@@ -3,15 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { getAggregatedUserStats, getAllLeagueSeasons } from '@/lib/api';
+import { getAggregatedUserStats, getAllLeagueSeasons, getLeagueInfo } from '@/lib/api';
 import { LEAGUE_ID } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { TrophyIcon, ChartBarIcon, CalendarIcon } from '@heroicons/react/24/outline';
-import type { SleeperLeague } from '@/types/sleeper';
-
-interface HistoryViewProps {
-  league: SleeperLeague;
-}
 
 interface UserStats {
   userId: string;
@@ -27,7 +22,7 @@ interface UserStats {
   averagePointsPerGame: number;
 }
 
-export default function HistoryView({ league }: HistoryViewProps) {
+export default function HistoryView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<UserStats[]>([]);
