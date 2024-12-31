@@ -1,6 +1,6 @@
 'use client';
 
-import { ChartBarIcon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 
 interface LogoProps {
   className?: string;
@@ -9,11 +9,16 @@ interface LogoProps {
 export default function Logo({ className }: LogoProps) {
   return (
     <div className={`flex items-center space-x-2 ${className}`}>
-      <div className="relative">
-        <ChartBarIcon className="w-6 h-6 text-blue-500" />
-        <div className="absolute inset-0 bg-blue-500/20 blur-lg rounded-full" />
+      <div className="relative w-8 h-8">
+        <Image
+          src="/logo.png"
+          alt="League Pulse Logo"
+          width={32}
+          height={32}
+          className="object-contain"
+        />
       </div>
-      <span className="font-bold text-lg tracking-tight">League Pulse</span>
+      <span className="font-bold text-lg">League Pulse</span>
     </div>
   );
 } 

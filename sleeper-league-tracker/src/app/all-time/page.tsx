@@ -12,7 +12,7 @@ export default async function HistoryPage() {
       <div className="space-y-6 pb-20 md:pb-8">
         <PageHeader
           icon={<ClockIcon className="h-6 w-6 text-gray-400" />}
-          title="League History"
+          title={`${league.name}: History`}
           subtitle={`Since ${league.previous_league_id ? 'Season 2022' : league.season}`}
         />
         <HistoryView league={league} />

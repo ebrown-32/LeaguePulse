@@ -73,7 +73,7 @@ export default async function Home() {
           {/* Page Header */}
           <PageHeader
             icon={<HomeIcon className="h-6 w-6 text-gray-400" />}
-            title="League Overview"
+            title={`${league.name}: Overview`}
             subtitle={`Season ${league.season}`}
             action={commissioner && (
               <div className="flex items-center space-x-2 text-sm text-gray-400 bg-white/5 px-3 py-2 rounded-lg">
@@ -187,13 +187,13 @@ export default async function Home() {
             </CardHeader>
             <CardContent className="md:pt-2">
               {/* Table Header */}
-              <div className="hidden md:grid md:grid-cols-[auto_1fr_repeat(4,auto)] gap-4 px-4 py-2 text-sm font-medium text-gray-400">
-                <div className="pl-2">Rank</div>
-                <div className="pl-12">Team</div>
-                <div className="text-right pr-1">Record</div>
-                <div className="text-right pr-1">Win%</div>
-                <div className="text-right pr-1">PF</div>
-                <div className="text-right">PA</div>
+              <div className="hidden md:grid md:grid-cols-[3rem_1fr_8rem_5rem_6rem_6rem] gap-2 px-4 py-2 text-sm font-medium text-gray-400">
+                <div>Rank</div>
+                <div>Team</div>
+                <div className="text-center">Record</div>
+                <div className="text-center">Win%</div>
+                <div className="text-center">PF</div>
+                <div className="text-center">PA</div>
               </div>
               
               <div className="space-y-2 md:space-y-3">
@@ -256,7 +256,7 @@ export default async function Home() {
                       </div>
 
                       {/* Desktop Layout */}
-                      <div className="hidden md:grid md:grid-cols-[auto_1fr_repeat(4,auto)] gap-4 items-center px-4 py-3">
+                      <div className="hidden md:grid md:grid-cols-[3rem_1fr_8rem_5rem_6rem_6rem] gap-2 items-center px-4 py-3">
                         <div className={`
                           w-7 h-7 flex items-center justify-center rounded-lg text-sm font-bold
                           ${isInPlayoffs ? 'bg-blue-500/20 text-blue-400' : 
@@ -265,17 +265,17 @@ export default async function Home() {
                         `}>
                           {index + 1}
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <Avatar avatarId={user.avatar} size={36} className="rounded-lg" />
-                          <span className="font-medium tracking-tight">{user.metadata.team_name || user.display_name}</span>
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <Avatar avatarId={user.avatar} size={36} className="rounded-lg flex-shrink-0" />
+                          <span className="font-medium tracking-tight truncate">{user.metadata.team_name || user.display_name}</span>
                         </div>
-                        <div className="text-right whitespace-nowrap font-medium">
+                        <div className="text-center whitespace-nowrap font-medium">
                           {roster.settings.wins}-{roster.settings.losses}
                           {roster.settings.ties > 0 ? `-${roster.settings.ties}` : ''}
                         </div>
-                        <div className="text-right font-medium">{winPct.toFixed(1)}%</div>
-                        <div className="text-right font-medium">{fpts.toFixed(1)}</div>
-                        <div className="text-right font-medium">{fptsAgainst.toFixed(1)}</div>
+                        <div className="text-center font-medium">{winPct.toFixed(1)}%</div>
+                        <div className="text-center font-medium">{fpts.toFixed(1)}</div>
+                        <div className="text-center font-medium">{fptsAgainst.toFixed(1)}</div>
                       </div>
 
                       {/* Playoff Indicator */}

@@ -29,7 +29,7 @@ interface MatchupDisplayData {
 }
 
 export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
-  const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
+  const [selectedWeek, setSelectedWeek] = useState<number>(1);
   const [matchups, setMatchups] = useState<SleeperMatchup[]>([]);
   const [users, setUsers] = useState<SleeperUser[]>([]);
   const [rosters, setRosters] = useState<SleeperRoster[]>([]);
@@ -49,7 +49,7 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
         const [usersData, rostersData, matchupsData] = await Promise.all([
           getLeagueUsers(LEAGUE_ID),
           getLeagueRosters(LEAGUE_ID),
-          getLeagueMatchups(LEAGUE_ID, currentWeek),
+          getLeagueMatchups(LEAGUE_ID, 1), // Always fetch week 1 initially
         ]);
 
         setUsers(usersData);
@@ -64,7 +64,7 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
     };
 
     fetchData();
-  }, [currentWeek]);
+  }, []); // Remove currentWeek dependency since we want to start with week 1
 
   const fetchWeekMatchups = async (week: number) => {
     setLoading(true);
@@ -166,7 +166,7 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
               <SelectValue>Week {selectedWeek}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {Array.from({ length: currentWeek }, (_, i) => i + 1).map((week) => (
+              {Array.from({ length: 18 }, (_, i) => i + 1).map((week) => (
                 <SelectItem key={week} value={week.toString()}>
                   Week {week}
                 </SelectItem>
