@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { label: 'Overview', href: '/' },
   { label: 'Matchups', href: '/matchups' },
   { label: 'Standings', href: '/standings' },
+  { label: 'Next-Gen Stats', href: '/next-gen' },
   { label: 'Records', href: '/records' },
   { label: 'All-Time', href: '/all-time' },
 ];

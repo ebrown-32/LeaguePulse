@@ -64,7 +64,7 @@ export default async function AllTimePage() {
               </div>
               <div>
                 <p className="text-sm text-gray-400">First Season</p>
-                <p className="text-2xl font-bold">{seasons[0]?.season || 'N/A'}</p>
+                <p className="text-2xl font-bold">{seasons[seasons.length - 1] || 'N/A'}</p>
               </div>
             </CardContent>
           </Card>

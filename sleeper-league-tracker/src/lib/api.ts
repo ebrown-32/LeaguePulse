@@ -64,21 +64,25 @@ export async function getLeaguePreviousSeason(leagueId: string): Promise<string 
 }
 
 // Helper function to get all seasons for a league
-export async function getAllLeagueSeasons(currentLeagueId: string): Promise<SleeperLeague[]> {
-  const seasons: SleeperLeague[] = [];
-  let currentId = currentLeagueId;
+export async function getAllLeagueSeasons(leagueId: string): Promise<string[]> {
+  try {
+    // Get the current league info
+    const league = await getLeagueInfo(leagueId);
+    const seasons: string[] = [league.season];
 
-  while (currentId) {
-    try {
-      const league = await getLeagueInfo(currentId);
-      seasons.unshift(league); // Add to beginning to maintain chronological order
-      currentId = league.previous_league_id || '';
-    } catch (error) {
-      break; // Stop if we can't fetch more seasons
+    // Get previous seasons by following the previous_league_id chain
+    let currentLeagueId = league.previous_league_id;
+    while (currentLeagueId) {
+      const previousLeague = await getLeagueInfo(currentLeagueId);
+      seasons.push(previousLeague.season);
+      currentLeagueId = previousLeague.previous_league_id;
     }
-  }
 
-  return seasons;
+    return seasons.sort((a, b) => Number(b) - Number(a)); // Sort in descending order
+  } catch (error) {
+    console.error('Failed to fetch league seasons:', error);
+    return []; // Return empty array if there's an error
+  }
 }
 
 // Helper function to get all matchups for a season
@@ -128,67 +132,270 @@ export interface AggregatedStats {
 }
 
 export async function getAggregatedUserStats(leagueId: string): Promise<AggregatedStats[]> {
-  const seasons = await getAllLeagueSeasons(leagueId);
   const statsMap = new Map<string, AggregatedStats>();
+  let currentLeagueId = leagueId;
 
-  for (const season of seasons) {
-    const [users, rosters] = await Promise.all([
-      getLeagueUsers(season.league_id),
-      getLeagueRosters(season.league_id),
+  try {
+    while (currentLeagueId) {
+      // Get league info first to check if it exists
+      const league = await getLeagueInfo(currentLeagueId);
+      const [users, rosters] = await Promise.all([
+        getLeagueUsers(currentLeagueId),
+        getLeagueRosters(currentLeagueId),
+      ]);
+
+      users.forEach(user => {
+        const roster = rosters.find(r => r.owner_id === user.user_id);
+        if (!roster) return;
+
+        const existingStats = statsMap.get(user.user_id) || {
+          userId: user.user_id,
+          username: user.display_name,
+          avatar: user.avatar,
+          totalWins: 0,
+          totalLosses: 0,
+          totalTies: 0,
+          totalPoints: 0,
+          totalPointsAgainst: 0,
+          winPercentage: 0,
+          averagePointsPerGame: 0,
+          bestFinish: roster.roster_id,
+          championships: 0,
+          playoffAppearances: 0,
+          seasons: 0,
+        };
+
+        // Update stats
+        existingStats.totalWins += roster.settings.wins;
+        existingStats.totalLosses += roster.settings.losses;
+        existingStats.totalTies += roster.settings.ties;
+        existingStats.totalPoints += roster.settings.fpts + roster.settings.fpts_decimal / 100;
+        existingStats.totalPointsAgainst += roster.settings.fpts_against + roster.settings.fpts_against_decimal / 100;
+        existingStats.seasons += 1;
+        
+        // Update best finish
+        if (roster.roster_id < existingStats.bestFinish) {
+          existingStats.bestFinish = roster.roster_id;
+        }
+
+        // Check for championships (assuming roster_id 1 is champion)
+        if (roster.roster_id === 1) {
+          existingStats.championships += 1;
+        }
+
+        // Check for playoff appearances
+        if (roster.roster_id <= league.settings.playoff_teams) {
+          existingStats.playoffAppearances += 1;
+        }
+
+        // Calculate averages
+        const totalGames = existingStats.totalWins + existingStats.totalLosses + existingStats.totalTies;
+        existingStats.winPercentage = totalGames > 0 
+          ? (existingStats.totalWins + existingStats.totalTies * 0.5) / totalGames * 100 
+          : 0;
+        existingStats.averagePointsPerGame = totalGames > 0 
+          ? existingStats.totalPoints / totalGames 
+          : 0;
+
+        statsMap.set(user.user_id, existingStats);
+      });
+
+      // Move to previous season
+      currentLeagueId = league.previous_league_id || '';
+    }
+
+    return Array.from(statsMap.values()).sort((a, b) => b.winPercentage - a.winPercentage);
+  } catch (error) {
+    console.error('Failed to fetch aggregated stats:', error);
+    throw error;
+  }
+}
+
+interface TeamMetrics {
+  userId: string;
+  username: string;
+  avatar: string;
+  teamName: string;
+  record: {
+    wins: number;
+    losses: number;
+    ties: number;
+    winPct: number;
+  };
+  points: {
+    total: number;
+    average: number;
+    high: number;
+    low: number;
+  };
+  consistency: {
+    score: number; // 0-100, based on standard deviation of weekly scores
+    averageMargin: number;
+  };
+  explosiveness: {
+    score: number; // 0-100, based on frequency of high-scoring weeks
+    explosiveGames: number; // games above 120% of league average
+  };
+  clutch: {
+    score: number; // 0-100, based on performance in close games and against top teams
+    closeWins: number;
+    topWins: number;
+  };
+}
+
+export async function getTeamMetrics(leagueId: string, season?: string): Promise<TeamMetrics[]> {
+  try {
+    // For all-time stats, we need to aggregate across all seasons
+    if (!season || season === 'all-time') {
+      const metricsMap = new Map<string, TeamMetrics>();
+      let currentLeagueId = leagueId;
+
+      while (currentLeagueId) {
+        const league = await getLeagueInfo(currentLeagueId);
+        const [users, rosters, allMatchups] = await Promise.all([
+          getLeagueUsers(currentLeagueId),
+          getLeagueRosters(currentLeagueId),
+          getAllSeasonMatchups(currentLeagueId, 18),
+        ]);
+
+        const leagueMetrics = await calculateSeasonMetrics(users, rosters, allMatchups);
+        
+        // Aggregate metrics for each user
+        leagueMetrics.forEach(metric => {
+          const existing = metricsMap.get(metric.userId);
+          if (!existing) {
+            metricsMap.set(metric.userId, metric);
+            return;
+          }
+
+          // Combine stats
+          existing.record.wins += metric.record.wins;
+          existing.record.losses += metric.record.losses;
+          existing.record.ties += metric.record.ties;
+          existing.points.total += metric.points.total;
+          existing.points.high = Math.max(existing.points.high, metric.points.high);
+          existing.points.low = Math.min(existing.points.low, metric.points.low);
+          existing.clutch.closeWins += metric.clutch.closeWins;
+          existing.explosiveness.explosiveGames += metric.explosiveness.explosiveGames;
+        });
+
+        currentLeagueId = league.previous_league_id || '';
+      }
+
+      // Recalculate averages and percentages for aggregated stats
+      const metrics = Array.from(metricsMap.values());
+      metrics.forEach(metric => {
+        const totalGames = metric.record.wins + metric.record.losses + metric.record.ties;
+        metric.record.winPct = (metric.record.wins + metric.record.ties * 0.5) / totalGames * 100;
+        metric.points.average = metric.points.total / totalGames;
+        metric.consistency.score = calculateConsistencyScore(metric.points.average, metric.points.high, metric.points.low);
+        metric.explosiveness.score = (metric.explosiveness.explosiveGames / totalGames) * 100;
+        metric.clutch.score = (metric.clutch.closeWins / totalGames) * 100;
+      });
+
+      return metrics.sort((a, b) => b.record.winPct - a.record.winPct);
+    }
+
+    // For specific season, find the correct league ID
+    let targetLeagueId = leagueId;
+    let currentId = leagueId;
+    while (currentId) {
+      const league = await getLeagueInfo(currentId);
+      if (league.season === season) {
+        targetLeagueId = currentId;
+        break;
+      }
+      currentId = league.previous_league_id || '';
+    }
+
+    // Get data for specific season
+    const [users, rosters, allMatchups] = await Promise.all([
+      getLeagueUsers(targetLeagueId),
+      getLeagueRosters(targetLeagueId),
+      getAllSeasonMatchups(targetLeagueId, 18),
     ]);
 
-    users.forEach(user => {
-      const roster = rosters.find(r => r.owner_id === user.user_id);
-      if (!roster) return;
-
-      const existingStats = statsMap.get(user.user_id) || {
-        userId: user.user_id,
-        username: user.display_name,
-        avatar: user.avatar,
-        totalWins: 0,
-        totalLosses: 0,
-        totalTies: 0,
-        totalPoints: 0,
-        totalPointsAgainst: 0,
-        winPercentage: 0,
-        averagePointsPerGame: 0,
-        bestFinish: roster.roster_id,
-        championships: 0,
-        playoffAppearances: 0,
-        seasons: 0,
-      };
-
-      // Update stats
-      existingStats.totalWins += roster.settings.wins;
-      existingStats.totalLosses += roster.settings.losses;
-      existingStats.totalTies += roster.settings.ties;
-      existingStats.totalPoints += roster.settings.fpts + roster.settings.fpts_decimal / 100;
-      existingStats.totalPointsAgainst += roster.settings.fpts_against + roster.settings.fpts_against_decimal / 100;
-      existingStats.seasons += 1;
-      
-      // Update best finish
-      if (roster.roster_id < existingStats.bestFinish) {
-        existingStats.bestFinish = roster.roster_id;
-      }
-
-      // Check for championships (assuming roster_id 1 is champion)
-      if (roster.roster_id === 1) {
-        existingStats.championships += 1;
-      }
-
-      // Check for playoff appearances
-      if (roster.roster_id <= season.settings.playoff_teams) {
-        existingStats.playoffAppearances += 1;
-      }
-
-      // Calculate averages
-      const totalGames = existingStats.totalWins + existingStats.totalLosses + existingStats.totalTies;
-      existingStats.winPercentage = (existingStats.totalWins + existingStats.totalTies * 0.5) / totalGames * 100;
-      existingStats.averagePointsPerGame = existingStats.totalPoints / totalGames;
-
-      statsMap.set(user.user_id, existingStats);
-    });
+    return calculateSeasonMetrics(users, rosters, allMatchups);
+  } catch (error) {
+    console.error('Failed to calculate team metrics:', error);
+    throw error;
   }
+}
 
-  return Array.from(statsMap.values());
+// Helper function to calculate metrics for a single season
+async function calculateSeasonMetrics(
+  users: SleeperUser[],
+  rosters: SleeperRoster[],
+  allMatchups: SleeperMatchup[][]
+): Promise<TeamMetrics[]> {
+  const allScores = allMatchups.flat().map(m => m.points || 0);
+  const leagueAverage = allScores.reduce((sum, score) => sum + score, 0) / allScores.length;
+  const explosiveThreshold = leagueAverage * 1.2;
+
+  const metrics: TeamMetrics[] = rosters.map(roster => {
+    const user = users.find(u => u.user_id === roster.owner_id);
+    if (!user) throw new Error(`User not found for roster ${roster.roster_id}`);
+
+    const teamMatchups = allMatchups.flat().filter(m => m.roster_id === roster.roster_id);
+    const weeklyScores = teamMatchups.map(m => m.points || 0);
+    const mean = weeklyScores.reduce((sum, score) => sum + score, 0) / weeklyScores.length;
+
+    const closeGames = teamMatchups.filter(match => {
+      const opposingMatch = allMatchups.flat().find(m => 
+        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
+      );
+      return opposingMatch && Math.abs((match.points || 0) - (opposingMatch.points || 0)) < 5;
+    });
+
+    const closeWins = closeGames.filter(match => {
+      const opposingMatch = allMatchups.flat().find(m => 
+        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
+      );
+      return opposingMatch && (match.points || 0) > (opposingMatch.points || 0);
+    }).length;
+
+    const explosiveGames = weeklyScores.filter(score => score > explosiveThreshold).length;
+    const consistencyScore = calculateConsistencyScore(mean, Math.max(...weeklyScores), Math.min(...weeklyScores));
+
+    return {
+      userId: user.user_id,
+      username: user.display_name,
+      avatar: user.avatar,
+      teamName: user.metadata.team_name || user.display_name,
+      record: {
+        wins: roster.settings.wins,
+        losses: roster.settings.losses,
+        ties: roster.settings.ties,
+        winPct: (roster.settings.wins + roster.settings.ties * 0.5) / 
+               (roster.settings.wins + roster.settings.losses + roster.settings.ties) * 100,
+      },
+      points: {
+        total: roster.settings.fpts + roster.settings.fpts_decimal / 100,
+        average: mean,
+        high: Math.max(...weeklyScores),
+        low: Math.min(...weeklyScores),
+      },
+      consistency: {
+        score: consistencyScore,
+        averageMargin: mean - leagueAverage,
+      },
+      explosiveness: {
+        score: (explosiveGames / teamMatchups.length) * 100,
+        explosiveGames,
+      },
+      clutch: {
+        score: (closeWins / Math.max(closeGames.length, 1)) * 100,
+        closeWins,
+        topWins: closeWins,
+      },
+    };
+  });
+
+  return metrics.sort((a, b) => b.record.winPct - a.record.winPct);
+}
+
+function calculateConsistencyScore(average: number, high: number, low: number): number {
+  const range = high - low;
+  const normalizedRange = range / average;
+  return Math.max(0, Math.min(100, 100 - (normalizedRange * 50)));
 } 
