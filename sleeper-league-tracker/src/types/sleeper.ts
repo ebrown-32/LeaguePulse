@@ -51,6 +51,7 @@ export interface SleeperLeague {
     draft_rounds: number;
     daily_waivers: number;
     bench_slots: number;
+    trade_deadline: number;
   };
   season: string;
   scoring_settings: Record<string, number>;
