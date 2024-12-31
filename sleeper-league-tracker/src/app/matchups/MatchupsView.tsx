@@ -1,17 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { getLeagueMatchups, getLeagueRosters, getLeagueUsers } from '@/lib/api';
+import { getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState, getLeagueInfo } from '@/lib/api';
 import type { SleeperMatchup, SleeperRoster, SleeperUser } from '@/types/sleeper';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { LEAGUE_ID } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
-
-interface MatchupsViewProps {
-  currentWeek: number;
-}
 
 interface Team {
   name: string;
@@ -31,17 +27,18 @@ interface MatchupDisplayData {
   isComplete: boolean;
 }
 
-export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+export default function MatchupsView() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [league, setLeague] = useState<any>(null);
   const [matchups, setMatchups] = useState<SleeperMatchup[]>([]);
   const [users, setUsers] = useState<SleeperUser[]>([]);
   const [rosters, setRosters] = useState<SleeperRoster[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentWeek, setCurrentWeek] = useState(1);
 
-  // Fetch initial data
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
@@ -49,14 +46,20 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
       }
 
       try {
-        const [usersData, rostersData, matchupsData] = await Promise.all([
+        const [nflState, leagueData, usersData, rostersData] = await Promise.all([
+          getNFLState(),
+          getLeagueInfo(LEAGUE_ID),
           getLeagueUsers(LEAGUE_ID),
           getLeagueRosters(LEAGUE_ID),
-          getLeagueMatchups(LEAGUE_ID, 1), // Always fetch week 1 initially
         ]);
 
+        setCurrentWeek(nflState.week);
+        setSelectedWeek(nflState.week);
+        setLeague(leagueData);
         setUsers(usersData);
         setRosters(rostersData);
+
+        const matchupsData = await getLeagueMatchups(LEAGUE_ID, nflState.week);
         setMatchups(matchupsData);
       } catch (err) {
         setError('Failed to fetch league data. Please check your league ID and try again.');
@@ -66,8 +69,8 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
       }
     };
 
-    fetchData();
-  }, []); // Remove currentWeek dependency since we want to start with week 1
+    fetchInitialData();
+  }, []);
 
   const fetchWeekMatchups = async (week: number) => {
     setLoading(true);
