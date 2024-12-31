@@ -1,63 +1,25 @@
-import { Suspense } from 'react';
-import { getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState } from '@/lib/api';
+import { UserGroupIcon } from '@heroicons/react/24/outline';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { getNFLState, getLeagueInfo } from '@/lib/api';
 import { LEAGUE_ID } from '@/config/league';
-import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import MatchupsView from './MatchupsView';
-import { Card, CardContent } from '@/components/ui/Card';
-
-function LoadingState() {
-  return (
-    <Card>
-      <CardContent className="py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-white/10 rounded w-1/4"></div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="h-32 bg-white/10 rounded"></div>
-            <div className="h-32 bg-white/10 rounded"></div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default async function MatchupsPage() {
-  if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
-    return (
-      <ErrorMessage
-        title="Configuration Required"
-        message="Please set your Sleeper league ID in the .env.local file. You can find your league ID in the URL when viewing your league on Sleeper."
-      />
-    );
-  }
+  const [nflState, league] = await Promise.all([
+    getNFLState(),
+    getLeagueInfo(LEAGUE_ID),
+  ]);
 
-  try {
-    const [nflState, users, rosters] = await Promise.all([
-      getNFLState(),
-      getLeagueUsers(LEAGUE_ID),
-      getLeagueRosters(LEAGUE_ID),
-    ]);
-
-    const initialMatchups = await getLeagueMatchups(LEAGUE_ID, 1);
-
-    return (
-      <Suspense fallback={<LoadingState />}>
-        <MatchupsView
-          initialMatchups={initialMatchups}
-          nflState={nflState}
-          users={users}
-          rosters={rosters}
-          leagueId={LEAGUE_ID}
+  return (
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="space-y-6 pb-20 md:pb-8">
+        <PageHeader
+          icon={<UserGroupIcon className="h-6 w-6 text-gray-400" />}
+          title={`${league.name}: Matchups`}
+          subtitle={`Week ${nflState.week}`}
         />
-      </Suspense>
-    );
-  } catch (error) {
-    console.error('Failed to fetch matchup data:', error);
-    return (
-      <ErrorMessage
-        title="Failed to Load Matchups"
-        message={error instanceof Error ? error.message : 'An unexpected error occurred while fetching matchup data. Please check your league ID and try again.'}
-      />
-    );
-  }
+        <MatchupsView currentWeek={nflState.week} />
+      </div>
+    </div>
+  );
 } 

@@ -1,45 +1,78 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { getLeagueMatchups } from '@/lib/api';
-import type { SleeperMatchup, SleeperNFLState, SleeperRoster, SleeperUser } from '@/types/sleeper';
+import { getLeagueMatchups, getLeagueRosters, getLeagueUsers } from '@/lib/api';
+import type { SleeperMatchup, SleeperRoster, SleeperUser } from '@/types/sleeper';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
+import { LEAGUE_ID } from '@/config/league';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
 interface MatchupsViewProps {
-  initialMatchups: SleeperMatchup[];
-  nflState: SleeperNFLState;
-  users: SleeperUser[];
-  rosters: SleeperRoster[];
-  leagueId: string;
+  currentWeek: number;
 }
 
-export default function MatchupsView({
-  initialMatchups,
-  nflState,
-  users,
-  rosters,
-  leagueId,
-}: MatchupsViewProps) {
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
-  const [matchups, setMatchups] = useState<SleeperMatchup[]>(initialMatchups);
-  const [loading, setLoading] = useState<boolean>(false);
+interface Team {
+  name: string;
+  avatar: string;
+  points: number;
+  record: {
+    wins: number;
+    losses: number;
+    ties: number;
+  };
+}
 
+interface MatchupDisplayData {
+  team1: Team;
+  team2: Team;
+  matchup_id: number;
+  isComplete: boolean;
+}
+
+export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
+  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [matchups, setMatchups] = useState<SleeperMatchup[]>([]);
+  const [users, setUsers] = useState<SleeperUser[]>([]);
+  const [rosters, setRosters] = useState<SleeperRoster[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch initial data
   useEffect(() => {
-    if (initialMatchups.length > 0) {
-      setMatchups(initialMatchups);
-    }
-  }, [initialMatchups]);
+    const fetchData = async () => {
+      if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+        setError('Please set your Sleeper league ID in the .env.local file.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [usersData, rostersData, matchupsData] = await Promise.all([
+          getLeagueUsers(LEAGUE_ID),
+          getLeagueRosters(LEAGUE_ID),
+          getLeagueMatchups(LEAGUE_ID, 1), // Always fetch week 1 initially
+        ]);
+
+        setUsers(usersData);
+        setRosters(rostersData);
+        setMatchups(matchupsData);
+      } catch (err) {
+        setError('Failed to fetch league data. Please check your league ID and try again.');
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []); // Remove currentWeek dependency since we want to start with week 1
 
   const fetchWeekMatchups = async (week: number) => {
-    if (week === 1 && initialMatchups.length > 0) {
-      setMatchups(initialMatchups);
-      return;
-    }
-
     setLoading(true);
     try {
-      const newMatchups = await getLeagueMatchups(leagueId, week);
+      const newMatchups = await getLeagueMatchups(LEAGUE_ID, week);
       setMatchups(newMatchups);
     } catch (error) {
       console.error('Failed to fetch matchups:', error);
@@ -48,111 +81,167 @@ export default function MatchupsView({
     }
   };
 
-  const handleWeekChange = (newWeek: number) => {
+  const handleWeekChange = (week: string) => {
+    const newWeek = parseInt(week, 10);
     setSelectedWeek(newWeek);
     fetchWeekMatchups(newWeek);
   };
 
-  const matchupPairs = matchups.reduce((acc, matchup) => {
-    if (!acc[matchup.matchup_id]) {
-      acc[matchup.matchup_id] = [];
-    }
-    acc[matchup.matchup_id].push(matchup);
-    return acc;
-  }, {} as Record<number, SleeperMatchup[]>);
+  const processMatchups = (): MatchupDisplayData[] => {
+    // First, group matchups by matchup_id
+    const matchupPairs = matchups.reduce((acc, matchup) => {
+      // Ensure matchup_id is not null/undefined and convert to string to be safe
+      const id = matchup.matchup_id?.toString() || 'none';
+      if (!acc[id]) {
+        acc[id] = [];
+      }
+      acc[id].push(matchup);
+      return acc;
+    }, {} as Record<string, SleeperMatchup[]>);
 
-  if (!matchups.length) {
-    return <div>Loading matchups...</div>;
+    // Process each pair
+    return Object.entries(matchupPairs)
+      .filter(([id, pair]) => id !== 'none' && pair.length === 2) // Ensure valid pairs only
+      .map(([_, pair]) => {
+        // Sort by roster_id to ensure consistent ordering
+        const [team1, team2] = pair.sort((a, b) => a.roster_id - b.roster_id);
+
+        // Find the corresponding rosters and users
+        const roster1 = rosters.find(r => r.roster_id === team1.roster_id);
+        const roster2 = rosters.find(r => r.roster_id === team2.roster_id);
+        const user1 = users.find(u => roster1?.owner_id === u.user_id);
+        const user2 = users.find(u => roster2?.owner_id === u.user_id);
+
+        if (!user1 || !user2 || !roster1 || !roster2) return null;
+
+        return {
+          team1: {
+            name: user1.metadata.team_name || user1.display_name,
+            avatar: user1.avatar,
+            points: team1.points || 0,
+            record: {
+              wins: roster1.settings.wins,
+              losses: roster1.settings.losses,
+              ties: roster1.settings.ties,
+            },
+          },
+          team2: {
+            name: user2.metadata.team_name || user2.display_name,
+            avatar: user2.avatar,
+            points: team2.points || 0,
+            record: {
+              wins: roster2.settings.wins,
+              losses: roster2.settings.losses,
+              ties: roster2.settings.ties,
+            },
+          },
+          matchup_id: team1.matchup_id,
+          isComplete: team1.points !== null && team2.points !== null,
+        };
+      })
+      .filter(Boolean) as MatchupDisplayData[];
+  };
+
+  if (error) {
+    return <ErrorMessage title="Error" message={error} />;
   }
 
+  if (loading && !matchups.length) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-white/10 rounded w-1/4"></div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="h-32 bg-white/10 rounded"></div>
+              <div className="h-32 bg-white/10 rounded"></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const processedMatchups = processMatchups();
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Week {selectedWeek} Matchups</h1>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => handleWeekChange(Math.max(1, selectedWeek - 1))}
-            className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
-            disabled={selectedWeek === 1 || loading}
+    <div className="space-y-8">
+      {/* Week Selection */}
+      <div className="flex items-center justify-end">
+        <div className="w-40">
+          <Select
+            value={selectedWeek.toString()}
+            onValueChange={handleWeekChange}
           >
-            Previous
-          </button>
-          <span className="px-3">{selectedWeek}</span>
-          <button
-            onClick={() => handleWeekChange(Math.min(nflState.week, selectedWeek + 1))}
-            className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
-            disabled={selectedWeek === nflState.week || loading}
-          >
-            Next
-          </button>
+            <SelectTrigger>
+              <SelectValue>Week {selectedWeek}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 18 }, (_, i) => i + 1).map((week) => (
+                <SelectItem key={week} value={week.toString()}>
+                  Week {week}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
+      {/* Matchups */}
       <div className={`grid gap-6 md:grid-cols-2 ${loading ? 'opacity-50' : ''}`}>
-        {Object.values(matchupPairs).map((pair) => {
-          if (pair.length !== 2) return null;
-
-          const [team1, team2] = pair;
-          const user1 = users.find(u => 
-            rosters.find(r => r.roster_id === team1.roster_id)?.owner_id === u.user_id
-          );
-          const user2 = users.find(u => 
-            rosters.find(r => r.roster_id === team2.roster_id)?.owner_id === u.user_id
-          );
-
-          if (!user1 || !user2) return null;
-
-          return (
-            <Card key={team1.matchup_id} className="overflow-hidden">
-              <CardHeader>
-                <CardTitle>Matchup {team1.matchup_id}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <Avatar avatarId={user1.avatar} size={32} />
-                      <span className="font-medium truncate">
-                        {user1.metadata.team_name || user1.display_name}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-center">
-                      {team1.points?.toFixed(2) || '0.00'}
+        {processedMatchups.map((matchup, index) => (
+          <Card key={index}>
+            <CardContent className="p-3 md:p-6">
+              <div className="space-y-3 md:space-y-6">
+                {/* Team 1 */}
+                <div className="flex items-center justify-between gap-3 md:gap-4">
+                  <div className="flex items-center space-x-2 md:space-x-3">
+                    <Avatar avatarId={matchup.team1.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
+                    <div>
+                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team1.name}</p>
+                      <p className="text-xs md:text-sm text-gray-400">
+                        {matchup.team1.record.wins}-{matchup.team1.record.losses}
+                        {matchup.team1.record.ties > 0 ? `-${matchup.team1.record.ties}` : ''}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="text-xl font-bold text-gray-400">VS</div>
-
-                  <div className="flex-1 text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <span className="font-medium truncate">
-                        {user2.metadata.team_name || user2.display_name}
-                      </span>
-                      <Avatar avatarId={user2.avatar} size={32} />
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-center">
-                      {team2.points?.toFixed(2) || '0.00'}
-                    </div>
+                  <div className="text-right">
+                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team1.points.toFixed(1)}</p>
+                    <p className="text-xs md:text-sm text-gray-400">Points</p>
                   </div>
                 </div>
 
-                {team1.points !== null && team2.points !== null && (
-                  <div className="mt-4 text-center text-sm">
-                    <span className={`font-medium ${
-                      team1.points > team2.points ? 'text-green-400' :
-                      team1.points < team2.points ? 'text-red-400' :
-                      'text-gray-400'
-                    }`}>
-                      {team1.points > team2.points ? 'Winner!' :
-                       team1.points < team2.points ? 'Defeat' :
-                       'Tie'}
-                    </span>
+                {/* VS Divider */}
+                <div className="relative py-1 md:py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10"></div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+                  <div className="relative flex justify-center">
+                    <span className="bg-gray-900 px-2 md:px-3 text-xs md:text-sm font-medium text-gray-400">VS</span>
+                  </div>
+                </div>
+
+                {/* Team 2 */}
+                <div className="flex items-center justify-between gap-3 md:gap-4">
+                  <div className="flex items-center space-x-2 md:space-x-3">
+                    <Avatar avatarId={matchup.team2.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
+                    <div>
+                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team2.name}</p>
+                      <p className="text-xs md:text-sm text-gray-400">
+                        {matchup.team2.record.wins}-{matchup.team2.record.losses}
+                        {matchup.team2.record.ties > 0 ? `-${matchup.team2.record.ties}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team2.points.toFixed(1)}</p>
+                    <p className="text-xs md:text-sm text-gray-400">Points</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
