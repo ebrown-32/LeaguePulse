@@ -10,6 +10,7 @@ import {
   SparklesIcon,
   TrophyIcon,
   ClockIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { useState, useEffect } from 'react';
 
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Season Stats', href: '/records', icon: ChartBarIcon },
   { name: 'History', href: '/all-time', icon: ClockIcon },
   { name: 'Next Gen Stats', href: '/next-gen', icon: SparklesIcon, beta: true },
+  { name: 'Media', href: '/media', icon: DocumentTextIcon, soon: true },
 ];
 
 export default function Navbar() {
@@ -76,6 +78,11 @@ export default function Navbar() {
                         BETA
                       </span>
                     )}
+                    {item.soon && (
+                      <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-purple-500/20 text-[10px] font-semibold text-purple-400">
+                        SOON
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -112,6 +119,11 @@ export default function Navbar() {
                 {item.beta && (
                   <span className="absolute top-0 right-1 px-1 py-0.5 rounded-full bg-blue-500/20 text-[8px] font-semibold text-blue-400">
                     BETA
+                  </span>
+                )}
+                {item.soon && (
+                  <span className="absolute top-0 right-1 px-1 py-0.5 rounded-full bg-purple-500/20 text-[8px] font-semibold text-purple-400">
+                    SOON
                   </span>
                 )}
               </Link>

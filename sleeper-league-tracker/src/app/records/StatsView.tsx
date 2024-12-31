@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups } from '@/lib/api';
@@ -197,7 +197,7 @@ export default function StatsView({ currentWeek }: StatsViewProps) {
   return (
     <div className="space-y-6">
       {/* Season Superlatives */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
         {teamPerformances.map(team => {
           const isHighScore = team.highScore === highestScore;
           const isMostBlowouts = team.blowouts === mostBlowouts;
@@ -208,47 +208,47 @@ export default function StatsView({ currentWeek }: StatsViewProps) {
 
           return (
             <Card key={team.rosterId} className="bg-gradient-to-br from-blue-500/10 to-purple-500/10">
-              <CardContent className="pt-6">
-                <div className="flex items-center space-x-4">
-                  <Avatar avatarId={team.avatar} size={48} />
+              <CardContent className="p-4 md:pt-6">
+                <div className="flex items-center space-x-3 md:space-x-4">
+                  <Avatar avatarId={team.avatar} size={40} className="rounded-lg" />
                   <div>
-                    <div className="font-medium">{team.name}</div>
-                    <div className="text-sm text-gray-400">
+                    <div className="font-medium text-sm md:text-base">{team.name}</div>
+                    <div className="text-xs md:text-sm text-gray-400">
                       {team.wins}-{team.losses}{team.ties > 0 ? `-${team.ties}` : ''}
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 space-y-2">
+                <div className="mt-3 md:mt-4 space-y-2">
                   {isHighScore && (
-                    <div className="flex items-center text-yellow-500">
-                      <SparklesIcon className="w-5 h-5 mr-2" />
+                    <div className="flex items-center text-yellow-500 text-sm md:text-base">
+                      <SparklesIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       <span>Highest Score: {team.highScore.toFixed(2)}</span>
                     </div>
                   )}
                   {isMostBlowouts && (
-                    <div className="flex items-center text-red-500">
-                      <FireIcon className="w-5 h-5 mr-2" />
+                    <div className="flex items-center text-red-500 text-sm md:text-base">
+                      <FireIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       <span>{team.blowouts} Blowout Wins</span>
                       <Tooltip content="Games won by more than 30 points">
-                        <QuestionMarkCircleIcon className="w-4 h-4 ml-1 opacity-50" />
+                        <QuestionMarkCircleIcon className="w-3 h-3 md:w-4 md:h-4 ml-1 opacity-50" />
                       </Tooltip>
                     </div>
                   )}
                   {isMostCloseGames && (
-                    <div className="flex items-center text-blue-500">
-                      <BoltIcon className="w-5 h-5 mr-2" />
+                    <div className="flex items-center text-blue-500 text-sm md:text-base">
+                      <BoltIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       <span>{team.closeGames} Close Games</span>
                       <Tooltip content="Games decided by less than 10 points">
-                        <QuestionMarkCircleIcon className="w-4 h-4 ml-1 opacity-50" />
+                        <QuestionMarkCircleIcon className="w-3 h-3 md:w-4 md:h-4 ml-1 opacity-50" />
                       </Tooltip>
                     </div>
                   )}
                   {isConsistent && (
-                    <div className="flex items-center text-green-500">
-                      <ChartBarIcon className="w-5 h-5 mr-2" />
+                    <div className="flex items-center text-green-500 text-sm md:text-base">
+                      <ChartBarIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       <span>Most Consistent Team</span>
                       <Tooltip content="Lowest standard deviation in weekly scores">
-                        <QuestionMarkCircleIcon className="w-4 h-4 ml-1 opacity-50" />
+                        <QuestionMarkCircleIcon className="w-3 h-3 md:w-4 md:h-4 ml-1 opacity-50" />
                       </Tooltip>
                     </div>
                   )}
@@ -259,127 +259,144 @@ export default function StatsView({ currentWeek }: StatsViewProps) {
         })}
       </div>
 
-      {/* Performance Metrics */}
+      {/* Team Performance Table */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <CardTitle>Team Performance Metrics</CardTitle>
-            <Tooltip content="Comprehensive stats for each team's performance throughout the season">
-              <QuestionMarkCircleIcon className="w-5 h-5 text-gray-400" />
-            </Tooltip>
-          </div>
+        <CardHeader className="pb-2 md:pb-4">
+          <CardTitle className="text-lg md:text-xl">Team Performance</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {teamPerformances
-              .sort((a, b) => b.pointsFor - a.pointsFor)
-              .map((team, index) => {
-                const avgDiff = team.avgScore - leagueAvgScore;
-                const isAboveAvg = avgDiff > 0;
-                const diffPercent = Math.abs(avgDiff / leagueAvgScore * 100);
+          {/* Desktop View */}
+          <div className="hidden md:block">
+            <div className="grid grid-cols-[2fr_6rem_5rem_5rem_5rem_5rem_6rem] gap-4 text-sm text-gray-400 px-4 py-2">
+              <div>Team</div>
+              <div className="text-center">Record</div>
+              <div className="text-center">PPG</div>
+              <div className="text-center">High</div>
+              <div className="text-center">Low</div>
+              <div className="text-center">vs Avg</div>
+              <div className="text-center">Close Games</div>
+            </div>
+            <div className="space-y-2">
+              {teamPerformances.sort((a, b) => b.avgScore - a.avgScore).map(team => (
+                <div key={team.rosterId} className="grid grid-cols-[2fr_6rem_5rem_5rem_5rem_5rem_6rem] gap-4 items-center px-4 py-3 rounded-lg hover:bg-white/5">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <Avatar avatarId={team.avatar} size={32} className="rounded-lg flex-shrink-0" />
+                    <span className="font-medium truncate">{team.name}</span>
+                  </div>
+                  <div className="text-center whitespace-nowrap">
+                    {team.wins}-{team.losses}{team.ties > 0 ? `-${team.ties}` : ''}
+                  </div>
+                  <div className="text-center font-medium">{team.avgScore.toFixed(1)}</div>
+                  <div className="text-center">{team.highScore.toFixed(1)}</div>
+                  <div className="text-center">{team.lowScore.toFixed(1)}</div>
+                  <div className={`text-center ${
+                    team.avgScore > leagueAvgScore ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {team.avgScore > leagueAvgScore ? '+' : ''}
+                    {(team.avgScore - leagueAvgScore).toFixed(1)}
+                  </div>
+                  <div className="text-center">{team.closeGames}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-                return (
-                  <div key={team.rosterId} className="flex items-center space-x-4">
-                    <div className="w-8 text-center font-bold text-gray-400">
-                      {index + 1}
-                    </div>
-                    <Avatar avatarId={team.avatar} size={40} />
-                    <div className="flex-1">
-                      <div className="flex items-center">
-                        <span className="font-medium">{team.name}</span>
-                        {Math.abs(diffPercent) > 10 && (
-                          <span className={`ml-2 flex items-center text-sm ${isAboveAvg ? 'text-green-500' : 'text-red-500'}`}>
-                            {isAboveAvg ? (
-                              <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-                            ) : (
-                              <ArrowTrendingDownIcon className="w-4 h-4 mr-1" />
-                            )}
-                            {diffPercent.toFixed(1)}% {isAboveAvg ? 'above' : 'below'} avg
-                          </span>
-                        )}
+          {/* Mobile View */}
+          <div className="md:hidden space-y-4">
+            {teamPerformances.sort((a, b) => b.avgScore - a.avgScore).map(team => (
+              <div key={team.rosterId} className="space-y-3 p-3 rounded-lg bg-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Avatar avatarId={team.avatar} size={28} className="rounded-lg" />
+                    <div>
+                      <div className="font-medium text-sm">{team.name}</div>
+                      <div className="text-xs text-gray-400">
+                        {team.wins}-{team.losses}{team.ties > 0 ? `-${team.ties}` : ''}
                       </div>
-                      <div className="flex space-x-4 text-sm text-gray-400">
-                        <Tooltip content="Points Per Game">
-                          <span className="cursor-help">{team.avgScore.toFixed(1)} PPG</span>
-                        </Tooltip>
-                        <Tooltip content="Standard Deviation - Lower means more consistent scoring">
-                          <span className="cursor-help">{team.consistency.toFixed(1)} σ</span>
-                        </Tooltip>
-                        <Tooltip content="Games decided by less than 10 points">
-                          <span className="cursor-help">{team.closeGames} Close</span>
-                        </Tooltip>
-                        <Tooltip content="Games won by more than 30 points">
-                          <span className="cursor-help">{team.blowouts} Blowouts</span>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">{team.pointsFor.toFixed(1)}</div>
-                      <div className="text-sm text-gray-400">Total Points</div>
                     </div>
                   </div>
-                );
-              })}
+                  <div className="text-right">
+                    <div className="text-sm font-medium">{team.avgScore.toFixed(1)} PPG</div>
+                    <div className={`text-xs ${
+                      team.avgScore > leagueAvgScore ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {team.avgScore > leagueAvgScore ? '+' : ''}
+                      {(team.avgScore - leagueAvgScore).toFixed(1)} vs Avg
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs bg-white/5 rounded-lg p-2">
+                  <div>
+                    <p className="text-gray-400 mb-0.5">High</p>
+                    <p className="font-medium">{team.highScore.toFixed(1)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 mb-0.5">Low</p>
+                    <p className="font-medium">{team.lowScore.toFixed(1)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 mb-0.5">Close Games</p>
+                    <p className="font-medium">{team.closeGames}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Weekly Performance Chart */}
+      {/* Weekly Rankings */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <CardTitle>Weekly Rankings</CardTitle>
+        <CardHeader className="pb-2 md:pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg md:text-xl">Weekly Rankings</CardTitle>
             <Tooltip content="Each team's rank by points scored each week. Gold = 1st, Blue = Top 3, Red = Bottom 2">
-              <QuestionMarkCircleIcon className="w-5 h-5 text-gray-400" />
+              <QuestionMarkCircleIcon className="w-4 h-4 md:w-5 md:h-5 text-gray-400" />
             </Tooltip>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="relative overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="text-left font-medium p-2">Team</th>
-                  {Array.from({ length: currentWeek }, (_, i) => (
-                    <th key={i} className="text-center font-medium p-2">
-                      Week {i + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+          <div className="relative overflow-x-auto -mx-6 md:mx-0">
+            <div className="min-w-[640px] px-6 md:px-0">
+              <div className="grid grid-cols-[2fr_repeat(18,minmax(2.5rem,1fr))] gap-2 text-sm">
+                <div className="text-gray-400 font-medium p-2">Team</div>
+                {Array.from({ length: currentWeek }, (_, i) => (
+                  <div key={i} className="text-center text-gray-400 font-medium p-2">
+                    {i + 1}
+                  </div>
+                ))}
+                
                 {teamPerformances
                   .sort((a, b) => 
-                    b.weeklyRank.reduce((sum, rank) => sum + rank, 0) - 
-                    a.weeklyRank.reduce((sum, rank) => sum + rank, 0)
+                    b.weeklyRank.reduce((sum, rank) => sum + rank, 0) / b.weeklyRank.length - 
+                    a.weeklyRank.reduce((sum, rank) => sum + rank, 0) / a.weeklyRank.length
                   )
                   .map(team => (
-                    <tr key={team.rosterId} className="border-t border-gray-700">
-                      <td className="p-2">
-                        <div className="flex items-center space-x-2">
-                          <Avatar avatarId={team.avatar} size={24} />
-                          <span>{team.name}</span>
-                        </div>
-                      </td>
+                    <React.Fragment key={team.rosterId}>
+                      <div className="flex items-center space-x-2 p-2 min-w-0">
+                        <Avatar avatarId={team.avatar} size={24} className="rounded-lg flex-shrink-0" />
+                        <span className="truncate text-sm">{team.name}</span>
+                      </div>
                       {team.weeklyRank.map((rank, week) => (
-                        <td key={week} className="text-center p-2">
+                        <div key={week} className="flex items-center justify-center p-2">
                           <Tooltip content={`Week ${week + 1}: Ranked ${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}`}>
-                            <span className={`
-                              inline-flex items-center justify-center w-6 h-6 rounded-full cursor-help
+                            <div className={`
+                              flex items-center justify-center w-6 h-6 text-xs font-medium rounded-full
                               ${rank === 1 ? 'bg-yellow-500/20 text-yellow-500' :
                                 rank <= 3 ? 'bg-blue-500/20 text-blue-500' :
-                                rank >= league.total_rosters - 2 ? 'bg-red-500/20 text-red-500' :
-                                'bg-gray-500/20 text-gray-500'}
+                                rank >= league.total_rosters - 1 ? 'bg-red-500/20 text-red-400' :
+                                'bg-white/5 text-gray-400'}
                             `}>
                               {rank}
-                            </span>
+                            </div>
                           </Tooltip>
-                        </td>
+                        </div>
                       ))}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                    </React.Fragment>
+                  ))
+                }
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

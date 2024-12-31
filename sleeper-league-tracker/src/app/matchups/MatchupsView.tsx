@@ -13,17 +13,20 @@ interface MatchupsViewProps {
   currentWeek: number;
 }
 
+interface Team {
+  name: string;
+  avatar: string;
+  points: number;
+  record: {
+    wins: number;
+    losses: number;
+    ties: number;
+  };
+}
+
 interface MatchupDisplayData {
-  team1: {
-    name: string;
-    avatar: string;
-    points: number;
-  };
-  team2: {
-    name: string;
-    avatar: string;
-    points: number;
-  };
+  team1: Team;
+  team2: Team;
   matchup_id: number;
   isComplete: boolean;
 }
@@ -103,26 +106,34 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
         // Sort by roster_id to ensure consistent ordering
         const [team1, team2] = pair.sort((a, b) => a.roster_id - b.roster_id);
 
-        // Find the corresponding users
-        const user1 = users.find(u => 
-          rosters.find(r => r.roster_id === team1.roster_id)?.owner_id === u.user_id
-        );
-        const user2 = users.find(u => 
-          rosters.find(r => r.roster_id === team2.roster_id)?.owner_id === u.user_id
-        );
+        // Find the corresponding rosters and users
+        const roster1 = rosters.find(r => r.roster_id === team1.roster_id);
+        const roster2 = rosters.find(r => r.roster_id === team2.roster_id);
+        const user1 = users.find(u => roster1?.owner_id === u.user_id);
+        const user2 = users.find(u => roster2?.owner_id === u.user_id);
 
-        if (!user1 || !user2) return null;
+        if (!user1 || !user2 || !roster1 || !roster2) return null;
 
         return {
           team1: {
             name: user1.metadata.team_name || user1.display_name,
             avatar: user1.avatar,
             points: team1.points || 0,
+            record: {
+              wins: roster1.settings.wins,
+              losses: roster1.settings.losses,
+              ties: roster1.settings.ties,
+            },
           },
           team2: {
             name: user2.metadata.team_name || user2.display_name,
             avatar: user2.avatar,
             points: team2.points || 0,
+            record: {
+              wins: roster2.settings.wins,
+              losses: roster2.settings.losses,
+              ties: roster2.settings.ties,
+            },
           },
           matchup_id: team1.matchup_id,
           isComplete: team1.points !== null && team2.points !== null,
@@ -178,38 +189,53 @@ export default function MatchupsView({ currentWeek }: MatchupsViewProps) {
 
       {/* Matchups */}
       <div className={`grid gap-6 md:grid-cols-2 ${loading ? 'opacity-50' : ''}`}>
-        {processedMatchups.map((matchup) => (
-          <Card key={matchup.matchup_id} className="overflow-hidden hover:bg-white/5 transition-colors">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-x-4">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <Avatar avatarId={matchup.team1.avatar} size={40} />
+        {processedMatchups.map((matchup, index) => (
+          <Card key={index}>
+            <CardContent className="p-3 md:p-6">
+              <div className="space-y-3 md:space-y-6">
+                {/* Team 1 */}
+                <div className="flex items-center justify-between gap-3 md:gap-4">
+                  <div className="flex items-center space-x-2 md:space-x-3">
+                    <Avatar avatarId={matchup.team1.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
                     <div>
-                      <div className="font-medium">{matchup.team1.name}</div>
-                      <div className="text-3xl font-bold mt-1">
-                        {matchup.team1.points.toFixed(2)}
-                      </div>
+                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team1.name}</p>
+                      <p className="text-xs md:text-sm text-gray-400">
+                        {matchup.team1.record.wins}-{matchup.team1.record.losses}
+                        {matchup.team1.record.ties > 0 ? `-${matchup.team1.record.ties}` : ''}
+                      </p>
                     </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team1.points.toFixed(1)}</p>
+                    <p className="text-xs md:text-sm text-gray-400">Points</p>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-center px-4">
-                  {matchup.isComplete && (
-                    <div className="text-sm font-medium text-gray-400 mb-1">Final</div>
-                  )}
-                  <div className="text-xl font-bold text-gray-400">VS</div>
+                {/* VS Divider */}
+                <div className="relative py-1 md:py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10"></div>
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-gray-900 px-2 md:px-3 text-xs md:text-sm font-medium text-gray-400">VS</span>
+                  </div>
                 </div>
 
-                <div className="flex-1 text-right">
-                  <div className="flex items-center justify-end space-x-3">
+                {/* Team 2 */}
+                <div className="flex items-center justify-between gap-3 md:gap-4">
+                  <div className="flex items-center space-x-2 md:space-x-3">
+                    <Avatar avatarId={matchup.team2.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
                     <div>
-                      <div className="font-medium">{matchup.team2.name}</div>
-                      <div className="text-3xl font-bold mt-1">
-                        {matchup.team2.points.toFixed(2)}
-                      </div>
+                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team2.name}</p>
+                      <p className="text-xs md:text-sm text-gray-400">
+                        {matchup.team2.record.wins}-{matchup.team2.record.losses}
+                        {matchup.team2.record.ties > 0 ? `-${matchup.team2.record.ties}` : ''}
+                      </p>
                     </div>
-                    <Avatar avatarId={matchup.team2.avatar} size={40} />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team2.points.toFixed(1)}</p>
+                    <p className="text-xs md:text-sm text-gray-400">Points</p>
                   </div>
                 </div>
               </div>

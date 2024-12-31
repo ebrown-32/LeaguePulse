@@ -232,25 +232,25 @@ export default async function Home() {
                             `}>
                               {index + 1}
                             </div>
-                            <Avatar avatarId={user.avatar} size={36} className="rounded-lg" />
+                            <Avatar avatarId={user.avatar} size={32} className="rounded-lg" />
                             <div>
-                              <p className="font-medium tracking-tight">{user.metadata.team_name || user.display_name}</p>
-                              <p className="text-sm text-gray-400">
-                                {roster.settings.wins}-{roster.settings.losses}
-                                {roster.settings.ties > 0 ? `-${roster.settings.ties}` : ''} 
-                                <span className="ml-1 text-xs">({winPct.toFixed(1)}%)</span>
-                              </p>
+                              <p className="font-medium tracking-tight text-sm">{user.metadata.team_name || user.display_name}</p>
+                              <div className="flex items-center space-x-2 text-xs text-gray-400">
+                                <span>{roster.settings.wins}-{roster.settings.losses}{roster.settings.ties > 0 ? `-${roster.settings.ties}` : ''}</span>
+                                <span>•</span>
+                                <span>{winPct.toFixed(1)}%</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm bg-white/5 rounded-lg p-2">
-                          <div>
-                            <p className="text-xs text-gray-400 mb-0.5">Points For</p>
-                            <p className="font-medium tracking-tight">{fpts.toFixed(1)}</p>
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-white/5 rounded-lg p-2">
+                          <div className="flex flex-col items-center">
+                            <p className="text-gray-400 mb-0.5">Points For</p>
+                            <p className="font-medium">{fpts.toFixed(1)}</p>
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-400 mb-0.5">Points Against</p>
-                            <p className="font-medium tracking-tight">{fptsAgainst.toFixed(1)}</p>
+                          <div className="flex flex-col items-center">
+                            <p className="text-gray-400 mb-0.5">Points Against</p>
+                            <p className="font-medium">{fptsAgainst.toFixed(1)}</p>
                           </div>
                         </div>
                       </div>
