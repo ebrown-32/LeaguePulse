@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "Your Fantasy Football League, Visualized",
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: {
