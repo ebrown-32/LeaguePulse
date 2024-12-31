@@ -26,6 +26,7 @@ export interface SleeperRoster {
     fpts_against_decimal: number;
     fpts_against: number;
     fpts: number;
+    playoff_seed?: number;
   };
 }
 

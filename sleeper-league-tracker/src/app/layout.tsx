@@ -3,11 +3,18 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  // Optimize for modern displays
+  adjustFontFallback: true,
+  preload: true,
+});
 
 export const metadata: Metadata = {
-  title: "Fantasy League Tracker",
-  description: "Track your Sleeper fantasy league stats and records",
+  title: "League Pulse",
+  description: "Your Fantasy Football League, Visualized",
 };
 
 export default function RootLayout({
@@ -16,16 +23,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body 
-        className={`${inter.className} min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white antialiased`}
-        suppressHydrationWarning
-      >
+    <html lang="en" className={`${inter.variable} font-sans`}>
+      <body className="min-h-screen bg-gray-900 text-white antialiased">
         <Navbar />
-        <main className="pt-16 min-h-screen">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </div>
+        <main className="container mx-auto px-4 py-6 md:px-8 lg:px-12 md:py-12">
+          {children}
         </main>
       </body>
     </html>
