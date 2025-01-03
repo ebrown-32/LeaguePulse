@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,6 +29,50 @@ const navigation = [
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-gray-950/80">
+        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center space-x-3">
+            <Logo />
+            <span className="text-lg font-bold tracking-tight text-gray-900 dark:text-white">League Pulse</span>
+          </Link>
+          <div className="hidden md:flex md:items-center md:space-x-6">
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="group relative flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400"
+              >
+                <item.icon className="h-5 w-5 text-gray-400" />
+                <span>{item.name}</span>
+                {item.tag && (
+                  <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-400/10 dark:text-blue-400">
+                    {item.tag}
+                  </span>
+                )}
+              </Link>
+            ))}
+            <div className="ml-2">
+              <ThemeToggle />
+            </div>
+          </div>
+          <div className="flex items-center space-x-4 md:hidden">
+            <ThemeToggle />
+            <button className="rounded-lg p-2 text-gray-600 dark:text-gray-400">
+              <Bars3Icon className="h-6 w-6" />
+            </button>
+          </div>
+        </nav>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-gray-950/80">
