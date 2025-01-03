@@ -8,7 +8,7 @@ export default async function MatchupsPage() {
   return (
     <PageLayout
       title="Matchups"
-      subtitle="View weekly matchups and playoff brackets"
+      subtitle="View weekly game results."
       icon={<UserGroupIcon className="h-6 w-6 text-gray-400" />}
     >
       <MatchupsView />

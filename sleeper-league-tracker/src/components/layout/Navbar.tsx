@@ -29,9 +29,9 @@ interface NavigationItem {
 const navigation: NavigationItem[] = [
   { name: 'Overview', href: '/', icon: HomeIcon },
   { name: 'Matchups', href: '/matchups', icon: UsersIcon },
-  { name: 'History', href: '/history', icon: ClockIcon },
+  { name: 'History', href: '/history', icon: ClockIcon, tag:'Beta' },
   { name: 'Next Gen', href: '/next-gen', icon: SparklesIcon, tag: 'Beta' },
-  { name: 'Media', href: '/media', icon: PhotoIcon, tag: 'Soon' },
+  { name: 'Media', href: '/media', icon: PhotoIcon},
 ];
 
 export default function Navbar() {

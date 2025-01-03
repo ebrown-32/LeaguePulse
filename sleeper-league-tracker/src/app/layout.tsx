@@ -7,8 +7,18 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Sleeper League Tracker',
-  description: 'Track your Sleeper fantasy football league stats and records',
+  title: 'League Pulse',
+  description: 'A new way to consume fantasy football. Give your league a pulse.',
+  icons: {
+    icon: [
+      {
+        url: '/logo.png',
+        href: '/logo.png',
+      }
+    ],
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
