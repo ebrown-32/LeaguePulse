@@ -19,6 +19,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { getDefaultSeason, getDefaultValue, formatPoints, calculateWinPercentage, formatRecord } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 function formatRosterPositions(positions: string[]): string {
   if (!positions?.length) return 'Standard';
@@ -194,65 +195,105 @@ export default function Home() {
       <div className="space-y-6">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-          <Card>
-            <CardContent className="flex items-center space-x-3 p-4 md:pt-6">
-              <div className="rounded-xl bg-blue-500/10 p-2.5 md:p-3">
-                <TrophyIcon className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-gray-400">Status</p>
-                <div>
-                  <p className="text-lg md:text-2xl font-bold tracking-tight">{formatLeagueStatus(league.status)}</p>
-                  {league.status === 'pre_draft' && !league.draft_id && (
-                    <p className="text-xs text-gray-400 mt-0.5">Draft not scheduled</p>
-                  )}
-                  {league.status === 'pre_draft' && league.draft_id && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Draft: {formatDraftDate(league.draft_id)}
-                    </p>
-                  )}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="col-span-full md:col-span-1 relative"
+          >
+            <Card className="group hover:ring-2 hover:ring-blue-500/50 transition-all duration-300 h-full">
+              <CardContent className="relative overflow-hidden p-4 md:pt-6 h-full flex flex-col justify-center min-h-[100px]">
+                <div className="flex items-center space-x-3">
+                  <div className="rounded-xl bg-blue-500/10 p-2.5 md:p-3 group-hover:scale-110 transition-transform duration-300">
+                    <TrophyIcon className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-xs md:text-sm text-gray-400">Status</p>
+                    <div>
+                      <p className="text-lg md:text-2xl font-bold tracking-tight">{formatLeagueStatus(league.status)}</p>
+                      {league.status === 'pre_draft' && !league.draft_id && (
+                        <p className="text-xs text-gray-400 mt-0.5">Draft not scheduled</p>
+                      )}
+                      {league.status === 'pre_draft' && league.draft_id && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Draft: {formatDraftDate(league.draft_id)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+              </CardContent>
+            </Card>
+          </motion.div>
           
-          <Card>
-            <CardContent className="flex items-center space-x-3 p-4 md:pt-6">
-              <div className="rounded-xl bg-purple-500/10 p-2.5 md:p-3">
-                <UserGroupIcon className="h-5 w-5 md:h-6 md:w-6 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-gray-400">Teams</p>
-                <p className="text-lg md:text-2xl font-bold tracking-tight">{getDefaultValue(league.total_rosters, 0)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="flex items-center space-x-3 p-4 md:pt-6">
-              <div className="rounded-xl bg-green-500/10 p-2.5 md:p-3">
-                <ChartBarIcon className="h-5 w-5 md:h-6 md:w-6 text-green-500" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-gray-400">Week</p>
-                <p className="text-lg md:text-2xl font-bold tracking-tight">
-                  {formatWeekDisplay(league.status, nflState?.week)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="col-span-full md:col-span-1 relative -mt-4 md:mt-0"
+          >
+            <Card className="group hover:ring-2 hover:ring-purple-500/50 transition-all duration-300 h-full">
+              <CardContent className="relative overflow-hidden p-4 md:pt-6 h-full flex flex-col justify-center min-h-[100px]">
+                <div className="flex items-center space-x-3">
+                  <div className="rounded-xl bg-purple-500/10 p-2.5 md:p-3 group-hover:scale-110 transition-transform duration-300">
+                    <UserGroupIcon className="h-5 w-5 md:h-6 md:w-6 text-purple-500" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-xs md:text-sm text-gray-400">Teams</p>
+                    <p className="text-lg md:text-2xl font-bold tracking-tight">{getDefaultValue(league.total_rosters, 0)}</p>
+                  </div>
+                </div>
+                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+              </CardContent>
+            </Card>
+          </motion.div>
 
-          <Card>
-            <CardContent className="flex items-center space-x-3 p-4 md:pt-6">
-              <div className="rounded-xl bg-orange-500/10 p-2.5 md:p-3">
-                <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-gray-400">Playoff Teams</p>
-                <p className="text-lg md:text-2xl font-bold tracking-tight">{getDefaultValue(league.settings?.playoff_teams, 6)}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="col-span-full md:col-span-1 relative -mt-4 md:mt-0"
+          >
+            <Card className="group hover:ring-2 hover:ring-green-500/50 transition-all duration-300 h-full">
+              <CardContent className="relative overflow-hidden p-4 md:pt-6 h-full flex flex-col justify-center min-h-[100px]">
+                <div className="flex items-center space-x-3">
+                  <div className="rounded-xl bg-green-500/10 p-2.5 md:p-3 group-hover:scale-110 transition-transform duration-300">
+                    <ChartBarIcon className="h-5 w-5 md:h-6 md:w-6 text-green-500" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-xs md:text-sm text-gray-400">Week</p>
+                    <p className="text-lg md:text-2xl font-bold tracking-tight">
+                      {formatWeekDisplay(league.status, nflState?.week)}
+                    </p>
+                  </div>
+                </div>
+                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-green-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+            className="col-span-full md:col-span-1 relative -mt-4 md:mt-0"
+          >
+            <Card className="group hover:ring-2 hover:ring-orange-500/50 transition-all duration-300 h-full">
+              <CardContent className="relative overflow-hidden p-4 md:pt-6 h-full flex flex-col justify-center min-h-[100px]">
+                <div className="flex items-center space-x-3">
+                  <div className="rounded-xl bg-orange-500/10 p-2.5 md:p-3 group-hover:scale-110 transition-transform duration-300">
+                    <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-orange-500" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-xs md:text-sm text-gray-400">Playoff Teams</p>
+                    <p className="text-lg md:text-2xl font-bold tracking-tight">{getDefaultValue(league.settings?.playoff_teams, 6)}</p>
+                  </div>
+                </div>
+                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
 
         {/* League Settings */}
