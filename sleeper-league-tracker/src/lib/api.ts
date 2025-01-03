@@ -24,26 +24,30 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
   linkedIds.add(leagueId);
 
   try {
-    // First, traverse backwards through previous seasons
+    // First, get the current league info
+    const currentLeague = await getLeagueInfo(leagueId);
+    const currentOwner = (await getLeagueUsers(leagueId)).find(user => user.is_owner);
+    if (!currentOwner) {
+      return [leagueId];
+    }
+
+    // Get all leagues for the owner for next season
+    const nextSeason = (parseInt(currentLeague.season) + 1).toString();
+    const ownerLeagues = await fetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
+    
+    // Find the league that has this league as its previous_league_id
+    const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === leagueId);
+    if (nextLeague) {
+      linkedIds.add(nextLeague.league_id);
+    }
+
+    // Then, traverse backwards through previous seasons
     let currentId = leagueId;
     while (currentId) {
       const league = await getLeagueInfo(currentId);
       if (league.previous_league_id) {
         linkedIds.add(league.previous_league_id);
         currentId = league.previous_league_id;
-      } else {
-        break;
-      }
-    }
-
-    // Then, traverse forwards through next seasons
-    currentId = leagueId;
-    while (currentId) {
-      const leagues = await getUserLeagues(currentId);
-      const nextLeague = leagues.find(l => l.previous_league_id === currentId);
-      if (nextLeague) {
-        linkedIds.add(nextLeague.league_id);
-        currentId = nextLeague.league_id;
       } else {
         break;
       }
@@ -138,11 +142,25 @@ export async function getLeaguePreviousSeason(leagueId: string): Promise<string 
 export async function getAllLeagueSeasons(leagueId: string): Promise<string[]> {
   try {
     // Get the current league info
-    const league = await getLeagueInfo(leagueId);
-    const seasons: string[] = [league.season];
+    const currentLeague = await getLeagueInfo(leagueId);
+    const seasons: string[] = [currentLeague.season];
+
+    // Get the league owner
+    const currentOwner = (await getLeagueUsers(leagueId)).find(user => user.is_owner);
+    if (!currentOwner) {
+      return seasons;
+    }
+
+    // Check for next season's league
+    const nextSeason = (parseInt(currentLeague.season) + 1).toString();
+    const ownerLeagues = await fetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
+    const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === leagueId);
+    if (nextLeague) {
+      seasons.push(nextLeague.season);
+    }
 
     // Get previous seasons by following the previous_league_id chain
-    let currentLeagueId = league.previous_league_id;
+    let currentLeagueId = currentLeague.previous_league_id;
     while (currentLeagueId) {
       const previousLeague = await getLeagueInfo(currentLeagueId);
       seasons.push(previousLeague.season);

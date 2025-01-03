@@ -26,7 +26,9 @@ export function getDefaultSeason(seasons: string[], draftDate?: string | null): 
       const monthBeforeDraft = new Date(draft);
       monthBeforeDraft.setMonth(draft.getMonth() - 1);
       
+      // If we're within a month of the draft or past it, show the current season
       if (now >= monthBeforeDraft) {
+        // Find the most recent season (which could be a future season)
         return Math.max(...seasons.map(Number)).toString();
       }
     }
