@@ -301,7 +301,7 @@ export default function Home() {
           <CardHeader className="pb-2 md:pb-4">
             <div className="flex items-center space-x-2">
               <CogIcon className="h-5 w-5 text-gray-400" />
-              <CardTitle>League Settings</CardTitle>
+              <CardTitle>Settings</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
@@ -340,7 +340,7 @@ export default function Home() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-8">
               <div className="flex items-center space-x-2">
                 <TrophyIcon className="h-5 w-5 text-gray-400" />
-                <CardTitle>League Standings</CardTitle>
+                <CardTitle>Standings</CardTitle>
               </div>
               <div className="flex items-center space-x-4">
                 <SeasonSelect

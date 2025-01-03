@@ -27,7 +27,7 @@ export default async function NextGenStatsPage() {
     return (
       <PageLayout
         title="Next-Gen Stats"
-        subtitle="Advanced analytics and performance metrics"
+        subtitle="Advanced analytics and performance metrics powered by League Pulse. This is a work in progress."
         icon={<SparklesIcon className="h-6 w-6 text-gray-400" />}
       >
         <NextGenStats
