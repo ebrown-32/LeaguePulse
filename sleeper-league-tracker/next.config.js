@@ -7,6 +7,7 @@ const nextConfig = {
         hostname: 'sleepercdn.com',
       },
     ],
+    domains: ['a.espncdn.com', 's.espncdn.com'],
   },
   eslint: {
     ignoreDuringBuilds: true,
