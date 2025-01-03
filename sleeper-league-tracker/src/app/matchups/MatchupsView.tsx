@@ -6,7 +6,7 @@ import Avatar from '@/components/ui/Avatar';
 import { getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState, getLeagueInfo } from '@/lib/api';
 import type { SleeperMatchup, SleeperRoster, SleeperUser } from '@/types/sleeper';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
 interface Team {
@@ -39,18 +39,19 @@ export default function MatchupsView() {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;
       }
 
       try {
+        const leagueId = await getCurrentLeagueId();
         const [nflState, leagueData, usersData, rostersData] = await Promise.all([
           getNFLState(),
-          getLeagueInfo(LEAGUE_ID),
-          getLeagueUsers(LEAGUE_ID),
-          getLeagueRosters(LEAGUE_ID),
+          getLeagueInfo(leagueId),
+          getLeagueUsers(leagueId),
+          getLeagueRosters(leagueId),
         ]);
 
         setCurrentWeek(nflState.week);
@@ -59,7 +60,7 @@ export default function MatchupsView() {
         setUsers(usersData);
         setRosters(rostersData);
 
-        const matchupsData = await getLeagueMatchups(LEAGUE_ID, nflState.week);
+        const matchupsData = await getLeagueMatchups(leagueId, nflState.week);
         setMatchups(matchupsData);
       } catch (err) {
         setError('Failed to fetch league data. Please check your league ID and try again.');
@@ -75,7 +76,8 @@ export default function MatchupsView() {
   const fetchWeekMatchups = async (week: number) => {
     setLoading(true);
     try {
-      const newMatchups = await getLeagueMatchups(LEAGUE_ID, week);
+      const leagueId = await getCurrentLeagueId();
+      const newMatchups = await getLeagueMatchups(leagueId, week);
       setMatchups(newMatchups);
     } catch (error) {
       console.error('Failed to fetch matchups:', error);

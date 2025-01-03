@@ -1,25 +1,26 @@
-import { ChartBarIcon } from '@heroicons/react/24/outline';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { getNFLState, getLeagueInfo } from '@/lib/api';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import StatsView from '@/app/records/StatsView';
 
+export const dynamic = 'force-dynamic';
+
 export default async function StatsPage() {
-  const [nflState, league] = await Promise.all([
+  const [nflState, leagueId] = await Promise.all([
     getNFLState(),
-    getLeagueInfo(LEAGUE_ID),
+    getCurrentLeagueId(),
   ]);
 
+  const league = await getLeagueInfo(leagueId);
+
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div className="space-y-6 pb-20 md:pb-8">
-        <PageHeader
-          icon={<ChartBarIcon className="h-6 w-6 text-gray-400" />}
-          title={`${league.name}: Season Stats`}
-          subtitle={`Through Week ${nflState.week}`}
-        />
-        <StatsView currentWeek={nflState.week} />
-      </div>
+    <div className="container mx-auto px-4 py-8">
+      <PageHeader
+        title="League Records"
+        subtitle="Season statistics and records for all teams"
+        icon="chart"
+      />
+      <StatsView currentWeek={nflState.week} />
     </div>
   );
 } 

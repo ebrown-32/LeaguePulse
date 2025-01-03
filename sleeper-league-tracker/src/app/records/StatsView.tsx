@@ -13,7 +13,7 @@ import {
   ArrowTrendingDownIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Tooltip } from '@/components/ui/Tooltip';
 
@@ -77,24 +77,25 @@ export default function StatsView({ currentWeek }: StatsViewProps) {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;
       }
 
       try {
+        const leagueId = await getCurrentLeagueId();
         const [leagueData, users, rosters] = await Promise.all([
-          getLeagueInfo(LEAGUE_ID),
-          getLeagueUsers(LEAGUE_ID),
-          getLeagueRosters(LEAGUE_ID),
+          getLeagueInfo(leagueId),
+          getLeagueUsers(leagueId),
+          getLeagueRosters(leagueId),
         ]);
 
         setLeague(leagueData);
 
         // Get all matchups for the season so far
         const matchupPromises = Array.from({ length: currentWeek }, (_, i) => 
-          getLeagueMatchups(LEAGUE_ID, i + 1)
+          getLeagueMatchups(leagueId, i + 1)
         );
         const weeklyMatchups = await Promise.all(matchupPromises);
 

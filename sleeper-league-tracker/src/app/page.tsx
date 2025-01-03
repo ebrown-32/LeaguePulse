@@ -11,7 +11,7 @@ import {
   UserIcon,
   HomeIcon,
 } from '@heroicons/react/24/outline';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
 function formatRosterPositions(positions: string[]): string {
@@ -38,7 +38,7 @@ function formatLeagueStatus(status: string): string {
 
 export default async function Home() {
   // Check if league ID is configured
-  if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
     return (
       <ErrorMessage
         title="Configuration Required"
@@ -48,10 +48,11 @@ export default async function Home() {
   }
 
   try {
+    const leagueId = await getCurrentLeagueId();
     const [league, users, rosters, nflState] = await Promise.all([
-      getLeagueInfo(LEAGUE_ID),
-      getLeagueUsers(LEAGUE_ID),
-      getLeagueRosters(LEAGUE_ID),
+      getLeagueInfo(leagueId),
+      getLeagueUsers(leagueId),
+      getLeagueRosters(leagueId),
       getNFLState(),
     ]);
 
