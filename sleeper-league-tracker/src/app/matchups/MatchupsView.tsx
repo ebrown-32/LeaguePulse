@@ -213,11 +213,11 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             return (
               <Card key={team1.matchup_id} className="overflow-hidden bg-white dark:bg-gray-900">
                 <CardHeader className="border-b border-gray-200 pb-2 dark:border-gray-800">
-                  <CardTitle className="text-sm text-gray-500 dark:text-gray-400">
+                  <h2 className="text-sm font-medium text-gray-900 dark:text-white">
                     {selectedWeek >= (league?.settings?.playoff_week_start || 15)
                       ? 'Playoff Match'
                       : 'Regular Season Match'}
-                  </CardTitle>
+                  </h2>
                 </CardHeader>
                 <CardContent className="grid gap-4 p-0">
                   {/* Team 1 */}
