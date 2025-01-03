@@ -1,24 +1,15 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import './globals.css';
+import { Inter } from 'next/font/google';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  // Optimize for modern displays
-  adjustFontFallback: true,
-  preload: true,
-});
+const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: "League Pulse",
-  description: "Your Fantasy Football League, Visualized",
+export const metadata = {
+  title: 'Sleeper League Tracker',
+  description: 'Track your Sleeper fantasy football league stats and records',
 };
-
-export const dynamic = 'force-dynamic';
 
 export default function RootLayout({
   children,
@@ -26,13 +17,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} font-sans`}>
-      <body className="min-h-screen bg-gray-900 text-white antialiased flex flex-col">
-        <Navbar />
-        <main className="flex-1 container mx-auto px-4 py-6 md:px-8 lg:px-12 md:py-12">
-          {children}
-        </main>
-        <Footer />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased`}>
+        <ThemeProvider>
+          <div className="flex min-h-screen flex-col">
+            <Navbar />
+            <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+              {children}
+            </main>
+            <Footer />
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );

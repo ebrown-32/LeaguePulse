@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageLayout } from '@/components/layout/PageLayout';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getNFLState } from '@/lib/api';
 import { 
   TrophyIcon, 
@@ -69,21 +69,18 @@ export default async function Home() {
     });
 
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="space-y-6 pb-20 md:pb-8">
-          {/* Page Header */}
-          <PageHeader
-            icon={<HomeIcon className="h-6 w-6 text-gray-400" />}
-            title={`${league.name}: Overview`}
-            subtitle={`Season ${league.season}`}
-            action={commissioner && (
-              <div className="flex items-center space-x-2 text-sm text-gray-400 bg-white/5 px-3 py-2 rounded-lg">
-                <UserIcon className="h-4 w-4" />
-                <span>Commissioner: {commissioner.display_name}</span>
-              </div>
-            )}
-          />
-
+      <PageLayout
+        title={league.name}
+        subtitle={`Season ${league.season}`}
+        icon={<HomeIcon className="h-6 w-6" />}
+        action={commissioner && (
+          <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 px-3 py-2 rounded-lg">
+            <UserIcon className="h-4 w-4" />
+            <span>Commissioner: {commissioner.display_name}</span>
+          </div>
+        )}
+      >
+        <div className="space-y-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
             <Card>
@@ -297,7 +294,7 @@ export default async function Home() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageLayout>
     );
   } catch (error) {
     console.error('Failed to fetch league data:', error);

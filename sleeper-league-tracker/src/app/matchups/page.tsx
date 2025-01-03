@@ -1,15 +1,17 @@
+import { UserGroupIcon } from '@heroicons/react/24/outline';
+import { PageLayout } from '@/components/layout/PageLayout';
 import MatchupsView from './MatchupsView';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MatchupsPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Matchups</h1>
-        <p className="text-gray-400">View weekly matchups and playoff brackets.</p>
-      </div>
+    <PageLayout
+      title="Matchups"
+      subtitle="View weekly matchups and playoff brackets"
+      icon={<UserGroupIcon className="h-6 w-6 text-gray-400" />}
+    >
       <MatchupsView />
-    </div>
+    </PageLayout>
   );
 } 

@@ -1,10 +1,14 @@
+import { SparklesIcon } from '@heroicons/react/24/outline';
 import { getTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { PageLayout } from '@/components/layout/PageLayout';
 import NextGenStats from './NextGenStats';
 
+export const dynamic = 'force-dynamic';
+
 export default async function NextGenStatsPage() {
-  if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
     return (
       <ErrorMessage
         title="Configuration Required"
@@ -14,17 +18,24 @@ export default async function NextGenStatsPage() {
   }
 
   try {
+    const leagueId = await getCurrentLeagueId();
     const [initialMetrics, seasons] = await Promise.all([
-      getTeamMetrics(LEAGUE_ID),
-      getAllLeagueSeasons(LEAGUE_ID),
+      getTeamMetrics(leagueId),
+      getAllLeagueSeasons(leagueId),
     ]);
 
     return (
-      <NextGenStats
-        initialMetrics={initialMetrics}
-        seasons={seasons}
-        leagueId={LEAGUE_ID}
-      />
+      <PageLayout
+        title="Next-Gen Stats"
+        subtitle="Advanced analytics and performance metrics"
+        icon={<SparklesIcon className="h-6 w-6 text-gray-400" />}
+      >
+        <NextGenStats
+          initialMetrics={initialMetrics}
+          seasons={seasons}
+          leagueId={leagueId}
+        />
+      </PageLayout>
     );
   } catch (error) {
     console.error('Failed to fetch next-gen stats:', error);
