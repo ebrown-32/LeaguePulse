@@ -13,17 +13,25 @@ import {
   SparklesIcon,
   Bars3Icon,
   XMarkIcon,
+  UsersIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
 
-const navigation = [
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: React.ForwardRefExoticComponent<React.SVGProps<SVGSVGElement>>;
+  tag?: string;
+}
+
+const navigation: NavigationItem[] = [
   { name: 'Overview', href: '/', icon: HomeIcon },
-  { name: 'Matchups', href: '/matchups', icon: UserGroupIcon },
-  { name: 'Records', href: '/records', icon: ChartBarIcon },
-  { name: 'History', href: '/all-time', icon: ClockIcon },
+  { name: 'Matchups', href: '/matchups', icon: UsersIcon },
+  { name: 'History', href: '/history', icon: ClockIcon },
   { name: 'Next Gen', href: '/next-gen', icon: SparklesIcon, tag: 'Beta' },
-  { name: 'Media', href: '/media', icon: DocumentTextIcon, tag: 'Soon' },
+  { name: 'Media', href: '/media', icon: PhotoIcon, tag: 'Soon' },
 ];
 
 export default function Navbar() {

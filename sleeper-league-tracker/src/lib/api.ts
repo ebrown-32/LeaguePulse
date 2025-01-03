@@ -1,9 +1,10 @@
+import { calculateWinPercentage } from './utils';
 import {
   SleeperLeague,
-  SleeperMatchup,
   SleeperNFLState,
   SleeperRoster,
   SleeperUser,
+  SleeperMatchup,
 } from "@/types/sleeper";
 
 const BASE_URL = 'https://api.sleeper.app/v1';
@@ -24,26 +25,30 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
   linkedIds.add(leagueId);
 
   try {
-    // First, traverse backwards through previous seasons
+    // First, get the current league info
+    const currentLeague = await getLeagueInfo(leagueId);
+    const currentOwner = (await getLeagueUsers(leagueId)).find(user => user.is_owner);
+    if (!currentOwner) {
+      return [leagueId];
+    }
+
+    // Get all leagues for the owner for next season
+    const nextSeason = (parseInt(currentLeague.season) + 1).toString();
+    const ownerLeagues = await fetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
+    
+    // Find the league that has this league as its previous_league_id
+    const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === leagueId);
+    if (nextLeague) {
+      linkedIds.add(nextLeague.league_id);
+    }
+
+    // Then, traverse backwards through previous seasons
     let currentId = leagueId;
     while (currentId) {
       const league = await getLeagueInfo(currentId);
       if (league.previous_league_id) {
         linkedIds.add(league.previous_league_id);
         currentId = league.previous_league_id;
-      } else {
-        break;
-      }
-    }
-
-    // Then, traverse forwards through next seasons
-    currentId = leagueId;
-    while (currentId) {
-      const leagues = await getUserLeagues(currentId);
-      const nextLeague = leagues.find(l => l.previous_league_id === currentId);
-      if (nextLeague) {
-        linkedIds.add(nextLeague.league_id);
-        currentId = nextLeague.league_id;
       } else {
         break;
       }
@@ -88,11 +93,19 @@ export async function getUserLeagues(userId: string, season?: string): Promise<S
 }
 
 export async function getLeagueInfo(leagueId: string) {
-  const response = await fetch(`${BASE_URL}/league/${leagueId}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch league info: ' + response.statusText);
+  try {
+    const response = await fetch(`${BASE_URL}/league/${leagueId}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // League not found
+      }
+      throw new Error(`Failed to fetch league info: ${response.status} ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching league ${leagueId}:`, error);
+    throw error;
   }
-  return await response.json();
 }
 
 export async function getLeagueUsers(leagueId: string): Promise<SleeperUser[]> {
@@ -138,11 +151,25 @@ export async function getLeaguePreviousSeason(leagueId: string): Promise<string 
 export async function getAllLeagueSeasons(leagueId: string): Promise<string[]> {
   try {
     // Get the current league info
-    const league = await getLeagueInfo(leagueId);
-    const seasons: string[] = [league.season];
+    const currentLeague = await getLeagueInfo(leagueId);
+    const seasons: string[] = [currentLeague.season];
+
+    // Get the league owner
+    const currentOwner = (await getLeagueUsers(leagueId)).find(user => user.is_owner);
+    if (!currentOwner) {
+      return seasons;
+    }
+
+    // Check for next season's league
+    const nextSeason = (parseInt(currentLeague.season) + 1).toString();
+    const ownerLeagues = await fetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
+    const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === leagueId);
+    if (nextLeague) {
+      seasons.push(nextLeague.season);
+    }
 
     // Get previous seasons by following the previous_league_id chain
-    let currentLeagueId = league.previous_league_id;
+    let currentLeagueId = currentLeague.previous_league_id;
     while (currentLeagueId) {
       const previousLeague = await getLeagueInfo(currentLeagueId);
       seasons.push(previousLeague.season);
@@ -202,84 +229,84 @@ export interface AggregatedStats {
   seasons: number;
 }
 
-export async function getAggregatedUserStats(leagueId: string): Promise<AggregatedStats[]> {
-  const statsMap = new Map<string, AggregatedStats>();
-  let currentLeagueId = leagueId;
+export async function getAggregatedUserStats(leagueIds: string[], currentWeek: number) {
+  const stats = new Map<string, {
+    userId: string;
+    username: string;
+    avatar: string;
+    totalWins: number;
+    totalLosses: number;
+    totalTies: number;
+    totalPoints: number;
+    totalGames: number;
+    championships: number;
+    playoffAppearances: number;
+  }>();
 
-  try {
-    while (currentLeagueId) {
-      // Get league info first to check if it exists
-      const league = await getLeagueInfo(currentLeagueId);
-      const [users, rosters] = await Promise.all([
-        getLeagueUsers(currentLeagueId),
-        getLeagueRosters(currentLeagueId),
+  for (const leagueId of leagueIds) {
+    try {
+      const league = await getLeagueInfo(leagueId);
+      if (!league) continue; // Skip if league not found
+
+      const [rosters, users] = await Promise.all([
+        getLeagueRosters(leagueId),
+        getLeagueUsers(leagueId)
       ]);
 
-      users.forEach(user => {
-        const roster = rosters.find(r => r.owner_id === user.user_id);
-        if (!roster) return;
+      // Map roster IDs to user IDs
+      const rosterToUser = new Map(rosters.map(roster => [roster.roster_id, roster.owner_id]));
+      const userDetails = new Map(users.map(user => [user.user_id, { username: user.display_name, avatar: user.avatar }]));
 
-        const existingStats = statsMap.get(user.user_id) || {
-          userId: user.user_id,
-          username: user.display_name,
+      // Process each roster's stats
+      for (const roster of rosters) {
+        const userId = roster.owner_id;
+        const user = userDetails.get(userId);
+        if (!userId || !user) continue;
+
+        let userStats = stats.get(userId) || {
+          userId,
+          username: user.username,
           avatar: user.avatar,
           totalWins: 0,
           totalLosses: 0,
           totalTies: 0,
           totalPoints: 0,
-          totalPointsAgainst: 0,
-          winPercentage: 0,
-          averagePointsPerGame: 0,
-          bestFinish: roster.roster_id,
+          totalGames: 0,
           championships: 0,
           playoffAppearances: 0,
-          seasons: 0,
         };
 
-        // Update stats
-        existingStats.totalWins += roster.settings.wins;
-        existingStats.totalLosses += roster.settings.losses;
-        existingStats.totalTies += roster.settings.ties;
-        existingStats.totalPoints += roster.settings.fpts + roster.settings.fpts_decimal / 100;
-        existingStats.totalPointsAgainst += roster.settings.fpts_against + roster.settings.fpts_against_decimal / 100;
-        existingStats.seasons += 1;
-        
-        // Update best finish
-        if (roster.roster_id < existingStats.bestFinish) {
-          existingStats.bestFinish = roster.roster_id;
+        // Update regular season stats from roster settings
+        userStats.totalWins += roster.settings.wins || 0;
+        userStats.totalLosses += roster.settings.losses || 0;
+        userStats.totalTies += roster.settings.ties || 0;
+        userStats.totalPoints += (roster.settings.fpts || 0) + (roster.settings.fpts_decimal || 0) / 100;
+        userStats.totalGames += (roster.settings.wins || 0) + (roster.settings.losses || 0) + (roster.settings.ties || 0);
+
+        // Check for playoff appearance
+        if (roster.settings.rank <= league.settings.playoff_teams) {
+          userStats.playoffAppearances++;
         }
 
-        // Check for championships (assuming roster_id 1 is champion)
-        if (roster.roster_id === 1) {
-          existingStats.championships += 1;
+        // Check for championship (rank 1 is champion)
+        if (roster.settings.rank === 1) {
+          userStats.championships++;
         }
 
-        // Check for playoff appearances
-        if (roster.roster_id <= league.settings.playoff_teams) {
-          existingStats.playoffAppearances += 1;
-        }
-
-        // Calculate averages
-        const totalGames = existingStats.totalWins + existingStats.totalLosses + existingStats.totalTies;
-        existingStats.winPercentage = totalGames > 0 
-          ? (existingStats.totalWins + existingStats.totalTies * 0.5) / totalGames * 100 
-          : 0;
-        existingStats.averagePointsPerGame = totalGames > 0 
-          ? existingStats.totalPoints / totalGames 
-          : 0;
-
-        statsMap.set(user.user_id, existingStats);
-      });
-
-      // Move to previous season
-      currentLeagueId = league.previous_league_id || '';
+        stats.set(userId, userStats);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch data for league ${leagueId}:`, error);
+      // Continue with other leagues if one fails
+      continue;
     }
-
-    return Array.from(statsMap.values()).sort((a, b) => b.winPercentage - a.winPercentage);
-  } catch (error) {
-    console.error('Failed to fetch aggregated stats:', error);
-    throw error;
   }
+
+  return Array.from(stats.values()).map(user => ({
+    ...user,
+    winPercentage: calculateWinPercentage(user.totalWins, user.totalLosses, user.totalTies),
+    averagePointsPerGame: user.totalGames > 0 ? user.totalPoints / user.totalGames : 0,
+  }));
 }
 
 interface TeamMetrics {

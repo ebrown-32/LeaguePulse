@@ -182,7 +182,7 @@ export default function Home() {
   return (
     <PageLayout
       title={league.name}
-      subtitle={`Season ${league.season} • ${new Date().toLocaleDateString()}`}
+      subtitle={`Season ${nflState?.season} • ${new Date().toLocaleDateString()}`}
       icon={<HomeIcon className="h-6 w-6" />}
       action={commissioner && (
         <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 px-3 py-2 rounded-lg">
