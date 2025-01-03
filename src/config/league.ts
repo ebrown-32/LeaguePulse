@@ -56,13 +56,4 @@ export async function getLeagueIdForSeason(season: string): Promise<string | nul
   }
 
   return null;
-}
-
-export const SITE_CONFIG = {
-  name: 'League Pulse',
-  description: 'Give your fantasy football league some life',
-  links: {
-    github: 'https://github.com/yourusername/sleeper-league-tracker',
-    twitter: 'https://twitter.com/yourusername',
-  },
-}; 
+} 
