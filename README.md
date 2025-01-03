@@ -1,4 +1,4 @@
-# League Pulse - Give life to your fantasy football league.
+# League Pulse - Give your fantasy football league some life!
 
 A modern, feature-rich web application that creates a personalized website for your Sleeper fantasy football league. Built with Next.js, TypeScript, and Tailwind CSS.
 
