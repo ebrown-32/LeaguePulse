@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getAggregatedUserStats, getAllLeagueSeasons, getLeagueInfo } from '@/lib/api';
-import { LEAGUE_ID } from '@/config/league';
+import { INITIAL_LEAGUE_ID, getLinkedLeagueIds } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { TrophyIcon, ChartBarIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
@@ -30,16 +30,23 @@ export default function HistoryView() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;
       }
 
       try {
+        // Get all linked league IDs
+        const leagueIds = await getLinkedLeagueIds();
+        if (!leagueIds.length) {
+          throw new Error('No league IDs found');
+        }
+
+        // Get stats and seasons data
         const [statsData, seasonsData] = await Promise.all([
-          getAggregatedUserStats(LEAGUE_ID),
-          getAllLeagueSeasons(LEAGUE_ID),
+          getAggregatedUserStats(leagueIds[0]), // Use most recent league ID
+          getAllLeagueSeasons(leagueIds[0]),
         ]);
 
         setStats(statsData);

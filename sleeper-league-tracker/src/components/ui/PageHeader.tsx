@@ -1,34 +1,31 @@
 import { ReactNode } from 'react';
-import { Card, CardContent } from './Card';
 
 interface PageHeaderProps {
-  icon: ReactNode;
   title: string;
   subtitle?: string;
+  icon: ReactNode;
   action?: ReactNode;
 }
 
-export function PageHeader({ icon, title, subtitle, action }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, icon, action }: PageHeaderProps) {
   return (
-    <Card>
-      <CardContent className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pt-6">
-        <div className="flex items-center space-x-4">
-          <div className="rounded-xl bg-white/5 p-3">
-            {icon}
-          </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">{title}</h1>
-            {subtitle && (
-              <p className="text-gray-400 text-sm md:text-base">{subtitle}</p>
-            )}
-          </div>
+    <div className="flex items-start justify-between">
+      <div className="flex items-center space-x-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400">
+          {icon}
         </div>
-        {action && (
-          <div>
-            {action}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+      {action && <div>{action}</div>}
+    </div>
   );
 } 

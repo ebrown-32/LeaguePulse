@@ -6,34 +6,113 @@ import {
   SleeperUser,
 } from "@/types/sleeper";
 
-const SLEEPER_API_BASE = "https://api.sleeper.app/v1";
+const BASE_URL = 'https://api.sleeper.app/v1';
 
-export async function getLeagueInfo(leagueId: string): Promise<SleeperLeague> {
-  const response = await fetch(`${SLEEPER_API_BASE}/league/${leagueId}`);
+// Cache for league IDs to avoid repeated API calls
+let leagueIdsCache: Record<string, string[]> = {};
+
+/**
+ * Fetches all linked league IDs for a given league, including previous and future seasons
+ */
+export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]> {
+  // Check cache first
+  if (leagueIdsCache[leagueId]) {
+    return leagueIdsCache[leagueId];
+  }
+
+  const linkedIds = new Set<string>();
+  linkedIds.add(leagueId);
+
+  try {
+    // First, traverse backwards through previous seasons
+    let currentId = leagueId;
+    while (currentId) {
+      const league = await getLeagueInfo(currentId);
+      if (league.previous_league_id) {
+        linkedIds.add(league.previous_league_id);
+        currentId = league.previous_league_id;
+      } else {
+        break;
+      }
+    }
+
+    // Then, traverse forwards through next seasons
+    currentId = leagueId;
+    while (currentId) {
+      const leagues = await getUserLeagues(currentId);
+      const nextLeague = leagues.find(l => l.previous_league_id === currentId);
+      if (nextLeague) {
+        linkedIds.add(nextLeague.league_id);
+        currentId = nextLeague.league_id;
+      } else {
+        break;
+      }
+    }
+
+    // Convert to array and sort by season (most recent first)
+    const sortedIds = Array.from(linkedIds).sort().reverse();
+    
+    // Cache the result
+    leagueIdsCache[leagueId] = sortedIds;
+    
+    return sortedIds;
+  } catch (error) {
+    console.error('Failed to fetch linked league IDs:', error);
+    return [leagueId];
+  }
+}
+
+/**
+ * Fetches user leagues for a given season or finds next season's league
+ */
+export async function getUserLeagues(userId: string, season?: string): Promise<SleeperLeague[]> {
+  if (!season) {
+    // When no season is provided, fetch next season's leagues
+    const league = await getLeagueInfo(userId); // userId is actually leagueId in this case
+    const users = await getLeagueUsers(userId);
+    const owner = users.find(user => user.is_owner);
+    if (!owner) return [];
+
+    const nextSeason = (parseInt(league.season) + 1).toString();
+    const response = await fetch(`${BASE_URL}/user/${owner.user_id}/leagues/nfl/${nextSeason}`);
+    if (!response.ok) return [];
+    return response.json();
+  }
+
+  // When season is provided, fetch leagues for that season
+  const response = await fetch(`${BASE_URL}/user/${userId}/leagues/nfl/${season}`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch league info: ${response.statusText}`);
+    throw new Error(`Failed to fetch user leagues: ${response.statusText}`);
   }
   return response.json();
 }
 
+export async function getLeagueInfo(leagueId: string) {
+  const response = await fetch(`${BASE_URL}/league/${leagueId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch league info: ' + response.statusText);
+  }
+  return await response.json();
+}
+
 export async function getLeagueUsers(leagueId: string): Promise<SleeperUser[]> {
-  const response = await fetch(`${SLEEPER_API_BASE}/league/${leagueId}/users`);
+  const response = await fetch(`${BASE_URL}/league/${leagueId}/users`);
   if (!response.ok) {
     throw new Error(`Failed to fetch league users: ${response.statusText}`);
   }
   return response.json();
 }
 
-export async function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
-  const response = await fetch(`${SLEEPER_API_BASE}/league/${leagueId}/rosters`);
+export async function getLeagueRosters(leagueId: string, season?: string): Promise<any[]> {
+  const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}${season ? `/${season}` : ''}/rosters`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch league rosters: ${response.statusText}`);
+    throw new Error('Failed to fetch league rosters');
   }
   return response.json();
 }
 
 export async function getLeagueMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {
-  const response = await fetch(`${SLEEPER_API_BASE}/league/${leagueId}/matchups/${week}`);
+  const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch league matchups: ${response.statusText}`);
   }
@@ -41,7 +120,7 @@ export async function getLeagueMatchups(leagueId: string, week: number): Promise
 }
 
 export async function getNFLState(): Promise<SleeperNFLState> {
-  const response = await fetch(`${SLEEPER_API_BASE}/state/nfl`);
+  const response = await fetch(`${BASE_URL}/state/nfl`);
   if (!response.ok) {
     throw new Error(`Failed to fetch NFL state: ${response.statusText}`);
   }
@@ -49,14 +128,6 @@ export async function getNFLState(): Promise<SleeperNFLState> {
 }
 
 // New functions for multi-season support
-
-export async function getUserLeagues(userId: string, season: string): Promise<SleeperLeague[]> {
-  const response = await fetch(`${SLEEPER_API_BASE}/user/${userId}/leagues/nfl/${season}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user leagues: ${response.statusText}`);
-  }
-  return response.json();
-}
 
 export async function getLeaguePreviousSeason(leagueId: string): Promise<string | null> {
   const league = await getLeagueInfo(leagueId);

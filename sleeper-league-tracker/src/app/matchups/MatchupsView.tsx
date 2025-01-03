@@ -1,251 +1,308 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState, getLeagueInfo } from '@/lib/api';
-import type { SleeperMatchup, SleeperRoster, SleeperUser } from '@/types/sleeper';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
-import { LEAGUE_ID } from '@/config/league';
+import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
+import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/Select';
+import { SeasonSelect } from '@/components/ui/SeasonSelect';
+import { getDefaultSeason } from '@/lib/utils';
+import type { SleeperMatchup } from '@/types/sleeper';
+import { motion } from 'framer-motion';
 
-interface Team {
-  name: string;
-  avatar: string;
-  points: number;
-  record: {
-    wins: number;
-    losses: number;
-    ties: number;
-  };
+interface MatchupsViewProps {
+  currentWeek?: number;
 }
 
-interface MatchupDisplayData {
-  team1: Team;
-  team2: Team;
-  matchup_id: number;
-  isComplete: boolean;
-}
-
-export default function MatchupsView() {
+export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedWeek, setSelectedWeek] = useState(1);
   const [league, setLeague] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [rosters, setRosters] = useState<any[]>([]);
   const [matchups, setMatchups] = useState<SleeperMatchup[]>([]);
-  const [users, setUsers] = useState<SleeperUser[]>([]);
-  const [rosters, setRosters] = useState<SleeperRoster[]>([]);
-  const [currentWeek, setCurrentWeek] = useState(1);
+  const [selectedWeek, setSelectedWeek] = useState<number>(initialWeek || 1);
+  const [nflState, setNFLState] = useState<any>(null);
+  const [seasons, setSeasons] = useState<string[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<string>('');
+  const [seasonRosters, setSeasonRosters] = useState<any[]>([]);
+  const [loadingSeasonData, setLoadingSeasonData] = useState(false);
 
+  // Initial data fetch
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!LEAGUE_ID || LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+    const fetchData = async () => {
+      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;
       }
 
       try {
-        const [nflState, leagueData, usersData, rostersData] = await Promise.all([
-          getNFLState(),
-          getLeagueInfo(LEAGUE_ID),
-          getLeagueUsers(LEAGUE_ID),
-          getLeagueRosters(LEAGUE_ID),
+        const leagueId = await getCurrentLeagueId();
+        
+        // First, get the league info and seasons
+        const [leagueData, allSeasons] = await Promise.all([
+          getLeagueInfo(leagueId),
+          getAllLeagueSeasons(leagueId),
         ]);
 
-        setCurrentWeek(nflState.week);
-        setSelectedWeek(nflState.week);
+        // Get the default season based on league data
+        const defaultSeason = getDefaultSeason(
+          allSeasons,
+          leagueData.draft_id
+        );
+
+        // Then fetch the rest of the data
+        const [usersData, rostersData, nflStateData] = await Promise.all([
+          getLeagueUsers(leagueId),
+          getLeagueRosters(leagueId),
+          getNFLState(),
+        ]);
+        
         setLeague(leagueData);
         setUsers(usersData);
         setRosters(rostersData);
+        setNFLState(nflStateData);
+        setSeasons(allSeasons);
+        setSelectedSeason(defaultSeason);
+        setSeasonRosters(rostersData);
 
-        const matchupsData = await getLeagueMatchups(LEAGUE_ID, nflState.week);
+        // Set initial week if not provided
+        if (!initialWeek) {
+          // If in season, use current week, otherwise default to week 1
+          const currentWeek = nflStateData.week || 1;
+          setSelectedWeek(leagueData.status === 'in_season' ? currentWeek : 1);
+        }
+
+        // Fetch matchups for the selected week
+        const matchupsData = await getLeagueMatchups(leagueId, selectedWeek);
         setMatchups(matchupsData);
-      } catch (err) {
-        setError('Failed to fetch league data. Please check your league ID and try again.');
-        console.error('Failed to fetch data:', err);
+
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch league data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchInitialData();
-  }, []);
+    fetchData();
+  }, [initialWeek]);
 
-  const fetchWeekMatchups = async (week: number) => {
-    setLoading(true);
-    try {
-      const newMatchups = await getLeagueMatchups(LEAGUE_ID, week);
-      setMatchups(newMatchups);
-    } catch (error) {
-      console.error('Failed to fetch matchups:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Fetch rosters and matchups when season changes
+  useEffect(() => {
+    const fetchSeasonData = async () => {
+      if (!selectedSeason || !league) return;
+      
+      setLoadingSeasonData(true);
+      try {
+        // Get all linked league IDs
+        const linkedLeagues = await getAllLinkedLeagueIds(league.league_id);
+        
+        // Find the league ID for the selected season
+        const seasonLeagueId = await (async () => {
+          for (const leagueId of linkedLeagues) {
+            const leagueInfo = await getLeagueInfo(leagueId);
+            if (leagueInfo.season === selectedSeason) {
+              return leagueId;
+            }
+          }
+          return league.league_id; // Fallback to current league
+        })();
 
-  const handleWeekChange = (week: string) => {
-    const newWeek = parseInt(week, 10);
-    setSelectedWeek(newWeek);
-    fetchWeekMatchups(newWeek);
-  };
-
-  const processMatchups = (): MatchupDisplayData[] => {
-    // First, group matchups by matchup_id
-    const matchupPairs = matchups.reduce((acc, matchup) => {
-      // Ensure matchup_id is not null/undefined and convert to string to be safe
-      const id = matchup.matchup_id?.toString() || 'none';
-      if (!acc[id]) {
-        acc[id] = [];
+        // Fetch rosters and matchups for the correct league
+        const [seasonRostersData, matchupsData] = await Promise.all([
+          getLeagueRosters(seasonLeagueId),
+          getLeagueMatchups(seasonLeagueId, selectedWeek)
+        ]);
+        
+        setSeasonRosters(seasonRostersData);
+        setMatchups(matchupsData);
+      } catch (error) {
+        console.error('Failed to fetch season data:', error);
+        // Fallback to current data if fetch fails
+        setSeasonRosters(rosters);
+      } finally {
+        setLoadingSeasonData(false);
       }
-      acc[id].push(matchup);
-      return acc;
-    }, {} as Record<string, SleeperMatchup[]>);
+    };
 
-    // Process each pair
-    return Object.entries(matchupPairs)
-      .filter(([id, pair]) => id !== 'none' && pair.length === 2) // Ensure valid pairs only
-      .map(([_, pair]) => {
-        // Sort by roster_id to ensure consistent ordering
-        const [team1, team2] = pair.sort((a, b) => a.roster_id - b.roster_id);
+    fetchSeasonData();
+  }, [selectedSeason, selectedWeek, league, rosters]);
 
-        // Find the corresponding rosters and users
-        const roster1 = rosters.find(r => r.roster_id === team1.roster_id);
-        const roster2 = rosters.find(r => r.roster_id === team2.roster_id);
-        const user1 = users.find(u => roster1?.owner_id === u.user_id);
-        const user2 = users.find(u => roster2?.owner_id === u.user_id);
+  if (loading) return <LoadingPage />;
+  if (error) return <ErrorMessage title="Error" message={error} />;
+  if (!league || !users.length || !rosters.length) return null;
 
-        if (!user1 || !user2 || !roster1 || !roster2) return null;
+  // Group matchups by matchup_id
+  const groupedMatchups = matchups.reduce((acc, matchup) => {
+    if (!matchup.matchup_id) return acc;
+    if (!acc[matchup.matchup_id]) acc[matchup.matchup_id] = [];
+    acc[matchup.matchup_id].push(matchup);
+    return acc;
+  }, {} as Record<string, any[]>);
 
-        return {
-          team1: {
-            name: user1.metadata.team_name || user1.display_name,
-            avatar: user1.avatar,
-            points: team1.points || 0,
-            record: {
-              wins: roster1.settings.wins,
-              losses: roster1.settings.losses,
-              ties: roster1.settings.ties,
-            },
-          },
-          team2: {
-            name: user2.metadata.team_name || user2.display_name,
-            avatar: user2.avatar,
-            points: team2.points || 0,
-            record: {
-              wins: roster2.settings.wins,
-              losses: roster2.settings.losses,
-              ties: roster2.settings.ties,
-            },
-          },
-          matchup_id: team1.matchup_id,
-          isComplete: team1.points !== null && team2.points !== null,
-        };
-      })
-      .filter(Boolean) as MatchupDisplayData[];
-  };
-
-  if (error) {
-    return <ErrorMessage title="Error" message={error} />;
-  }
-
-  if (loading && !matchups.length) {
-    return (
-      <Card>
+  return (
+    <div className="space-y-6">
+      {/* Season and Week Selector */}
+      <Card className="bg-white dark:bg-gray-900">
         <CardContent className="py-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-white/10 rounded w-1/4"></div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="h-32 bg-white/10 rounded"></div>
-              <div className="h-32 bg-white/10 rounded"></div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Week {selectedWeek}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {selectedWeek >= (league?.settings?.playoff_week_start || 15)
+                  ? 'Playoffs'
+                  : 'Regular Season'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <SeasonSelect
+                seasons={seasons}
+                selectedSeason={selectedSeason}
+                onSeasonChange={setSelectedSeason}
+                className="w-[140px]"
+              />
+              <Select
+                value={selectedWeek.toString()}
+                onValueChange={(value) => setSelectedWeek(Number(value))}
+              >
+                <SelectTrigger className="w-[180px]">
+                  Week {selectedWeek}
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 18 }, (_, i) => (
+                    <SelectItem key={i + 1} value={(i + 1).toString()}>
+                      Week {i + 1}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
       </Card>
-    );
-  }
 
-  const processedMatchups = processMatchups();
-
-  return (
-    <div className="space-y-8">
-      {/* Week Selection */}
-      <div className="flex items-center justify-end">
-        <div className="w-40">
-          <Select
-            value={selectedWeek.toString()}
-            onValueChange={handleWeekChange}
-          >
-            <SelectTrigger>
-              <SelectValue>Week {selectedWeek}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 18 }, (_, i) => i + 1).map((week) => (
-                <SelectItem key={week} value={week.toString()}>
-                  Week {week}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Matchups Grid */}
+      {loadingSeasonData ? (
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner />
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2">
+          {Object.values(groupedMatchups).map((matchup) => {
+            const [team1, team2] = matchup;
+            if (!team1 || !team2) return null;
 
-      {/* Matchups */}
-      <div className={`grid gap-6 md:grid-cols-2 ${loading ? 'opacity-50' : ''}`}>
-        {processedMatchups.map((matchup, index) => (
-          <Card key={index}>
-            <CardContent className="p-3 md:p-6">
-              <div className="space-y-3 md:space-y-6">
-                {/* Team 1 */}
-                <div className="flex items-center justify-between gap-3 md:gap-4">
-                  <div className="flex items-center space-x-2 md:space-x-3">
-                    <Avatar avatarId={matchup.team1.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
-                    <div>
-                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team1.name}</p>
-                      <p className="text-xs md:text-sm text-gray-400">
-                        {matchup.team1.record.wins}-{matchup.team1.record.losses}
-                        {matchup.team1.record.ties > 0 ? `-${matchup.team1.record.ties}` : ''}
-                      </p>
+            const roster1 = seasonRosters.find((r) => r.roster_id === team1.roster_id);
+            const roster2 = seasonRosters.find((r) => r.roster_id === team2.roster_id);
+            const user1 = users.find((u) => u.user_id === roster1?.owner_id);
+            const user2 = users.find((u) => u.user_id === roster2?.owner_id);
+
+            if (!roster1 || !roster2 || !user1 || !user2) return null;
+
+            const team1Points = team1.points || 0;
+            const team2Points = team2.points || 0;
+            const matchupComplete = team1.points !== null && team2.points !== null;
+            const team1Winning = team1Points > team2Points;
+            const team2Winning = team2Points > team1Points;
+
+            return (
+              <Card key={team1.matchup_id} className="overflow-hidden bg-white dark:bg-gray-900">
+                <CardHeader className="border-b border-gray-200 pb-2 dark:border-gray-800">
+                  <CardTitle className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedWeek >= (league?.settings?.playoff_week_start || 15)
+                      ? 'Playoff Match'
+                      : 'Regular Season Match'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4 p-0">
+                  {/* Team 1 */}
+                  <motion.div
+                    className={`flex items-center justify-between p-4 transition-colors ${
+                      matchupComplete && team1Winning
+                        ? 'bg-green-50 dark:bg-green-500/10'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                    initial={false}
+                    animate={{
+                      backgroundColor: matchupComplete && team1Winning
+                        ? 'var(--winner-bg)'
+                        : 'var(--base-bg)'
+                    }}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Avatar
+                        avatarId={user1.avatar}
+                        size={40}
+                        className="rounded-lg ring-2 ring-gray-200 dark:ring-gray-800"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {user1.metadata?.team_name || user1.display_name}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {roster1.settings.wins}-{roster1.settings.losses}
+                          {roster1.settings.ties > 0 ? `-${roster1.settings.ties}` : ''}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team1.points.toFixed(1)}</p>
-                    <p className="text-xs md:text-sm text-gray-400">Points</p>
-                  </div>
-                </div>
-
-                {/* VS Divider */}
-                <div className="relative py-1 md:py-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/10"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-gray-900 px-2 md:px-3 text-xs md:text-sm font-medium text-gray-400">VS</span>
-                  </div>
-                </div>
-
-                {/* Team 2 */}
-                <div className="flex items-center justify-between gap-3 md:gap-4">
-                  <div className="flex items-center space-x-2 md:space-x-3">
-                    <Avatar avatarId={matchup.team2.avatar} size={32} className="rounded-lg md:w-10 md:h-10" />
-                    <div>
-                      <p className="font-medium tracking-tight text-sm md:text-base">{matchup.team2.name}</p>
-                      <p className="text-xs md:text-sm text-gray-400">
-                        {matchup.team2.record.wins}-{matchup.team2.record.losses}
-                        {matchup.team2.record.ties > 0 ? `-${matchup.team2.record.ties}` : ''}
-                      </p>
+                    <div className={`text-2xl font-bold ${
+                      matchupComplete && team1Winning
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-gray-900 dark:text-white'
+                    }`}>
+                      {team1Points?.toFixed(2) || '0.00'}
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl md:text-2xl font-bold tracking-tight">{matchup.team2.points.toFixed(1)}</p>
-                    <p className="text-xs md:text-sm text-gray-400">Points</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  </motion.div>
+
+                  {/* Team 2 */}
+                  <motion.div
+                    className={`flex items-center justify-between p-4 transition-colors ${
+                      matchupComplete && team2Winning
+                        ? 'bg-green-50 dark:bg-green-500/10'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                    initial={false}
+                    animate={{
+                      backgroundColor: matchupComplete && team2Winning
+                        ? 'var(--winner-bg)'
+                        : 'var(--base-bg)'
+                    }}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Avatar
+                        avatarId={user2.avatar}
+                        size={40}
+                        className="rounded-lg ring-2 ring-gray-200 dark:ring-gray-800"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {user2.metadata?.team_name || user2.display_name}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {roster2.settings.wins}-{roster2.settings.losses}
+                          {roster2.settings.ties > 0 ? `-${roster2.settings.ties}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`text-2xl font-bold ${
+                      matchupComplete && team2Winning
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-gray-900 dark:text-white'
+                    }`}>
+                      {team2Points?.toFixed(2) || '0.00'}
+                    </div>
+                  </motion.div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 } 
