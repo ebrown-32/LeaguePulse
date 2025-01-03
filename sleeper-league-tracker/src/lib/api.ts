@@ -103,10 +103,10 @@ export async function getLeagueUsers(leagueId: string): Promise<SleeperUser[]> {
   return response.json();
 }
 
-export async function getLeagueRosters(leagueId: string): Promise<SleeperRoster[]> {
-  const response = await fetch(`${BASE_URL}/league/${leagueId}/rosters`);
+export async function getLeagueRosters(leagueId: string, season?: string): Promise<any[]> {
+  const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}${season ? `/${season}` : ''}/rosters`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch league rosters: ${response.statusText}`);
+    throw new Error('Failed to fetch league rosters');
   }
   return response.json();
 }

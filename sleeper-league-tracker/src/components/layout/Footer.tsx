@@ -1,5 +1,4 @@
 import Logo from '@/components/ui/Logo';
-import { LEAGUE_ID } from '@/config/league';
 import { GithubIcon } from 'lucide-react';
 
 export default function Footer() {
