@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HomeIcon,
@@ -15,6 +15,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import Logo from '@/components/ui/Logo';
 
 const navigation = [
   { name: 'Overview', href: '/', icon: HomeIcon },
@@ -25,34 +26,6 @@ const navigation = [
   { name: 'Media', href: '/media', icon: DocumentTextIcon, tag: 'Soon' },
 ];
 
-const Logo = () => (
-  <div className="flex items-center space-x-3">
-    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg ring-4 ring-blue-500/20">
-      <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", duration: 0.5 }}
-      >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </motion.div>
-    </div>
-    <Link
-      href="/"
-      className="text-lg font-bold tracking-tight text-gray-900 hover:text-gray-600 transition-colors dark:text-white dark:hover:text-gray-400"
-    >
-      League Pulse
-    </Link>
-  </div>
-);
-
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -60,7 +33,10 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-gray-950/80">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Logo />
+        <Link href="/" className="flex items-center space-x-3">
+          <Logo />
+          <span className="text-lg font-bold tracking-tight text-gray-900 hover:text-gray-600 transition-colors dark:text-white dark:hover:text-gray-400">League Pulse</span>
+        </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex md:items-center md:space-x-6">
