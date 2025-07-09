@@ -15,9 +15,10 @@ export function SeasonSelect({ seasons, selectedSeason, onSeasonChange, classNam
   return (
     <Select value={selectedSeason} onValueChange={onSeasonChange}>
       <SelectTrigger className={className}>
-        Season {selectedSeason}
+        {selectedSeason === 'all-time' ? 'All-Time' : `Season ${selectedSeason}`}
       </SelectTrigger>
       <SelectContent>
+        <SelectItem value="all-time">All-Time</SelectItem>
         {sortedSeasons.map((season) => (
           <SelectItem key={season} value={season}>
             Season {season}

@@ -11,7 +11,7 @@ export default async function HistoryPage() {
   return (
     <PageLayout
       title="League History"
-      subtitle="Historical performance, records, and season statistics. This is a work in progress."
+      subtitle="Explore your league's rich history with comprehensive stats, records, and dynasty rankings"
       icon={<ClockIcon className="h-6 w-6 text-gray-400" />}
     >
       <HistoryView currentWeek={nflState.week} />
