@@ -132,7 +132,12 @@ export default function TeamStory({ user, seasonData, records }: TeamStoryProps)
           <CardContent>
             <div className="space-y-4">
               {seasonPerformances
-                .sort((a, b) => parseInt(b.season) - parseInt(a.season))
+                .filter((performance): performance is NonNullable<typeof performance> => performance !== null)
+                .sort((a, b) => {
+                  const seasonA = a.season ? parseInt(a.season) : 0;
+                  const seasonB = b.season ? parseInt(b.season) : 0;
+                  return seasonB - seasonA;
+                })
                 .map((performance, index) => (
                   <motion.div
                     key={performance.season}
