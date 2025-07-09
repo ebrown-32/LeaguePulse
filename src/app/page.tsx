@@ -33,10 +33,36 @@ function formatRosterPositions(positions: string[]): string {
     .join(', ');
 }
 
+function getEffectiveLeagueStatus(league: any, nflState: any): string {
+  // If the league status is already in_season, post_season, or complete, use that
+  if (['in_season', 'post_season', 'complete'].includes(league.status)) {
+    return league.status;
+  }
+  
+  // If the league status is drafting, use that
+  if (league.status === 'drafting') {
+    return 'drafting';
+  }
+  
+  // If the league status is pre_draft but we have a draft_id and NFL week is 0 or preseason
+  if (league.status === 'pre_draft' && league.draft_id && nflState?.week === 0) {
+    return 'preseason';
+  }
+  
+  // If the league status is pre_draft but we have a draft_id and NFL week is 1 or higher
+  if (league.status === 'pre_draft' && league.draft_id && nflState?.week && nflState.week >= 1) {
+    return 'in_season';
+  }
+  
+  // Default to pre_draft
+  return 'pre_draft';
+}
+
 function formatLeagueStatus(status: string): string {
   const statusMap: Record<string, string> = {
     'pre_draft': 'Pre-Draft',
     'drafting': 'Drafting',
+    'preseason': 'Preseason',
     'in_season': 'In Season',
     'post_season': 'Postseason',
     'complete': 'Complete',
@@ -58,6 +84,8 @@ function formatWeekDisplay(status: string, week: number | null): string {
   switch (status) {
     case 'drafting':
       return 'Draft Week';
+    case 'preseason':
+      return 'Preseason';
     case 'in_season':
     case 'post_season':
       return `Week ${getDefaultValue(week, 0)}`;
@@ -210,15 +238,25 @@ export default function Home() {
                   <div className="relative z-10">
                     <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Status</p>
                     <div>
-                      <p className="text-lg md:text-2xl font-bold tracking-tight">{formatLeagueStatus(league.status)}</p>
-                      {league.status === 'pre_draft' && !league.draft_id && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Draft not scheduled</p>
-                      )}
-                      {league.status === 'pre_draft' && league.draft_id && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Draft: {formatDraftDate(league.draft_id)}
-                        </p>
-                      )}
+                      {(() => {
+                        const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
+                        return (
+                          <>
+                            <p className="text-lg md:text-2xl font-bold tracking-tight">{formatLeagueStatus(effectiveStatus)}</p>
+                            {effectiveStatus === 'pre_draft' && !league.draft_id && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Draft not scheduled</p>
+                            )}
+                            {effectiveStatus === 'pre_draft' && league.draft_id && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                Draft: {formatDraftDate(league.draft_id)}
+                              </p>
+                            )}
+                            {effectiveStatus === 'preseason' && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Season starting soon</p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -264,7 +302,7 @@ export default function Home() {
                   <div className="relative z-10">
                     <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Week</p>
                     <p className="text-lg md:text-2xl font-bold tracking-tight">
-                      {formatWeekDisplay(league.status, nflState?.week)}
+                      {formatWeekDisplay(getEffectiveLeagueStatus(league, nflState), nflState?.week)}
                     </p>
                   </div>
                 </div>
@@ -349,15 +387,18 @@ export default function Home() {
                   onSeasonChange={setSelectedSeason}
                   className="w-[140px]"
                 />
-                {league.status === 'in_season' && selectedSeason === league.season && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 px-4 py-2 rounded-lg">
-                    {loadingSeasonData ? (
-                      <span className="animate-pulse">Loading...</span>
-                    ) : (
-                      formatWeekDisplay(league.status, nflState?.week)
-                    )}
-                  </div>
-                )}
+                {(() => {
+                  const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
+                  return (effectiveStatus === 'in_season' || effectiveStatus === 'preseason') && selectedSeason === league.season && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 px-4 py-2 rounded-lg">
+                      {loadingSeasonData ? (
+                        <span className="animate-pulse">Loading...</span>
+                      ) : (
+                        formatWeekDisplay(effectiveStatus, nflState?.week)
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </CardHeader>

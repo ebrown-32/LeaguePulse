@@ -27,6 +27,7 @@ export interface SleeperRoster {
     fpts_against: number;
     fpts: number;
     playoff_seed?: number;
+    rank?: number;
   };
 }
 
@@ -53,6 +54,7 @@ export interface SleeperLeague {
     daily_waivers: number;
     bench_slots: number;
     trade_deadline: number;
+    median_wins?: boolean; // Median games enabled
   };
   season: string;
   scoring_settings: Record<string, number>;

@@ -1,5 +1,5 @@
 import { SparklesIcon } from '@heroicons/react/24/outline';
-import { getTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
+import { getAdvancedTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { PageLayout } from '@/components/layout/PageLayout';
@@ -20,7 +20,7 @@ export default async function NextGenStatsPage() {
   try {
     const leagueId = await getCurrentLeagueId();
     const [initialMetrics, seasons] = await Promise.all([
-      getTeamMetrics(leagueId),
+      getAdvancedTeamMetrics(leagueId),
       getAllLeagueSeasons(leagueId),
     ]);
 
