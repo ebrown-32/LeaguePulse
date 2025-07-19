@@ -8,17 +8,17 @@ export function cn(...inputs: ClassValue[]) {
 export function getDefaultSeason(seasons: string[], draftDate?: string | null): string {
   if (!seasons.length) return new Date().getFullYear().toString();
   
-  // Get current year and most recent completed season
-  const currentYear = new Date().getFullYear();
-  const completedSeasons = seasons.filter(season => Number(season) < currentYear);
-  const mostRecentSeason = completedSeasons.length ? Math.max(...completedSeasons.map(Number)).toString() : currentYear.toString();
+  // Always prefer the current active season (most recent season in the list)
+  // This ensures we start with the current active season instead of completed seasons
+  const currentActiveSeason = Math.max(...seasons.map(Number)).toString();
   
-  // If no draft date is set, return the most recent completed season
+  // If no draft date is set, return the current active season
   if (!draftDate) {
-    return mostRecentSeason;
+    return currentActiveSeason;
   }
   
-  // If draft date is provided, check if it's valid and we're within a month of it
+  // If draft date is provided, still prefer the current active season
+  // The draft date logic was causing us to default to old seasons
   try {
     const draft = new Date(Number(draftDate));
     if (!isNaN(draft.getTime())) {
@@ -26,18 +26,15 @@ export function getDefaultSeason(seasons: string[], draftDate?: string | null): 
       const monthBeforeDraft = new Date(draft);
       monthBeforeDraft.setMonth(draft.getMonth() - 1);
       
-      // If we're within a month of the draft or past it, show the current season
-      if (now >= monthBeforeDraft) {
-        // Find the most recent season (which could be a future season)
-        return Math.max(...seasons.map(Number)).toString();
-      }
+      // Always show the current active season regardless of draft timing
+      return currentActiveSeason;
     }
   } catch (e) {
     console.warn('Invalid draft date provided:', draftDate);
   }
   
-  // Default to most recent completed season
-  return mostRecentSeason;
+  // Default to current active season
+  return currentActiveSeason;
 }
 
 export function getDefaultValue<T>(value: T | null | undefined, defaultValue: T): T {

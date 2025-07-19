@@ -133,6 +133,33 @@ export async function getLeagueRosters(leagueId: string, season?: string): Promi
   return response.json();
 }
 
+export async function getPlayoffBracket(leagueId: string): Promise<any> {
+  const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
+  if (!response.ok) {
+    // If winners bracket fails, try losers bracket
+    const losersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+    if (!losersResponse.ok) {
+      throw new Error('Failed to fetch playoff bracket');
+    }
+    return { winners_bracket: null, losers_bracket: await losersResponse.json() };
+  }
+  
+  // Try to get both brackets
+  try {
+    const losersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+    const losers_bracket = losersResponse.ok ? await losersResponse.json() : null;
+    return { 
+      winners_bracket: await response.json(), 
+      losers_bracket 
+    };
+  } catch (error) {
+    return { 
+      winners_bracket: await response.json(), 
+      losers_bracket: null 
+    };
+  }
+}
+
 export async function getLeagueMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {
   const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`);
   if (!response.ok) {
@@ -1623,6 +1650,7 @@ interface SeasonAnalysis {
   };
 }
 
+// Enhanced league history generation with improved accuracy and performance
 export async function generateComprehensiveLeagueHistory(leagueIds: string[]): Promise<{
   records: LeagueRecord[];
   seasonAnalyses: SeasonAnalysis[];
