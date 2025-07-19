@@ -1,6 +1,6 @@
 import { ClockIcon } from '@heroicons/react/24/outline';
 import { PageLayout } from '@/components/layout/PageLayout';
-import HistoryView from './HistoryView';
+import EnhancedHistoryView from './EnhancedHistoryView';
 import { getNFLState } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -11,10 +11,10 @@ export default async function HistoryPage() {
   return (
     <PageLayout
       title="League History"
-      subtitle="Explore your league's rich history with comprehensive stats, records, and dynasty rankings"
+      subtitle="Comprehensive stats, records, and insights"
       icon={<ClockIcon className="h-6 w-6 text-gray-400" />}
     >
-      <HistoryView currentWeek={nflState.week} />
+      <EnhancedHistoryView currentWeek={nflState.week} />
     </PageLayout>
   );
 } 
