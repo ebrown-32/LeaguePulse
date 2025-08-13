@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/ai-agents/auto-generate",
-      "schedule": "0 * * *"
+      "schedule": "0 17 * * *"
     }
   ]
 }
