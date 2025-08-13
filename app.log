@@ -1,0 +1,16 @@
+
+> sleeper-league-tracker@0.1.0 dev
+> next dev --turbopack
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+   ▲ Next.js 15.1.3 (Turbopack)
+   - Local:        http://localhost:3001
+   - Network:      http://172.17.0.3:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1289ms
+   Reload env: .env.local
+   Reload env: .env.local
+   Reload env: .env.local
+   Reload env: .env.local

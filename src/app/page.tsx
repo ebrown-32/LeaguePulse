@@ -263,6 +263,11 @@ export default function Home() {
   const [currentWeekMatchups, setCurrentWeekMatchups] = useState<any[]>([]);
   const [allTimeUserStats, setAllTimeUserStats] = useState<any>(null);
 
+  // Calculate effective week for display (week 1 during preseason, actual week during regular season)
+  const effectiveWeek = nflState?.season_type === 'regular' 
+    ? nflState.week 
+    : 1;
+
   // Initial data fetch
   useEffect(() => {
     const fetchData = async () => {
@@ -296,9 +301,14 @@ export default function Home() {
         
         // Fetch current week matchups for league activity
         let matchupsData: any[] = [];
-        if (nflStateData?.week && leagueData.status === 'in_season') {
+        // Use actual week only during regular season, default to week 1 during preseason
+        const effectiveWeek = nflStateData?.season_type === 'regular' 
+          ? nflStateData.week 
+          : 1;
+        
+        if (effectiveWeek && leagueData.status === 'in_season') {
           try {
-            matchupsData = await getLeagueMatchups(leagueId, nflStateData.week);
+            matchupsData = await getLeagueMatchups(leagueId, effectiveWeek);
           } catch (error) {
             console.error('Failed to fetch current week matchups:', error);
           }
@@ -339,6 +349,12 @@ export default function Home() {
   useEffect(() => {
     const fetchSeasonRosters = async () => {
       if (!selectedSeason || !league) return;
+      
+      // Skip fetching for all-time view since we already have the data
+      if (selectedSeason === 'all-time') {
+        setLoadingSeasonData(false);
+        return;
+      }
       
       setLoadingSeasonData(true);
       try {
@@ -387,6 +403,38 @@ export default function Home() {
     const aPoints = getDefaultValue(a.settings?.fpts, 0) + getDefaultValue(a.settings?.fpts_decimal, 0) / 100;
     return bPoints - aPoints;
   });
+
+  // Prepare all-time standings data when All-Time is selected
+  const allTimeStandings = selectedSeason === 'all-time' && allTimeUserStats
+    ? Object.entries(allTimeUserStats)
+        .map(([userId, userStats]) => {
+          const stats = userStats as any;
+          return {
+            user: users.find(u => u.user_id === userId),
+            userId,
+            username: stats.username,
+            avatar: stats.avatar,
+            totalWins: stats.totalWins,
+            totalLosses: stats.totalLosses,
+            totalTies: stats.totalTies,
+            totalPoints: stats.totalPoints,
+            totalPointsAgainst: stats.totalPointsAgainst,
+            championships: stats.championships,
+            winPercentage: stats.winPercentage
+          };
+        })
+        .filter(item => item.user)
+        .sort((a, b) => {
+          // Sort by win percentage, then by total wins, then by championships
+          if (Math.abs(b.winPercentage - a.winPercentage) > 0.001) {
+            return b.winPercentage - a.winPercentage;
+          }
+          if (b.totalWins !== a.totalWins) {
+            return b.totalWins - a.totalWins;
+          }
+          return b.championships - a.championships;
+        })
+    : [];
 
   return (
     <PageLayout
@@ -463,7 +511,7 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Current Week</p>
-                    <p className="text-lg md:text-xl font-bold">{formatWeekDisplay(getEffectiveLeagueStatus(league, nflState), nflState?.week)}</p>
+                    <p className="text-lg md:text-xl font-bold">{formatWeekDisplay(getEffectiveLeagueStatus(league, nflState), effectiveWeek)}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                       {getWeekContext(league, nflState)}
                     </p>
@@ -510,7 +558,7 @@ export default function Home() {
                   <BoltIcon className="h-5 w-5 text-yellow-500" />
                   <h2 className="text-xl font-bold">This Week's Battles</h2>
                   <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                    Week {nflState?.week}
+                    Week {effectiveWeek}
                   </span>
                 </div>
               </CardHeader>
@@ -590,8 +638,62 @@ export default function Home() {
                   <div className="text-center">PA</div>
                 </div>
                 
-                {/* Season Standings */}
-                {sortedRosters.map((roster, index) => {
+                {/* Conditional Standings: Season vs All-Time */}
+                {selectedSeason === 'all-time' ? (
+                  // All-Time Standings
+                  allTimeStandings.map((standing, index) => {
+                    const user = standing.user;
+                    if (!user) return null;
+
+                    const totalGames = standing.totalWins + standing.totalLosses + standing.totalTies;
+                    const avgPoints = totalGames > 0 ? standing.totalPoints / totalGames : 0;
+                    const avgPointsAgainst = totalGames > 0 ? standing.totalPointsAgainst / totalGames : 0;
+
+                    return (
+                      <motion.div
+                        key={user.user_id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.4, delay: index * 0.05 }}
+                        className="relative overflow-hidden rounded-xl transition-all p-3 md:p-4 bg-gradient-to-r from-yellow-50 to-amber-50 hover:from-yellow-100 hover:to-amber-100 dark:from-yellow-500/10 dark:to-amber-500/10 dark:hover:from-yellow-500/20 dark:hover:to-amber-500/20 ring-1 ring-yellow-200 dark:ring-yellow-500/30"
+                      >
+                        <div className="grid grid-cols-5 md:grid-cols-6 gap-3 md:gap-4 items-center">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80 text-xs md:text-sm font-bold text-gray-600 dark:text-gray-300">
+                              {index + 1}
+                            </div>
+                            <Avatar avatarId={user.avatar} size={24} className="rounded md:w-6 md:h-6" />
+                            <span className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {user.display_name}
+                            </span>
+                          </div>
+                          <div className="text-center font-semibold text-gray-900 dark:text-white text-xs md:text-sm">
+                            {standing.totalWins}-{standing.totalLosses}{standing.totalTies > 0 ? `-${standing.totalTies}` : ''}
+                          </div>
+                          <div className="text-center font-medium text-xs md:text-sm">
+                            {(standing.winPercentage * 100).toFixed(1)}%
+                          </div>
+                          <div className="text-center font-medium">{formatPoints(avgPoints)}</div>
+                          <div className="text-center font-medium">{formatPoints(avgPointsAgainst)}</div>
+                        </div>
+
+                        {/* All-Time Badge */}
+                        {index === 0 && (
+                          <div className="absolute top-1 right-1 md:top-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-yellow-700 bg-yellow-200 dark:text-yellow-300 dark:bg-yellow-500/30 rounded-full">
+                            👑 ALL-TIME KING
+                          </div>
+                        )}
+                        {standing.championships > 0 && (
+                          <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-green-700 bg-green-200 dark:text-green-300 dark:bg-green-500/30 rounded-full">
+                            {standing.championships} 🏆
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })
+                ) : (
+                  // Season Standings
+                  sortedRosters.map((roster, index) => {
                     const user = users.find(u => u.user_id === roster.owner_id);
                     if (!user) return null;
 
@@ -684,7 +786,8 @@ export default function Home() {
                         )}
                       </motion.div>
                     );
-                  })}
+                  })
+                )}
               </div>
             )}
           </CardContent>

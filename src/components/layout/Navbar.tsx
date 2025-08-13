@@ -31,7 +31,7 @@ const navigation: NavigationItem[] = [
   { name: 'Matchups', href: '/matchups', icon: UsersIcon },
   { name: 'History', href: '/history', icon: ClockIcon, tag:'Beta' },
   { name: 'Next Gen', href: '/next-gen', icon: SparklesIcon, tag: 'Beta' },
-  { name: 'Media', href: '/media', icon: PhotoIcon},
+  { name: 'Media', href: '/media', icon: PhotoIcon, tag: 'New'},
 ];
 
 export default function Navbar() {
