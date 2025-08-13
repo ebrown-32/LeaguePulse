@@ -46,7 +46,7 @@ export function getDefaultValue<T>(value: T | null | undefined, defaultValue: T)
 
 export function formatPoints(points: number | null | undefined): string {
   const value = getDefaultValue(points, 0);
-  return value.toFixed(1);
+  return Math.round(value).toString();
 }
 
 export function calculateWinPercentage(wins: number, losses: number, ties: number): number {

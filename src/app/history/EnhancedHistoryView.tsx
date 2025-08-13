@@ -119,7 +119,6 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
     { type: 'blowout', title: 'Biggest Blowouts', icon: BoltIcon, color: 'orange', description: 'Most dominant victories' },
     { type: 'closeGame', title: 'Closest Games', icon: HeartIcon, color: 'pink', description: 'Nail-biting finishes' },
     { type: 'winStreak', title: 'Win Streaks', icon: ArrowTrendingUpIcon, color: 'green', description: 'Longest winning streaks' },
-    { type: 'lossStreak', title: 'Loss Streaks', icon: ArrowTrendingDownIcon, color: 'red', description: 'Longest losing streaks' },
   ];
 
   if (loading) {
@@ -288,7 +287,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                         {champion.details.pointsFor && (
                           <div className="flex justify-between">
                             <span className="text-gray-500 dark:text-gray-400">Points For:</span>
-                            <span className="font-medium text-gray-900 dark:text-white">{champion.details.pointsFor.toFixed(1)}</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{Math.round(champion.details.pointsFor)}</span>
                           </div>
                         )}
                       </div>
@@ -478,7 +477,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                                   <div className="text-sm text-gray-500 dark:text-gray-400">
                                     {record.type === 'highScore' || record.type === 'lowScore' || 
                                      record.type === 'playoffHighScore' || record.type === 'playoffLowScore' ? 'points' : 
-                                     record.type === 'winStreak' || record.type === 'lossStreak' ? 'games' :
+                                     record.type === 'winStreak' ? 'games' :
                                      record.type === 'blowout' || record.type === 'closeGame' ? 'margin' :
                                      record.type === 'championship' || record.type === 'runnerUp' || record.type === 'playoffAppearance' ? 'finish' : 'record'}
                                   </div>
@@ -499,7 +498,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                                   {record.details && (
                                     <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                                       {record.details.winnerScore && record.details.loserScore && 
-                                        `${record.details.winnerScore.toFixed(2)} - ${record.details.loserScore.toFixed(2)}`}
+                                        `${Math.round(record.details.winnerScore)} - ${Math.round(record.details.loserScore)}`}
                                       {record.details.rank && ` • Rank: ${record.details.rank}`}
                                       {record.details.record && ` • ${record.details.record}`}
                                       {record.details.opponent && ` • vs ${record.details.opponent}`}
@@ -547,7 +546,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                   {record.type === 'highScore' || record.type === 'lowScore' ||
                                    record.type === 'playoffHighScore' || record.type === 'playoffLowScore' ? 'points' : 
-                                   record.type === 'winStreak' || record.type === 'lossStreak' ? 'games' :
+                                   record.type === 'winStreak' ? 'games' :
                                    record.type === 'blowout' || record.type === 'closeGame' ? 'margin' :
                                    record.type === 'championship' || record.type === 'runnerUp' || record.type === 'playoffAppearance' ? 'finish' : 'record'}
                                 </div>
@@ -572,7 +571,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                               {record.details && (
                                 <div className="text-xs text-gray-500 dark:text-gray-500">
                                   {record.details.winnerScore && record.details.loserScore && 
-                                    `${record.details.winnerScore.toFixed(2)} - ${record.details.loserScore.toFixed(2)}`}
+                                    `${Math.round(record.details.winnerScore)} - ${Math.round(record.details.loserScore)}`}
                                   {record.details.rank && ` • Rank: ${record.details.rank}`}
                                   {record.details.record && ` • ${record.details.record}`}
                                   {record.details.opponent && ` • vs ${record.details.opponent}`}
@@ -610,7 +609,6 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                     <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Record</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Win%</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Championships</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Playoffs</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Avg Points</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Seasons</th>
                   </tr>
@@ -642,11 +640,6 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                         <td className="py-3 px-4">
                           <span className="font-bold text-yellow-600 dark:text-yellow-400">
                             {userStats.championships}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-blue-600 dark:text-blue-400">
-                            {userStats.playoffAppearances}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -704,12 +697,6 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                         <div className="text-xs text-gray-500 dark:text-gray-400">Championships</div>
                         <div className="font-bold text-yellow-600 dark:text-yellow-400">
                           {userStats.championships}
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Playoffs</div>
-                        <div className="font-medium text-blue-600 dark:text-blue-400">
-                          {userStats.playoffAppearances}
                         </div>
                       </div>
                       <div className="space-y-1 col-span-2">

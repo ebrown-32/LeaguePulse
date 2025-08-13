@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/ai-agents/auto-generate",
+      "schedule": "0 8,12,16,20 * * *"
+    }
+  ]
+}

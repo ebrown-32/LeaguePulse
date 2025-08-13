@@ -73,8 +73,10 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
         // Set initial week if not provided
         if (!initialWeek) {
-          // If in season, use current week, otherwise default to week 1
-          const currentWeek = nflStateData.week || 1;
+          // Use actual week only during regular season, default to week 1 during preseason
+          const currentWeek = nflStateData?.season_type === 'regular' 
+            ? nflStateData.week 
+            : 1;
           setSelectedWeek(leagueData.status === 'in_season' ? currentWeek : 1);
         }
 

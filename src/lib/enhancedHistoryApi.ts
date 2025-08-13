@@ -11,7 +11,7 @@ import {
 
 // Enhanced types for better data accuracy
 export interface EnhancedHistoricalRecord {
-  type: 'championship' | 'playoff' | 'highScore' | 'lowScore' | 'winStreak' | 'lossStreak' | 
+  type: 'championship' | 'playoff' | 'highScore' | 'lowScore' | 'winStreak' | 
         'blowout' | 'closeGame' | 'consistency' | 'explosiveness' | 'seasonHigh' | 'seasonLow' | 
         'playoffAppearance' | 'regularSeasonChamp' | 'perfectSeason' | 'mostImproved' | 'biggestUpset' |
         'runnerUp' | 'championshipGame' | 'playoffHighScore' | 'playoffLowScore';
@@ -62,7 +62,6 @@ export interface EnhancedUserStats {
   highestScore: number;
   lowestScore: number;
   longestWinStreak: number;
-  longestLossStreak: number;
   currentStreak: number;
   streakType: 'W' | 'L' | 'T' | null;
   bestFinish: number;
@@ -272,7 +271,6 @@ async function processLeagueSeason(
         highestScore: 0,
         lowestScore: Infinity,
         longestWinStreak: 0,
-        longestLossStreak: 0,
         currentStreak: 0,
         streakType: null,
         bestFinish: Infinity,
@@ -523,6 +521,8 @@ async function processRosterData(
     const wins = roster.settings?.wins || 0;
     const losses = roster.settings?.losses || 0;
     const ties = roster.settings?.ties || 0;
+    const playoffWins = roster.settings?.poffs || 0; // Playoff wins from roster settings
+    const playoffLosses = roster.settings?.poffl || 0; // Playoff losses from roster settings (if available)
 
     // Update user stats for this season
     userStats.totalWins += wins;
@@ -530,9 +530,16 @@ async function processRosterData(
     userStats.totalTies += ties;
     userStats.seasonsPlayed++;
 
-    // Assume regular season games (we'll update playoff stats separately)
-    userStats.regularSeasonWins += wins;
-    userStats.regularSeasonLosses += losses;
+    // Calculate regular season wins/losses by subtracting playoff games
+    const regularSeasonWins = wins - playoffWins;
+    const regularSeasonLosses = losses - playoffLosses;
+    
+    userStats.regularSeasonWins += Math.max(0, regularSeasonWins);
+    userStats.regularSeasonLosses += Math.max(0, regularSeasonLosses);
+    
+    // Add playoff wins and losses
+    userStats.playoffWins += playoffWins;
+    userStats.playoffLosses += playoffLosses;
 
     // Update season-by-season stats
     userStats.seasonBySeasonStats[league.season] = {
@@ -651,10 +658,17 @@ async function determineChampionsAndPlayoffs(
     return aRank - bRank;
   });
 
-  // Determine playoff participants (teams with poff value and poff > 0)
-  const playoffTeams = sortedRosters.filter(roster => 
-    roster.settings?.poff && roster.settings.poff > 0
-  );
+  // Determine playoff participants using league settings and roster rankings
+  const numPlayoffTeams = league.settings.playoff_teams || 6;
+  const playoffTeams = sortedRosters.filter(roster => {
+    // Try poff first (for completed playoffs)
+    if (roster.settings?.poff && roster.settings.poff > 0) {
+      return true;
+    }
+    // Fallback to rank-based determination
+    const rosterRank = roster.settings?.rank || 0;
+    return rosterRank > 0 && rosterRank <= numPlayoffTeams;
+  });
   
   // Champion is team with poff = 1 (verified winner)
   let champion = playoffTeams.find(roster => roster.settings?.poff === 1);
@@ -879,22 +893,16 @@ async function generateWinLossStreaks(
   // Track streaks for each user across all seasons
   const userStreaks = new Map<string, { 
     currentWinStreak: number; 
-    currentLossStreak: number; 
-    longestWinStreak: number; 
-    longestLossStreak: number;
+    longestWinStreak: number;
     winStreakSeasons: string[];
-    lossStreakSeasons: string[];
   }>();
 
   // Initialize tracking for all users
   for (const userStats of userStatsMap.values()) {
     userStreaks.set(userStats.userId, {
       currentWinStreak: 0,
-      currentLossStreak: 0,
       longestWinStreak: 0,
-      longestLossStreak: 0,
-      winStreakSeasons: [],
-      lossStreakSeasons: []
+      winStreakSeasons: []
     });
   }
 
@@ -921,23 +929,15 @@ async function generateWinLossStreaks(
         if (winPercentage > 0.5) {
           // Winning season
           userStreak.currentWinStreak++;
-          userStreak.currentLossStreak = 0;
           userStreak.winStreakSeasons.push(league.season);
-          userStreak.lossStreakSeasons = [];
           
           if (userStreak.currentWinStreak > userStreak.longestWinStreak) {
             userStreak.longestWinStreak = userStreak.currentWinStreak;
           }
         } else {
-          // Losing season
-          userStreak.currentLossStreak++;
+          // Losing season - reset win streak
           userStreak.currentWinStreak = 0;
-          userStreak.lossStreakSeasons.push(league.season);
           userStreak.winStreakSeasons = [];
-          
-          if (userStreak.currentLossStreak > userStreak.longestLossStreak) {
-            userStreak.longestLossStreak = userStreak.currentLossStreak;
-          }
         }
       });
     } catch (error) {
@@ -952,7 +952,6 @@ async function generateWinLossStreaks(
 
     // Update user stats
     userStats.longestWinStreak = streak.longestWinStreak;
-    userStats.longestLossStreak = streak.longestLossStreak;
 
     // Add win streak records
     if (streak.longestWinStreak >= 2) {
@@ -971,22 +970,6 @@ async function generateWinLossStreaks(
       });
     }
 
-    // Add loss streak records
-    if (streak.longestLossStreak >= 2) {
-      records.push({
-        type: 'lossStreak',
-        season: streak.lossStreakSeasons[streak.lossStreakSeasons.length - 1] || 'Multiple',
-        userId,
-        username: userStats.username,
-        avatar: userStats.avatar,
-        value: streak.longestLossStreak,
-        description: `${userStats.username} had ${streak.longestLossStreak} consecutive losing seasons`,
-        details: {
-          streak: streak.longestLossStreak,
-          record: `${streak.longestLossStreak} losing seasons`
-        }
-      });
-    }
   }
 }
 
