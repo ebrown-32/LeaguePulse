@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { defaultAgents, availableTools, type AIAgent, type AgentTool } from '@/config/aiAgents';
+import { storage } from '@/lib/hybridStorage';
 import { 
   CheckCircleIcon, 
   XCircleIcon, 
@@ -47,6 +48,44 @@ export default function AdminConfigView() {
   const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const loadAgents = async () => {
+    try {
+      const response = await fetch('/api/ai-agents/config');
+      if (response.ok) {
+        const data = await response.json();
+        setAgents(data.agents);
+      } else {
+        console.error('Failed to load agents');
+        setAgents(defaultAgents);
+      }
+    } catch (error) {
+      console.error('Failed to load agents:', error);
+      setAgents(defaultAgents);
+    }
+  };
+
+  const saveAgentsToAPI = async (agentsToSave: AIAgent[]) => {
+    const response = await fetch('/api/ai-agents/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ agents: agentsToSave }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save agents');
+    }
+    
+    return response.json();
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAgents();
+    }
+  }, [isAuthenticated]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -88,10 +127,15 @@ export default function AdminConfigView() {
   const handleAgentSave = async (updatedAgent: AIAgent) => {
     setLoading(true);
     try {
-      // In a real app, this would save to database
-      setAgents(prev => prev.map(agent => 
+      const updatedAgents = agents.map(agent => 
         agent.id === updatedAgent.id ? updatedAgent : agent
-      ));
+      );
+      
+      // Save to persistent storage
+      await saveAgentsToAPI(updatedAgents);
+      
+      // Update local state
+      setAgents(updatedAgents);
       setSelectedAgent(null);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -102,7 +146,7 @@ export default function AdminConfigView() {
     }
   };
 
-  const handleCreateAgent = () => {
+  const handleCreateAgent = async () => {
     const newAgent: AIAgent = {
       id: `custom-${Date.now()}`,
       name: 'New AI Agent',
@@ -122,12 +166,12 @@ export default function AdminConfigView() {
       contentTypes: ['general'],
       postFrequency: 'medium',
       tools: [
-        { ...availableTools.find(t => t.id === 'league-analysis')!, enabled: true }
+        { ...availableTools.find(t => t.id === 'get-league-standings')!, enabled: true }
       ],
       personality: {
         tone: 'casual',
         expertise: ['fantasy football'],
-        catchphrases: ['Let\s go!'],
+        catchphrases: ['Let\'s go!'],
         writingStyle: {
           useEmojis: true,
           useAllCaps: false,
@@ -136,14 +180,27 @@ export default function AdminConfigView() {
         }
       }
     };
-    setAgents(prev => [...prev, newAgent]);
-    setSelectedAgent(newAgent);
+    
+    try {
+      const updatedAgents = [...agents, newAgent];
+      await saveAgentsToAPI(updatedAgents);
+      setAgents(updatedAgents);
+      setSelectedAgent(newAgent);
+    } catch (error) {
+      console.error('Failed to create agent:', error);
+    }
   };
 
-  const handleDeleteAgent = (agentId: string) => {
+  const handleDeleteAgent = async (agentId: string) => {
     if (confirm('Are you sure you want to delete this agent?')) {
-      setAgents(prev => prev.filter(agent => agent.id !== agentId));
-      setSelectedAgent(null);
+      try {
+        const updatedAgents = agents.filter(agent => agent.id !== agentId);
+        await saveAgentsToAPI(updatedAgents);
+        setAgents(updatedAgents);
+        setSelectedAgent(null);
+      } catch (error) {
+        console.error('Failed to delete agent:', error);
+      }
     }
   };
 

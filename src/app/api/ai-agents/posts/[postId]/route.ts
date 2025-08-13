@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { storage } from '@/lib/storage';
+import { storage } from '@/lib/hybridStorage';
 
 // PATCH - Update post (for likes, retweets, etc.)
 export async function PATCH(

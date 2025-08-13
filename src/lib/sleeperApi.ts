@@ -1,4 +1,4 @@
-import { leagueCache } from './storage';
+import { leagueCache } from './hybridStorage';
 
 const SLEEPER_BASE_URL = 'https://api.sleeper.app/v1';
 

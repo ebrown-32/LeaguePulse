@@ -2,7 +2,7 @@ import { type AIAgent, type AgentPost } from '@/config/aiAgents';
 import { sleeperAPI } from './sleeperApi';
 import { newsService, type NewsItem } from './newsService';
 import { llmService } from './llmService';
-import { storage } from './storage';
+import { storage } from './hybridStorage';
 import { createAgentToolService, type ToolResult } from './agentTools';
 
 export interface ContentContext {

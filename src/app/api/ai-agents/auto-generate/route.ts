@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { IntelligentContentGenerator } from '@/lib/contentGenerator';
 import { defaultAgents } from '@/config/aiAgents';
+import { storage } from '@/lib/hybridStorage';
 
 // This endpoint will be called by Vercel Cron or an external scheduler
 export async function POST(request: NextRequest) {
@@ -38,8 +39,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get enabled agents
-    const enabledAgents = defaultAgents.filter(agent => 
+    // Get enabled agents from persistent storage
+    let agents = defaultAgents;
+    try {
+      const hasPersistedAgents = await storage.hasPersistedAgents();
+      if (hasPersistedAgents) {
+        agents = await storage.getAgents();
+      }
+    } catch (error) {
+      console.warn('Failed to load persisted agents, using defaults:', error);
+    }
+    
+    const enabledAgents = agents.filter(agent => 
       enabledAgentIds ? enabledAgentIds.includes(agent.id) : agent.enabled
     );
 

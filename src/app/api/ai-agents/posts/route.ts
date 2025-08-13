@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { storage } from '@/lib/storage';
+import { storage } from '@/lib/hybridStorage';
 
 // GET - Retrieve posts
 export async function GET(request: NextRequest) {
