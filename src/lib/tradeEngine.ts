@@ -1,9 +1,9 @@
+import { generateObject } from 'ai';
+import { gateway } from 'ai';
+import { z } from 'zod';
+
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
-
 const RELEVANT_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
-
-// Minimum roster spots typically needed at each position
-const MIN_STARTERS: Record<string, number> = { QB: 1, RB: 2, WR: 2, TE: 1 };
 
 export const POSITION_COLORS: Record<string, string> = {
   QB:  'text-amber-400  bg-amber-400/10  border-amber-400/30',
@@ -22,7 +22,7 @@ export interface PlayerValue {
   avgPPG: number;
   totalPoints: number;
   gamesPlayed: number;
-  value: number; // position-normalized 0–100 percentile
+  value: number;
 }
 
 export interface TradeProposal {
@@ -33,73 +33,98 @@ export interface TradeProposal {
   labelVariant: 'green' | 'blue' | 'amber' | 'purple' | 'red';
   tagline: string;
   rationale: string;
-  fairness: number; // 0–100, 50 = balanced
+  fairness: number;
 }
 
-interface TeamProfile {
+export interface TeamInfo {
   rosterId: number;
   teamName: string;
   record: string;
-  wins: number;
-  losses: number;
-  winPct: number;
-  isContender: boolean;
-  isRebuilding: boolean;
-  byPos: Record<string, PlayerValue[]>;
-  players: PlayerValue[];
 }
 
-export async function generateTradeProposals(leagueId: string): Promise<TradeProposal[]> {
-  // 1. NFL state → current week & season
-  const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`).then(r => r.json());
-  const currentWeek = Math.max(1, nflState.week ?? 1);
+export interface TradeResult {
+  proposals: TradeProposal[];
+  teams: TeamInfo[];
+}
 
-  // 2. League data in parallel
+// ── Zod schema for AI output ───────────────────────────────────────────────────
+
+const AiPlayerSchema = z.object({
+  name:     z.string().describe('Exact player name as provided in the roster context'),
+  position: z.enum(['QB', 'RB', 'WR', 'TE']),
+  nflTeam:  z.string(),
+  avgPPG:   z.number().min(0),
+});
+
+const AiProposalSchema = z.object({
+  sideATeam:   z.string().describe('Exact team name from the context'),
+  sideAGives:  z.array(AiPlayerSchema).min(1).max(3),
+  sideBTeam:   z.string().describe('Exact team name from the context'),
+  sideBGives:  z.array(AiPlayerSchema).min(1).max(3),
+  label:       z.enum(['Win-Win', 'Sell High', 'Buy Low', 'Big Swing', 'Rebuild Move', 'Steal Alert', 'Championship Push']),
+  tagline:     z.string().max(80).describe('One punchy line — under 80 chars'),
+  rationale:   z.string().min(80).max(600).describe('2–3 sentences. Specific, opinionated, witty. Reference actual stats and records.'),
+  fairness:    z.number().min(10).max(90).describe('0=Side A robbery, 50=balanced, 90=Side B robbery'),
+});
+
+const AiResponseSchema = z.object({
+  proposals: z.array(AiProposalSchema).min(1).max(20),
+});
+
+// ── Data fetching ──────────────────────────────────────────────────────────────
+
+async function fetchLeagueContext(leagueId: string) {
+  // NFl state: short cache — week number changes weekly
+  const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`, {
+    next: { revalidate: 3600 },
+  }).then(r => r.json());
+  const currentWeek: number = Math.max(1, nflState.week ?? 1);
+
   const [rosters, users, allPlayers] = await Promise.all([
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`).then(r => r.json()),
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/users`).then(r => r.json()),
+    // Rosters/users: cache 1 h — change with trades/waivers
+    fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
+    fetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
+    // Players: ~19 MB — too large for Next.js data cache; route-level revalidate covers this
     fetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
   ]);
 
-  // 3. Matchup history — fetch all completed weeks in parallel
-  const weeksToFetch = Math.min(currentWeek, 14);
+  // Cap at 8 most-recent weeks — enough signal, avoids excess fetching
+  const weeksToFetch = Math.min(currentWeek, 8);
+  const startWeek    = Math.max(1, currentWeek - weeksToFetch + 1);
   const matchupWeeks: any[][] = await Promise.all(
-    Array.from({ length: weeksToFetch }, (_, i) => i + 1).map(week =>
-      fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`)
+    Array.from({ length: weeksToFetch }, (_, i) => startWeek + i).map(week =>
+      fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, {
+        next: { revalidate: 1800 }, // 30 min — scores finalize mid-week
+      })
         .then(r => r.ok ? r.json() : [])
         .catch(() => [])
     )
   );
 
-  // 4. Aggregate player fantasy points from matchup history
+  // Aggregate player points from matchup history
   const playerPointsByWeek: Record<string, number[]> = {};
-
   for (const weekMatchups of matchupWeeks) {
     for (const matchup of (weekMatchups ?? [])) {
       const pp: Record<string, number> = matchup.players_points ?? {};
       for (const pid of (matchup.players ?? [])) {
-        if (!playerPointsByWeek[pid]) playerPointsByWeek[pid] = [];
-        playerPointsByWeek[pid].push(pp[pid] ?? 0);
+        (playerPointsByWeek[pid] ??= []).push(pp[pid] ?? 0);
       }
     }
   }
 
-  // 5. Build player value objects for all currently rostered players
-  const rosteredPlayerIds = new Set<string>();
-  for (const roster of rosters) {
-    for (const pid of (roster.players ?? [])) rosteredPlayerIds.add(pid);
-  }
-
+  // Build player value objects
+  const rosteredIds = new Set<string>(rosters.flatMap((r: any) => r.players ?? []));
   const playerValues: Record<string, PlayerValue> = {};
-  for (const pid of rosteredPlayerIds) {
+
+  for (const pid of rosteredIds) {
     const meta = allPlayers[pid];
     if (!meta) continue;
     const pos: string = meta.fantasy_positions?.[0] ?? meta.position ?? '';
     if (!RELEVANT_POSITIONS.includes(pos as any)) continue;
 
-    const points = playerPointsByWeek[pid] ?? [];
-    const totalPoints = points.reduce((a, b) => a + b, 0);
-    const gamesPlayed = points.filter(p => p > 0).length;
+    const pts = playerPointsByWeek[pid] ?? [];
+    const totalPoints = pts.reduce((a, b) => a + b, 0);
+    const gamesPlayed = pts.filter(p => p > 0).length;
     const avgPPG = gamesPlayed > 0 ? totalPoints / gamesPlayed : 0;
 
     playerValues[pid] = {
@@ -114,220 +139,178 @@ export async function generateTradeProposals(leagueId: string): Promise<TradePro
     };
   }
 
-  // 6. Normalize value within position to 0–100 percentile
-  const byPosition = groupBy(Object.values(playerValues), p => p.position);
-  for (const players of Object.values(byPosition)) {
+  // Normalize value within position (0–100 percentile)
+  const byPos = groupBy(Object.values(playerValues), p => p.position);
+  for (const players of Object.values(byPos)) {
     const sorted = [...players].sort((a, b) => a.avgPPG - b.avgPPG);
     sorted.forEach((p, i) => {
-      playerValues[p.playerId].value = sorted.length <= 1
-        ? 50
-        : Math.round((i / (sorted.length - 1)) * 100);
+      playerValues[p.playerId].value = sorted.length <= 1 ? 50 : Math.round((i / (sorted.length - 1)) * 100);
     });
   }
 
-  // 7. Build team profiles
+  // Build team profiles
   const userLookup = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
 
-  const teams: TeamProfile[] = rosters.map((roster: any) => {
+  const teams = rosters.map((roster: any) => {
     const user = userLookup.get(roster.owner_id);
-    const teamName: string =
-      user?.metadata?.team_name || user?.display_name || `Team ${roster.roster_id}`;
-    const wins: number = roster.settings?.wins ?? 0;
+    const teamName: string = user?.metadata?.team_name || user?.display_name || `Team ${roster.roster_id}`;
+    const wins: number  = roster.settings?.wins  ?? 0;
     const losses: number = roster.settings?.losses ?? 0;
-    const record = `${wins}-${losses}`;
-    const totalGames = wins + losses;
-    const winPct = totalGames > 0 ? wins / totalGames : 0.5;
+    const fpts: number  = (roster.settings?.fpts ?? 0) + (roster.settings?.fpts_decimal ?? 0) / 100;
 
     const players = (roster.players ?? [])
       .map((pid: string) => playerValues[pid])
       .filter(Boolean) as PlayerValue[];
 
-    const byPos: Record<string, PlayerValue[]> = {};
+    const byPosition: Record<string, PlayerValue[]> = {};
     for (const pos of RELEVANT_POSITIONS) {
-      byPos[pos] = players
+      byPosition[pos] = players
         .filter(p => p.position === pos)
-        .sort((a, b) => b.avgPPG - a.avgPPG);
+        .sort((a, b) => b.avgPPG - a.avgPPG)
+        .slice(0, 6); // top 6 per position
     }
 
     return {
-      rosterId: roster.roster_id,
+      rosterId: roster.roster_id as number,
       teamName,
-      record,
+      record: `${wins}-${losses}`,
       wins,
       losses,
-      winPct,
-      isContender: winPct >= 0.6,
-      isRebuilding: winPct <= 0.35,
-      byPos,
-      players,
+      fpts,
+      winPct: (wins + losses) > 0 ? wins / (wins + losses) : 0.5,
+      byPosition,
+      allPlayers: players,
     };
+  }).sort((a: any, b: any) => b.wins - a.wins || b.fpts - a.fpts);
+
+  return { teams, playerValues, currentWeek, nflState };
+}
+
+// ── Context string for the AI ──────────────────────────────────────────────────
+
+function buildPrompt(teams: any[], currentWeek: number): string {
+  const posLines = (byPos: Record<string, PlayerValue[]>) =>
+    RELEVANT_POSITIONS
+      .map(pos => {
+        const players = byPos[pos] ?? [];
+        if (!players.length) return null;
+        const names = players
+          .map(p => `${p.name} (${p.nflTeam}, ${p.avgPPG.toFixed(1)} ppg)`)
+          .join(' | ');
+        return `  ${pos}: ${names}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+
+  const teamSection = teams.map(t => {
+    const trend = t.winPct >= 0.65 ? '🔥 HOT' : t.winPct <= 0.35 ? '❄️ COLD' : '→ MID';
+    return [
+      `\nTEAM: ${t.teamName} | Record: ${t.record} | ${trend} | ${t.fpts.toFixed(0)} pts scored`,
+      posLines(t.byPosition),
+    ].join('\n');
+  }).join('\n');
+
+  return `You are a sharp, deeply knowledgeable fantasy football analyst embedded inside a league's private dashboard. You know every roster, every trend, and every weakness in this league. Your job is to generate ${Math.min(teams.length * 2, 16)} creative, specific trade proposals for the managers.
+
+WEEK: ${currentWeek}
+
+${teamSection}
+
+RULES:
+- Use EXACT player names and team names from the data above — do not invent players
+- Every trade must involve players from the two listed teams only
+- Make rationale vivid, specific, and opinionated. Call out overperformers, underperformers, schedule context, and positional needs. No generic filler.
+- Vary trade types: fair swaps, sell-high, buy-low, contender pushes, rebuilds, etc.
+- Do NOT repeat the same team pair more than once
+- Fairness: 50 = balanced. Lower = sideA getting robbed. Higher = sideB getting robbed.
+- Tagline must be punchy, under 80 chars, no emojis
+
+Generate proposals now.`;
+}
+
+// ── Map AI output back to typed proposals ─────────────────────────────────────
+
+function resolveProposals(
+  aiProposals: z.infer<typeof AiResponseSchema>['proposals'],
+  teams: any[],
+  playerValues: Record<string, PlayerValue>,
+): TradeProposal[] {
+  const teamByName = new Map(teams.map(t => [t.teamName.toLowerCase(), t]));
+
+  // Build a name→PlayerValue lookup for fast matching
+  const playerByName = new Map<string, PlayerValue>();
+  for (const pv of Object.values(playerValues)) {
+    playerByName.set(pv.name.toLowerCase(), pv);
+  }
+
+  const LABEL_VARIANT: Record<string, TradeProposal['labelVariant']> = {
+    'Win-Win': 'green',
+    'Sell High': 'amber',
+    'Buy Low': 'blue',
+    'Big Swing': 'amber',
+    'Rebuild Move': 'purple',
+    'Steal Alert': 'red',
+    'Championship Push': 'green',
+  };
+
+  return aiProposals.flatMap((p, i) => {
+    const teamA = teamByName.get(p.sideATeam.toLowerCase());
+    const teamB = teamByName.get(p.sideBTeam.toLowerCase());
+    if (!teamA || !teamB || teamA.rosterId === teamB.rosterId) return [];
+
+    const resolvePlayer = (ap: z.infer<typeof AiPlayerSchema>): PlayerValue => {
+      const found = playerByName.get(ap.name.toLowerCase());
+      // Use AI data as fallback if player not found in values map (e.g. 0-week seasons)
+      return found ?? {
+        playerId: `ai-${ap.name.replace(/\s+/g, '-').toLowerCase()}`,
+        name: ap.name,
+        position: ap.position,
+        nflTeam: ap.nflTeam,
+        avgPPG: ap.avgPPG,
+        totalPoints: 0,
+        gamesPlayed: 0,
+        value: 50,
+      };
+    };
+
+    return [{
+      id: `ai-${i}-${teamA.rosterId}-${teamB.rosterId}`,
+      sideA: { rosterId: teamA.rosterId, teamName: teamA.teamName, record: teamA.record, gives: p.sideAGives.map(resolvePlayer) },
+      sideB: { rosterId: teamB.rosterId, teamName: teamB.teamName, record: teamB.record, gives: p.sideBGives.map(resolvePlayer) },
+      label: p.label,
+      labelVariant: LABEL_VARIANT[p.label] ?? 'blue',
+      tagline: p.tagline,
+      rationale: p.rationale,
+      fairness: p.fairness,
+    }];
+  });
+}
+
+// ── Main export ────────────────────────────────────────────────────────────────
+
+export async function generateTradeProposals(leagueId: string): Promise<TradeResult> {
+  const { teams, playerValues, currentWeek } = await fetchLeagueContext(leagueId);
+
+  const teamInfos: TeamInfo[] = teams.map((t: any) => ({
+    rosterId: t.rosterId,
+    teamName: t.teamName,
+    record:   t.record,
+  }));
+
+  const prompt = buildPrompt(teams, currentWeek);
+
+  const { object } = await generateObject({
+    model: gateway('anthropic/claude-haiku-4-5'),
+    schema: AiResponseSchema,
+    prompt,
   });
 
-  // 8. Generate proposals
-  const proposals: TradeProposal[] = [];
+  const proposals = resolveProposals(object.proposals, teams, playerValues);
 
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      proposals.push(...positionalSwaps(teams[i], teams[j]));
-      proposals.push(...starForDepth(teams[i], teams[j]));
-    }
-  }
-
-  // 9. Deduplicate by team pair, rank, and return top 15
-  const seen = new Set<string>();
-  const unique = proposals.filter(p => {
-    const key = `${Math.min(p.sideA.rosterId, p.sideB.rosterId)}-${Math.max(p.sideA.rosterId, p.sideB.rosterId)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return unique
-    .sort((a, b) => {
-      const balanceA = 50 - Math.abs(a.fairness - 50);
-      const balanceB = 50 - Math.abs(b.fairness - 50);
-      const valueA = avgValue(a.sideA.gives) + avgValue(a.sideB.gives);
-      const valueB = avgValue(b.sideA.gives) + avgValue(b.sideB.gives);
-      return (balanceB + valueB) - (balanceA + valueA);
-    })
-    .slice(0, 16);
+  return { proposals, teams: teamInfos };
 }
 
-function positionalSwaps(a: TeamProfile, b: TeamProfile): TradeProposal[] {
-  const trades: TradeProposal[] = [];
-
-  for (const posA of RELEVANT_POSITIONS) {
-    for (const posB of RELEVANT_POSITIONS) {
-      if (posA === posB) continue;
-
-      const minA = MIN_STARTERS[posA] ?? 1;
-      const minB = MIN_STARTERS[posB] ?? 1;
-
-      const aSurplusA = (a.byPos[posA]?.length ?? 0) >= minA + 2;
-      const aNeedsB   = (a.byPos[posB]?.length ?? 0) <= minB;
-      const bSurplusB = (b.byPos[posB]?.length ?? 0) >= minB + 2;
-      const bNeedsA   = (b.byPos[posA]?.length ?? 0) <= minA;
-
-      if (!aSurplusA || !aNeedsB || !bSurplusB || !bNeedsA) continue;
-
-      // Trade their luxury #2 at the surplus position
-      const fromA = a.byPos[posA][1];
-      const fromB = b.byPos[posB][1];
-      if (!fromA || !fromB) continue;
-
-      const fairness = calcFairness([fromA], [fromB]);
-      if (fairness < 22 || fairness > 78) continue;
-
-      const balanced = fairness >= 35 && fairness <= 65;
-
-      trades.push({
-        id: `swap-${a.rosterId}-${b.rosterId}-${posA}-${posB}`,
-        sideA: { rosterId: a.rosterId, teamName: a.teamName, record: a.record, gives: [fromA] },
-        sideB: { rosterId: b.rosterId, teamName: b.teamName, record: b.record, gives: [fromB] },
-        label: balanced ? 'Win-Win' : 'Slight Edge',
-        labelVariant: balanced ? 'green' : 'blue',
-        tagline: balanced
-          ? 'Both rosters get exactly what they need'
-          : 'One side edges it — but both improve',
-        rationale: swapRationale(a, b, fromA, fromB, posA, posB),
-        fairness,
-      });
-    }
-  }
-
-  return trades;
-}
-
-function starForDepth(a: TeamProfile, b: TeamProfile): TradeProposal[] {
-  const trades: TradeProposal[] = [];
-
-  for (const pos of RELEVANT_POSITIONS) {
-    for (const [seller, buyer] of [[a, b], [b, a]]) {
-      const star = seller.byPos[pos]?.[0];
-      if (!star || star.value < 72) continue;
-
-      // Build a 2-player package from the buyer
-      const pkg: PlayerValue[] = [];
-      let pkgVal = 0;
-
-      for (const p of RELEVANT_POSITIONS) {
-        for (const player of (buyer.byPos[p] ?? [])) {
-          if (pkg.length >= 2) break;
-          if (player.playerId === star.playerId) continue;
-          if (player.value >= 35 && pkgVal + player.value <= star.value * 1.25) {
-            pkg.push(player);
-            pkgVal += player.value;
-          }
-        }
-        if (pkg.length >= 2) break;
-      }
-
-      if (pkg.length < 2) continue;
-
-      const fairness = calcFairness([star], pkg);
-      if (fairness < 25 || fairness > 75) continue;
-
-      const sellerSide  = seller.rosterId === a.rosterId
-        ? { rosterId: a.rosterId, teamName: a.teamName, record: a.record, gives: [star] }
-        : { rosterId: b.rosterId, teamName: b.teamName, record: b.record, gives: [star] };
-      const buyerSide = buyer.rosterId === a.rosterId
-        ? { rosterId: a.rosterId, teamName: a.teamName, record: a.record, gives: pkg }
-        : { rosterId: b.rosterId, teamName: b.teamName, record: b.record, gives: pkg };
-
-      const isSell = seller.isRebuilding;
-
-      trades.push({
-        id: `star-${seller.rosterId}-${buyer.rosterId}-${pos}`,
-        sideA: seller.rosterId === a.rosterId ? sellerSide : buyerSide,
-        sideB: seller.rosterId === b.rosterId ? sellerSide : buyerSide,
-        label: isSell ? 'Sell High' : 'Big Swing',
-        labelVariant: isSell ? 'purple' : 'amber',
-        tagline: isSell
-          ? `${seller.teamName} cashes in before the window closes`
-          : `${buyer.teamName} goes all-in for a championship run`,
-        rationale: starRationale(seller, buyer, star, pkg, isSell),
-        fairness,
-      });
-    }
-  }
-
-  return trades;
-}
-
-function calcFairness(sideA: PlayerValue[], sideB: PlayerValue[]): number {
-  const valA = sideA.reduce((s, p) => s + p.value, 0);
-  const valB = sideB.reduce((s, p) => s + p.value, 0);
-  const total = valA + valB;
-  if (total === 0) return 50;
-  return Math.round((valB / total) * 100);
-}
-
-const SWAP_RATIONALES = [
-  (a: TeamProfile, b: TeamProfile, pA: PlayerValue, pB: PlayerValue, posA: string, posB: string) =>
-    `${a.teamName} has been stacking ${posA}s all season while their ${posB} situation is quietly killing them. ${b.teamName} is the mirror image — deep at ${posB}, starving for ${posA}. ${pA.name} for ${pB.name} fixes both rosters.`,
-  (a: TeamProfile, b: TeamProfile, pA: PlayerValue, pB: PlayerValue, posA: string, posB: string) =>
-    `${pA.name} is a luxury for ${a.teamName} — they can't start him every week. Same story for ${b.teamName} with ${pB.name}. One manager's bench piece is another manager's difference-maker.`,
-  (a: TeamProfile, b: TeamProfile, pA: PlayerValue, pB: PlayerValue, posA: string, posB: string) =>
-    `The logic is simple: ${a.teamName} has ${posA} depth most managers dream of and a ${posB} situation they'd rather forget. This is the exact trade that turns a 6-win team into a contender.`,
-];
-
-function swapRationale(a: TeamProfile, b: TeamProfile, pA: PlayerValue, pB: PlayerValue, posA: string, posB: string): string {
-  const pick = SWAP_RATIONALES[Math.abs(a.rosterId + b.rosterId) % SWAP_RATIONALES.length];
-  return pick(a, b, pA, pB, posA, posB);
-}
-
-function starRationale(seller: TeamProfile, buyer: TeamProfile, star: PlayerValue, pkg: PlayerValue[], isSell: boolean): string {
-  const names = pkg.map(p => p.name).join(' + ');
-  if (isSell) {
-    return `${seller.teamName} is ${seller.record} and the playoffs are slipping away. ${star.name} is the most tradeable asset on their roster. Getting ${names} back isn't a white flag — it's a smart rebuild. Sell before the value drops.`;
-  }
-  return `${buyer.teamName} decides enough is enough. Trading ${names} for ${star.name} is the kind of move that either wins the championship or makes for a great off-season story. No regrets.`;
-}
-
-function avgValue(players: PlayerValue[]): number {
-  if (!players.length) return 0;
-  return players.reduce((s, p) => s + p.value, 0) / players.length;
-}
+// ── Util ───────────────────────────────────────────────────────────────────────
 
 function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
   return arr.reduce((acc, item) => {
