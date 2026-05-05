@@ -1,274 +1,220 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds, getLeagueMatchups, generateComprehensiveLeagueHistory } from '@/lib/api';
-import { 
-  TrophyIcon, 
-  ChartBarIcon, 
-  UserGroupIcon,
-  UserIcon,
-  HomeIcon,
-  FireIcon,
-  ClockIcon,
-  StarIcon,
-  BoltIcon,
-} from '@heroicons/react/24/outline';
+import {
+  getLeagueInfo,
+  getLeagueRosters,
+  getLeagueUsers,
+  getNFLState,
+  getAllLeagueSeasons,
+  getAllLinkedLeagueIds,
+  getLeagueMatchups,
+  generateComprehensiveLeagueHistory,
+} from '@/lib/api';
+import {
+  Trophy,
+  BarChart3,
+  Users,
+  User,
+  LayoutDashboard,
+  Flame,
+  Clock,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
-import { getDefaultSeason, getDefaultValue, formatPoints, calculateWinPercentage, formatRecord } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import {
+  getDefaultSeason,
+  getDefaultValue,
+  formatPoints,
+  calculateWinPercentage,
+  formatRecord,
+} from '@/lib/utils';
+import { cn } from '@/lib/utils';
+
+// ─── Profanity filter ────────────────────────────────────────────────────────
+
+const PROFANITY_LIST = new Set([
+  'fuck','fuckin','fucking','fucker','fucked','fucks',
+  'shit','shitty','shitting','bullshit',
+  'cunt','cunts',
+  'bitch','bitches','bitchin',
+  'cock','cocks',
+  'dick','dicks',
+  'pussy','pussies',
+  'asshole','assholes','arsehole',
+  'whore','whores',
+  'nigger','niggers','nigga','niggas',
+  'faggot','faggots','fag','fags',
+  'retard','retarded','retards',
+  'bastard','bastards',
+]);
+
+function censorWord(word: string): string {
+  if (word.length <= 2) return '***';
+  return word[0] + '*'.repeat(word.length - 2) + word[word.length - 1];
+}
+
+function censorTeamName(name: string): string {
+  if (!name) return name;
+  return name.replace(/\b\w+\b/g, (match) =>
+    PROFANITY_LIST.has(match.toLowerCase()) ? censorWord(match) : match
+  );
+}
+
+// ─── Data helpers ─────────────────────────────────────────────────────────────
 
 async function calculateHistoricalInsights(seasons: string[], currentLeagueId: string) {
   try {
     const linkedLeagues = await getAllLinkedLeagueIds(currentLeagueId);
-    
-    // Use the comprehensive history function that gets accurate data from the API
-    const historyData = await generateComprehensiveLeagueHistory(linkedLeagues);
-    
-    // Calculate total teams across all seasons (using actual roster counts)
-    const totalTeams = historyData.seasonAnalyses.reduce((sum, season) => sum + season.rosters.length, 0);
-    
-    // Calculate total games from actual API data
-    const totalGames = historyData.allTimeStats.totalGames;
-    
-    // Get unique champions
-    const uniqueChampions = new Set();
-    historyData.seasonAnalyses.forEach(season => {
-      season.champions.forEach(champion => {
-        uniqueChampions.add(champion.owner_id);
-      });
-    });
-    
+    const historyData   = await generateComprehensiveLeagueHistory(linkedLeagues);
+    const totalTeams    = historyData.seasonAnalyses.reduce((s: number, season: any) => s + season.rosters.length, 0);
+    const uniqueChampions = new Set<string>();
+    historyData.seasonAnalyses.forEach((season: any) =>
+      season.champions.forEach((c: any) => uniqueChampions.add(c.owner_id)),
+    );
     return {
-      totalSeasons: historyData.allTimeStats.totalSeasons,
+      totalSeasons:          historyData.allTimeStats.totalSeasons,
       totalTeams,
-      totalGames,
-      champions: historyData.records.filter(r => r.type === 'championship'),
-      uniqueChampionsCount: uniqueChampions.size,
-      highestScore: historyData.allTimeStats.highestScore,
-      lowestScore: historyData.allTimeStats.lowestScore,
-      averageScore: historyData.allTimeStats.averageScore,
-      totalPoints: historyData.allTimeStats.totalPoints,
-      seasonAnalyses: historyData.seasonAnalyses
+      totalGames:            historyData.allTimeStats.totalGames,
+      champions:             historyData.records.filter((r: any) => r.type === 'championship'),
+      uniqueChampionsCount:  uniqueChampions.size,
+      highestScore:          historyData.allTimeStats.highestScore,
+      lowestScore:           historyData.allTimeStats.lowestScore,
+      averageScore:          historyData.allTimeStats.averageScore,
+      totalPoints:           historyData.allTimeStats.totalPoints,
+      seasonAnalyses:        historyData.seasonAnalyses,
     };
-  } catch (error) {
-    console.error('Failed to calculate historical insights:', error);
-    // Fallback to basic calculation
-    return {
-      totalSeasons: seasons.length,
-      totalTeams: 0,
-      totalGames: 0,
-      champions: [],
-      uniqueChampionsCount: 0,
-      highestScore: 0,
-      lowestScore: 0,
-      averageScore: 0,
-      totalPoints: 0,
-      seasonAnalyses: []
-    };
+  } catch {
+    return { totalSeasons: seasons.length, totalTeams: 0, totalGames: 0, champions: [], uniqueChampionsCount: 0, highestScore: 0, lowestScore: 0, averageScore: 0, totalPoints: 0, seasonAnalyses: [] };
   }
-}
-
-function formatRosterPositions(positions: string[]): string {
-  if (!positions?.length) return 'Standard';
-  const counts = positions.reduce((acc: { [key: string]: number }, pos) => {
-    acc[pos] = (acc[pos] || 0) + 1;
-    return acc;
-  }, {});
-  
-  return Object.entries(counts)
-    .map(([pos, count]) => `${pos}${count > 1 ? ` x${count}` : ''}`)
-    .join(', ');
 }
 
 function getEffectiveLeagueStatus(league: any, nflState: any): string {
-  // If the league status is already in_season, post_season, or complete, use that
-  if (['in_season', 'post_season', 'complete'].includes(league.status)) {
-    return league.status;
-  }
-  
-  // If the league status is drafting, use that
-  if (league.status === 'drafting') {
-    return 'drafting';
-  }
-  
-  // If the league status is pre_draft but we have a draft_id and NFL week is 0 or preseason
-  if (league.status === 'pre_draft' && league.draft_id && nflState?.week === 0) {
-    return 'preseason';
-  }
-  
-  // If the league status is pre_draft but we have a draft_id and NFL week is 1 or higher
-  if (league.status === 'pre_draft' && league.draft_id && nflState?.week && nflState.week >= 1) {
-    return 'in_season';
-  }
-  
-  // Default to pre_draft
+  if (['in_season', 'post_season', 'complete'].includes(league.status)) return league.status;
+  if (league.status === 'drafting') return 'drafting';
+  if (league.status === 'pre_draft' && league.draft_id && nflState?.week === 0) return 'preseason';
+  if (league.status === 'pre_draft' && league.draft_id && nflState?.week >= 1) return 'in_season';
   return 'pre_draft';
 }
 
 function formatLeagueStatus(status: string): string {
-  const statusMap: Record<string, string> = {
-    'pre_draft': 'Pre-Draft',
-    'drafting': 'Drafting',
-    'preseason': 'Preseason',
-    'in_season': 'In Season',
-    'post_season': 'Postseason',
-    'complete': 'Complete',
-  };
-  return statusMap[status] || 'Unknown';
+  const map: Record<string, string> = { pre_draft: 'Pre-Draft', drafting: 'Drafting', preseason: 'Preseason', in_season: 'In Season', post_season: 'Postseason', complete: 'Complete' };
+  return map[status] ?? 'Unknown';
 }
 
 function formatDraftDate(draftId: string | null): string {
   if (!draftId) return 'Not set';
-  try {
-    const date = new Date(Number(draftId));
-    return !isNaN(date.getTime()) ? date.toLocaleDateString() : 'Not set';
-  } catch {
-    return 'Not set';
-  }
+  try { const d = new Date(Number(draftId)); return !isNaN(d.getTime()) ? d.toLocaleDateString() : 'Not set'; }
+  catch { return 'Not set'; }
 }
 
 function formatWeekDisplay(status: string, week: number | null): string {
   switch (status) {
-    case 'drafting':
-      return 'Draft Week';
-    case 'preseason':
-      return 'Preseason';
+    case 'drafting':    return 'Draft Week';
+    case 'preseason':   return 'Preseason';
     case 'in_season':
-    case 'post_season':
-      return `Week ${getDefaultValue(week, 0)}`;
-    default:
-      return '-';
+    case 'post_season': return `Week ${getDefaultValue(week, 0)}`;
+    default:            return '—';
   }
 }
 
 function getLeagueSubtitle(league: any, nflState: any, seasons: string[], historyData: any): string {
-  const currentSeason = nflState?.season || league?.season || new Date().getFullYear().toString();
-  if (historyData?.totalSeasons > 1) {
-    return `Season ${currentSeason} • ${historyData.totalSeasons} seasons of competition`;
-  }
-  return `Season ${currentSeason} • ${new Date().toLocaleDateString()}`;
+  const currentSeason = nflState?.season ?? league?.season ?? new Date().getFullYear().toString();
+  if (historyData?.totalSeasons > 1) return `Season ${currentSeason}, ${historyData.totalSeasons} seasons of competition.`;
+  return `Season ${currentSeason} · ${new Date().toLocaleDateString()}`;
 }
 
 function getSeasonContext(league: any, nflState: any): string | null {
-  const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
-  switch (effectiveStatus) {
-    case 'pre_draft':
-      if (league.draft_id) {
-        return `Draft: ${formatDraftDate(league.draft_id)}`;
-      }
-      return 'Draft not scheduled';
-    case 'drafting':
-      return 'Draft in progress';
-    case 'preseason':
-      return 'Season starting soon';
-    case 'in_season':
-      return 'Regular season active';
-    case 'post_season':
-      return 'Playoffs underway';
-    case 'complete':
-      return 'Season completed';
-    default:
-      return null;
+  switch (getEffectiveLeagueStatus(league, nflState)) {
+    case 'pre_draft':   return league.draft_id ? `Draft: ${formatDraftDate(league.draft_id)}` : 'Draft not scheduled';
+    case 'drafting':    return 'Draft in progress';
+    case 'preseason':   return 'Season starting soon';
+    case 'in_season':   return 'Regular season active';
+    case 'post_season': return 'Playoffs underway';
+    case 'complete':    return 'Season completed';
+    default:            return null;
   }
 }
 
 function getWeekContext(league: any, nflState: any): string {
   const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
-  const week = nflState?.week || 0;
-  
+  const week = nflState?.week ?? 0;
   if (effectiveStatus === 'in_season' || effectiveStatus === 'post_season') {
-    const playoffStart = league.settings?.playoff_week_start || 15;
-    if (week >= playoffStart) {
-      return 'Playoffs';
-    }
-    return 'Regular Season';
+    return week >= (league.settings?.playoff_week_start ?? 15) ? 'Playoffs' : 'Regular Season';
   }
   return '';
 }
 
 function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): any[] {
-  if (!matchups || matchups.length === 0) return [];
-  
-  // Group matchups by matchup_id
-  const groupedMatchups = matchups.reduce((acc, matchup) => {
-    if (!matchup.matchup_id) return acc;
-    if (!acc[matchup.matchup_id]) acc[matchup.matchup_id] = [];
-    acc[matchup.matchup_id].push(matchup);
+  if (!matchups?.length) return [];
+  const grouped = matchups.reduce((acc: any, m: any) => {
+    if (!m.matchup_id) return acc;
+    acc[m.matchup_id] = acc[m.matchup_id] ?? [];
+    acc[m.matchup_id].push(m);
     return acc;
-  }, {} as Record<string, any[]>);
-
-  const formattedMatchups = (Object.values(groupedMatchups) as any[][]).map((matchup) => {
-    const [team1, team2] = matchup;
-    if (!team1 || !team2) return null;
-
-    const roster1 = rosters.find((r) => r.roster_id === team1.roster_id);
-    const roster2 = rosters.find((r) => r.roster_id === team2.roster_id);
-    const user1 = users.find((u) => u.user_id === roster1?.owner_id);
-    const user2 = users.find((u) => u.user_id === roster2?.owner_id);
-
-    if (!roster1 || !roster2 || !user1 || !user2) return null;
-
-    const team1Points = team1.points || 0;
-    const team2Points = team2.points || 0;
-    const totalPoints = team1Points + team2Points;
-    const pointDifference = Math.abs(team1Points - team2Points);
-    
-    // Highlight high-scoring or close games
-    const isHighlight = totalPoints > 200 || (pointDifference < 10 && totalPoints > 0);
-
-    return {
-      id: team1.matchup_id,
-      team1: {
-        name: user1.metadata?.team_name || user1.display_name,
-        avatar: user1.avatar,
-        points: team1Points
-      },
-      team2: {
-        name: user2.metadata?.team_name || user2.display_name,
-        avatar: user2.avatar,
-        points: team2Points
-      },
-      isHighlight,
-      totalPoints
-    };
-  }).filter(Boolean);
-
-  // Sort by total points descending, then by highlight status
-  return formattedMatchups.filter(Boolean).sort((a, b) => {
-    if (!a || !b) return 0;
-    if (a.isHighlight && !b.isHighlight) return -1;
-    if (!a.isHighlight && b.isHighlight) return 1;
-    return b.totalPoints - a.totalPoints;
-  }).slice(0, 6); // Show max 6 matchups
+  }, {});
+  return (Object.values(grouped) as any[][]).map((pair) => {
+    const [t1, t2] = pair;
+    if (!t1 || !t2) return null;
+    const r1 = rosters.find((r: any) => r.roster_id === t1.roster_id);
+    const r2 = rosters.find((r: any) => r.roster_id === t2.roster_id);
+    const u1 = users.find((u: any) => u.user_id === r1?.owner_id);
+    const u2 = users.find((u: any) => u.user_id === r2?.owner_id);
+    if (!r1 || !r2 || !u1 || !u2) return null;
+    const p1 = t1.points ?? 0, p2 = t2.points ?? 0;
+    return { id: t1.matchup_id, team1: { name: censorTeamName(u1.metadata?.team_name || u1.display_name), avatar: u1.avatar, points: p1 }, team2: { name: censorTeamName(u2.metadata?.team_name || u2.display_name), avatar: u2.avatar, points: p2 }, isHighlight: p1 + p2 > 200 || (Math.abs(p1 - p2) < 10 && p1 + p2 > 0), totalPoints: p1 + p2 };
+  }).filter(Boolean).sort((a: any, b: any) => { if (a.isHighlight !== b.isHighlight) return a.isHighlight ? -1 : 1; return b.totalPoints - a.totalPoints; }).slice(0, 6);
 }
 
+// ─── Stat card component ─────────────────────────────────────────────────────
+
+function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string; value: string; sub?: string | null }) {
+  return (
+    <div>
+      <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 hover:border-primary/30 transition-none group">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+            {label}
+          </p>
+          <p className="font-display text-xl font-bold text-foreground truncate leading-none">
+            {value}
+          </p>
+          {sub && <p className="mt-1 text-xs text-muted-foreground truncate">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
 export default function Home() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [league, setLeague] = useState<any>(null);
-  const [users, setUsers] = useState<any[]>([]);
-  const [rosters, setRosters] = useState<any[]>([]);
-  const [nflState, setNFLState] = useState<any>(null);
-  const [seasons, setSeasons] = useState<string[]>([]);
-  const [selectedSeason, setSelectedSeason] = useState<string>('');
-  const [seasonRosters, setSeasonRosters] = useState<any[]>([]);
-  const [loadingSeasonData, setLoadingSeasonData] = useState(false);
-  const [historyData, setHistoryData] = useState<any>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState<string | null>(null);
+  const [league,           setLeague]           = useState<any>(null);
+  const [users,            setUsers]            = useState<any[]>([]);
+  const [rosters,          setRosters]          = useState<any[]>([]);
+  const [nflState,         setNFLState]         = useState<any>(null);
+  const [seasons,          setSeasons]          = useState<string[]>([]);
+  const [selectedSeason,   setSelectedSeason]   = useState('');
+  const [seasonRosters,    setSeasonRosters]    = useState<any[]>([]);
+  const [loadingSeasonData,setLoadingSeasonData]= useState(false);
+  const [historyData,      setHistoryData]      = useState<any>(null);
   const [currentWeekMatchups, setCurrentWeekMatchups] = useState<any[]>([]);
   const [allTimeUserStats, setAllTimeUserStats] = useState<any>(null);
 
-  // Calculate effective week for display (week 1 during preseason, actual week during regular season)
-  const effectiveWeek = nflState?.season_type === 'regular' 
-    ? nflState.week 
-    : 1;
+  const effectiveWeek = nflState?.season_type === 'regular' ? nflState.week : 1;
 
-  // Initial data fetch
   useEffect(() => {
     const fetchData = async () => {
       if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
@@ -276,522 +222,357 @@ export default function Home() {
         setLoading(false);
         return;
       }
-
       try {
         const leagueId = await getCurrentLeagueId();
-        
-        // First, get the league info and seasons
-        const [leagueData, allSeasons] = await Promise.all([
-          getLeagueInfo(leagueId),
-          getAllLeagueSeasons(leagueId),
-        ]);
+        const [leagueData, allSeasons] = await Promise.all([getLeagueInfo(leagueId), getAllLeagueSeasons(leagueId)]);
+        const defaultSeason = getDefaultSeason(allSeasons, leagueData.draft_id);
+        const [usersData, rostersData, nflStateData] = await Promise.all([getLeagueUsers(leagueId), getLeagueRosters(leagueId), getNFLState()]);
 
-        // Get the default season based on league data
-        const defaultSeason = getDefaultSeason(
-          allSeasons,
-          leagueData.draft_id
-        );
-
-        // Then fetch the rest of the data
-        const [usersData, rostersData, nflStateData] = await Promise.all([
-          getLeagueUsers(leagueId),
-          getLeagueRosters(leagueId),
-          getNFLState(),
-        ]);
-        
-        // Fetch current week matchups for league activity
         let matchupsData: any[] = [];
-        // Use actual week only during regular season, default to week 1 during preseason
-        const effectiveWeek = nflStateData?.season_type === 'regular' 
-          ? nflStateData.week 
-          : 1;
-        
-        if (effectiveWeek && leagueData.status === 'in_season') {
-          try {
-            matchupsData = await getLeagueMatchups(leagueId, effectiveWeek);
-          } catch (error) {
-            console.error('Failed to fetch current week matchups:', error);
-          }
+        const ew = nflStateData?.season_type === 'regular' ? nflStateData.week : 1;
+        if (ew && leagueData.status === 'in_season') {
+          try { matchupsData = await getLeagueMatchups(leagueId, ew); } catch {}
         }
-        
-        // Calculate historical insights from all seasons
+
         const history = await calculateHistoricalInsights(allSeasons, leagueId);
-        
-        setLeague(leagueData);
-        setUsers(usersData);
-        setRosters(rostersData);
-        setNFLState(nflStateData);
-        setSeasons(allSeasons);
-        setSelectedSeason(defaultSeason);
-        setSeasonRosters(rostersData); // Initialize with current rosters
-        setCurrentWeekMatchups(matchupsData);
-        setHistoryData(history);
-        
-        // Set all-time stats for standings
-        if (history?.seasonAnalyses && history.seasonAnalyses.length > 1) {
-          // Get linked leagues for comprehensive history
-          const linkedLeagues = await getAllLinkedLeagueIds(leagueId);
-          const comprehensiveHistory = await generateComprehensiveLeagueHistory(linkedLeagues);
-          setAllTimeUserStats(comprehensiveHistory.userAllTimeStats);
+        setLeague(leagueData); setUsers(usersData); setRosters(rostersData);
+        setNFLState(nflStateData); setSeasons(allSeasons); setSelectedSeason(defaultSeason);
+        setSeasonRosters(rostersData); setCurrentWeekMatchups(matchupsData); setHistoryData(history);
+
+        if (history?.seasonAnalyses?.length > 1) {
+          const linked = await getAllLinkedLeagueIds(leagueId);
+          const comp   = await generateComprehensiveLeagueHistory(linked);
+          setAllTimeUserStats(comp.userAllTimeStats);
         }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch league data');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch league data');
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // Fetch rosters when season changes
   useEffect(() => {
     const fetchSeasonRosters = async () => {
-      if (!selectedSeason || !league) return;
-      
-      // Skip fetching for all-time view since we already have the data
-      if (selectedSeason === 'all-time') {
-        setLoadingSeasonData(false);
-        return;
-      }
-      
+      if (!selectedSeason || !league || selectedSeason === 'all-time') { setLoadingSeasonData(false); return; }
       setLoadingSeasonData(true);
       try {
-        // Get all linked league IDs
-        const linkedLeagues = await getAllLinkedLeagueIds(league.league_id);
-        
-        // Find the league ID for the selected season
-        const seasonLeagueId = await (async () => {
-          for (const leagueId of linkedLeagues) {
-            const leagueInfo = await getLeagueInfo(leagueId);
-            if (leagueInfo.season === selectedSeason) {
-              return leagueId;
-            }
-          }
-          return league.league_id; // Fallback to current league
-        })();
-
-        // Fetch rosters for the correct league
-        const seasonRostersData = await getLeagueRosters(seasonLeagueId);
-        setSeasonRosters(seasonRostersData);
-      } catch (error) {
-        console.error('Failed to fetch season rosters:', error);
-        // Fallback to current rosters if fetch fails
-        setSeasonRosters(rosters);
-      } finally {
-        setLoadingSeasonData(false);
-      }
+        const linked = await getAllLinkedLeagueIds(league.league_id);
+        let seasonLeagueId = league.league_id;
+        for (const id of linked) {
+          const info = await getLeagueInfo(id);
+          if (info.season === selectedSeason) { seasonLeagueId = id; break; }
+        }
+        setSeasonRosters(await getLeagueRosters(seasonLeagueId));
+      } catch { setSeasonRosters(rosters); }
+      finally   { setLoadingSeasonData(false); }
     };
-
     fetchSeasonRosters();
   }, [selectedSeason, league, rosters]);
 
   if (loading) return <LoadingPage />;
-  if (error) return <ErrorMessage title="Error" message={error} />;
+  if (error)   return <ErrorMessage title="Error" message={error} />;
   if (!league || !users.length || !rosters.length) return null;
 
-  // Find commissioner
-  const commissioner = users.find(user => user.is_owner);
+  const commissioner = users.find((u: any) => u.is_owner);
 
-  // Sort rosters by wins, then points (only for season view)
-  const sortedRosters = [...seasonRosters].sort((a, b) => {
-    if (getDefaultValue(b.settings?.wins, 0) !== getDefaultValue(a.settings?.wins, 0)) {
-      return getDefaultValue(b.settings?.wins, 0) - getDefaultValue(a.settings?.wins, 0);
-    }
-    const bPoints = getDefaultValue(b.settings?.fpts, 0) + getDefaultValue(b.settings?.fpts_decimal, 0) / 100;
-    const aPoints = getDefaultValue(a.settings?.fpts, 0) + getDefaultValue(a.settings?.fpts_decimal, 0) / 100;
-    return bPoints - aPoints;
+  const sortedRosters = [...seasonRosters].sort((a: any, b: any) => {
+    const bw = getDefaultValue(b.settings?.wins, 0), aw = getDefaultValue(a.settings?.wins, 0);
+    if (bw !== aw) return bw - aw;
+    return (getDefaultValue(b.settings?.fpts, 0) + getDefaultValue(b.settings?.fpts_decimal, 0) / 100)
+         - (getDefaultValue(a.settings?.fpts, 0) + getDefaultValue(a.settings?.fpts_decimal, 0) / 100);
   });
 
-  // Prepare all-time standings data when All-Time is selected
   const allTimeStandings = selectedSeason === 'all-time' && allTimeUserStats
     ? Object.entries(allTimeUserStats)
-        .map(([userId, userStats]) => {
-          const stats = userStats as any;
-          return {
-            user: users.find(u => u.user_id === userId),
-            userId,
-            username: stats.username,
-            avatar: stats.avatar,
-            totalWins: stats.totalWins,
-            totalLosses: stats.totalLosses,
-            totalTies: stats.totalTies,
-            totalPoints: stats.totalPoints,
-            totalPointsAgainst: stats.totalPointsAgainst,
-            championships: stats.championships,
-            winPercentage: stats.winPercentage
-          };
-        })
-        .filter(item => item.user)
-        .sort((a, b) => {
-          // Sort by win percentage, then by total wins, then by championships
-          if (Math.abs(b.winPercentage - a.winPercentage) > 0.001) {
-            return b.winPercentage - a.winPercentage;
-          }
-          if (b.totalWins !== a.totalWins) {
-            return b.totalWins - a.totalWins;
-          }
+        .map(([userId, s]: any) => ({ user: users.find((u: any) => u.user_id === userId), userId, ...s }))
+        .filter((x: any) => x.user)
+        .sort((a: any, b: any) => {
+          if (Math.abs(b.winPercentage - a.winPercentage) > 0.001) return b.winPercentage - a.winPercentage;
+          if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
           return b.championships - a.championships;
         })
     : [];
+
+  const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
+  const playoffTeams    = getDefaultValue(league.settings?.playoff_teams, 6);
 
   return (
     <PageLayout
       title={league.name}
       subtitle={getLeagueSubtitle(league, nflState, seasons, historyData)}
-      icon={<HomeIcon className="h-6 w-6" />}
+      icon={<LayoutDashboard className="h-5 w-5" />}
       action={commissioner && (
-        <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 px-3 py-2 rounded-lg">
-          <UserIcon className="h-4 w-4" />
-          <span>Commissioner: {commissioner.display_name}</span>
+        <div className="hidden md:flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground">Commissioner:</span>
+          <span className="font-medium text-foreground">{commissioner.display_name}</span>
         </div>
       )}
     >
       <div className="space-y-8">
 
-        {/* Current Season Status */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-          >
-            <Card className="group hover:ring-2 hover:ring-blue-500/50 transition-all duration-300">
-              <CardContent className="relative overflow-hidden p-4 md:p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-xl bg-blue-100 dark:bg-blue-500/10 p-2 md:p-3 group-hover:scale-110 transition-transform duration-300">
-                    <ClockIcon className="h-5 w-5 md:h-6 md:w-6 text-blue-600 dark:text-blue-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Season Status</p>
-                    <p className="text-lg md:text-xl font-bold truncate">{formatLeagueStatus(getEffectiveLeagueStatus(league, nflState))}</p>
-                    {getSeasonContext(league, nflState) && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{getSeasonContext(league, nflState)}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-          >
-            <Card className="group hover:ring-2 hover:ring-purple-500/50 transition-all duration-300">
-              <CardContent className="relative overflow-hidden p-4 md:p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-xl bg-purple-100 dark:bg-purple-500/10 p-2 md:p-3 group-hover:scale-110 transition-transform duration-300">
-                    <UserGroupIcon className="h-5 w-5 md:h-6 md:w-6 text-purple-600 dark:text-purple-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">League Size</p>
-                    <p className="text-lg md:text-xl font-bold">{league.total_rosters} Teams</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      {league.scoring_settings?.rec ? 'PPR' : 'Standard'} Scoring
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
-          >
-            <Card className="group hover:ring-2 hover:ring-green-500/50 transition-all duration-300">
-              <CardContent className="relative overflow-hidden p-4 md:p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-xl bg-green-100 dark:bg-green-500/10 p-2 md:p-3 group-hover:scale-110 transition-transform duration-300">
-                    <ChartBarIcon className="h-5 w-5 md:h-6 md:w-6 text-green-600 dark:text-green-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Current Week</p>
-                    <p className="text-lg md:text-xl font-bold">{formatWeekDisplay(getEffectiveLeagueStatus(league, nflState), effectiveWeek)}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      {getWeekContext(league, nflState)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-          >
-            <Card className="group hover:ring-2 hover:ring-orange-500/50 transition-all duration-300">
-              <CardContent className="relative overflow-hidden p-4 md:p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-xl bg-orange-100 dark:bg-orange-500/10 p-2 md:p-3 group-hover:scale-110 transition-transform duration-300">
-                    <StarIcon className="h-5 w-5 md:h-6 md:w-6 text-orange-600 dark:text-orange-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Playoff Race</p>
-                    <p className="text-lg md:text-xl font-bold">{league.settings?.playoff_teams || 6} Spots</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      Week {league.settings?.playoff_week_start || 15} start
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+        {/* ── Stat cards ── */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+          <StatCard
+            icon={Clock}
+            label="Season Status"
+            value={formatLeagueStatus(effectiveStatus)}
+            sub={getSeasonContext(league, nflState)}
+          />
+          <StatCard
+            icon={Users}
+            label="League Size"
+            value={`${league.total_rosters} Teams`}
+            sub={league.scoring_settings?.rec ? 'PPR Scoring' : 'Standard Scoring'}
+          />
+          <StatCard
+            icon={BarChart3}
+            label="Current Week"
+            value={formatWeekDisplay(effectiveStatus, effectiveWeek)}
+            sub={getWeekContext(league, nflState) || undefined}
+          />
+          <StatCard
+            icon={Sparkles}
+            label="Playoff Race"
+            value={`${playoffTeams} Spots`}
+            sub={`Starts week ${league.settings?.playoff_week_start ?? 15}`}
+          />
         </div>
 
-        {/* This Week's Action (if in season) */}
+        {/* ── This Week's Battles ── */}
         {league.status === 'in_season' && currentWeekMatchups.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-          >
+          <div>
             <Card>
               <CardHeader>
-                <div className="flex items-center space-x-2">
-                  <BoltIcon className="h-5 w-5 text-yellow-500" />
-                  <h2 className="text-xl font-bold">This Week's Battles</h2>
-                  <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                    Week {effectiveWeek}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <CardTitle>This Week's Battles</CardTitle>
                 </div>
+                <span className="rounded border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Week {effectiveWeek}
+                </span>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup, index) => (
-                    <motion.div
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any, i: number) => (
+                    <div
                       key={matchup.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.4, delay: 0.6 + index * 0.1 }}
-                      className="relative p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700"
+                      className="relative rounded-md border border-border bg-background p-4"
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Avatar avatarId={matchup.team1.avatar} size={24} className="rounded-lg" />
-                            <span className="font-medium text-sm">{matchup.team1.name}</span>
-                          </div>
-                          <span className="text-lg font-bold">{matchup.team1.points?.toFixed(1) || '0.0'}</span>
+                      {/* Team 1 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar avatarId={matchup.team1.avatar} size={26} className="rounded shrink-0" />
+                          <span className="text-sm font-medium truncate">{matchup.team1.name}</span>
                         </div>
-                        <div className="text-center text-xs text-gray-500 dark:text-gray-400">VS</div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Avatar avatarId={matchup.team2.avatar} size={24} className="rounded-lg" />
-                            <span className="font-medium text-sm">{matchup.team2.name}</span>
-                          </div>
-                          <span className="text-lg font-bold">{matchup.team2.points?.toFixed(1) || '0.0'}</span>
-                        </div>
+                        <span className="font-display text-lg font-bold tabular-nums ml-2 shrink-0 text-foreground">
+                          {matchup.team1.points?.toFixed(1) ?? '0.0'}
+                        </span>
                       </div>
+
+                      {/* Divider */}
+                      <div className="my-2.5 flex items-center gap-2">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">vs</span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+
+                      {/* Team 2 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar avatarId={matchup.team2.avatar} size={26} className="rounded shrink-0" />
+                          <span className="text-sm font-medium truncate">{matchup.team2.name}</span>
+                        </div>
+                        <span className="font-display text-lg font-bold tabular-nums ml-2 shrink-0 text-foreground">
+                          {matchup.team2.points?.toFixed(1) ?? '0.0'}
+                        </span>
+                      </div>
+
                       {matchup.isHighlight && (
-                        <div className="absolute top-2 right-2">
-                          <FireIcon className="h-4 w-4 text-red-500" />
+                        <div className="absolute top-2.5 right-2.5">
+                          <Flame className="h-3.5 w-3.5 text-orange-500" />
                         </div>
                       )}
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         )}
 
-        {/* Current Standings */}
-        <Card>
-          <CardHeader className="pb-4">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center space-x-2">
-                <TrophyIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                <h2 className="text-xl font-bold">Standings</h2>
+        {/* ── Standings ── */}
+        <div>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-primary" />
+                <CardTitle>Standings</CardTitle>
               </div>
-              <div className="flex justify-end">
-                {/* Season Selector */}
-                <SeasonSelect
-                  seasons={seasons}
-                  selectedSeason={selectedSeason}
-                  onSeasonChange={setSelectedSeason}
-                  className="w-[140px]"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loadingSeasonData ? (
-              <div className="flex items-center justify-center py-12">
-                <LoadingSpinner />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Header */}
-                <div className="hidden md:grid md:grid-cols-[3rem_1fr_8rem_5rem_6rem_6rem] gap-4 px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                  <div>Rank</div>
-                  <div>Team</div>
-                  <div className="text-center">Record</div>
-                  <div className="text-center">Win%</div>
-                  <div className="text-center">PF</div>
-                  <div className="text-center">PA</div>
+              <SeasonSelect
+                seasons={seasons}
+                selectedSeason={selectedSeason}
+                onSeasonChange={setSelectedSeason}
+                className="w-[130px]"
+              />
+            </CardHeader>
+            <CardContent>
+              {loadingSeasonData ? (
+                <div className="flex items-center justify-center py-12">
+                  <LoadingSpinner />
                 </div>
-                
-                {/* Conditional Standings: Season vs All-Time */}
-                {selectedSeason === 'all-time' ? (
-                  // All-Time Standings
-                  allTimeStandings.map((standing, index) => {
-                    const user = standing.user;
-                    if (!user) return null;
+              ) : (
+                <div className="space-y-0.5">
+                  {/* Column headers */}
+                  <div className="hidden md:flex items-center gap-3 py-2 px-4 mb-1">
+                    <span className="w-5 shrink-0" />
+                    <span className="flex-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Team</span>
+                    <span className="w-20 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Record</span>
+                    <span className="w-14 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Win%</span>
+                    <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">PF</span>
+                    <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">PA</span>
+                  </div>
 
-                    const totalGames = standing.totalWins + standing.totalLosses + standing.totalTies;
-                    const avgPoints = totalGames > 0 ? standing.totalPoints / totalGames : 0;
-                    const avgPointsAgainst = totalGames > 0 ? standing.totalPointsAgainst / totalGames : 0;
-
-                    return (
-                      <motion.div
-                        key={user.user_id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4, delay: index * 0.05 }}
-                        className="relative overflow-hidden rounded-xl transition-all p-3 md:p-4 bg-gradient-to-r from-yellow-50 to-amber-50 hover:from-yellow-100 hover:to-amber-100 dark:from-yellow-500/10 dark:to-amber-500/10 dark:hover:from-yellow-500/20 dark:hover:to-amber-500/20 ring-1 ring-yellow-200 dark:ring-yellow-500/30"
-                      >
-                        <div className="grid grid-cols-5 md:grid-cols-6 gap-3 md:gap-4 items-center">
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80 text-xs md:text-sm font-bold text-gray-600 dark:text-gray-300">
-                              {index + 1}
-                            </div>
-                            <Avatar avatarId={user.avatar} size={24} className="rounded md:w-6 md:h-6" />
-                            <span className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {user.display_name}
+                  {/* All-time standings */}
+                  {selectedSeason === 'all-time'
+                    ? allTimeStandings.map((s: any, i: number) => {
+                        const totalGames = s.totalWins + s.totalLosses + s.totalTies;
+                        return (
+                          <div
+                            key={s.userId}
+                            className={cn(
+                              'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none group',
+                              i === 0
+                                ? 'border-amber-400 bg-amber-500/[0.05] hover:bg-amber-500/[0.08]'
+                                : 'border-transparent hover:bg-accent/60',
+                            )}
+                          >
+                            <span className={cn(
+                              'w-5 shrink-0 text-center text-xs font-bold',
+                              i === 0 ? 'text-amber-500' : 'text-muted-foreground',
+                            )}>
+                              {i + 1}
                             </span>
-                          </div>
-                          <div className="text-center font-semibold text-gray-900 dark:text-white text-xs md:text-sm">
-                            {standing.totalWins}-{standing.totalLosses}{standing.totalTies > 0 ? `-${standing.totalTies}` : ''}
-                          </div>
-                          <div className="text-center font-medium text-xs md:text-sm">
-                            {(standing.winPercentage * 100).toFixed(1)}%
-                          </div>
-                          <div className="text-center font-medium">{formatPoints(avgPoints)}</div>
-                          <div className="text-center font-medium">{formatPoints(avgPointsAgainst)}</div>
-                        </div>
-
-                        {/* All-Time Badge */}
-                        {index === 0 && (
-                          <div className="absolute top-1 right-1 md:top-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-yellow-700 bg-yellow-200 dark:text-yellow-300 dark:bg-yellow-500/30 rounded-full">
-                            👑 ALL-TIME KING
-                          </div>
-                        )}
-                        {standing.championships > 0 && (
-                          <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-green-700 bg-green-200 dark:text-green-300 dark:bg-green-500/30 rounded-full">
-                            {standing.championships} 🏆
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })
-                ) : (
-                  // Season Standings
-                  sortedRosters.map((roster, index) => {
-                    const user = users.find(u => u.user_id === roster.owner_id);
-                    if (!user) return null;
-
-                    const wins = getDefaultValue(roster.settings?.wins, 0);
-                    const losses = getDefaultValue(roster.settings?.losses, 0);
-                    const ties = getDefaultValue(roster.settings?.ties, 0);
-                    const fpts = getDefaultValue(roster.settings?.fpts, 0) + getDefaultValue(roster.settings?.fpts_decimal, 0) / 100;
-                    const fptsAgainst = getDefaultValue(roster.settings?.fpts_against, 0) + getDefaultValue(roster.settings?.fpts_against_decimal, 0) / 100;
-                    const winPct = calculateWinPercentage(wins, losses, ties);
-                    
-                    const isInPlayoffs = index < getDefaultValue(league.settings?.playoff_teams, 6);
-                    const isOnBubble = index === getDefaultValue(league.settings?.playoff_teams, 6);
-
-                    return (
-                      <motion.div
-                        key={roster.roster_id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4, delay: index * 0.05 }}
-                        className={`
-                          relative overflow-hidden rounded-xl transition-all p-3 md:p-4
-                          ${isInPlayoffs ? 'bg-blue-50 hover:bg-blue-100/80 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 ring-1 ring-blue-200 dark:ring-blue-500/30' : 
-                            isOnBubble ? 'bg-orange-50 hover:bg-orange-100/80 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 ring-1 ring-orange-200 dark:ring-orange-500/30' : 
-                            'bg-gray-50 hover:bg-gray-100/80 dark:bg-white/5 dark:hover:bg-white/10'}
-                        `}
-                      >
-                        {/* Mobile Layout */}
-                        <div className="md:hidden space-y-2">
-                          <div className="flex items-center space-x-3">
-                            <div className={`
-                              w-6 h-6 flex items-center justify-center rounded text-xs font-bold
-                              ${isInPlayoffs ? 'bg-blue-200 text-blue-700 dark:bg-blue-500/30 dark:text-blue-300' : 
-                                isOnBubble ? 'bg-orange-200 text-orange-700 dark:bg-orange-500/30 dark:text-orange-300' : 
-                                'bg-gray-200 text-gray-700 dark:bg-gray-500/30 dark:text-gray-300'}
-                            `}>
-                              {index + 1}
+                            <Avatar avatarId={s.user.avatar} size={26} className="rounded shrink-0" />
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {censorTeamName(s.user.display_name)}
+                              </span>
+                              {s.championships > 0 && (
+                                <span className={cn(
+                                  'hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border',
+                                  i === 0
+                                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                    : 'bg-primary/10 text-primary border-primary/20',
+                                )}>
+                                  {s.championships}× Champ
+                                </span>
+                              )}
                             </div>
-                            <Avatar avatarId={user.avatar} size={32} className="rounded-lg" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{user.metadata?.team_name || user.display_name}</p>
-                              <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                                <span>{formatRecord(wins, losses, ties)}</span>
-                                <span>•</span>
-                                <span>{winPct.toFixed(1)}%</span>
-                              </div>
+                            <div className="hidden md:flex items-center gap-3 shrink-0">
+                              <span className="w-20 text-right font-mono text-sm text-foreground">
+                                {s.totalWins}-{s.totalLosses}{s.totalTies > 0 ? `-${s.totalTies}` : ''}
+                              </span>
+                              <span className="w-14 text-right text-sm text-muted-foreground">
+                                {(s.winPercentage * 100).toFixed(1)}%
+                              </span>
+                              <span className="w-16 text-right text-sm font-medium text-foreground">
+                                {formatPoints(totalGames > 0 ? s.totalPoints / totalGames : 0)}
+                              </span>
+                              <span className="w-16 text-right text-sm text-muted-foreground">
+                                {formatPoints(totalGames > 0 ? s.totalPointsAgainst / totalGames : 0)}
+                              </span>
+                            </div>
+                            {/* Mobile record */}
+                            <div className="md:hidden text-right shrink-0">
+                              <p className="text-xs font-mono text-foreground">{s.totalWins}-{s.totalLosses}</p>
+                              <p className="text-[10px] text-muted-foreground">{(s.winPercentage * 100).toFixed(1)}%</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs pl-11">
-                            <div className="flex justify-between">
-                              <span className="text-gray-500 dark:text-gray-400">PF:</span>
-                              <span className="font-medium">{formatPoints(fpts)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500 dark:text-gray-400">PA:</span>
-                              <span className="font-medium">{formatPoints(fptsAgainst)}</span>
-                            </div>
-                          </div>
-                        </div>
+                        );
+                      })
 
-                        {/* Desktop Layout */}
-                        <div className="hidden md:grid md:grid-cols-[3rem_1fr_8rem_5rem_6rem_6rem] gap-4 items-center">
-                          <div className={`
-                            w-7 h-7 flex items-center justify-center rounded-lg text-sm font-bold
-                            ${isInPlayoffs ? 'bg-blue-200 text-blue-700 dark:bg-blue-500/30 dark:text-blue-300' : 
-                              isOnBubble ? 'bg-orange-200 text-orange-700 dark:bg-orange-500/30 dark:text-orange-300' : 
-                              'bg-gray-200 text-gray-700 dark:bg-gray-500/30 dark:text-gray-300'}
-                          `}>
-                            {index + 1}
-                          </div>
-                          <div className="flex items-center space-x-3 min-w-0">
-                            <Avatar avatarId={user.avatar} size={32} className="rounded-lg flex-shrink-0" />
-                            <span className="font-medium truncate">{user.metadata?.team_name || user.display_name}</span>
-                          </div>
-                          <div className="text-center font-medium">{formatRecord(wins, losses, ties)}</div>
-                          <div className="text-center font-medium">{winPct.toFixed(1)}%</div>
-                          <div className="text-center font-medium">{formatPoints(fpts)}</div>
-                          <div className="text-center font-medium">{formatPoints(fptsAgainst)}</div>
-                        </div>
+                    /* Season standings */
+                    : sortedRosters.map((roster: any, i: number) => {
+                        const user = users.find((u: any) => u.user_id === roster.owner_id);
+                        if (!user) return null;
+                        const wins       = getDefaultValue(roster.settings?.wins, 0);
+                        const losses     = getDefaultValue(roster.settings?.losses, 0);
+                        const ties       = getDefaultValue(roster.settings?.ties, 0);
+                        const fpts       = getDefaultValue(roster.settings?.fpts, 0) + getDefaultValue(roster.settings?.fpts_decimal, 0) / 100;
+                        const fptsAgainst= getDefaultValue(roster.settings?.fpts_against, 0) + getDefaultValue(roster.settings?.fpts_against_decimal, 0) / 100;
+                        const winPct     = calculateWinPercentage(wins, losses, ties);
+                        const isPlayoff  = i < playoffTeams;
+                        const isBubble   = i === playoffTeams;
 
-                        {/* Status Badges */}
-                        {isInPlayoffs && (
-                          <div className="absolute top-1 right-1 md:top-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-blue-700 bg-blue-200 dark:text-blue-300 dark:bg-blue-500/30 rounded-full">
-                            PLAYOFF
+                        return (
+                          <div
+                            key={roster.roster_id}
+                            className={cn(
+                              'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none',
+                              isPlayoff
+                                ? 'border-primary bg-primary/[0.04] hover:bg-primary/[0.07]'
+                                : isBubble
+                                  ? 'border-amber-500 bg-amber-500/[0.04] hover:bg-amber-500/[0.07]'
+                                  : 'border-transparent hover:bg-accent/60',
+                            )}
+                          >
+                            <span className={cn(
+                              'w-5 shrink-0 text-center text-xs font-bold',
+                              isPlayoff ? 'text-primary' : isBubble ? 'text-amber-500' : 'text-muted-foreground',
+                            )}>
+                              {i + 1}
+                            </span>
+                            <Avatar avatarId={user.avatar} size={26} className="rounded shrink-0" />
+
+                            {/* Team name + inline badge */}
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {censorTeamName(user.metadata?.team_name || user.display_name)}
+                              </span>
+                              {isPlayoff && (
+                                <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
+                                  Playoff
+                                </span>
+                              )}
+                              {isBubble && (
+                                <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                  Bubble
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Desktop stats */}
+                            <div className="hidden md:flex items-center gap-3 shrink-0">
+                              <span className="w-20 text-right font-mono text-sm text-foreground">
+                                {formatRecord(wins, losses, ties)}
+                              </span>
+                              <span className="w-14 text-right text-sm text-muted-foreground">
+                                {winPct.toFixed(1)}%
+                              </span>
+                              <span className="w-16 text-right text-sm font-medium text-foreground">
+                                {formatPoints(fpts)}
+                              </span>
+                              <span className="w-16 text-right text-sm text-muted-foreground">
+                                {formatPoints(fptsAgainst)}
+                              </span>
+                            </div>
+
+                            {/* Mobile stats */}
+                            <div className="md:hidden text-right shrink-0">
+                              <p className="text-xs font-mono text-foreground">{formatRecord(wins, losses, ties)}</p>
+                              <p className="text-[10px] text-muted-foreground">{winPct.toFixed(1)}%</p>
+                            </div>
                           </div>
-                        )}
-                        {isOnBubble && (
-                          <div className="absolute top-1 right-1 md:top-2 md:right-2 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-orange-700 bg-orange-200 dark:text-orange-300 dark:bg-orange-500/30 rounded-full">
-                            BUBBLE
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        );
+                      })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </PageLayout>
   );

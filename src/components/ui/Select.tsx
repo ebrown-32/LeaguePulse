@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Select = SelectPrimitive.Root;
@@ -22,7 +22,7 @@ const SelectTrigger = React.forwardRef<
     {...props}
   >
     {children}
-    <ChevronDownIcon className="h-4 w-4 opacity-50" />
+    <ChevronDown className="h-4 w-4 opacity-50" />
   </SelectPrimitive.Trigger>
 ));
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;

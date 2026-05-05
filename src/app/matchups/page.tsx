@@ -1,4 +1,4 @@
-import { FireIcon } from '@heroicons/react/24/outline';
+import { Swords } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import MatchupsView from './MatchupsView';
 
@@ -9,9 +9,9 @@ export default async function MatchupsPage() {
     <PageLayout
       title="Matchups"
       subtitle="The slate."
-      icon={<FireIcon className="h-6 w-6" />}
+      icon={<Swords className="h-6 w-6" />}
     >
       <MatchupsView />
     </PageLayout>
   );
-} 
+}
