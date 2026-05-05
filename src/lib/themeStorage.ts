@@ -36,7 +36,14 @@ async function ensureDataDir() {
 export async function getTheme(): Promise<ThemeConfig> {
   try {
     if (redis) {
-      if (!redis.isOpen) await redis.connect();
+      try {
+        if (!redis.isOpen) await redis.connect();
+      } catch {
+        redis = null; // auth/connection failed — fall through to file storage
+      }
+    }
+
+    if (redis) {
       const raw = await redis.get(REDIS_KEY);
       if (raw) return { ...DEFAULT_THEME, ...JSON.parse(raw) };
     } else {
@@ -46,8 +53,8 @@ export async function getTheme(): Promise<ThemeConfig> {
         return { ...DEFAULT_THEME, ...JSON.parse(raw) };
       } catch { /* file doesn't exist yet */ }
     }
-  } catch (err) {
-    console.error('themeStorage.getTheme error:', err);
+  } catch {
+    // silently fall back to defaults
   }
   return { ...DEFAULT_THEME };
 }

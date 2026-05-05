@@ -63,7 +63,7 @@ const AiProposalSchema = z.object({
   sideBGives:  z.array(AiPlayerSchema).min(1).max(3),
   label:       z.enum(['Win-Win', 'Sell High', 'Buy Low', 'Big Swing', 'Rebuild Move', 'Steal Alert', 'Championship Push']),
   tagline:     z.string().max(80).describe('One punchy line — under 80 chars'),
-  rationale:   z.string().min(80).max(350).describe('2–3 sentences. Specific, opinionated, witty. Reference actual stats and records.'),
+  rationale:   z.string().min(80).max(600).describe('2–3 sentences. Specific, opinionated, witty. Reference actual stats and records.'),
   fairness:    z.number().min(10).max(90).describe('0=Side A robbery, 50=balanced, 90=Side B robbery'),
 });
 
@@ -84,8 +84,8 @@ async function fetchLeagueContext(leagueId: string) {
     // Rosters/users: cache 1 h — change with trades/waivers
     fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
     fetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
-    // Players: huge payload (~3 MB) — cache 24 h, changes rarely
-    fetch(`${SLEEPER_BASE}/players/nfl`, { next: { revalidate: 86400 } }).then(r => r.json()),
+    // Players: ~19 MB — too large for Next.js data cache; route-level revalidate covers this
+    fetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
   ]);
 
   // Cap at 8 most-recent weeks — enough signal, avoids excess fetching
