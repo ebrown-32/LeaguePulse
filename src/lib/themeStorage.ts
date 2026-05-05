@@ -33,30 +33,53 @@ async function ensureDataDir() {
   catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
+// In-memory cache — avoids hitting storage on every request within the same instance
+let memCache: ThemeConfig | null = null;
+let memCacheExpiry = 0;
+const MEM_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function connectRedis(): Promise<void> {
+  // Hard 2-second timeout so a slow/misconfigured Redis never blocks page loads
+  await Promise.race([
+    redis.connect(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Redis connect timeout')), 2000)
+    ),
+  ]);
+}
+
 export async function getTheme(): Promise<ThemeConfig> {
+  if (memCache && Date.now() < memCacheExpiry) return memCache;
+
   try {
     if (redis) {
       try {
-        if (!redis.isOpen) await redis.connect();
+        if (!redis.isOpen) await connectRedis();
       } catch {
-        redis = null; // auth/connection failed — fall through to file storage
+        redis = null; // unreachable or unauthenticated — fall through
       }
     }
 
+    let theme: ThemeConfig | null = null;
+
     if (redis) {
       const raw = await redis.get(REDIS_KEY);
-      if (raw) return { ...DEFAULT_THEME, ...JSON.parse(raw) };
+      if (raw) theme = { ...DEFAULT_THEME, ...JSON.parse(raw) };
     } else {
       await ensureDataDir();
       try {
         const raw = await fs.readFile(THEME_FILE, 'utf-8');
-        return { ...DEFAULT_THEME, ...JSON.parse(raw) };
+        theme = { ...DEFAULT_THEME, ...JSON.parse(raw) };
       } catch { /* file doesn't exist yet */ }
     }
+
+    const result = theme ?? { ...DEFAULT_THEME };
+    memCache = result;
+    memCacheExpiry = Date.now() + MEM_TTL;
+    return result;
   } catch {
-    // silently fall back to defaults
+    return { ...DEFAULT_THEME };
   }
-  return { ...DEFAULT_THEME };
 }
 
 export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfig> {
@@ -64,7 +87,7 @@ export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfi
   const next: ThemeConfig = { ...current, ...theme };
   try {
     if (redis) {
-      if (!redis.isOpen) await redis.connect();
+      if (!redis.isOpen) await connectRedis();
       await redis.set(REDIS_KEY, JSON.stringify(next));
     } else {
       await ensureDataDir();
@@ -73,6 +96,9 @@ export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfi
   } catch (err) {
     console.error('themeStorage.saveTheme error:', err);
   }
+  // Bust in-memory cache so the new theme is served immediately
+  memCache = next;
+  memCacheExpiry = Date.now() + MEM_TTL;
   return next;
 }
 
