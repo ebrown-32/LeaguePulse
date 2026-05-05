@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { generateTradeProposals } from '@/lib/tradeEngine';
 
-export const revalidate = 3600;
+// Cache the full response for 2 hours — AI call is expensive
+export const revalidate = 7200;
+
+// Vercel Pro: up to 60s. Hobby: capped at 10s — upgrade if hitting limit.
+export const maxDuration = 60;
 
 export async function GET() {
   const leagueId = process.env.NEXT_PUBLIC_LEAGUE_ID;

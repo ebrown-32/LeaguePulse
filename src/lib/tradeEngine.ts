@@ -74,20 +74,28 @@ const AiResponseSchema = z.object({
 // ── Data fetching ──────────────────────────────────────────────────────────────
 
 async function fetchLeagueContext(leagueId: string) {
-  const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`).then(r => r.json());
+  // NFl state: short cache — week number changes weekly
+  const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`, {
+    next: { revalidate: 3600 },
+  }).then(r => r.json());
   const currentWeek: number = Math.max(1, nflState.week ?? 1);
 
   const [rosters, users, allPlayers] = await Promise.all([
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`).then(r => r.json()),
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/users`).then(r => r.json()),
-    fetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
+    // Rosters/users: cache 1 h — change with trades/waivers
+    fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
+    fetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
+    // Players: huge payload (~3 MB) — cache 24 h, changes rarely
+    fetch(`${SLEEPER_BASE}/players/nfl`, { next: { revalidate: 86400 } }).then(r => r.json()),
   ]);
 
-  // Fetch all completed weeks in parallel
-  const weeksToFetch = Math.min(currentWeek, 14);
+  // Cap at 8 most-recent weeks — enough signal, avoids excess fetching
+  const weeksToFetch = Math.min(currentWeek, 8);
+  const startWeek    = Math.max(1, currentWeek - weeksToFetch + 1);
   const matchupWeeks: any[][] = await Promise.all(
-    Array.from({ length: weeksToFetch }, (_, i) => i + 1).map(week =>
-      fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`)
+    Array.from({ length: weeksToFetch }, (_, i) => startWeek + i).map(week =>
+      fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, {
+        next: { revalidate: 1800 }, // 30 min — scores finalize mid-week
+      })
         .then(r => r.ok ? r.json() : [])
         .catch(() => [])
     )
