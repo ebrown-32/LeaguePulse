@@ -3,7 +3,7 @@
 import { Card, CardContent } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { TrophyIcon } from '@heroicons/react/24/outline';
+import { Trophy } from 'lucide-react';
 import type { SleeperRoster, SleeperUser } from '@/types/sleeper';
 
 interface PlayoffBracketProps {
@@ -36,13 +36,13 @@ export default function PlayoffBracket({ matchups }: PlayoffBracketProps) {
       {/* Championship */}
       {championshipMatch && (
         <div className="flex justify-center mb-8">
-          <Card className="w-80 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 ring-2 ring-yellow-500/50">
+          <Card className="w-80 bg-card ring-1 ring-amber-500/30 border border-amber-500/20">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-4">
-                <TrophyIcon className="w-5 h-5 text-yellow-500" />
-                <span className="text-sm font-medium text-yellow-500">Championship</span>
+                <Trophy className="w-5 h-5 text-amber-500" />
+                <span className="text-sm font-semibold uppercase tracking-wide text-amber-500">Championship</span>
                 {championshipMatch.isComplete && (
-                  <span className="text-xs text-gray-400">Final</span>
+                  <span className="text-xs text-muted-foreground">Final</span>
                 )}
               </div>
               <div className="space-y-4">
@@ -67,18 +67,18 @@ export default function PlayoffBracket({ matchups }: PlayoffBracketProps) {
       )}
 
       {/* Connecting Lines */}
-      <div className="absolute top-[45%] left-1/2 w-px h-16 bg-gray-600 -translate-x-1/2 -translate-y-full" />
-      <div className="absolute top-[45%] left-1/4 w-[50%] h-px bg-gray-600 -translate-y-full" />
+      <div className="absolute top-[45%] left-1/2 w-px h-16 bg-border -translate-x-1/2 -translate-y-full" />
+      <div className="absolute top-[45%] left-1/4 w-[50%] h-px bg-border -translate-y-full" />
 
       {/* Semifinals */}
       <div className="grid grid-cols-2 gap-8">
         {semifinalMatches.map((match) => (
-          <Card key={match.matchup_id} className="bg-gradient-to-br from-blue-500/10 to-purple-500/10">
+          <Card key={match.matchup_id}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm font-medium">Semifinal {match.matchup_id - 1}</span>
                 {match.isComplete && (
-                  <span className="text-xs text-gray-400">Final</span>
+                  <span className="text-xs text-muted-foreground">Final</span>
                 )}
               </div>
               <div className="space-y-4">
@@ -115,14 +115,14 @@ interface MatchupTeamProps {
 
 function MatchupTeam({ name, avatar, points, seed, isWinner }: MatchupTeamProps) {
   return (
-    <div className={`flex items-center space-x-2 p-2 rounded ${isWinner ? 'bg-green-500/10 ring-1 ring-green-500/50' : ''}`}>
+    <div className={`flex items-center space-x-2 p-2 rounded-lg ${isWinner ? 'bg-primary/5 ring-1 ring-primary/30' : ''}`}>
       <Avatar avatarId={avatar} size={24} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">#{seed}</span>
-          <span className="font-medium truncate">{name}</span>
+          <span className="text-xs text-muted-foreground">#{seed}</span>
+          <span className={`font-medium truncate text-sm ${isWinner ? 'text-primary' : 'text-foreground'}`}>{name}</span>
         </div>
-        <div className="text-sm text-gray-400">{points.toFixed(2)}</div>
+        <div className="text-sm text-muted-foreground">{points.toFixed(2)}</div>
       </div>
     </div>
   );

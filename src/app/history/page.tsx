@@ -1,4 +1,4 @@
-import { ClockIcon } from '@heroicons/react/24/outline';
+import { Database } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import EnhancedHistoryView from './EnhancedHistoryView';
 import { getNFLState } from '@/lib/api';
@@ -11,8 +11,8 @@ export default async function HistoryPage() {
   return (
     <PageLayout
       title="League History"
-      subtitle="Comprehensive stats, records, and insights"
-      icon={<ClockIcon className="h-6 w-6 text-gray-400" />}
+      subtitle="Stats, records, and insights."
+      icon={<Database className="h-6 w-6 text-primary" />}
     >
       <EnhancedHistoryView currentWeek={nflState.week} />
     </PageLayout>

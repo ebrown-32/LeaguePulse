@@ -1,13 +1,15 @@
-import { 
-  getLeagueInfo, 
-  getLeagueUsers, 
-  getLeagueRosters, 
-  getLeagueMatchups, 
+import {
+  getLeagueInfo,
+  getLeagueUsers,
+  getLeagueRosters,
+  getLeagueMatchups,
   getLeagueWeeks,
   getAllLinkedLeagueIds,
   getNFLState,
-  getPlayoffBracket
+  getPlayoffBracket,
+  getSeasonTransactions
 } from './api';
+import type { SleeperTransaction } from '@/types/sleeper';
 
 // Enhanced types for better data accuracy
 export interface EnhancedHistoricalRecord {
@@ -51,6 +53,7 @@ export interface EnhancedUserStats {
   playoffLosses: number;
   totalPoints: number;
   totalPointsAgainst: number;
+  totalWeeksScored: number;
   championships: number;
   playoffAppearances: number;
   regularSeasonChampionships: number;
@@ -71,6 +74,12 @@ export interface EnhancedUserStats {
   consistencyScore: number; // Lower variance = more consistent
   explosiveGames: number; // Games scoring 20+ points above average
   duds: number; // Games scoring 20+ points below average
+  totalTrades: number;
+  totalWaiverClaims: number;
+  totalFAMoves: number;
+  benchPointsLeftTotal: number;
+  benchPointsWeeksCount: number;
+  benchPointsLeftPerGame: number;
   headToHeadRecord: { [opponentId: string]: { wins: number; losses: number; ties: number } };
   seasonBySeasonStats: {
     [season: string]: {
@@ -163,7 +172,7 @@ export async function generateEnhancedLeagueHistory(
 
     // Step 5: Generate win/loss streaks
     progressCallback?.(85, 'Calculating win/loss streaks...');
-    await generateWinLossStreaks(linkedLeagueIds, userStatsMap, records);
+    await generateWinLossStreaks(linkedLeagueIds, userStatsMap, records, seasonStats);
     
     // Step 6: Calculate derived statistics and rankings
     progressCallback?.(90, 'Calculating derived statistics...');
@@ -260,6 +269,7 @@ async function processLeagueSeason(
         playoffLosses: 0,
         totalPoints: 0,
         totalPointsAgainst: 0,
+        totalWeeksScored: 0,
         championships: 0,
         playoffAppearances: 0,
         regularSeasonChampionships: 0,
@@ -280,19 +290,31 @@ async function processLeagueSeason(
         consistencyScore: 0,
         explosiveGames: 0,
         duds: 0,
+        totalTrades: 0,
+        totalWaiverClaims: 0,
+        totalFAMoves: 0,
+        benchPointsLeftTotal: 0,
+        benchPointsWeeksCount: 0,
+        benchPointsLeftPerGame: 0,
         headToHeadRecord: {},
         seasonBySeasonStats: {}
       });
     }
   });
 
-  // Get all matchups for the season
+  // Get all matchups and transactions for the season in parallel
   const totalWeeks = await getLeagueWeeks(leagueId);
-  const allMatchups = await Promise.all(
-    Array.from({ length: totalWeeks }, (_, i) => 
-      getLeagueMatchups(leagueId, i + 1).catch(() => [])
-    )
-  );
+  const [allMatchups, allTransactions] = await Promise.all([
+    Promise.all(
+      Array.from({ length: totalWeeks }, (_, i) =>
+        getLeagueMatchups(leagueId, i + 1).catch(() => [])
+      )
+    ),
+    getSeasonTransactions(leagueId, totalWeeks).catch(() => [] as SleeperTransaction[])
+  ]);
+
+  // Process transaction activity per manager
+  processTransactionsForSeason(allTransactions, users, rosters, userStatsMap);
 
   // Process matchups and calculate stats
   await processMatchupsForSeason(
@@ -367,19 +389,29 @@ async function processMatchupsForSeason(
       }
     }
 
-    // Process individual scores for records
+    // Process individual scores for records and bench points
     weekMatchups.forEach(matchup => {
       if (typeof matchup.points === 'number' && matchup.points > 0) {
         const user = findUserByRoster(matchup.roster_id, users, rosters);
         if (user) {
           userSeasonScores.get(user.user_id)?.push(matchup.points);
-          
-          // Track high/low scores
+
           const userStats = userStatsMap.get(user.user_id)!;
+          userStats.totalWeeksScored += 1;
           userStats.highestScore = Math.max(userStats.highestScore, matchup.points);
           userStats.lowestScore = Math.min(userStats.lowestScore, matchup.points);
-          
-          // Update season stats
+
+          // Calculate bench points (total roster points minus starter points)
+          if (matchup.players_points && matchup.starters_points && matchup.starters_points.length > 0) {
+            const totalRosterPoints = (Object.values(matchup.players_points) as number[]).reduce((sum: number, p: number) => sum + (p || 0), 0);
+            const totalStarterPoints = (matchup.starters_points as number[]).reduce((sum: number, p: number) => sum + (p || 0), 0);
+            const benchPoints = totalRosterPoints - totalStarterPoints;
+            if (benchPoints >= 0) {
+              userStats.benchPointsLeftTotal += benchPoints;
+              userStats.benchPointsWeeksCount += 1;
+            }
+          }
+
           seasonStats.highestScore = Math.max(seasonStats.highestScore, matchup.points);
           seasonStats.lowestScore = Math.min(seasonStats.lowestScore, matchup.points);
         }
@@ -494,6 +526,35 @@ async function processHeadToHeadMatchup(
   // Update season stats
   seasonStats.closestGame = Math.min(seasonStats.closestGame, margin);
   seasonStats.biggestBlowout = Math.max(seasonStats.biggestBlowout, margin);
+}
+
+// Tally transaction activity per manager for a season
+function processTransactionsForSeason(
+  transactions: SleeperTransaction[],
+  users: any[],
+  rosters: any[],
+  userStatsMap: Map<string, EnhancedUserStats>
+): void {
+  for (const tx of transactions) {
+    // Each transaction has roster_ids for all involved parties
+    for (const rosterId of tx.roster_ids) {
+      const user = findUserByRoster(rosterId, users, rosters);
+      if (!user) continue;
+      const stats = userStatsMap.get(user.user_id);
+      if (!stats) continue;
+
+      if (tx.type === 'trade') {
+        // Count each trade once per manager (roster_ids may include 2+ managers)
+        stats.totalTrades += 1;
+      } else if (tx.type === 'waiver') {
+        stats.totalWaiverClaims += 1;
+      } else if (tx.type === 'free_agent') {
+        stats.totalFAMoves += 1;
+      }
+    }
+    // Trades involve multiple roster_ids — each side gets counted once above, which is correct
+    // (each team's trade count reflects how active they were, not the number of unique trades)
+  }
 }
 
 // Find user by roster ID with accurate team name assignment
@@ -687,17 +748,12 @@ async function determineChampionsAndPlayoffs(
           .sort((a: any, b: any) => b.r - a.r)[0]; // Highest round should be championship
         
         if (finalMatchup && finalMatchup.w) {
-          // The winner (w) field contains the roster_id of the champion
+          // w = winner roster_id, l = loser roster_id in Sleeper's bracket schema
           champion = rosters.find(r => r.roster_id === finalMatchup.w);
-          
-          // Find runner-up from the same matchup
-          if (finalMatchup.m && finalMatchup.m.length === 2) {
-            const loserRosterId = finalMatchup.m.find((id: number) => id !== finalMatchup.w);
-            if (loserRosterId) {
-              runnerUp = rosters.find(r => r.roster_id === loserRosterId);
-            }
+          if (finalMatchup.l) {
+            runnerUp = rosters.find(r => r.roster_id === finalMatchup.l);
           }
-          
+
           if (champion) {
             console.log(`Season ${league.season}: Found champion via playoff bracket - Roster ID: ${champion.roster_id}`);
           }
@@ -888,11 +944,12 @@ async function determineChampionsAndPlayoffs(
 async function generateWinLossStreaks(
   linkedLeagueIds: string[],
   userStatsMap: Map<string, EnhancedUserStats>,
-  records: EnhancedHistoricalRecord[]
+  records: EnhancedHistoricalRecord[],
+  seasonStats: { [season: string]: any }
 ): Promise<void> {
   // Track streaks for each user across all seasons
-  const userStreaks = new Map<string, { 
-    currentWinStreak: number; 
+  const userStreaks = new Map<string, {
+    currentWinStreak: number;
     longestWinStreak: number;
     winStreakSeasons: string[];
   }>();
@@ -906,8 +963,18 @@ async function generateWinLossStreaks(
     });
   }
 
-  // Process each season chronologically to track streaks
-  const sortedLeagueIds = [...linkedLeagueIds].sort();
+  // Build leagueId → season map from seasonStats so we can sort chronologically
+  // (sorting by Sleeper league ID is alphabetical, not chronological)
+  const leagueIdToSeason: Record<string, string> = {};
+  for (const [season, stats] of Object.entries(seasonStats)) {
+    if (stats?.leagueId) leagueIdToSeason[stats.leagueId] = season;
+  }
+
+  const sortedLeagueIds = [...linkedLeagueIds].sort((a, b) => {
+    const sa = leagueIdToSeason[a] ?? '0';
+    const sb = leagueIdToSeason[b] ?? '0';
+    return sa.localeCompare(sb);
+  });
   
   for (const leagueId of sortedLeagueIds) {
     try {
@@ -990,10 +1057,11 @@ async function calculateDerivedStats(
       userStats.playoffWinPercentage = userStats.playoffWins / playoffGames;
     }
 
-    // Calculate averages
-    if (totalGames > 0) {
-      userStats.averagePointsPerGame = userStats.totalPoints / totalGames;
-      userStats.averagePointsAgainst = userStats.totalPointsAgainst / totalGames;
+    // Calculate averages — use totalWeeksScored as denominator so median game
+    // leagues (which double W/L counts but score only once per week) stay accurate
+    if (userStats.totalWeeksScored > 0) {
+      userStats.averagePointsPerGame = userStats.totalPoints / userStats.totalWeeksScored;
+      userStats.averagePointsAgainst = userStats.totalPointsAgainst / userStats.totalWeeksScored;
     }
 
     if (userStats.seasonsPlayed > 0) {
@@ -1004,6 +1072,11 @@ async function calculateDerivedStats(
       if (finishes.length > 0) {
         userStats.averageFinish = finishes.reduce((a, b) => a + b, 0) / finishes.length;
       }
+    }
+
+    // Calculate bench points per game
+    if (userStats.benchPointsWeeksCount > 0) {
+      userStats.benchPointsLeftPerGame = userStats.benchPointsLeftTotal / userStats.benchPointsWeeksCount;
     }
 
     // Calculate consistency score (coefficient of variation)

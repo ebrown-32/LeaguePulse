@@ -1,4 +1,4 @@
-import { SparklesIcon } from '@heroicons/react/24/outline';
+import { Activity } from 'lucide-react';
 import { getAdvancedTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
@@ -27,8 +27,8 @@ export default async function NextGenStatsPage() {
     return (
       <PageLayout
         title="Next-Gen Stats"
-        subtitle="Advanced analytics and performance metrics powered by League Pulse. This is a work in progress."
-        icon={<SparklesIcon className="h-6 w-6 text-gray-400" />}
+        subtitle="Advanced analytics and performance metrics powered by League Pulse."
+        icon={<Activity className="h-6 w-6" />}
       >
         <NextGenStats
           initialMetrics={initialMetrics}

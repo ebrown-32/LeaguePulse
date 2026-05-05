@@ -3,14 +3,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { 
-  ChevronUpIcon, 
-  ChevronDownIcon,
-  HeartIcon,
-  ShareIcon,
-  ArrowTopRightOnSquareIcon
-} from '@heroicons/react/24/outline';
-import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import {
+  ChevronUp,
+  ChevronDown,
+  Heart,
+  Share2,
+  ExternalLink,
+} from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface Article {
@@ -254,7 +253,7 @@ export default function NewsView() {
               onClick={() => paginate(-1)}
               aria-label="Previous article"
             >
-              <ChevronUpIcon className="w-6 h-6 text-gray-700 dark:text-white" />
+              <ChevronUp className="w-6 h-6 text-gray-700 dark:text-white" />
             </motion.button>
             
             <div className="py-4 flex flex-col items-center space-y-2">
@@ -282,7 +281,7 @@ export default function NewsView() {
               onClick={() => paginate(1)}
               aria-label="Next article"
             >
-              <ChevronDownIcon className="w-6 h-6 text-gray-700 dark:text-white" />
+              <ChevronDown className="w-6 h-6 text-gray-700 dark:text-white" />
             </motion.button>
           </div>
 
@@ -358,9 +357,9 @@ export default function NewsView() {
                     aria-label={isLiked ? "Unlike article" : "Like article"}
                   >
                     {isLiked ? (
-                      <HeartIconSolid className="w-8 h-8 text-red-500 drop-shadow-glow-red" />
+                      <Heart className="w-8 h-8 text-red-500 drop-shadow-glow-red" />
                     ) : (
-                      <HeartIcon className="w-8 h-8 text-gray-700 dark:text-white" />
+                      <Heart className="w-8 h-8 text-gray-700 dark:text-white" />
                     )}
                     <span className="text-sm mt-1">Like</span>
                   </motion.button>
@@ -372,7 +371,7 @@ export default function NewsView() {
                     className="flex flex-col items-center"
                     aria-label="Share article"
                   >
-                    <ShareIcon className="w-8 h-8 text-gray-700 dark:text-white" />
+                    <Share2 className="w-8 h-8 text-gray-700 dark:text-white" />
                     <span className="text-sm mt-1">Share</span>
                   </motion.button>
 
@@ -386,7 +385,7 @@ export default function NewsView() {
                     aria-label="Read full article"
                     onClick={e => e.stopPropagation()}
                   >
-                    <ArrowTopRightOnSquareIcon className="w-8 h-8" />
+                    <ExternalLink className="w-8 h-8" />
                     <span className="text-sm mt-1">Read</span>
                   </motion.a>
                 </div>

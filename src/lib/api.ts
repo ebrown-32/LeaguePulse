@@ -5,6 +5,7 @@ import {
   SleeperRoster,
   SleeperUser,
   SleeperMatchup,
+  SleeperTransaction,
 } from "@/types/sleeper";
 
 const BASE_URL = 'https://api.sleeper.app/v1';
@@ -166,6 +167,24 @@ export async function getLeagueMatchups(leagueId: string, week: number): Promise
     throw new Error(`Failed to fetch league matchups: ${response.statusText}`);
   }
   return response.json();
+}
+
+export async function getLeagueTransactions(leagueId: string, week: number): Promise<SleeperTransaction[]> {
+  try {
+    const response = await fetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data.filter((t: SleeperTransaction) => t.status === 'complete') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getSeasonTransactions(leagueId: string, totalWeeks: number): Promise<SleeperTransaction[]> {
+  const results = await Promise.all(
+    Array.from({ length: totalWeeks }, (_, i) => getLeagueTransactions(leagueId, i + 1))
+  );
+  return results.flat();
 }
 
 export async function getNFLState(): Promise<SleeperNFLState> {

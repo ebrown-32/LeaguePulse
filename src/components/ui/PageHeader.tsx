@@ -1,31 +1,37 @@
 import { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
-  title: string;
+  title:     string;
   subtitle?: string;
-  icon: ReactNode;
-  action?: ReactNode;
+  icon:      ReactNode;
+  action?:   ReactNode;
+  className?: string;
 }
 
-export function PageHeader({ title, subtitle, icon, action }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, icon, action, className }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between">
-      <div className="flex items-center space-x-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400">
-          {icon}
+    <div className={cn('flex items-start justify-between gap-4', className)}>
+      <div className="flex items-center gap-4 min-w-0">
+        {/* Icon with glow ring */}
+        <div className="relative shrink-0">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+            {icon}
+          </div>
+          <div className="absolute inset-0 rounded-lg blur-md opacity-40 bg-primary/20 -z-10" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground truncate">
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-muted-foreground truncate tracking-wide">
               {subtitle}
             </p>
           )}
         </div>
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
-} 
+}

@@ -38,6 +38,24 @@ export interface SleeperMatchup {
   starters: string[];
   points: number;
   custom_points?: number;
+  starters_points?: number[];
+  players_points?: Record<string, number>;
+}
+
+export interface SleeperTransaction {
+  type: 'trade' | 'free_agent' | 'waiver';
+  transaction_id: string;
+  status: 'complete' | 'failed';
+  status_updated: number;
+  roster_ids: number[];
+  adds: Record<string, number> | null;
+  drops: Record<string, number> | null;
+  draft_picks: any[];
+  creator: string;
+  created: number;
+  leg: number;
+  consenter_ids: string[];
+  waiver_budget: any[];
 }
 
 export interface SleeperLeague {

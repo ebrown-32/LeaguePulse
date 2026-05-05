@@ -5,19 +5,16 @@ import { defaultAgents, type AIAgent, type AgentPost } from '@/config/aiAgents';
 import NewsView from './NewsView';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { 
-  HeartIcon,
-  ArrowPathRoundedSquareIcon,
-  ChatBubbleLeftIcon,
-  CheckBadgeIcon,
-  SparklesIcon,
-  NewspaperIcon,
-  UserGroupIcon,
-  PhotoIcon
-} from '@heroicons/react/24/outline';
-import { 
-  HeartIcon as HeartSolidIcon 
-} from '@heroicons/react/24/solid';
+import {
+  Heart,
+  RefreshCw,
+  MessageCircle,
+  BadgeCheck,
+  Sparkles,
+  Newspaper,
+  Users,
+  Image,
+} from 'lucide-react';
 
 export default function MediaView() {
   const [activeTab, setActiveTab] = useState<'news' | 'social'>('news');
@@ -83,16 +80,16 @@ export default function MediaView() {
   };
 
   const getPostTypeColor = (type: AgentPost['type']) => {
-    const colors = {
-      'analysis': 'text-blue-400',
-      'prediction': 'text-purple-400', 
-      'power-ranking': 'text-green-400',
-      'matchup': 'text-orange-400',
-      'news': 'text-red-400',
-      'hot-take': 'text-red-400',
-      'general': 'text-gray-400'
+    const colors: Record<string, string> = {
+      'analysis': 'text-primary',
+      'prediction': 'text-violet-500',
+      'power-ranking': 'text-emerald-500',
+      'matchup': 'text-amber-500',
+      'news': 'text-rose-500',
+      'hot-take': 'text-rose-500',
+      'general': 'text-muted-foreground'
     };
-    return colors[type] || 'text-gray-400';
+    return colors[type] || 'text-muted-foreground';
   };
 
   const tabNavigation = (
@@ -101,12 +98,12 @@ export default function MediaView() {
         onClick={() => setActiveTab('news')}
         className={`pb-3 border-b-2 transition-colors font-medium ${
           activeTab === 'news'
-            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         <div className="flex items-center gap-2">
-          <NewspaperIcon className="h-4 w-4" />
+          <Newspaper className="h-4 w-4" />
           <span>NFL News</span>
         </div>
       </button>
@@ -114,12 +111,12 @@ export default function MediaView() {
         onClick={() => setActiveTab('social')}
         className={`pb-3 border-b-2 transition-colors font-medium ${
           activeTab === 'social'
-            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         <div className="flex items-center gap-2">
-          <UserGroupIcon className="h-4 w-4" />
+          <Users className="h-4 w-4" />
           <span>Social Feed</span>
         </div>
       </button>
@@ -130,8 +127,8 @@ export default function MediaView() {
     return (
       <PageLayout
         title="Media"
-        subtitle="Latest NFL news and your league's AI-powered social feed"
-        icon={<PhotoIcon className="h-6 w-6 text-gray-400" />}
+        subtitle="Latest NFL news and your league's AI-powered social feed."
+        icon={<Image className="h-6 w-6 text-primary" />}
       >
         {tabNavigation}
         
@@ -147,8 +144,8 @@ export default function MediaView() {
     return (
       <PageLayout
         title="Media"
-        subtitle="Latest NFL news and your league's AI-powered social feed"
-        icon={<PhotoIcon className="h-6 w-6 text-gray-400" />}
+        subtitle="Latest NFL news and your league's AI-powered social feed."
+        icon={<Image className="h-6 w-6 text-primary" />}
       >
         {tabNavigation}
         
@@ -165,8 +162,8 @@ export default function MediaView() {
   return (
     <PageLayout
       title="Media"
-      subtitle="Latest NFL news and your league's AI-powered social feed"
-      icon={<PhotoIcon className="h-6 w-6 text-gray-400" />}
+      subtitle="Latest NFL news and your league's AI-powered social feed."
+      icon={<Image className="h-6 w-6 text-gray-400" />}
     >
       {tabNavigation}
 
@@ -174,7 +171,7 @@ export default function MediaView() {
       <div className="space-y-6">
         {posts.length === 0 && !loading ? (
           <div className="text-center py-16 px-4">
-            <SparklesIcon className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+            <Sparkles className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-600 dark:text-gray-300 mb-2">No posts yet</h2>
             <p className="text-gray-500 dark:text-gray-400">
               AI agents will start posting content once they're configured and enabled.
@@ -189,25 +186,25 @@ export default function MediaView() {
               return (
                 <div
                   key={post.id}
-                  className="bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg dark:hover:bg-gray-800/70 transition-all duration-200"
+                  className="bg-card rounded-xl border border-border p-6 hover:bg-accent/30 transition-colors duration-200"
                 >
                   {/* Agent Header */}
                   <div className="flex items-start gap-3 mb-4">
                     <div className="text-2xl">{agent.avatar}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-gray-900 dark:text-white truncate">{agent.name}</h3>
+                        <h3 className="font-bold text-foreground truncate">{agent.name}</h3>
                         {agent.verified && (
-                          <CheckBadgeIcon className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                          <BadgeCheck className="h-4 w-4 text-primary flex-shrink-0" />
                         )}
-                        <span className="text-gray-500 dark:text-gray-400 truncate">{agent.username}</span>
-                        <span className="text-gray-400 dark:text-gray-500">·</span>
-                        <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                        <span className="text-muted-foreground truncate">{agent.username}</span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-muted-foreground flex-shrink-0">
                           {formatTimeAgo(post.timestamp)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 ${getPostTypeColor(post.type)} border border-gray-200 dark:border-gray-600`}>
+                        <span className={`text-xs px-2 py-1 rounded-full bg-muted ${getPostTypeColor(post.type)} border border-border`}>
                           {post.type.replace('-', ' ')}
                         </span>
                       </div>
@@ -216,7 +213,7 @@ export default function MediaView() {
 
                   {/* Content */}
                   <div className="ml-11">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed mb-4 whitespace-pre-wrap">
+                    <p className="text-foreground leading-relaxed mb-4 whitespace-pre-wrap">
                       {post.content}
                     </p>
 
@@ -224,7 +221,7 @@ export default function MediaView() {
                     {post.hashtags && post.hashtags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-4">
                         {post.hashtags.map((hashtag, index) => (
-                          <span key={index} className="text-blue-500 dark:text-blue-400 text-sm hover:text-blue-600 dark:hover:text-blue-300">
+                          <span key={index} className="text-primary text-sm hover:text-primary/80">
                             {hashtag}
                           </span>
                         ))}
@@ -232,23 +229,23 @@ export default function MediaView() {
                     )}
 
                     {/* Engagement Stats */}
-                    <div className="flex items-center gap-6 text-gray-500 dark:text-gray-400 text-sm">
+                    <div className="flex items-center gap-6 text-muted-foreground text-sm">
                       <div className="flex items-center gap-1 group cursor-default">
-                        <ChatBubbleLeftIcon className="h-4 w-4 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
+                        <MessageCircle className="h-4 w-4 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
                         <span className="group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
                           {post.replies}
                         </span>
                       </div>
                       
                       <div className="flex items-center gap-1 group cursor-default">
-                        <ArrowPathRoundedSquareIcon className="h-4 w-4 group-hover:text-green-500 dark:group-hover:text-green-400 transition-colors" />
+                        <RefreshCw className="h-4 w-4 group-hover:text-green-500 dark:group-hover:text-green-400 transition-colors" />
                         <span className="group-hover:text-green-500 dark:group-hover:text-green-400 transition-colors">
                           {post.retweets}
                         </span>
                       </div>
                       
                       <div className="flex items-center gap-1 group cursor-default">
-                        <HeartIcon className="h-4 w-4 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" />
+                        <Heart className="h-4 w-4 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" />
                         <span className="group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors">
                           {post.likes}
                         </span>
@@ -265,7 +262,7 @@ export default function MediaView() {
                 <button
                   onClick={handleLoadMore}
                   disabled={loading}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
+                  className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg transition-colors font-medium"
                 >
                   {loading ? 'Loading...' : 'Show more'}
                 </button>
