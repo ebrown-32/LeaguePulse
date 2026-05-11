@@ -11,10 +11,11 @@ import type { EnrichedTransaction, PlayerSummary, DraftPickSummary, Transactions
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+// CSS-variable-driven config — colors injected by ThemeInjector server component.
 const TYPE_CONFIG = {
-  trade:      { label: 'Trade',      Icon: ArrowLeftRight, accent: 'text-amber-400  bg-amber-400/10  border-amber-400/30',  line: 'from-amber-500/80  via-amber-400/40  to-transparent' },
-  waiver:     { label: 'Waiver',     Icon: Gavel,          accent: 'text-sky-400    bg-sky-400/10    border-sky-400/30',    line: 'from-sky-500/80    via-sky-400/40    to-transparent' },
-  free_agent: { label: 'Free Agent', Icon: UserPlus,       accent: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30', line: 'from-emerald-500/80 via-emerald-400/40 to-transparent' },
+  trade:      { label: 'Trade',      Icon: ArrowLeftRight, v: '--tx-trade'  },
+  waiver:     { label: 'Waiver',     Icon: Gavel,          v: '--tx-waiver' },
+  free_agent: { label: 'Free Agent', Icon: UserPlus,       v: '--tx-fa'     },
 } as const;
 
 const POS_COLOR: Record<string, string> = {
@@ -73,10 +74,13 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="h-px bg-gradient-to-r from-amber-500/80 via-amber-400/40 to-transparent" />
+      <div className="h-px" style={{ background: 'var(--tx-trade-grad)' }} />
       <div className="flex items-center justify-between px-4 pt-3 pb-2.5">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-400">
+          <span
+            className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: 'var(--tx-trade)', backgroundColor: 'var(--tx-trade-muted)', borderColor: 'var(--tx-trade-dim)' }}
+          >
             <ArrowLeftRight className="h-2.5 w-2.5" />
             Trade
           </span>
@@ -142,11 +146,14 @@ function ActivityCard({ tx }: { tx: EnrichedTransaction }) {
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className={cn('h-px bg-gradient-to-r', cfg.line)} />
+      <div className="h-px" style={{ background: `var(${cfg.v}-grad)` }} />
       <div className="px-4 pt-3 pb-4">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2">
-            <span className={cn('inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest', cfg.accent)}>
+            <span
+              className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: `var(${cfg.v})`, backgroundColor: `var(${cfg.v}-muted)`, borderColor: `var(${cfg.v}-dim)` }}
+            >
               <cfg.Icon className="h-2.5 w-2.5" />
               {cfg.label}
             </span>

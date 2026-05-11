@@ -6,22 +6,26 @@ import {
   ScatterChart, Scatter, Cell,
 } from 'recharts';
 import Avatar from '@/components/ui/Avatar';
-import { cn } from '@/lib/utils';
 import type { EnrichedTransaction } from '@/app/api/transactions/route';
 import type { EnhancedLeagueHistory } from '@/lib/enhancedHistoryApi';
 
-// ── Chart palette (works in dark + light) ────────────────────────────────────
+// ── Chart palette — solid colors read from CSS vars injected by ThemeInjector ─
 
-const C = {
-  trade:     '#f59e0b',
-  waiver:    '#38bdf8',
-  freeAgent: '#34d399',
-  grid:      'rgba(148,163,184,0.12)',
-  tick:      '#64748b',
-  trendLine: 'rgba(139,92,246,0.55)',
-  champDot:  '#f59e0b',
-  plainDot:  '#475569',
-};
+const FALLBACK = { trade: '#f59e0b', waiver: '#38bdf8', freeAgent: '#34d399' };
+
+function useTxColors() {
+  const [c, setC] = useState(FALLBACK);
+  useEffect(() => {
+    const s = getComputedStyle(document.documentElement);
+    const get = (v: string) => s.getPropertyValue(v).trim();
+    setC({
+      trade:     get('--tx-trade')  || FALLBACK.trade,
+      waiver:    get('--tx-waiver') || FALLBACK.waiver,
+      freeAgent: get('--tx-fa')     || FALLBACK.freeAgent,
+    });
+  }, []);
+  return c;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,12 +52,12 @@ function linearRegression(data: { x: number; y: number }[]): { m: number; b: num
   return { m, b };
 }
 
-function correlationLabel(r: number): { text: string; color: string } {
-  if (r >  0.4) return { text: 'Strong positive. Active managers win more.',    color: 'text-emerald-400' };
-  if (r >  0.15) return { text: 'Weak positive. Slight edge for active teams.', color: 'text-emerald-400/70' };
-  if (r < -0.4) return { text: 'Strong negative. Less is more in this league.', color: 'text-rose-400' };
-  if (r < -0.15) return { text: 'Weak negative. Activity may hurt slightly.',   color: 'text-rose-400/70' };
-  return { text: 'No significant correlation',                                    color: 'text-muted-foreground' };
+function correlationLabel(r: number): string {
+  if (r >  0.4)  return 'Strong positive. Active managers win more.';
+  if (r >  0.15) return 'Weak positive. Slight edge for active teams.';
+  if (r < -0.4)  return 'Strong negative. Less is more in this league.';
+  if (r < -0.15) return 'Weak negative. Activity may hurt slightly.';
+  return 'No significant correlation';
 }
 
 function truncate(str: string, max: number) {
@@ -151,6 +155,19 @@ interface Props {
 }
 
 export default function TransactionActivity({ historyData }: Props) {
+  const txColors = useTxColors();
+
+  const C = useMemo(() => ({
+    trade:     txColors.trade,
+    waiver:    txColors.waiver,
+    freeAgent: txColors.freeAgent,
+    champDot:  txColors.trade,
+    grid:      'rgba(148,163,184,0.12)',
+    tick:      '#64748b',
+    trendLine: 'rgba(139,92,246,0.55)',
+    plainDot:  '#475569',
+  }), [txColors]);
+
   const [transactions, setTransactions] = useState<EnrichedTransaction[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
@@ -269,7 +286,7 @@ export default function TransactionActivity({ historyData }: Props) {
   const topManager    = managerStats[0];
   const mostTrader    = [...managerStats].sort((a, b) => b.trades - a.trades)[0];
   const mostWaiver    = [...managerStats].sort((a, b) => b.waivers + b.freeAgents - a.waivers - a.freeAgents)[0];
-  const { text: corrText, color: corrColor } = correlationLabel(r);
+  const corrText = correlationLabel(r);
 
   // ── Loading / error ───────────────────────────────────────────────────────
 
@@ -304,7 +321,7 @@ export default function TransactionActivity({ historyData }: Props) {
         <InsightCard
           label="Most Active"
           value={topManager?.username ?? '—'}
-          sub={`${topManager?.total ?? 0} regular-season moves`}
+          sub={`${topManager?.total ?? 0} total moves`}
           avatar={topManager?.avatar}
         />
         <InsightCard
@@ -330,7 +347,7 @@ export default function TransactionActivity({ historyData }: Props) {
       <div className="rounded-xl border border-border bg-card p-5">
         <SectionHeader
           title="Transaction Volume by Manager"
-          sub="Regular-season moves only · each trade counted once per participating team"
+          sub="All moves."
         />
         <ResponsiveContainer width="100%" height={Math.max(220, barData.length * 32)}>
           <BarChart
@@ -359,9 +376,9 @@ export default function TransactionActivity({ historyData }: Props) {
       <div className="rounded-xl border border-border bg-card p-5">
         <SectionHeader
           title="Activity vs. Win Rate"
-          sub="Regular-season transactions per manager plotted against all-time win percentage"
+          sub="Regular-season transactions per manager plotted against all-time win percentage."
         />
-        <div className={cn('mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium', corrColor, 'border-border/60 bg-muted/30')}>
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-[11px] font-medium" style={{ color: 'hsl(var(--primary))' }}>
           <span className="font-mono">r = {r.toFixed(2)}</span>
           <span className="text-muted-foreground/50">·</span>
           <span>{corrText}</span>
@@ -411,7 +428,7 @@ export default function TransactionActivity({ historyData }: Props) {
         <div className="rounded-xl border border-border bg-card p-5">
           <SectionHeader
             title="League Activity by Season"
-            sub="Total transactions per season · trades counted once per transaction"
+            sub="Total transactions per season."
           />
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={seasonTrend} margin={{ top: 0, right: 20, left: -10, bottom: 0 }} barSize={28}>

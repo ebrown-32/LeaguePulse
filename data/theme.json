@@ -1,8 +1,20 @@
 {
-  "primaryH": 350,
-  "primaryS": 86,
+  "primaryH": 45,
+  "primaryS": 93,
+  "primaryHLight": 45,
+  "primarySLight": 93,
   "radiusRem": 0,
   "fontPair": "syne-dm",
   "logoUrl": "https://dominationleague.com/badge.png",
-  "leagueName": "The Domination League"
+  "leagueName": "The Domination League",
+  "txColorsDark": {
+    "trade": "#f87171",
+    "waiver": "#fb923c",
+    "freeAgent": "#fbbf24"
+  },
+  "txColorsLight": {
+    "trade": "#dc2626",
+    "waiver": "#ea580c",
+    "freeAgent": "#d97706"
+  }
 }

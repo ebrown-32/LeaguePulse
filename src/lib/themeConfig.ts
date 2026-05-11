@@ -5,22 +5,48 @@
 
 export type FontPairKey = 'bricolage-dm' | 'syne-dm' | 'fraunces-outfit' | 'outfit';
 
-export interface ThemeConfig {
-  primaryH:   number;      // 0–360
-  primaryS:   number;      // 0–100 (%)
-  radiusRem:  number;      // e.g. 0, 0.25, 0.5, 0.75, 1
-  fontPair:   FontPairKey;
-  logoUrl:    string | null;
-  leagueName: string | null;
+export interface TxColors {
+  trade:     string;  // hex
+  waiver:    string;
+  freeAgent: string;
 }
 
+export interface ThemeConfig {
+  primaryH:      number;      // dark mode accent hue 0–360
+  primaryS:      number;      // dark mode accent saturation 0–100 (%)
+  primaryHLight: number;      // light mode accent hue
+  primarySLight: number;      // light mode accent saturation
+  radiusRem:     number;      // e.g. 0, 0.25, 0.5, 0.75, 1
+  fontPair:      FontPairKey;
+  logoUrl:       string | null;
+  leagueName:    string | null;
+  txColorsDark:  TxColors;
+  txColorsLight: TxColors;
+}
+
+export const DEFAULT_TX_DARK: TxColors = {
+  trade:     '#f59e0b',
+  waiver:    '#38bdf8',
+  freeAgent: '#34d399',
+};
+
+export const DEFAULT_TX_LIGHT: TxColors = {
+  trade:     '#d97706',
+  waiver:    '#0284c7',
+  freeAgent: '#059669',
+};
+
 export const DEFAULT_THEME: ThemeConfig = {
-  primaryH:   177,
-  primaryS:   89,
-  radiusRem:  0.5,
-  fontPair:   'bricolage-dm',
-  logoUrl:    null,
-  leagueName: null,
+  primaryH:      177,
+  primaryS:      89,
+  primaryHLight: 177,
+  primarySLight: 89,
+  radiusRem:     0.5,
+  fontPair:      'bricolage-dm',
+  logoUrl:       null,
+  leagueName:    null,
+  txColorsDark:  DEFAULT_TX_DARK,
+  txColorsLight: DEFAULT_TX_LIGHT,
 };
 
 export const fontPairs: Record<FontPairKey, {
@@ -64,4 +90,36 @@ export const accentPresets: Array<{ name: string; h: number; s: number }> = [
   { name: 'Amber',   h:  45, s: 93 },
   { name: 'Emerald', h: 152, s: 76 },
   { name: 'Slate',   h: 215, s: 25 },
+];
+
+export const txColorPresets: Array<{
+  name:  string;
+  dark:  TxColors;
+  light: TxColors;
+}> = [
+  {
+    name:  'Classic',
+    dark:  { trade: '#f59e0b', waiver: '#38bdf8', freeAgent: '#34d399' },
+    light: { trade: '#d97706', waiver: '#0284c7', freeAgent: '#059669' },
+  },
+  {
+    name:  'Vivid',
+    dark:  { trade: '#f43f5e', waiver: '#8b5cf6', freeAgent: '#06b6d4' },
+    light: { trade: '#e11d48', waiver: '#7c3aed', freeAgent: '#0891b2' },
+  },
+  {
+    name:  'Neon',
+    dark:  { trade: '#fb923c', waiver: '#a78bfa', freeAgent: '#4ade80' },
+    light: { trade: '#ea580c', waiver: '#7c3aed', freeAgent: '#16a34a' },
+  },
+  {
+    name:  'Cool',
+    dark:  { trade: '#818cf8', waiver: '#67e8f9', freeAgent: '#a3e635' },
+    light: { trade: '#4f46e5', waiver: '#0e7490', freeAgent: '#65a30d' },
+  },
+  {
+    name:  'Warm',
+    dark:  { trade: '#f87171', waiver: '#fb923c', freeAgent: '#fbbf24' },
+    light: { trade: '#dc2626', waiver: '#ea580c', freeAgent: '#d97706' },
+  },
 ];

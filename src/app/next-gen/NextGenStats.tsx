@@ -138,8 +138,8 @@ function MetricRadar({ metrics, team }: { metrics: string[]; team: AdvancedTeamM
             const y = 100 + r * Math.sin(angle);
             return `${x},${y}`;
           }).join(' ')}
-          fill="hsl(177 89% 44% / 0.15)"
-          stroke="hsl(177 89% 44% / 0.7)"
+          fill="hsl(var(--primary) / 0.15)"
+          stroke="hsl(var(--primary) / 0.7)"
           strokeWidth="2"
         />
 
@@ -155,7 +155,7 @@ function MetricRadar({ metrics, team }: { metrics: string[]; team: AdvancedTeamM
               cx={x}
               cy={y}
               r="3"
-              fill="hsl(177 89% 44%)"
+              fill="hsl(var(--primary))"
             />
           );
         })}

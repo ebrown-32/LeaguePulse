@@ -548,13 +548,13 @@ export default function Home() {
                               isPlayoff
                                 ? 'border-primary bg-primary/[0.04] hover:bg-primary/[0.07]'
                                 : isBubble
-                                  ? 'border-amber-500 bg-amber-500/[0.04] hover:bg-amber-500/[0.07]'
+                                  ? 'border-primary/40 bg-primary/[0.02] hover:bg-primary/[0.04]'
                                   : 'border-transparent hover:bg-accent/60',
                             )}
                           >
                             <span className={cn(
                               'w-5 shrink-0 text-center text-xs font-bold',
-                              isPlayoff ? 'text-primary' : isBubble ? 'text-amber-500' : 'text-muted-foreground',
+                              isPlayoff ? 'text-primary' : isBubble ? 'text-primary/50' : 'text-muted-foreground',
                             )}>
                               {i + 1}
                             </span>
@@ -572,7 +572,7 @@ export default function Home() {
                                   </span>
                                 )}
                                 {isBubble && (
-                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/[0.08] text-primary/60 border border-primary/20">
                                     Bubble
                                   </span>
                                 )}
@@ -585,7 +585,7 @@ export default function Home() {
                                 {(isPlayoff || isBubble) && (
                                   <>
                                     <span className="text-[10px] text-muted-foreground/40">·</span>
-                                    <span className={cn('text-[10px] font-semibold', isPlayoff ? 'text-primary' : 'text-amber-500')}>
+                                    <span className={cn('text-[10px] font-semibold', isPlayoff ? 'text-primary' : 'text-primary/50')}>
                                       {isPlayoff ? 'Playoff' : 'Bubble'}
                                     </span>
                                   </>
