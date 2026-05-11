@@ -1,5 +1,5 @@
 /**
- * Theme types and constants — safe to import on both client and server.
+ * Theme types and constants. Safe to import on both client and server.
  * Actual storage functions live in themeStorage.ts (server-only).
  */
 

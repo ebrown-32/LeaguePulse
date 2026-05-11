@@ -26,6 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
+import TransactionTicker from '@/components/ui/TransactionTicker';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
@@ -177,20 +178,18 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
 
 function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string; value: string; sub?: string | null }) {
   return (
-    <div>
-      <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 hover:border-primary/30 transition-none group">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
-            {label}
-          </p>
-          <p className="font-display text-xl font-bold text-foreground truncate leading-none">
-            {value}
-          </p>
-          {sub && <p className="mt-1 text-xs text-muted-foreground truncate">{sub}</p>}
-        </div>
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-none group min-w-[158px] md:min-w-0">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+          {label}
+        </p>
+        <p className="font-display text-lg font-bold text-foreground leading-tight">
+          {value}
+        </p>
+        {sub && <p className="mt-1 text-xs text-muted-foreground leading-snug">{sub}</p>}
       </div>
     </div>
   );
@@ -313,42 +312,31 @@ export default function Home() {
     >
       <div className="space-y-8">
 
-        {/* ── Stat cards ── */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          <StatCard
-            icon={Clock}
-            label="Season Status"
-            value={formatLeagueStatus(effectiveStatus)}
-            sub={getSeasonContext(league, nflState)}
-          />
-          <StatCard
-            icon={Users}
-            label="League Size"
-            value={`${league.total_rosters} Teams`}
-            sub={league.scoring_settings?.rec ? 'PPR Scoring' : 'Standard Scoring'}
-          />
-          <StatCard
-            icon={BarChart3}
-            label="Current Week"
-            value={formatWeekDisplay(effectiveStatus, effectiveWeek)}
-            sub={getWeekContext(league, nflState) || undefined}
-          />
-          <StatCard
-            icon={Sparkles}
-            label="Playoff Race"
-            value={`${playoffTeams} Spots`}
-            sub={`Starts week ${league.settings?.playoff_week_start ?? 15}`}
-          />
+        {/* ── Stat cards: snap-scroll on mobile, grid on md+ ── */}
+        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible md:pb-0">
+          {[
+            { icon: Clock,    label: 'Season Status', value: formatLeagueStatus(effectiveStatus),     sub: getSeasonContext(league, nflState) },
+            { icon: Users,    label: 'League Size',   value: `${league.total_rosters} Teams`,         sub: league.scoring_settings?.rec ? 'PPR Scoring' : 'Standard Scoring' },
+            { icon: BarChart3,label: 'Current Week',  value: formatWeekDisplay(effectiveStatus, effectiveWeek), sub: getWeekContext(league, nflState) || undefined },
+            { icon: Sparkles, label: 'Playoff Race',  value: `${playoffTeams} Spots`,                 sub: `Starts week ${league.settings?.playoff_week_start ?? 15}` },
+          ].map(({ icon, label, value, sub }) => (
+            <div key={label} className="snap-start shrink-0 w-[calc(50vw-1.25rem)] sm:w-auto md:w-auto">
+              <StatCard icon={icon} label={label} value={value} sub={sub} />
+            </div>
+          ))}
         </div>
 
-        {/* ── This Week's Battles ── */}
+        {/* ── Transaction ticker ── */}
+        <TransactionTicker />
+
+        {/* ── This Week&apos;s Battles ── */}
         {league.status === 'in_season' && currentWeekMatchups.length > 0 && (
           <div>
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-primary" />
-                  <CardTitle>This Week's Battles</CardTitle>
+                  <CardTitle>This Week&apos;s Battles</CardTitle>
                 </div>
                 <span className="rounded border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   Week {effectiveWeek}
@@ -356,47 +344,76 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any, i: number) => (
-                    <div
-                      key={matchup.id}
-                      className="relative rounded-md border border-border bg-background p-4"
-                    >
-                      {/* Team 1 */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar avatarId={matchup.team1.avatar} size={26} className="rounded shrink-0" />
-                          <span className="text-sm font-medium truncate">{matchup.team1.name}</span>
-                        </div>
-                        <span className="font-display text-lg font-bold tabular-nums ml-2 shrink-0 text-foreground">
-                          {matchup.team1.points?.toFixed(1) ?? '0.0'}
-                        </span>
-                      </div>
+                  {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any) => {
+                    const p1 = matchup.team1.points ?? 0;
+                    const p2 = matchup.team2.points ?? 0;
+                    const hasScores = p1 + p2 > 0;
+                    const t1Winning = hasScores && p1 > p2;
+                    const t2Winning = hasScores && p2 > p1;
+                    return (
+                      <div
+                        key={matchup.id}
+                        className="relative rounded-xl border border-border bg-background overflow-hidden"
+                      >
+                        {matchup.isHighlight && (
+                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-orange-500/60 to-transparent" />
+                        )}
 
-                      {/* Divider */}
-                      <div className="my-2.5 flex items-center gap-2">
-                        <div className="flex-1 h-px bg-border" />
-                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">vs</span>
-                        <div className="flex-1 h-px bg-border" />
-                      </div>
-
-                      {/* Team 2 */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar avatarId={matchup.team2.avatar} size={26} className="rounded shrink-0" />
-                          <span className="text-sm font-medium truncate">{matchup.team2.name}</span>
+                        {/* Team 1 */}
+                        <div className={cn(
+                          'flex items-center gap-3 px-4 py-3.5',
+                          t1Winning && 'bg-primary/[0.04]',
+                        )}>
+                          <Avatar avatarId={matchup.team1.avatar} size={30} className="rounded-lg shrink-0" />
+                          <span className={cn(
+                            'flex-1 text-sm font-medium leading-tight',
+                            t1Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
+                          )}>
+                            {matchup.team1.name}
+                          </span>
+                          <span className={cn(
+                            'font-display text-xl font-bold tabular-nums shrink-0',
+                            t1Winning ? 'text-primary' : 'text-muted-foreground',
+                          )}>
+                            {p1.toFixed(1)}
+                          </span>
                         </div>
-                        <span className="font-display text-lg font-bold tabular-nums ml-2 shrink-0 text-foreground">
-                          {matchup.team2.points?.toFixed(1) ?? '0.0'}
-                        </span>
-                      </div>
 
-                      {matchup.isHighlight && (
-                        <div className="absolute top-2.5 right-2.5">
-                          <Flame className="h-3.5 w-3.5 text-orange-500" />
+                        {/* Divider */}
+                        <div className="flex items-center px-4">
+                          <div className="flex-1 h-px bg-border/60" />
+                          <span className="px-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">vs</span>
+                          <div className="flex-1 h-px bg-border/60" />
                         </div>
-                      )}
-                    </div>
-                  ))}
+
+                        {/* Team 2 */}
+                        <div className={cn(
+                          'flex items-center gap-3 px-4 py-3.5',
+                          t2Winning && 'bg-primary/[0.04]',
+                        )}>
+                          <Avatar avatarId={matchup.team2.avatar} size={30} className="rounded-lg shrink-0" />
+                          <span className={cn(
+                            'flex-1 text-sm font-medium leading-tight',
+                            t2Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
+                          )}>
+                            {matchup.team2.name}
+                          </span>
+                          <span className={cn(
+                            'font-display text-xl font-bold tabular-nums shrink-0',
+                            t2Winning ? 'text-primary' : 'text-muted-foreground',
+                          )}>
+                            {p2.toFixed(1)}
+                          </span>
+                        </div>
+
+                        {matchup.isHighlight && (
+                          <div className="absolute top-3 right-3">
+                            <Flame className="h-3.5 w-3.5 text-orange-500" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -439,6 +456,7 @@ export default function Home() {
                   {selectedSeason === 'all-time'
                     ? allTimeStandings.map((s: any, i: number) => {
                         const totalGames = s.totalWins + s.totalLosses + s.totalTies;
+                        const avgPF = totalGames > 0 ? s.totalPoints / totalGames : 0;
                         return (
                           <div
                             key={s.userId}
@@ -456,30 +474,46 @@ export default function Home() {
                               {i + 1}
                             </span>
                             <Avatar avatarId={s.user.avatar} size={26} className="rounded shrink-0" />
-                            <div className="flex-1 min-w-0 flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground truncate">
-                                {censorTeamName(s.user.display_name)}
-                              </span>
-                              {s.championships > 0 && (
-                                <span className={cn(
-                                  'hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border',
-                                  i === 0
-                                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                    : 'bg-primary/10 text-primary border-primary/20',
-                                )}>
-                                  {s.championships}× Champ
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground leading-tight line-clamp-2">
+                                  {censorTeamName(s.user.display_name)}
                                 </span>
-                              )}
+                                {s.championships > 0 && (
+                                  <span className={cn(
+                                    'hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border',
+                                    i === 0
+                                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                      : 'bg-primary/10 text-primary border-primary/20',
+                                  )}>
+                                    {s.championships}× Champ
+                                  </span>
+                                )}
+                              </div>
+                              {/* Mobile sub-stats */}
+                              <div className="mt-0.5 flex items-center gap-1.5 md:hidden">
+                                <span className="text-[10px] text-muted-foreground">{s.winPercentage.toFixed(1)}% win</span>
+                                <span className="text-[10px] text-muted-foreground/40">·</span>
+                                <span className="text-[10px] text-muted-foreground">{formatPoints(avgPF)} avg</span>
+                                {s.championships > 0 && (
+                                  <>
+                                    <span className="text-[10px] text-muted-foreground/40">·</span>
+                                    <span className={cn('text-[10px] font-semibold', i === 0 ? 'text-amber-500' : 'text-primary')}>
+                                      {s.championships}× Champ
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <div className="hidden md:flex items-center gap-3 shrink-0">
                               <span className="w-20 text-right font-mono text-sm text-foreground">
                                 {s.totalWins}-{s.totalLosses}{s.totalTies > 0 ? `-${s.totalTies}` : ''}
                               </span>
                               <span className="w-14 text-right text-sm text-muted-foreground">
-                                {(s.winPercentage * 100).toFixed(1)}%
+                                {s.winPercentage.toFixed(1)}%
                               </span>
                               <span className="w-16 text-right text-sm font-medium text-foreground">
-                                {formatPoints(totalGames > 0 ? s.totalPoints / totalGames : 0)}
+                                {formatPoints(avgPF)}
                               </span>
                               <span className="w-16 text-right text-sm text-muted-foreground">
                                 {formatPoints(totalGames > 0 ? s.totalPointsAgainst / totalGames : 0)}
@@ -487,8 +521,7 @@ export default function Home() {
                             </div>
                             {/* Mobile record */}
                             <div className="md:hidden text-right shrink-0">
-                              <p className="text-xs font-mono text-foreground">{s.totalWins}-{s.totalLosses}</p>
-                              <p className="text-[10px] text-muted-foreground">{(s.winPercentage * 100).toFixed(1)}%</p>
+                              <p className="text-xs font-mono font-semibold text-foreground">{s.totalWins}-{s.totalLosses}</p>
                             </div>
                           </div>
                         );
@@ -528,20 +561,36 @@ export default function Home() {
                             <Avatar avatarId={user.avatar} size={26} className="rounded shrink-0" />
 
                             {/* Team name + inline badge */}
-                            <div className="flex-1 min-w-0 flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground truncate">
-                                {censorTeamName(user.metadata?.team_name || user.display_name)}
-                              </span>
-                              {isPlayoff && (
-                                <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
-                                  Playoff
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground leading-tight line-clamp-2">
+                                  {censorTeamName(user.metadata?.team_name || user.display_name)}
                                 </span>
-                              )}
-                              {isBubble && (
-                                <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                  Bubble
-                                </span>
-                              )}
+                                {isPlayoff && (
+                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
+                                    Playoff
+                                  </span>
+                                )}
+                                {isBubble && (
+                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                    Bubble
+                                  </span>
+                                )}
+                              </div>
+                              {/* Mobile sub-stats */}
+                              <div className="mt-0.5 flex items-center gap-1.5 md:hidden">
+                                <span className="text-[10px] text-muted-foreground">{winPct.toFixed(1)}% win</span>
+                                <span className="text-[10px] text-muted-foreground/40">·</span>
+                                <span className="text-[10px] text-muted-foreground">{formatPoints(fpts)} PF</span>
+                                {(isPlayoff || isBubble) && (
+                                  <>
+                                    <span className="text-[10px] text-muted-foreground/40">·</span>
+                                    <span className={cn('text-[10px] font-semibold', isPlayoff ? 'text-primary' : 'text-amber-500')}>
+                                      {isPlayoff ? 'Playoff' : 'Bubble'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
 
                             {/* Desktop stats */}
@@ -560,10 +609,9 @@ export default function Home() {
                               </span>
                             </div>
 
-                            {/* Mobile stats */}
+                            {/* Mobile record */}
                             <div className="md:hidden text-right shrink-0">
-                              <p className="text-xs font-mono text-foreground">{formatRecord(wins, losses, ties)}</p>
-                              <p className="text-[10px] text-muted-foreground">{winPct.toFixed(1)}%</p>
+                              <p className="text-xs font-mono font-semibold text-foreground">{formatRecord(wins, losses, ties)}</p>
                             </div>
                           </div>
                         );

@@ -11,7 +11,9 @@ import {
   BarChart3,
   ShieldCheck,
   Users,
+  Activity,
 } from 'lucide-react';
+import TransactionActivity from './TransactionActivity';
 import { getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { formatPoints } from '@/lib/utils';
@@ -26,7 +28,7 @@ interface EnhancedHistoryViewProps {
   currentWeek: number;
 }
 
-type Tab = 'managers' | 'champions' | 'records';
+type Tab = 'managers' | 'champions' | 'records' | 'activity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -172,9 +174,10 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
   const catRange = catMax - catMin || 1;
 
   const tabs: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'managers',  label: 'Managers',    Icon: Users },
+    { id: 'managers',  label: 'Managers',    Icon: Users     },
     { id: 'champions', label: 'Champions',   Icon: Trophy    },
-    { id: 'records',   label: 'Record Book', Icon: BarChart3  },
+    { id: 'records',   label: 'Record Book', Icon: BarChart3 },
+    { id: 'activity',  label: 'Activity',    Icon: Activity  },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -225,7 +228,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
 
           {/* ══ Managers ═════════════════════════════════════════════════ */}
           <div className={activeTab !== 'managers' ? 'hidden' : ''}>
-              {/* Column headers — desktop only */}
+              {/* Column headers (desktop only) */}
               <div className="hidden md:flex items-center gap-3 px-4 py-2 mb-1">
                 <span className="w-7 shrink-0" />
                 <span className="flex-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Manager</span>
@@ -286,7 +289,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                           {(manager.winPercentage * 100).toFixed(1)}%
                         </span>
 
-                        {/* Titles — trophy icons */}
+                        {/* Titles (trophy icons) */}
                         <div className="w-16 flex items-center justify-center gap-0.5">
                           {manager.championships > 0 ? (
                             <>
@@ -458,7 +461,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
           {/* ══ Record Book ══════════════════════════════════════════════ */}
           <div className={`space-y-4 ${activeTab !== 'records' ? 'hidden' : ''}`}>
 
-              {/* Category pills — horizontal scroll */}
+              {/* Category pills (horizontal scroll) */}
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {RECORD_CATEGORIES.map(cat => {
                   const CatIcon = cat.icon;
@@ -558,6 +561,11 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                   )}
               </div>
 
+          </div>
+
+          {/* ══ Activity ═════════════════════════════════════════════════ */}
+          <div className={activeTab !== 'activity' ? 'hidden' : ''}>
+            <TransactionActivity historyData={historyData} />
           </div>
 
       </div>

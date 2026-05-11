@@ -203,7 +203,7 @@ export default function AppearancePage() {
       // Re-run server components (ThemeInjector) so the new theme is applied immediately
       router.refresh();
     } catch {
-      setSaveError('Network error — check your connection and try again.');
+      setSaveError('Network error. Check your connection and try again.');
     } finally {
       setLoading(false);
     }

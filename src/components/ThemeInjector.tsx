@@ -3,7 +3,7 @@ import { getTheme } from '@/lib/themeStorage';
 import { fontPairs } from '@/lib/themeConfig';
 
 /**
- * Server component — fetches the admin-saved theme from storage and injects
+ * Server component. Fetches the admin-saved theme from storage and injects
  * CSS variable overrides + the correct Google Font <link>.
  * noStore() ensures this always reads the latest saved theme, never cached.
  */

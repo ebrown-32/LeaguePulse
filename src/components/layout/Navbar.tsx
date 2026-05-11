@@ -10,6 +10,7 @@ import {
   Database,
   Activity,
   Newspaper,
+  Receipt,
   Menu,
   X,
 } from 'lucide-react';
@@ -24,11 +25,12 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Overview',  href: '/',         icon: LayoutDashboard },
-  { name: 'Matchups',  href: '/matchups', icon: Swords          },
-  { name: 'History',   href: '/history',  icon: Database        },
-  { name: 'Next Gen',  href: '/next-gen', icon: Activity        },
-  { name: 'Media',     href: '/media',    icon: Newspaper       },
+  { name: 'Overview',      href: '/',             icon: LayoutDashboard },
+  { name: 'Matchups',      href: '/matchups',     icon: Swords          },
+  { name: 'Transactions',  href: '/transactions', icon: Receipt         },
+  { name: 'History',       href: '/history',      icon: Database        },
+  { name: 'Next Gen',      href: '/next-gen',     icon: Activity        },
+  { name: 'Media',         href: '/media',        icon: Newspaper       },
 ];
 
 interface NavbarProps {

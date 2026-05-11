@@ -1,8 +1,8 @@
 {
-  "primaryH": 45,
-  "primaryS": 93,
-  "radiusRem": 1,
-  "fontPair": "outfit",
+  "primaryH": 350,
+  "primaryS": 86,
+  "radiusRem": 0,
+  "fontPair": "syne-dm",
   "logoUrl": "https://dominationleague.com/badge.png",
   "leagueName": "The Domination League"
 }

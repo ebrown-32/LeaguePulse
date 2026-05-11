@@ -552,7 +552,7 @@ function processTransactionsForSeason(
         stats.totalFAMoves += 1;
       }
     }
-    // Trades involve multiple roster_ids — each side gets counted once above, which is correct
+    // Trades involve multiple roster_ids. Each side gets counted once above, which is correct.
     // (each team's trade count reflects how active they were, not the number of unique trades)
   }
 }
@@ -1057,7 +1057,7 @@ async function calculateDerivedStats(
       userStats.playoffWinPercentage = userStats.playoffWins / playoffGames;
     }
 
-    // Calculate averages — use totalWeeksScored as denominator so median game
+    // Calculate averages. Use totalWeeksScored as denominator so median game
     // leagues (which double W/L counts but score only once per week) stay accurate
     if (userStats.totalWeeksScored > 0) {
       userStats.averagePointsPerGame = userStats.totalPoints / userStats.totalWeeksScored;

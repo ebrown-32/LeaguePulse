@@ -147,14 +147,14 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
     if (isPlayoffs) {
       return {
-        title: `Week ${selectedWeek} — Playoffs`,
-        subtitle: isCurrentWeek ? 'Championship dreams on the line' : 'Playoff battles',
+        title: `Week ${selectedWeek}: Playoffs`,
+        subtitle: isCurrentWeek ? 'Championship dreams on the line' : 'Playoff battles.',
       };
     }
 
     return {
-      title: `Week ${selectedWeek} — Regular Season`,
-      subtitle: isCurrentWeek ? "This week's matchups" : 'Head-to-head battles',
+      title: `Week ${selectedWeek}: Regular Season`,
+      subtitle: isCurrentWeek ? "This week's matchups" : 'Head-to-head battles.',
     };
   };
 
