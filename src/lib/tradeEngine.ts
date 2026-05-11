@@ -62,7 +62,7 @@ const AiProposalSchema = z.object({
   sideBTeam:   z.string().describe('Exact team name from the context'),
   sideBGives:  z.array(AiPlayerSchema).min(1).max(3),
   label:       z.enum(['Win-Win', 'Sell High', 'Buy Low', 'Big Swing', 'Rebuild Move', 'Steal Alert', 'Championship Push']),
-  tagline:     z.string().max(80).describe('One punchy line — under 80 chars'),
+  tagline:     z.string().max(80).describe('One punchy line. Under 80 chars.'),
   rationale:   z.string().min(80).max(600).describe('2–3 sentences. Specific, opinionated, witty. Reference actual stats and records.'),
   fairness:    z.number().min(10).max(90).describe('0=Side A robbery, 50=balanced, 90=Side B robbery'),
 });
@@ -74,27 +74,27 @@ const AiResponseSchema = z.object({
 // ── Data fetching ──────────────────────────────────────────────────────────────
 
 async function fetchLeagueContext(leagueId: string) {
-  // NFl state: short cache — week number changes weekly
+  // NFL state: short cache. Week number changes weekly.
   const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`, {
     next: { revalidate: 3600 },
   }).then(r => r.json());
   const currentWeek: number = Math.max(1, nflState.week ?? 1);
 
   const [rosters, users, allPlayers] = await Promise.all([
-    // Rosters/users: cache 1 h — change with trades/waivers
+    // Rosters/users: cache 1 h. Changes with trades/waivers.
     fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
     fetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
-    // Players: ~19 MB — too large for Next.js data cache; route-level revalidate covers this
+    // Players: ~19 MB. Too large for Next.js data cache; route-level revalidate covers this.
     fetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
   ]);
 
-  // Cap at 8 most-recent weeks — enough signal, avoids excess fetching
+  // Cap at 8 most-recent weeks. Enough signal, avoids excess fetching.
   const weeksToFetch = Math.min(currentWeek, 8);
   const startWeek    = Math.max(1, currentWeek - weeksToFetch + 1);
   const matchupWeeks: any[][] = await Promise.all(
     Array.from({ length: weeksToFetch }, (_, i) => startWeek + i).map(week =>
       fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, {
-        next: { revalidate: 1800 }, // 30 min — scores finalize mid-week
+        next: { revalidate: 1800 }, // 30 min. Scores finalize mid-week.
       })
         .then(r => r.ok ? r.json() : [])
         .catch(() => [])
@@ -217,7 +217,7 @@ WEEK: ${currentWeek}
 ${teamSection}
 
 RULES:
-- Use EXACT player names and team names from the data above — do not invent players
+- Use EXACT player names and team names from the data above. Do not invent players.
 - Every trade must involve players from the two listed teams only
 - Make rationale vivid, specific, and opinionated. Call out overperformers, underperformers, schedule context, and positional needs. No generic filler.
 - Vary trade types: fair swaps, sell-high, buy-low, contender pushes, rebuilds, etc.

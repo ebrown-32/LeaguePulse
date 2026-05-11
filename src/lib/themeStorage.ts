@@ -1,6 +1,6 @@
 /**
  * Server-only: theme persistence (Redis in prod, JSON file in dev).
- * Do NOT import this in client components — import themeConfig.ts instead.
+ * Do NOT import this in client components. Import themeConfig.ts instead.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -33,7 +33,7 @@ async function ensureDataDir() {
   catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
-// In-memory cache — avoids hitting storage on every request within the same instance
+// In-memory cache. Avoids hitting storage on every request within the same instance.
 let memCache: ThemeConfig | null = null;
 let memCacheExpiry = 0;
 const MEM_TTL = 5 * 60 * 1000; // 5 minutes
@@ -56,7 +56,7 @@ export async function getTheme(): Promise<ThemeConfig> {
       try {
         if (!redis.isOpen) await connectRedis();
       } catch {
-        redis = null; // unreachable or unauthenticated — fall through
+        redis = null; // unreachable or unauthenticated, fall through
       }
     }
 

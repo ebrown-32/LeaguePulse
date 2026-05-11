@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { generateTradeProposals } from '@/lib/tradeEngine';
 
-// Cache the full response for 2 hours — AI call is expensive
+// Cache the full response for 2 hours. AI call is expensive.
 export const revalidate = 7200;
 
-// Vercel Pro: up to 60s. Hobby: capped at 10s — upgrade if hitting limit.
+// Vercel Pro: up to 60s. Hobby: capped at 10s. Upgrade if hitting limit.
 export const maxDuration = 60;
 
 export async function GET() {

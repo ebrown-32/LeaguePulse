@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import type { ThemeConfig, FontPairKey } from '@/lib/themeConfig';
-import { accentPresets, fontPairs } from '@/lib/themeConfig';
+import type { ThemeConfig, FontPairKey, TxColors } from '@/lib/themeConfig';
+import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME } from '@/lib/themeConfig';
 import { cn } from '@/lib/utils';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
@@ -37,6 +37,39 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+// ─── Live DOM injection (mirrors ThemeInjector server logic) ─────────────────
+
+function hexRgba(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function applyThemeToDOM(t: ThemeConfig) {
+  const root  = document.documentElement;
+  const dark  = root.classList.contains('dark');
+  const hD = t.primaryH,            sD = t.primaryS;
+  const hL = t.primaryHLight ?? hD, sL = t.primarySLight ?? sD;
+  const primary = dark ? `${hD} ${sD}% 44%` : `${hL} ${sL}% 35%`;
+  root.style.setProperty('--primary', primary);
+  root.style.setProperty('--ring',    primary);
+  root.style.setProperty('--radius', `${t.radiusRem}rem`);
+  const c = dark ? t.txColorsDark : t.txColorsLight;
+  root.style.setProperty('--tx-trade',       c.trade);
+  root.style.setProperty('--tx-trade-muted', hexRgba(c.trade, 0.10));
+  root.style.setProperty('--tx-trade-dim',   hexRgba(c.trade, 0.30));
+  root.style.setProperty('--tx-trade-grad',  `linear-gradient(to right,${hexRgba(c.trade, 0.80)},${hexRgba(c.trade, 0.40)},transparent)`);
+  root.style.setProperty('--tx-waiver',       c.waiver);
+  root.style.setProperty('--tx-waiver-muted', hexRgba(c.waiver, 0.10));
+  root.style.setProperty('--tx-waiver-dim',   hexRgba(c.waiver, 0.30));
+  root.style.setProperty('--tx-waiver-grad',  `linear-gradient(to right,${hexRgba(c.waiver, 0.80)},${hexRgba(c.waiver, 0.40)},transparent)`);
+  root.style.setProperty('--tx-fa',           c.freeAgent);
+  root.style.setProperty('--tx-fa-muted',     hexRgba(c.freeAgent, 0.10));
+  root.style.setProperty('--tx-fa-dim',       hexRgba(c.freeAgent, 0.30));
+  root.style.setProperty('--tx-fa-grad',      `linear-gradient(to right,${hexRgba(c.freeAgent, 0.80)},${hexRgba(c.freeAgent, 0.40)},transparent)`);
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const RADIUS_OPTIONS = [
   { label: 'Sharp',   value: 0 },
   { label: 'Soft',    value: 0.5 },
@@ -46,8 +79,8 @@ const RADIUS_OPTIONS = [
 
 // ─── Mini preview card ────────────────────────────────────────────────────────
 
-function Preview({ h, s, radius }: { h: number; s: number; radius: number }) {
-  const accent = `hsl(${h} ${s}% 44%)`;
+function Preview({ h, s, radius, lightness = 44 }: { h: number; s: number; radius: number; lightness?: number }) {
+  const accent = `hsl(${h} ${s}% ${lightness}%)`;
   return (
     <div
       className="rounded-lg overflow-hidden border border-border text-[13px] bg-card"
@@ -63,7 +96,7 @@ function Preview({ h, s, radius }: { h: number; s: number; radius: number }) {
               'text-[10px] font-medium px-2 py-0.5 rounded',
               i === 0 ? 'text-foreground' : 'text-muted-foreground',
             )}
-            style={i === 0 ? { background: `hsl(${h} ${s}% 44% / 0.12)`, color: accent } : {}}>
+            style={i === 0 ? { background: `hsl(${h} ${s}% ${lightness}% / 0.12)`, color: accent } : {}}>
               {n}
             </span>
           ))}
@@ -83,7 +116,7 @@ function Preview({ h, s, radius }: { h: number; s: number; radius: number }) {
             style={{ borderRadius: `${radius}rem` }}
           >
             <div className="h-6 w-6 rounded shrink-0 flex items-center justify-center"
-              style={{ background: `hsl(${h} ${s}% 44% / 0.12)`, borderRadius: `calc(${radius}rem - 2px)` }}>
+              style={{ background: `hsl(${h} ${s}% ${lightness}% / 0.12)`, borderRadius: `calc(${radius}rem - 2px)` }}>
               <div className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
             </div>
             <div>
@@ -106,7 +139,7 @@ function Preview({ h, s, radius }: { h: number; s: number; radius: number }) {
             style={{
               borderRadius: `${Math.min(radius, 0.375)}rem`,
               borderLeftColor: i < 2 ? accent : 'transparent',
-              background: i < 2 ? `hsl(${h} ${s}% 44% / 0.04)` : 'transparent',
+              background: i < 2 ? `hsl(${h} ${s}% ${lightness}% / 0.04)` : 'transparent',
             }}
           >
             <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}</span>
@@ -132,19 +165,18 @@ export default function AppearancePage() {
   const [saved,     setSaved]     = useState(false);
   const [saveError, setSaveError] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [accentMode, setAccentMode] = useState<'dark' | 'light'>('dark');
+  const [txMode,     setTxMode]     = useState<'dark' | 'light'>('dark');
 
-  const [theme, setTheme] = useState<ThemeConfig>({
-    primaryH:   177,
-    primaryS:   89,
-    radiusRem:  0.5,
-    fontPair:   'bricolage-dm',
-    logoUrl:    null,
-    leagueName: null,
-  });
+  const [theme, setTheme] = useState<ThemeConfig>({ ...DEFAULT_THEME });
 
-  const [customHex, setCustomHex] = useState(
-    hslToHex(theme.primaryH, theme.primaryS, 44),
-  );
+  const [customHexDark,  setCustomHexDark]  = useState(hslToHex(DEFAULT_THEME.primaryH,      DEFAULT_THEME.primaryS,      44));
+  const [customHexLight, setCustomHexLight] = useState(hslToHex(DEFAULT_THEME.primaryHLight,  DEFAULT_THEME.primarySLight,  35));
+
+  // Apply CSS variables immediately whenever theme state changes (once authed)
+  useEffect(() => {
+    if (authed) applyThemeToDOM(theme);
+  }, [theme, authed]);
 
   // Load current theme once authenticated
   const loadTheme = useCallback(async (pwd: string) => {
@@ -152,9 +184,11 @@ export default function AppearancePage() {
       headers: { 'x-admin-password': pwd },
     });
     if (res.ok) {
-      const data = await res.json();
-      setTheme(data);
-      setCustomHex(hslToHex(data.primaryH, data.primaryS, 44));
+      const data: ThemeConfig = await res.json();
+      const merged = { ...DEFAULT_THEME, ...data };
+      setTheme(merged);
+      setCustomHexDark(hslToHex(merged.primaryH,      merged.primaryS,      44));
+      setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, 35));
     }
   }, []);
 
@@ -203,7 +237,7 @@ export default function AppearancePage() {
       // Re-run server components (ThemeInjector) so the new theme is applied immediately
       router.refresh();
     } catch {
-      setSaveError('Network error — check your connection and try again.');
+      setSaveError('Network error. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -217,24 +251,49 @@ export default function AppearancePage() {
         headers: { 'x-admin-password': password },
       });
       if (res.ok) {
-        const defaults = await res.json();
-        setTheme(defaults);
-        setCustomHex(hslToHex(defaults.primaryH, defaults.primaryS, 44));
+        const defaults: ThemeConfig = await res.json();
+        const merged = { ...DEFAULT_THEME, ...defaults };
+        setTheme(merged);
+        setCustomHexDark(hslToHex(merged.primaryH,      merged.primaryS,      44));
+        setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, 35));
       }
     } finally {
       setResetting(false);
     }
   };
 
+  const setTxColor = (mode: 'dark' | 'light', key: keyof TxColors, hex: string) => {
+    const field = mode === 'dark' ? 'txColorsDark' : 'txColorsLight';
+    setTheme(t => ({ ...t, [field]: { ...t[field], [key]: hex } }));
+  };
+
+  const applyTxPreset = (preset: typeof txColorPresets[number]) => {
+    setTheme(t => ({
+      ...t,
+      txColorsDark:  preset.dark,
+      txColorsLight: preset.light,
+    }));
+  };
+
   const setAccent = (h: number, s: number) => {
-    setTheme(t => ({ ...t, primaryH: h, primaryS: s }));
-    setCustomHex(hslToHex(h, s, 44));
+    if (accentMode === 'dark') {
+      setTheme(t => ({ ...t, primaryH: h, primaryS: s }));
+      setCustomHexDark(hslToHex(h, s, 44));
+    } else {
+      setTheme(t => ({ ...t, primaryHLight: h, primarySLight: s }));
+      setCustomHexLight(hslToHex(h, s, 35));
+    }
   };
 
   const handleCustomColor = (hex: string) => {
-    setCustomHex(hex);
     const hsl = hexToHsl(hex);
-    if (hsl) setTheme(t => ({ ...t, primaryH: hsl.h, primaryS: hsl.s }));
+    if (accentMode === 'dark') {
+      setCustomHexDark(hex);
+      if (hsl) setTheme(t => ({ ...t, primaryH: hsl.h, primaryS: hsl.s }));
+    } else {
+      setCustomHexLight(hex);
+      if (hsl) setTheme(t => ({ ...t, primaryHLight: hsl.h, primarySLight: hsl.s }));
+    }
   };
 
   // ── Login gate ──
@@ -376,10 +435,31 @@ export default function AppearancePage() {
                 </p>
               </div>
 
+              {/* Dark / Light mode tab */}
+              <div className="flex gap-1 rounded-md border border-border bg-background p-0.5 w-fit">
+                {(['dark', 'light'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setAccentMode(m)}
+                    className={cn(
+                      'px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
+                      accentMode === m
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
               {/* Presets */}
               <div className="flex flex-wrap gap-2">
                 {accentPresets.map((p) => {
-                  const isActive = theme.primaryH === p.h && theme.primaryS === p.s;
+                  const activeH  = accentMode === 'dark' ? theme.primaryH      : theme.primaryHLight;
+                  const activeS  = accentMode === 'dark' ? theme.primaryS      : theme.primarySLight;
+                  const l        = accentMode === 'dark' ? 44 : 35;
+                  const isActive = activeH === p.h && activeS === p.s;
                   return (
                     <button
                       key={p.name}
@@ -389,7 +469,7 @@ export default function AppearancePage() {
                         'group relative h-8 w-8 rounded-full border-2 transition-none',
                         isActive ? 'border-foreground scale-110' : 'border-transparent hover:scale-105',
                       )}
-                      style={{ background: hslToHex(p.h, p.s, 44) }}
+                      style={{ background: hslToHex(p.h, p.s, l) }}
                     >
                       {isActive && (
                         <CheckIcon className="absolute inset-0 m-auto h-4 w-4 text-white drop-shadow" />
@@ -405,14 +485,19 @@ export default function AppearancePage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={customHex}
+                    value={accentMode === 'dark' ? customHexDark : customHexLight}
                     onChange={e => handleCustomColor(e.target.value)}
                     className="h-8 w-12 cursor-pointer rounded border border-border bg-transparent p-0.5"
                   />
                   <input
                     type="text"
-                    value={customHex}
-                    onChange={e => { if (/^#[0-9a-f]{6}$/i.test(e.target.value)) handleCustomColor(e.target.value); setCustomHex(e.target.value); }}
+                    value={accentMode === 'dark' ? customHexDark : customHexLight}
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (accentMode === 'dark') setCustomHexDark(v);
+                      else setCustomHexLight(v);
+                      if (/^#[0-9a-f]{6}$/i.test(v)) handleCustomColor(v);
+                    }}
                     className="
                       w-24 rounded border border-border bg-background px-2 py-1 text-xs
                       font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary
@@ -421,6 +506,109 @@ export default function AppearancePage() {
                     maxLength={7}
                   />
                 </div>
+              </div>
+            </section>
+
+            {/* ── Transaction colors ── */}
+            <section className="rounded-lg border border-border bg-card p-6 space-y-4">
+              <div>
+                <h2 className="font-display text-base font-semibold text-foreground">Transaction Colors</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Colors for trade, waiver, and free agent tags in transactions and charts.
+                </p>
+              </div>
+
+              {/* Dark / Light mode tab */}
+              <div className="flex gap-1 rounded-md border border-border bg-background p-0.5 w-fit">
+                {(['dark', 'light'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setTxMode(m)}
+                    className={cn(
+                      'px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
+                      txMode === m
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              {/* Preset chips */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Presets</p>
+                <div className="flex flex-wrap gap-2">
+                  {txColorPresets.map(preset => {
+                    const colors = txMode === 'dark' ? preset.dark : preset.light;
+                    const active =
+                      theme.txColorsDark.trade     === preset.dark.trade     &&
+                      theme.txColorsDark.waiver    === preset.dark.waiver    &&
+                      theme.txColorsDark.freeAgent === preset.dark.freeAgent &&
+                      theme.txColorsLight.trade     === preset.light.trade    &&
+                      theme.txColorsLight.waiver    === preset.light.waiver   &&
+                      theme.txColorsLight.freeAgent === preset.light.freeAgent;
+                    return (
+                      <button
+                        key={preset.name}
+                        onClick={() => applyTxPreset(preset)}
+                        className={cn(
+                          'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                          active
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-background text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        <span className="flex gap-0.5">
+                          {(['trade', 'waiver', 'freeAgent'] as const).map(k => (
+                            <span key={k} className="h-3 w-3 rounded-full border border-black/10" style={{ background: colors[k] }} />
+                          ))}
+                        </span>
+                        {preset.name}
+                        {active && <CheckIcon className="h-3 w-3 ml-0.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Individual pickers */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {([
+                  { key: 'trade'     as const, label: 'Trade'      },
+                  { key: 'waiver'    as const, label: 'Waiver'     },
+                  { key: 'freeAgent' as const, label: 'Free Agent' },
+                ]).map(({ key, label }) => {
+                  const val = txMode === 'dark' ? theme.txColorsDark[key] : theme.txColorsLight[key];
+                  return (
+                    <div key={key} className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={val}
+                          onChange={e => setTxColor(txMode, key, e.target.value)}
+                          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5 shrink-0"
+                        />
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={e => { if (/^#[0-9a-f]{6}$/i.test(e.target.value)) setTxColor(txMode, key, e.target.value); }}
+                          className="w-full rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          maxLength={7}
+                        />
+                      </div>
+                      {/* Swatch preview showing tag style */}
+                      <div
+                        className="inline-flex items-center self-start rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+                        style={{ color: val, backgroundColor: `${val}1a`, borderColor: `${val}4d` }}
+                      >
+                        {label}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
@@ -549,7 +737,12 @@ export default function AppearancePage() {
               <div className="flex-1 h-px bg-border" />
             </div>
             <div className="sticky top-20">
-              <Preview h={theme.primaryH} s={theme.primaryS} radius={theme.radiusRem} />
+              <Preview
+                h={accentMode === 'dark' ? theme.primaryH : theme.primaryHLight}
+                s={accentMode === 'dark' ? theme.primaryS : theme.primarySLight}
+                radius={theme.radiusRem}
+                lightness={accentMode === 'dark' ? 44 : 35}
+              />
               <p className="mt-3 text-center text-xs text-muted-foreground">
                 Changes are reflected above instantly. Save to apply site-wide.
               </p>
