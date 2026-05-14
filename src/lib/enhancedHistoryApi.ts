@@ -172,7 +172,11 @@ export async function generateEnhancedLeagueHistory(
 
     // Step 5: Generate win/loss streaks
     progressCallback?.(85, 'Calculating win/loss streaks...');
-    await generateWinLossStreaks(linkedLeagueIds, userStatsMap, records, seasonStats);
+    try {
+      await generateWinLossStreaks(linkedLeagueIds, userStatsMap, records, seasonStats);
+    } catch {
+      // Streak calculation is non-critical; continue without it
+    }
     
     // Step 6: Calculate derived statistics and rankings
     progressCallback?.(90, 'Calculating derived statistics...');
@@ -1007,8 +1011,8 @@ async function generateWinLossStreaks(
           userStreak.winStreakSeasons = [];
         }
       });
-    } catch (error) {
-      console.error(`Error processing streaks for league ${leagueId}:`, error);
+    } catch {
+      // League data unavailable (deleted/private) — skip streak for this season
     }
   }
 

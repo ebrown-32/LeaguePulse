@@ -5,15 +5,14 @@ import Link from 'next/link';
 import { X, ArrowLeftRight, Gavel, UserPlus, Ticket } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
 import type { EnrichedTransaction } from '@/app/api/transactions/route';
 
 const DISMISS_STORAGE_KEY = 'lp_tx_ticker_dismissed';
 
 const TYPE_CONFIG = {
-  trade:      { label: 'Trade',      Icon: ArrowLeftRight, badge: 'border-amber-400/40 bg-amber-400/10 text-amber-400'   },
-  waiver:     { label: 'Waiver',     Icon: Gavel,          badge: 'border-sky-400/40 bg-sky-400/10 text-sky-400'         },
-  free_agent: { label: 'Free Agent', Icon: UserPlus,       badge: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-400' },
+  trade:      { label: 'Trade',      Icon: ArrowLeftRight, v: '--tx-trade'  },
+  waiver:     { label: 'Waiver',     Icon: Gavel,          v: '--tx-waiver' },
+  free_agent: { label: 'Free Agent', Icon: UserPlus,       v: '--tx-fa'     },
 } as const;
 
 function summarize(tx: EnrichedTransaction): string {
@@ -128,11 +127,14 @@ export default function TransactionTicker({ className }: TransactionTickerProps)
               return (
                 <div key={tx.transactionId} className="flex items-start gap-3 min-w-0">
                   {/* Type badge */}
-                  <span className={cn(
-                    'mt-px shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-0.5',
-                    'text-[9px] font-bold uppercase tracking-wide',
-                    cfg.badge,
-                  )}>
+                  <span
+                    className="mt-px shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                    style={{
+                      color:           `var(${cfg.v})`,
+                      backgroundColor: `var(${cfg.v}-muted)`,
+                      borderColor:     `var(${cfg.v}-dim)`,
+                    }}
+                  >
                     <cfg.Icon className="h-2.5 w-2.5" />
                     {cfg.label}
                   </span>

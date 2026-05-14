@@ -229,24 +229,20 @@ function WeeklyScoreChart({ scores }: { scores: number[] }) {
   );
 }
 
-const statBadgeColors: Record<string, string> = {
-  blue: 'bg-primary/10 border-primary/20 text-primary',
-  purple: 'bg-violet-500/10 border-violet-500/20 text-violet-500',
-  green: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500',
-  yellow: 'bg-amber-500/10 border-amber-500/20 text-amber-500',
-  pink: 'bg-pink-500/10 border-pink-500/20 text-pink-500',
-  orange: 'bg-orange-500/10 border-orange-500/20 text-orange-500',
-};
-
-function StatBadge({ label, value, color, icon: Icon }: {
+function StatBadge({ label, value, icon: Icon }: {
   label: string;
   value: string | number;
-  color: string;
   icon: any;
 }) {
-  const colorClass = statBadgeColors[color] ?? statBadgeColors.blue;
   return (
-    <div className={`border rounded-lg p-3 ${colorClass}`}>
+    <div
+      className="border rounded-lg p-3"
+      style={{
+        color:           'hsl(var(--primary))',
+        backgroundColor: 'hsl(var(--primary) / 0.08)',
+        borderColor:     'hsl(var(--primary) / 0.2)',
+      }}
+    >
       <div className="flex items-center space-x-2">
         <Icon className="h-4 w-4" />
         <div>
@@ -283,32 +279,24 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
     {
       label: 'Most Consistent',
       icon: ShieldCheck,
-      iconClass: 'text-primary',
-      bgClass: 'bg-primary/10',
       team: [...metrics].sort((a, b) => b.consistency.score - a.consistency.score)[0],
       sub: (t: AdvancedTeamMetrics) => `${t.consistency.score.toFixed(1)}%`,
     },
     {
       label: 'Most Explosive',
       icon: Zap,
-      iconClass: 'text-violet-500',
-      bgClass: 'bg-violet-500/10',
       team: [...metrics].sort((a, b) => b.explosiveness.score - a.explosiveness.score)[0],
       sub: (t: AdvancedTeamMetrics) => `${t.explosiveness.explosiveGames} explosive games`,
     },
     {
       label: 'Most Clutch',
       icon: Heart,
-      iconClass: 'text-emerald-500',
-      bgClass: 'bg-emerald-500/10',
       team: [...metrics].sort((a, b) => b.clutch.score - a.clutch.score)[0],
       sub: (t: AdvancedTeamMetrics) => `${t.clutch.closeWinRate.toFixed(1)} close win rate`,
     },
     {
       label: 'Most Efficient',
       icon: Rocket,
-      iconClass: 'text-amber-500',
-      bgClass: 'bg-amber-500/10',
       team: [...metrics].sort((a, b) => b.efficiency.score - a.efficiency.score)[0],
       sub: (t: AdvancedTeamMetrics) => `${t.efficiency.score.toFixed(1)}% efficiency`,
     },
@@ -344,20 +332,20 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
       </div>
 
       {/* League Leaders */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {leaderCards.map(({ label, icon: Icon, iconClass, bgClass, team, sub }) => (
+      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+        {leaderCards.map(({ label, icon: Icon, team, sub }) => (
           <Card key={label}>
-            <CardContent className="p-5">
-              <div className="flex items-center space-x-4">
-                <div className={`rounded-full ${bgClass} p-3`}>
-                  <Icon className={`h-6 w-6 ${iconClass}`} />
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                <div className="rounded-full p-2.5 sm:p-3 w-fit bg-primary/10">
+                  <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="text-base font-semibold text-foreground truncate">
+                  <p className="text-xs sm:text-sm text-muted-foreground">{label}</p>
+                  <p className="text-sm sm:text-base font-semibold text-foreground truncate">
                     {team?.teamName}
                   </p>
-                  <p className={`text-xs ${iconClass}`}>
+                  <p className="text-xs text-primary">
                     {team ? sub(team) : '—'}
                   </p>
                 </div>
@@ -432,30 +420,10 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
 
                     {/* Advanced Metrics */}
                     <div className="grid grid-cols-2 gap-3">
-                      <StatBadge
-                        label="Consistency"
-                        value={`${team.consistency.score.toFixed(0)}%`}
-                        color="blue"
-                        icon={ShieldCheck}
-                      />
-                      <StatBadge
-                        label="Explosiveness"
-                        value={`${team.explosiveness.score.toFixed(0)}%`}
-                        color="purple"
-                        icon={Zap}
-                      />
-                      <StatBadge
-                        label="Clutch"
-                        value={`${team.clutch.score.toFixed(0)}%`}
-                        color="green"
-                        icon={Heart}
-                      />
-                      <StatBadge
-                        label="Efficiency"
-                        value={`${team.efficiency.score.toFixed(0)}%`}
-                        color="yellow"
-                        icon={Rocket}
-                      />
+                      <StatBadge label="Consistency"   value={`${team.consistency.score.toFixed(0)}%`}   icon={ShieldCheck} />
+                      <StatBadge label="Explosiveness" value={`${team.explosiveness.score.toFixed(0)}%`} icon={Zap}         />
+                      <StatBadge label="Clutch"        value={`${team.clutch.score.toFixed(0)}%`}        icon={Heart}       />
+                      <StatBadge label="Efficiency"    value={`${team.efficiency.score.toFixed(0)}%`}    icon={Rocket}      />
                     </div>
 
                     {/* Streak Info */}
@@ -647,16 +615,16 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
         <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-6">Understanding the Metrics</h3>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[
-            { icon: ShieldCheck, iconClass: 'text-primary', title: 'Consistency', body: 'Measures scoring consistency using coefficient of variation. Lower variation = higher consistency. Accounts for median games if your league has them enabled.' },
-            { icon: Zap, iconClass: 'text-violet-500', title: 'Explosiveness', body: 'Percentage of games scoring above 120% of league average. Higher percentage = more explosive scoring weeks.' },
-            { icon: Heart, iconClass: 'text-emerald-500', title: 'Clutch', body: 'Win rate in close games (within 10 points). Higher percentage = better performance under pressure.' },
-            { icon: Rocket, iconClass: 'text-amber-500', title: 'Efficiency', body: 'Combines scoring efficiency with win efficiency. Higher score = better points-to-wins ratio.' },
-            { icon: TrendingUp, iconClass: 'text-orange-500', title: 'Momentum', body: 'Based on late-season performance and win streaks. Shows how teams finish the season.' },
-            { icon: Scale, iconClass: 'text-pink-500', title: 'Luck', body: 'Expected wins vs actual wins. Positive = lucky (won more than expected), negative = unlucky.' },
-          ].map(({ icon: Icon, iconClass, title, body }) => (
+            { icon: ShieldCheck, title: 'Consistency',   body: 'Measures scoring consistency using coefficient of variation. Lower variation = higher consistency. Accounts for median games if your league has them enabled.' },
+            { icon: Zap,         title: 'Explosiveness', body: 'Percentage of games scoring above 120% of league average. Higher percentage = more explosive scoring weeks.' },
+            { icon: Heart,       title: 'Clutch',        body: 'Win rate in close games (within 10 points). Higher percentage = better performance under pressure.' },
+            { icon: Rocket,      title: 'Efficiency',    body: 'Combines scoring efficiency with win efficiency. Higher score = better points-to-wins ratio.' },
+            { icon: TrendingUp,  title: 'Momentum',      body: 'Based on late-season performance and win streaks. Shows how teams finish the season.' },
+            { icon: Scale,       title: 'Luck',          body: 'Expected wins vs actual wins. Positive = lucky (won more than expected), negative = unlucky.' },
+          ].map(({ icon: Icon, title, body }) => (
             <div key={title}>
               <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                <Icon className={`h-4 w-4 ${iconClass}`} />
+                <Icon className="h-4 w-4 text-primary" />
                 {title}
               </h4>
               <p className="text-sm text-muted-foreground">{body}</p>

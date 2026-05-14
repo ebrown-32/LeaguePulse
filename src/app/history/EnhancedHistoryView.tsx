@@ -186,7 +186,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
     <div className="space-y-6">
 
       {/* ── Overview strip ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-5 md:overflow-visible md:pb-0">
         {[
           { label: 'Seasons',          value: String(leagueMetadata.totalSeasons) },
           { label: 'Games Played',     value: String(Math.round(leagueMetadata.totalGamesPlayed)) },
@@ -196,7 +196,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
         ].map(({ label, value }) => (
           <div
             key={label}
-            className="bg-card border border-border rounded-xl px-4 py-3"
+            className="snap-start shrink-0 w-[calc(50vw-1.25rem)] min-w-[130px] sm:min-w-0 sm:w-auto md:w-auto bg-card border border-border rounded-xl px-4 py-3"
           >
             <div className="font-display text-xl font-bold text-foreground tabular-nums">{value}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
@@ -205,18 +205,18 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
-      <div className="flex gap-0 border-b border-border">
+      <div className="flex border-b border-border">
         {tabs.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-5 py-3 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">{label}</span>
             <span className="sm:hidden">{label.split(' ')[0]}</span>
           </button>
@@ -263,7 +263,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                               <span className="font-semibold text-sm text-foreground truncate">{manager.username}</span>
                               {isGoat && (
                                 <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/25">
-                                  GOAT
+                                  BOAT
                                 </span>
                               )}
                               {repeat && !isGoat && (
@@ -325,7 +325,7 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                               <span className="font-semibold text-sm text-foreground truncate">{manager.username}</span>
                               {isGoat && (
                                 <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/25">
-                                  GOAT
+                                  BOAT
                                 </span>
                               )}
                             </div>

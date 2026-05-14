@@ -184,43 +184,45 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <SeasonSelect
-            seasons={seasons}
-            selectedSeason={selectedSeason}
-            onSeasonChange={setSelectedSeason}
-            className="w-full sm:w-[140px]"
-          />
-          <Select
-            value={selectedWeek.toString()}
-            onValueChange={(value) => setSelectedWeek(Number(value))}
-          >
-            <SelectTrigger className="w-full sm:w-[160px]">
-              Week {selectedWeek}
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 18 }, (_, i) => (
-                <SelectItem key={i + 1} value={(i + 1).toString()}>
-                  Week {i + 1}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
-              disabled={selectedWeek <= 1}
-              className="rounded-lg border border-border p-2 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex items-center gap-2">
+            <SeasonSelect
+              seasons={seasons}
+              selectedSeason={selectedSeason}
+              onSeasonChange={setSelectedSeason}
+              className="flex-1 sm:flex-none sm:w-[140px]"
+            />
+            <Select
+              value={selectedWeek.toString()}
+              onValueChange={(value) => setSelectedWeek(Number(value))}
             >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setSelectedWeek(Math.min(18, selectedWeek + 1))}
-              disabled={selectedWeek >= 18}
-              className="rounded-lg border border-border p-2 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              <SelectTrigger className="flex-1 sm:flex-none sm:w-[160px]">
+                Week {selectedWeek}
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 18 }, (_, i) => (
+                  <SelectItem key={i + 1} value={(i + 1).toString()}>
+                    Week {i + 1}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
+                disabled={selectedWeek <= 1}
+                className="rounded-lg border border-border p-2 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setSelectedWeek(Math.min(18, selectedWeek + 1))}
+                disabled={selectedWeek >= 18}
+                className="rounded-lg border border-border p-2 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           {hasMatchups && (
             <span className="text-xs text-muted-foreground">
@@ -241,7 +243,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             <div className="text-muted-foreground">
               <Flame className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <h3 className="text-lg font-medium mb-2">No Matchups Available</h3>
-              <p className="text-sm">There are no matchups for Week {selectedWeek} in Season {selectedSeason}.</p>
+              <p className="text-sm">Hmmm, it must be the offseason. Week {selectedWeek} in Season {selectedSeason} coming soon...</p>
             </div>
           </CardContent>
         </Card>
