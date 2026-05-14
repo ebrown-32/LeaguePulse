@@ -141,7 +141,7 @@ export async function GET() {
       // Offseason (pre_draft): fetch up to current NFL week (transactions accumulate from week 1).
       // Active season: same cap. Completed seasons: through week 22 to capture playoffs.
       const maxWeek = (isOffseason || isActive) ? Math.max(1, currentNFLWeek) : 22;
-      const ttl     = isActive ? 1800 : 86400;
+      const ttl     = (isActive || isOffseason) ? 1800 : 86400;
 
       const weekBatches = await Promise.all(
         Array.from({ length: maxWeek }, (_, i) =>
