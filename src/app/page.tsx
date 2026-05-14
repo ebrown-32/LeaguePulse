@@ -134,12 +134,12 @@ function getLeagueSubtitle(league: any, nflState: any, seasons: string[], histor
 
 function getSeasonContext(league: any, nflState: any): string | null {
   switch (getEffectiveLeagueStatus(league, nflState)) {
-    case 'pre_draft':   return league.draft_id ? `Draft: ${formatDraftDate(league.draft_id)}` : 'Draft not scheduled';
-    case 'drafting':    return 'Draft in progress';
-    case 'preseason':   return 'Season starting soon';
-    case 'in_season':   return 'Regular season active';
-    case 'post_season': return 'Playoffs underway';
-    case 'complete':    return 'Season completed';
+    case 'pre_draft':   return league.draft_id ? `Draft: ${formatDraftDate(league.draft_id)}` : 'Draft not scheduled.';
+    case 'drafting':    return 'Draft in progress.';
+    case 'preseason':   return 'Season starting soon.';
+    case 'in_season':   return 'Regular season active.';
+    case 'post_season': return 'Playoffs underway.';
+    case 'complete':    return 'Season completed.';
     default:            return null;
   }
 }

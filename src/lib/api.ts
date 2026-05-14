@@ -788,7 +788,7 @@ async function calculateAdvancedSeasonMetrics(
     const explosiveGames = weeklyScores.filter(score => score > explosiveThreshold).length;
 
     // Calculate win streaks
-    const winStreak = calculateLongestWinStreak(teamMatchups, allMatchups.flat());
+    const winStreak = calculateLongestWinStreak(teamMatchups, allMatchups);
 
     // Calculate late season performance (last 4 weeks)
     const regularSeasonWeeks = league.settings.playoff_week_start ? league.settings.playoff_week_start - 1 : 14;
@@ -887,7 +887,7 @@ async function calculateAdvancedSeasonMetrics(
         lateSeasonRecord: `${lateSeasonWins}-${lateSeasonMatchups.length - lateSeasonWins}`,
         finalWeeksWinRate: lateSeasonWinRate,
         longestWinStreak: winStreak,
-        currentStreak: calculateCurrentStreak(teamMatchups, allMatchups.flat()),
+        currentStreak: calculateCurrentStreak(teamMatchups, allMatchups),
       },
       luck: {
         score: calculateLuckScore(expectedWins, roster.settings.wins || 0, closeLosses),
@@ -973,15 +973,24 @@ function calculateLuckScore(expectedWins: number, actualWins: number, closeLosse
   return Math.max(0, winLuck - closeLossPenalty);
 }
 
-function calculateLongestWinStreak(teamMatchups: any[], allMatchups: any[]): number {
+// matchup_id is only unique within a single week, so opponent lookups must
+// be scoped to the correct week's sub-array rather than a flat list.
+function findWeekMatchups(matchup: any, allMatchupsByWeek: any[][]): any[] | undefined {
+  return allMatchupsByWeek.find(week =>
+    week.some(m => m.matchup_id === matchup.matchup_id && m.roster_id === matchup.roster_id)
+  );
+}
+
+function calculateLongestWinStreak(teamMatchups: any[], allMatchupsByWeek: any[][]): number {
   let currentStreak = 0;
   let longestStreak = 0;
-  
+
   teamMatchups.forEach(matchup => {
-    const opposingMatch = allMatchups.find(m => 
+    const weekMatchups = findWeekMatchups(matchup, allMatchupsByWeek);
+    const opposingMatch = weekMatchups?.find(m =>
       m.matchup_id === matchup.matchup_id && m.roster_id !== matchup.roster_id
     );
-    
+
     if (opposingMatch && (matchup.points || 0) > (opposingMatch.points || 0)) {
       currentStreak++;
       longestStreak = Math.max(longestStreak, currentStreak);
@@ -989,25 +998,25 @@ function calculateLongestWinStreak(teamMatchups: any[], allMatchups: any[]): num
       currentStreak = 0;
     }
   });
-  
+
   return longestStreak;
 }
 
-function calculateCurrentStreak(teamMatchups: any[], allMatchups: any[]): number {
+function calculateCurrentStreak(teamMatchups: any[], allMatchupsByWeek: any[][]): number {
   let currentStreak = 0;
   let isWinStreak = true;
-  
-  // Start from the most recent matchup
+
   for (let i = teamMatchups.length - 1; i >= 0; i--) {
     const matchup = teamMatchups[i];
-    const opposingMatch = allMatchups.find(m => 
+    const weekMatchups = findWeekMatchups(matchup, allMatchupsByWeek);
+    const opposingMatch = weekMatchups?.find(m =>
       m.matchup_id === matchup.matchup_id && m.roster_id !== matchup.roster_id
     );
-    
+
     if (!opposingMatch) continue;
-    
+
     const isWin = (matchup.points || 0) > (opposingMatch.points || 0);
-    
+
     if (currentStreak === 0) {
       currentStreak = 1;
       isWinStreak = isWin;
@@ -1017,24 +1026,26 @@ function calculateCurrentStreak(teamMatchups: any[], allMatchups: any[]): number
       break;
     }
   }
-  
+
   return isWinStreak ? currentStreak : -currentStreak;
 }
 
-function calculateHighestWeekRank(teamMatchups: any[], allMatchups: any[]): number {
+function calculateHighestWeekRank(teamMatchups: any[], allMatchupsByWeek: any[][]): number {
   let highestRank = Infinity;
-  
+
   teamMatchups.forEach(matchup => {
-    const weekScores = allMatchups
-      .filter(m => m.matchup_id === matchup.matchup_id)
+    const weekMatchups = findWeekMatchups(matchup, allMatchupsByWeek);
+    if (!weekMatchups) return;
+
+    const weekScores = weekMatchups
       .map(m => m.points || 0)
       .sort((a, b) => b - a);
-    
+
     const teamScore = matchup.points || 0;
     const rank = weekScores.indexOf(teamScore) + 1;
     highestRank = Math.min(highestRank, rank);
   });
-  
+
   return highestRank === Infinity ? 0 : highestRank;
 }
 
