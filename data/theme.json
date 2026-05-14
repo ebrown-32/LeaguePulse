@@ -5,7 +5,7 @@
   "primarySLight": 93,
   "radiusRem": 0,
   "fontPair": "syne-dm",
-  "logoUrl": "https://dominationleague.com/badge.png",
+  "logoUrl": "/dominationleague.png",
   "leagueName": "The Domination League",
   "txColorsDark": {
     "trade": "#f87171",

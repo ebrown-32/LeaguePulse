@@ -705,19 +705,22 @@ export default function AppearancePage() {
 
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                    Logo URL
+                    Logo
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={theme.logoUrl ?? ''}
                     onChange={e => setTheme(t => ({ ...t, logoUrl: e.target.value || null }))}
-                    placeholder="https://example.com/logo.png"
+                    placeholder="/dominationleague.png"
                     className="
                       w-full rounded-md border border-border bg-background px-3 py-2
                       text-sm text-foreground placeholder:text-muted-foreground
                       focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
                     "
                   />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Place your image in the <code className="font-mono">public/</code> folder and enter its path, e.g. <code className="font-mono">/dominationleague.png</code>
+                  </p>
                   {theme.logoUrl && (
                     <div className="mt-2 flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
