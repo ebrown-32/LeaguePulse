@@ -119,8 +119,8 @@ export async function GET() {
     const [nflState, allLeagueIds, allPlayers] = await Promise.all([
       fetch(`${BASE}/state/nfl`).then(r => r.json()),
       getAllLinkedLeagueIds(initialId),
-      // 19 MB. Route-level revalidate covers caching; only fetched once per window.
-      fetch(`${BASE}/players/nfl`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      // 19 MB — explicit revalidate so it stays cached even when the route is dynamic.
+      fetch(`${BASE}/players/nfl`, { next: { revalidate: 86400 } }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]);
 
     const currentNFLWeek = Math.max(1, nflState.week ?? 1);
@@ -141,11 +141,17 @@ export async function GET() {
       // Offseason (pre_draft): fetch up to current NFL week (transactions accumulate from week 1).
       // Active season: same cap. Completed seasons: through week 22 to capture playoffs.
       const maxWeek = (isOffseason || isActive) ? Math.max(1, currentNFLWeek) : 22;
-      const ttl     = (isActive || isOffseason) ? 1800 : 86400;
+
+      // Completed seasons never change — cache aggressively. Current/offseason leagues must
+      // always hit Sleeper fresh so new transactions appear immediately (no-store bypasses
+      // the Next.js Data Cache which can survive redeployments).
+      const fetchOpts: RequestInit = (isActive || isOffseason)
+        ? { cache: 'no-store' }
+        : { next: { revalidate: 86400 } };
 
       const weekBatches = await Promise.all(
         Array.from({ length: maxWeek }, (_, i) =>
-          fetch(`${BASE}/league/${leagueId}/transactions/${i + 1}`, { next: { revalidate: ttl } })
+          fetch(`${BASE}/league/${leagueId}/transactions/${i + 1}`, fetchOpts)
             .then(r => r.ok ? r.json() : [])
             .catch(() => [])
         )
