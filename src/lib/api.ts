@@ -10,16 +10,19 @@ import {
 
 const BASE_URL = 'https://api.sleeper.app/v1';
 
-// Cache for league IDs to avoid repeated API calls
-let leagueIdsCache: Record<string, string[]> = {};
+// Cache for league IDs — TTL of 1 hour so warm serverless instances pick up
+// newly linked seasons (e.g. a new pre-draft league) without waiting for a cold start.
+let leagueIdsCache: Record<string, { ids: string[]; ts: number }> = {};
+const LEAGUE_IDS_TTL_MS = 3_600_000; // 1 h
 
 /**
  * Fetches all linked league IDs for a given league, including previous and future seasons
  */
 export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]> {
   // Check cache first
-  if (leagueIdsCache[leagueId]) {
-    return leagueIdsCache[leagueId];
+  const cached = leagueIdsCache[leagueId];
+  if (cached && Date.now() - cached.ts < LEAGUE_IDS_TTL_MS) {
+    return cached.ids;
   }
 
   const linkedIds = new Set<string>();
@@ -68,7 +71,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
     console.log('Linked league IDs:', sortedIds);
     
     // Cache the result
-    leagueIdsCache[leagueId] = sortedIds;
+    leagueIdsCache[leagueId] = { ids: sortedIds, ts: Date.now() };
     
     return sortedIds;
   } catch (error) {
