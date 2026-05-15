@@ -1,9 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 
-export const revalidate = 1800;
+export const dynamic = 'force-dynamic';
 
 const BASE = 'https://api.sleeper.app/v1';
+
+// Module-level cache for the 19MB players blob — too large for Next.js data cache (2MB limit).
+// Survives across requests within the same serverless function instance.
+let playersCache: { data: Record<string, any>; ts: number } | null = null;
+const PLAYERS_TTL_MS = 86_400_000; // 24 h
+
+async function fetchAllPlayers(): Promise<Record<string, any>> {
+  if (playersCache && Date.now() - playersCache.ts < PLAYERS_TTL_MS) {
+    return playersCache.data;
+  }
+  const data = await fetch(`${BASE}/players/nfl`, { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : {})
+    .catch(() => ({}));
+  playersCache = { data, ts: Date.now() };
+  return data;
+}
 
 export interface PlayerSummary {
   id: string;
@@ -117,10 +133,9 @@ export async function GET() {
 
   try {
     const [nflState, allLeagueIds, allPlayers] = await Promise.all([
-      fetch(`${BASE}/state/nfl`).then(r => r.json()),
+      fetch(`${BASE}/state/nfl`, { cache: 'no-store' }).then(r => r.json()),
       getAllLinkedLeagueIds(initialId),
-      // 19 MB — explicit revalidate so it stays cached even when the route is dynamic.
-      fetch(`${BASE}/players/nfl`, { next: { revalidate: 86400 } }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetchAllPlayers(),
     ]);
 
     const currentNFLWeek = Math.max(1, nflState.week ?? 1);
