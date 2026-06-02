@@ -187,7 +187,15 @@ export async function GET() {
 
     const seasons = [...new Set(all.map(t => t.season))].sort((a, b) => Number(b) - Number(a));
 
-    return NextResponse.json({ transactions: all, seasons } satisfies TransactionsResponse);
+    const _debug = seasonData.map(s => ({
+      leagueId: s.rosters?.[0] ? 'ok' : 'no-rosters',
+      season: s.season,
+      status: s.isOffseason ? 'pre_draft' : 'other',
+      rawTxCount: s.rawTxs.length,
+    }));
+    console.log('[transactions] debug:', JSON.stringify(_debug));
+
+    return NextResponse.json({ transactions: all, seasons, _debug } as any);
   } catch (err) {
     console.error('[api/transactions]', err);
     return NextResponse.json({ error: 'Failed to load transactions' }, { status: 500 });
