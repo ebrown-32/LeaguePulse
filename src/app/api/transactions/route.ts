@@ -1,9 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 
-export const revalidate = 1800;
+export const dynamic = 'force-dynamic';
 
 const BASE = 'https://api.sleeper.app/v1';
+
+// Module-level cache for the 19MB players blob — too large for Next.js data cache (2MB limit).
+// Survives across requests within the same serverless function instance.
+let playersCache: { data: Record<string, any>; ts: number } | null = null;
+const PLAYERS_TTL_MS = 86_400_000; // 24 h
+
+async function fetchAllPlayers(): Promise<Record<string, any>> {
+  if (playersCache && Date.now() - playersCache.ts < PLAYERS_TTL_MS) {
+    return playersCache.data;
+  }
+  const data = await fetch(`${BASE}/players/nfl`, { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : {})
+    .catch(() => ({}));
+  playersCache = { data, ts: Date.now() };
+  return data;
+}
 
 export interface PlayerSummary {
   id: string;
@@ -117,10 +133,9 @@ export async function GET() {
 
   try {
     const [nflState, allLeagueIds, allPlayers] = await Promise.all([
-      fetch(`${BASE}/state/nfl`).then(r => r.json()),
+      fetch(`${BASE}/state/nfl`, { cache: 'no-store' }).then(r => r.json()),
       getAllLinkedLeagueIds(initialId),
-      // 19 MB — explicit revalidate so it stays cached even when the route is dynamic.
-      fetch(`${BASE}/players/nfl`, { next: { revalidate: 86400 } }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetchAllPlayers(),
     ]);
 
     const currentNFLWeek = Math.max(1, nflState.week ?? 1);
@@ -172,7 +187,15 @@ export async function GET() {
 
     const seasons = [...new Set(all.map(t => t.season))].sort((a, b) => Number(b) - Number(a));
 
-    return NextResponse.json({ transactions: all, seasons } satisfies TransactionsResponse);
+    const _debug = seasonData.map(s => ({
+      leagueId: s.rosters?.[0] ? 'ok' : 'no-rosters',
+      season: s.season,
+      status: s.isOffseason ? 'pre_draft' : 'other',
+      rawTxCount: s.rawTxs.length,
+    }));
+    console.log('[transactions] debug:', JSON.stringify(_debug));
+
+    return NextResponse.json({ transactions: all, seasons, _debug } as any);
   } catch (err) {
     console.error('[api/transactions]', err);
     return NextResponse.json({ error: 'Failed to load transactions' }, { status: 500 });
