@@ -37,9 +37,7 @@ const RECORD_CATEGORIES = [
   { type: 'lowScore',           label: 'Lowest Score',     icon: TrendingDown, unit: 'pts',    higher: false },
   { type: 'blowout',            label: 'Biggest Blowouts', icon: Zap,              unit: 'margin', higher: true  },
   { type: 'closeGame',          label: 'Closest Games',    icon: Heart,             unit: 'margin', higher: false },
-  { type: 'playoffHighScore',   label: 'Playoff High',     icon: Flame,              unit: 'pts',    higher: true  },
-  { type: 'playoffLowScore',    label: 'Playoff Low',      icon: TrendingDown, unit: 'pts',    higher: false },
-  { type: 'regularSeasonChamp', label: 'Reg Season Title', icon: ShieldCheck,       unit: 'wins',   higher: true  },
+{ type: 'regularSeasonChamp', label: 'Reg Season Title', icon: ShieldCheck,       unit: 'wins',   higher: true  },
 ] as const;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
