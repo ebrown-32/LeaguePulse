@@ -11,6 +11,7 @@ import {
   Activity,
   Newspaper,
   Receipt,
+  ClipboardList,
   Menu,
   X,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ const navigation: NavItem[] = [
   { name: 'Overview',      href: '/',             icon: LayoutDashboard },
   { name: 'Matchups',      href: '/matchups',     icon: Swords          },
   { name: 'Transactions',  href: '/transactions', icon: Receipt         },
+  { name: 'Drafts',        href: '/drafts',       icon: ClipboardList   },
   { name: 'History',       href: '/history',      icon: Database        },
   { name: 'Next Gen',      href: '/next-gen',     icon: Activity        },
   { name: 'Media',         href: '/media',        icon: Newspaper       },

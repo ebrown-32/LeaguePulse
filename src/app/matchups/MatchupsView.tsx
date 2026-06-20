@@ -273,9 +273,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             const isTie = matchupComplete && team1Points === team2Points;
             const totalPoints = team1Points + team2Points;
             const pointDifference = Math.abs(team1Points - team2Points);
-            const isCloseGame = matchupComplete && pointDifference < 5;
-            const isHighScoring = totalPoints > 200;
-
             return (
               <motion.div
                 key={team1.matchup_id}
@@ -283,10 +280,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.1 }}
               >
-                <Card className={`overflow-hidden transition-shadow duration-300 hover:shadow-md ${
-                  isCloseGame ? 'ring-1 ring-amber-500/30' :
-                  isHighScoring ? 'ring-1 ring-primary/30' : ''
-                }`}>
+                <Card className="overflow-hidden transition-shadow duration-300 hover:shadow-md">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -300,20 +294,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {isCloseGame && (
-                          <div className="flex items-center gap-1 text-amber-500">
-                            <Flame className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide">Close</span>
-                          </div>
-                        )}
-                        {isHighScoring && (
-                          <div className="flex items-center gap-1 text-primary">
-                            <Trophy className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide">High Score</span>
-                          </div>
-                        )}
-                      </div>
+                      <div />
                     </div>
                   </CardHeader>
 

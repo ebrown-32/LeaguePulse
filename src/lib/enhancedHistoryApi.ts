@@ -678,7 +678,7 @@ function generateWeeklyScoreRecords(
   // Generate high score records (top 50 to ensure we have enough good ones)
   weeklyHighScores.slice(0, 50).forEach(({ score, user, week, isPlayoff }) => {
     records.push({
-      type: isPlayoff ? 'playoffHighScore' : 'highScore',
+      type: 'highScore',
       season: league.season,
       week,
       userId: user.user_id,
@@ -696,7 +696,7 @@ function generateWeeklyScoreRecords(
     .slice(0, 50)
     .forEach(({ score, user, week, isPlayoff }) => {
       records.push({
-        type: isPlayoff ? 'playoffLowScore' : 'lowScore',
+        type: 'lowScore',
         season: league.season,
         week,
         userId: user.user_id,
