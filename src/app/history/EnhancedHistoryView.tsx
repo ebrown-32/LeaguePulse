@@ -13,10 +13,13 @@ import {
   Users,
   Activity,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import TransactionActivity from './TransactionActivity';
 import { getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { formatPoints } from '@/lib/utils';
+
+const ChampionRing = dynamic(() => import('@/components/ui/ChampionRing'), { ssr: false });
 import {
   generateEnhancedLeagueHistory,
   type EnhancedLeagueHistory,
@@ -24,13 +27,13 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EnhancedHistoryViewProps {
-  currentWeek: number;
-}
 
 type Tab = 'managers' | 'champions' | 'records' | 'activity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+// Seasons that have a ring model in /public/models/rings/
+const RING_SEASONS = new Set(['2024', '2025', '2026']);
 
 const RECORD_CATEGORIES = [
   { type: 'highScore',          label: 'Highest Score',    icon: Flame,              unit: 'pts',    higher: true  },
@@ -66,7 +69,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryViewProps) {
+export default function EnhancedHistoryView() {
   const [loading, setLoading]                       = useState(true);
   const [error, setError]                           = useState<string | null>(null);
   const [historyData, setHistoryData]               = useState<EnhancedLeagueHistory | null>(null);
@@ -158,6 +161,11 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
     .reduce<Record<string, (typeof records)[0]>>((acc, r) => { acc[r.season] = r; return acc; }, {});
 
   const uniqueChampions = new Set(championRecords.map(r => r.userId)).size;
+
+  const claimedSeasons = new Set(championRecords.map(r => r.season));
+  const futureRingSeasons = [...RING_SEASONS]
+    .filter(s => !claimedSeasons.has(s))
+    .sort((a, b) => parseInt(a) - parseInt(b));
 
   const activeCategory = RECORD_CATEGORIES.find(c => c.type === activeRecord) ?? RECORD_CATEGORIES[0];
   const ActiveCategoryIcon = activeCategory.icon;
@@ -374,84 +382,128 @@ export default function EnhancedHistoryView({ currentWeek }: EnhancedHistoryView
                     const runnerUp    = runnerUpBySeason[champion.season];
                     const isMostRecent = i === 0;
                     const champCount  = titleCounts[champion.userId] ?? 0;
+                    const ringPath    = `/models/rings/ring-${champion.season}.glb`;
 
                     return (
                       <div
                         key={`${champion.season}-${champion.userId}`}
-                        className={`flex items-center gap-4 md:gap-5 rounded-xl border px-5 py-4 md:py-5 ${
+                        className={`rounded-xl border overflow-hidden flex ${
                           isMostRecent
                             ? 'border-amber-500/25 bg-amber-500/[0.04]'
                             : 'border-border bg-card'
                         }`}
                       >
-                        {/* Year */}
-                        <div className="w-14 shrink-0 text-center">
-                          <div className={`font-display text-2xl font-bold leading-none ${isMostRecent ? 'text-amber-500' : 'text-foreground'}`}>
-                            {champion.season}
-                          </div>
-                          {isMostRecent && (
-                            <div className="text-[9px] font-bold uppercase tracking-wider text-amber-500/60 mt-1">Latest</div>
-                          )}
-                        </div>
-
-                        <div className="w-px h-10 bg-border shrink-0" />
-
-                        {/* Champion avatar + name */}
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="relative shrink-0">
-                            <Avatar
-                              avatarId={champion.avatar}
-                              size={44}
-                              className={`rounded-xl ${isMostRecent ? 'ring-2 ring-amber-500/40' : ''}`}
-                            />
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow">
-                              <Trophy className="h-2.5 w-2.5 text-white" />
+                        {/* Info row */}
+                        <div className="flex items-center gap-4 md:gap-5 px-5 py-4 md:py-5 flex-1 min-w-0">
+                          {/* Year */}
+                          <div className="w-14 shrink-0 text-center">
+                            <div className={`font-display text-2xl font-bold leading-none ${isMostRecent ? 'text-amber-500' : 'text-foreground'}`}>
+                              {champion.season}
                             </div>
+                            {isMostRecent && (
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-amber-500/60 mt-1">Latest</div>
+                            )}
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-foreground truncate">{champion.username}</span>
-                              {champCount > 1 && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
-                                  {champCount}× Champ
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">League Champion</div>
-                          </div>
-                        </div>
 
-                        {/* Stats */}
-                        <div className="hidden sm:flex items-center gap-6 shrink-0">
-                          {champion.details?.record && (
-                            <div className="text-right">
-                              <div className="font-mono font-bold text-sm text-foreground">{champion.details.record}</div>
-                              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Record</div>
-                            </div>
-                          )}
-                          {(champion.details?.pointsFor ?? 0) > 0 && (
-                            <div className="text-right">
-                              <div className="font-display font-bold text-sm text-foreground">
-                                {Math.round(champion.details!.pointsFor as number)}
+                          <div className="w-px h-10 bg-border shrink-0" />
+
+                          {/* Champion avatar + name */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="relative shrink-0">
+                              <Avatar
+                                avatarId={champion.avatar}
+                                size={44}
+                                className={`rounded-xl ${isMostRecent ? 'ring-2 ring-amber-500/40' : ''}`}
+                              />
+                              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow">
+                                <Trophy className="h-2.5 w-2.5 text-white" />
                               </div>
-                              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Pts For</div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-foreground truncate">{champion.username}</span>
+                                {champCount > 1 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                                    {champCount}× Champ
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">League Champion</div>
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="hidden sm:flex items-center gap-6 shrink-0">
+                            {champion.details?.record && (
+                              <div className="text-right">
+                                <div className="font-mono font-bold text-sm text-foreground">{champion.details.record}</div>
+                                <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Record</div>
+                              </div>
+                            )}
+                            {(champion.details?.pointsFor ?? 0) > 0 && (
+                              <div className="text-right">
+                                <div className="font-display font-bold text-sm text-foreground">
+                                  {Math.round(champion.details!.pointsFor as number)}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Pts For</div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Runner-up */}
+                          {runnerUp && (
+                            <div className="hidden md:flex items-center gap-2.5 shrink-0 pl-4 border-l border-border">
+                              <Avatar avatarId={runnerUp.avatar} size={28} className="rounded-lg shrink-0" />
+                              <div>
+                                <div className="text-xs font-medium text-foreground truncate max-w-[90px]">{runnerUp.username}</div>
+                                <div className="text-[10px] text-muted-foreground">Runner-up</div>
+                              </div>
                             </div>
                           )}
                         </div>
 
-                        {/* Runner-up */}
-                        {runnerUp && (
-                          <div className="hidden md:flex items-center gap-2.5 shrink-0 pl-4 border-l border-border">
-                            <Avatar avatarId={runnerUp.avatar} size={28} className="rounded-lg shrink-0" />
-                            <div>
-                              <div className="text-xs font-medium text-foreground truncate max-w-[90px]">{runnerUp.username}</div>
-                              <div className="text-[10px] text-muted-foreground">Runner-up</div>
-                            </div>
+                        {/* 3D ring — full-height right column */}
+                        {RING_SEASONS.has(champion.season) && (
+                          <div className="w-36 md:w-44 shrink-0 border-l border-border/40">
+                            <ChampionRing modelPath={ringPath} height={160} />
                           </div>
                         )}
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Future rings */}
+              {futureRingSeasons.length > 0 && (
+                <div className="mt-4 space-y-2.5">
+                  {futureRingSeasons.map(season => (
+                    <div
+                      key={season}
+                      className="rounded-xl border border-dashed border-border/50 bg-card/30 overflow-hidden flex opacity-60"
+                    >
+                      {/* Info row */}
+                      <div className="flex items-center gap-4 md:gap-5 px-5 py-4 flex-1 min-w-0">
+                        <div className="w-14 shrink-0 text-center">
+                          <div className="font-display text-2xl font-bold leading-none text-muted-foreground/50">{season}</div>
+                        </div>
+                        <div className="w-px h-10 bg-border/40 shrink-0" />
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl border border-dashed border-border/50 bg-muted/20 flex items-center justify-center">
+                            <Trophy className="h-4 w-4 text-muted-foreground/30" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-muted-foreground/50">To Be Determined</div>
+                            <div className="text-[10px] text-muted-foreground/35 mt-0.5 uppercase tracking-wide">Season not yet played</div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Ring preview */}
+                      <div className="w-36 md:w-44 shrink-0 border-l border-border/25">
+                        <ChampionRing modelPath={`/models/rings/ring-${season}.glb`} height={160} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
           </div>

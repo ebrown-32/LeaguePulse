@@ -143,24 +143,48 @@ function enrichTradedFuturePicks(
 ): TradedFuturePick[] {
   const slotByRosterId = new Map(slots.map(s => [s.rosterId, s]));
 
-  return (rawTradedPicks ?? [])
-    .filter((p: any) => p.season === season)
-    .flatMap((p: any): TradedFuturePick[] => {
-      const fromSlotObj = slotByRosterId.get(p.previous_owner_id);
-      const toSlotObj   = slotByRosterId.get(p.roster_id ?? p.owner_id);
-      if (!fromSlotObj || !toSlotObj || fromSlotObj.slot === toSlotObj.slot) return [];
-      return [{
-        round:        p.round,
-        fromSlot:     fromSlotObj.slot,
-        fromRosterId: fromSlotObj.rosterId,
-        fromTeamName: fromSlotObj.teamName,
-        fromAvatar:   fromSlotObj.avatar,
-        toSlot:       toSlotObj.slot,
-        toRosterId:   toSlotObj.rosterId,
-        toTeamName:   toSlotObj.teamName,
-        toAvatar:     toSlotObj.avatar,
-      }];
+  // Sleeper returns the full transaction history — one entry per trade, not per pick.
+  // Group by (round, owner_id): owner_id is always the ORIGINAL roster (the draft slot position),
+  // preserved across re-trades.
+  const groups = new Map<string, any[]>();
+  for (const p of (rawTradedPicks ?? [])) {
+    if (p.season !== season) continue;
+    const key = `${p.round}-${p.owner_id}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+
+  const result: TradedFuturePick[] = [];
+
+  for (const entries of groups.values()) {
+    // Walk the chain to find the final holder.
+    // The final entry is the one whose roster_id hasn't been traded away again
+    // (i.e., it doesn't appear as a previous_owner_id in any sibling entry).
+    const previousOwners = new Set(entries.map((e: any) => e.previous_owner_id));
+    const finalEntry: any =
+      entries.find((e: any) => !previousOwners.has(e.roster_id)) ??
+      entries[entries.length - 1];
+
+    const fromSlotObj = slotByRosterId.get(finalEntry.owner_id);
+    const toSlotObj   = slotByRosterId.get(finalEntry.roster_id);
+
+    // Skip if slot unknown, or pick returned to original owner
+    if (!fromSlotObj || !toSlotObj || fromSlotObj.slot === toSlotObj.slot) continue;
+
+    result.push({
+      round:        finalEntry.round,
+      fromSlot:     fromSlotObj.slot,
+      fromRosterId: fromSlotObj.rosterId,
+      fromTeamName: fromSlotObj.teamName,
+      fromAvatar:   fromSlotObj.avatar,
+      toSlot:       toSlotObj.slot,
+      toRosterId:   toSlotObj.rosterId,
+      toTeamName:   toSlotObj.teamName,
+      toAvatar:     toSlotObj.avatar,
     });
+  }
+
+  return result;
 }
 
 async function enrichDraft(
