@@ -454,10 +454,6 @@ function PosLegend() {
 
 // ── Upcoming draft pick ownership board ───────────────────────────────────────
 
-type OwnershipEntry =
-  | { kind: 'own' }
-  | { kind: 'traded'; tp: TradedFuturePick }
-  | { kind: 'received'; tp: TradedFuturePick };
 
 // Overall pick number for a snake draft at (round, slot, numTeams).
 function snakePickNo(round: number, slot: number, numTeams: number): number {
@@ -466,34 +462,53 @@ function snakePickNo(round: number, slot: number, numTeams: number): number {
   return (round - 1) * numTeams + posInRound;
 }
 
-function UpcomingDraftBoard({ draft }: { draft: EnrichedDraft }) {
-  const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
+interface EffectivePick {
+  userId: string;
+  teamName: string;
+  avatar: string;
+  tradedFrom?: { teamName: string; avatar: string };
+}
 
-  // Build ownership matrix: [round][colSlot] = OwnershipEntry[]
-  const ownerMatrix = useMemo(() => {
-    const matrix: Record<number, Record<number, OwnershipEntry[]>> = {};
+function UpcomingDraftBoard({ draft }: { draft: EnrichedDraft }) {
+  const [hoveredUserId, setHoveredUserId] = useState<string | null>(null);
+
+  const slotBySlotNum = useMemo(
+    () => new Map(draft.slots.map(s => [s.slot, s])),
+    [draft.slots],
+  );
+
+  // Build effective ownership: for each (round, slot) → who actually picks there
+  const effectiveMatrix = useMemo(() => {
+    const matrix: Record<number, Record<number, EffectivePick>> = {};
+
     for (let r = 1; r <= draft.rounds; r++) {
       matrix[r] = {};
       for (const slot of draft.slots) {
-        matrix[r][slot.slot] = [{ kind: 'own' }];
+        matrix[r][slot.slot] = { userId: slot.userId, teamName: slot.teamName, avatar: slot.avatar };
       }
     }
+
     for (const tp of draft.tradedFuturePicks ?? []) {
       const r = tp.round;
       if (!matrix[r]) continue;
-      if (matrix[r][tp.fromSlot]) {
-        matrix[r][tp.fromSlot] = matrix[r][tp.fromSlot]
-          .filter(e => e.kind !== 'own')
-          .concat([{ kind: 'traded', tp }]);
-      }
-      if (matrix[r][tp.toSlot]) {
-        matrix[r][tp.toSlot] = [...matrix[r][tp.toSlot], { kind: 'received', tp }];
-      }
+      const toSlotTeam = slotBySlotNum.get(tp.toSlot);
+      const fromSlotTeam = slotBySlotNum.get(tp.fromSlot);
+      // The pick AT the from-slot position is now owned by the to-team
+      matrix[r][tp.fromSlot] = {
+        userId:     toSlotTeam?.userId ?? '',
+        teamName:   tp.toTeamName,
+        avatar:     tp.toAvatar,
+        tradedFrom: { teamName: tp.fromTeamName, avatar: tp.fromAvatar },
+      };
+      // The to-slot keeps their own pick; mark it as "also has received pick" via tradedFrom on fromSlot only
+      // (no change to matrix[r][tp.toSlot] — their own pick stays as-is)
+      void fromSlotTeam; // suppress unused warning
     }
-    return matrix;
-  }, [draft]);
 
-  const colMinPx   = 118;
+    return matrix;
+  }, [draft, slotBySlotNum]);
+
+  const colMinPx   = 112;
   const labelColPx = 52;
   const isSnake    = draft.type !== 'linear';
   const tradeCount = (draft.tradedFuturePicks ?? []).length;
@@ -505,111 +520,100 @@ function UpcomingDraftBoard({ draft }: { draft: EnrichedDraft }) {
       <div className="flex items-center gap-2">
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Draft Board</h3>
         <div className="flex-1 h-px bg-border/40" />
-        {!draft.orderSet && (
-          <span className="text-[10px] text-muted-foreground/50 font-semibold">Order TBD</span>
-        )}
         {tradeCount > 0 && (
           <span className="text-[10px] text-muted-foreground/50 font-semibold">{tradeCount} traded pick{tradeCount !== 1 ? 's' : ''}</span>
         )}
       </div>
-      {!draft.orderSet && (
-        <p className="text-[10px] text-muted-foreground/40 italic">
-          Draft order hasn't been set yet — teams shown in roster order.
-        </p>
-      )}
 
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: draft.teams * colMinPx + labelColPx }}>
-            {/* Column headers */}
+            {/* Column headers — original slot positions */}
             <div
               className="grid border-b border-border bg-card/80 sticky top-0 z-10"
               style={{ gridTemplateColumns: `${labelColPx}px repeat(${draft.teams}, minmax(${colMinPx}px, 1fr))` }}
             >
               <div className="border-r border-border/30" />
-              {draft.slots.map(slot => (
-                <button
-                  key={slot.slot}
-                  className={cn(
-                    'flex flex-col items-center gap-1 py-3 px-2 border-r border-border/30 transition-colors',
-                    hoveredSlot === slot.slot ? 'bg-primary/8' : 'hover:bg-accent/50',
-                  )}
-                  onMouseEnter={() => setHoveredSlot(slot.slot)}
-                  onMouseLeave={() => setHoveredSlot(null)}
-                >
-                  <Avatar avatarId={slot.avatar || null} size={24} className="rounded shrink-0" />
-                  <span className="text-[10px] font-semibold text-center text-foreground leading-tight max-w-[100px] truncate">
-                    {slot.teamName}
-                  </span>
-                  <span className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground/35">
-                    #{slot.slot}
-                  </span>
-                </button>
-              ))}
+              {draft.slots.map(slot => {
+                const isHovered = hoveredUserId === slot.userId;
+                return (
+                  <button
+                    key={slot.slot}
+                    className={cn(
+                      'flex flex-col items-center gap-1 py-3 px-2 border-r border-border/30 transition-colors',
+                      isHovered ? 'bg-primary/8' : 'hover:bg-accent/50',
+                    )}
+                    onMouseEnter={() => setHoveredUserId(slot.userId)}
+                    onMouseLeave={() => setHoveredUserId(null)}
+                  >
+                    <Avatar avatarId={slot.avatar || null} size={24} className="rounded shrink-0" />
+                    <span className="text-[10px] font-semibold text-center text-foreground leading-tight max-w-[100px] truncate">
+                      {slot.teamName}
+                    </span>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground/35">
+                      Pick #{slot.slot}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Round rows */}
             {Array.from({ length: draft.rounds }, (_, i) => i + 1).map(round => (
               <div
                 key={round}
-                className={cn('grid', round % 2 === 0 && isSnake ? 'bg-muted/10' : '')}
+                className={cn('grid', round % 2 === 0 && isSnake ? 'bg-muted/[0.04]' : '')}
                 style={{ gridTemplateColumns: `${labelColPx}px repeat(${draft.teams}, minmax(${colMinPx}px, 1fr))` }}
               >
-                <div className="border-r border-b border-border/20 flex flex-col items-center justify-center min-h-[68px] gap-0.5">
+                {/* Round label */}
+                <div className="border-r border-b border-border/20 flex flex-col items-center justify-center min-h-[72px] gap-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">R{round}</span>
                   {isSnake && (
-                    <span className="text-[8px] text-muted-foreground/25">{round % 2 === 0 ? '←' : '→'}</span>
+                    <span className="text-[8px] text-muted-foreground/20">{round % 2 === 0 ? '←' : '→'}</span>
                   )}
                 </div>
+
+                {/* Pick cells */}
                 {draft.slots.map(slot => {
-                  const entries  = ownerMatrix[round]?.[slot.slot] ?? [{ kind: 'own' as const }];
-                  const dimmed   = hoveredSlot !== null && hoveredSlot !== slot.slot;
-                  const pickNo   = snakePickNo(round, slot.slot, draft.teams);
+                  const pick   = effectiveMatrix[round]?.[slot.slot];
+                  const pickNo = snakePickNo(round, slot.slot, draft.teams);
+                  const isOwner   = hoveredUserId === pick?.userId;
+                  const isHovered = hoveredUserId !== null;
+                  const isTraded  = !!pick?.tradedFrom;
+
                   return (
                     <div
                       key={slot.slot}
                       className={cn(
-                        'border-r border-b border-border/20 flex flex-col divide-y divide-border/15 transition-opacity duration-150',
-                        dimmed ? 'opacity-20' : 'opacity-100',
+                        'border-r border-b border-border/20 flex flex-col items-center justify-center min-h-[72px] gap-1.5 p-2.5 transition-all duration-150',
+                        isTraded ? 'bg-foreground/[0.02]' : '',
+                        isHovered && !isOwner ? 'opacity-15' : 'opacity-100',
                       )}
-                      onMouseEnter={() => setHoveredSlot(slot.slot)}
-                      onMouseLeave={() => setHoveredSlot(null)}
+                      onMouseEnter={() => pick && setHoveredUserId(pick.userId)}
+                      onMouseLeave={() => setHoveredUserId(null)}
                     >
-                      {entries.map((entry, idx) => {
-                        if (entry.kind === 'own') {
-                          return (
-                            <div key={idx} className="flex flex-col items-center justify-center min-h-[68px] gap-1.5 p-2">
-                              <span className="text-lg font-black text-foreground/10 tabular-nums leading-none">
-                                #{pickNo}
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <div className="h-1.5 w-1.5 rounded-full bg-foreground/25" />
-                                <span className="text-[9px] text-muted-foreground/30 font-medium">Own pick</span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        if (entry.kind === 'traded') {
-                          return (
-                            <div key={idx} className="flex flex-col items-center justify-center gap-1 p-2 min-h-[68px]">
-                              <span className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground/30">Traded to</span>
-                              <Avatar avatarId={entry.tp.toAvatar || null} size={22} className="rounded shrink-0" />
-                              <span className="text-[9px] text-muted-foreground/60 text-center leading-tight line-clamp-2 max-w-[90px]">
-                                {entry.tp.toTeamName}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={idx} className="flex flex-col items-center justify-center gap-1 p-2 min-h-[68px] bg-primary/4">
-                            <span className="text-[8px] font-bold uppercase tracking-wide text-primary/50">Received from</span>
-                            <Avatar avatarId={entry.tp.fromAvatar || null} size={22} className="rounded shrink-0" />
-                            <span className="text-[9px] text-primary/70 text-center leading-tight line-clamp-2 max-w-[90px]">
-                              {entry.tp.fromTeamName}
-                            </span>
-                          </div>
-                        );
-                      })}
+                      {/* Pick number */}
+                      <span className="text-[9px] font-black text-muted-foreground/20 tabular-nums leading-none">
+                        {round}.{String(slot.slot).padStart(2, '0')}
+                      </span>
+
+                      {/* Effective owner */}
+                      <Avatar avatarId={pick?.avatar || null} size={28} className="rounded shrink-0" />
+                      <span className="text-[10px] font-semibold text-foreground/80 text-center leading-tight line-clamp-2 max-w-[88px]">
+                        {pick?.teamName ?? slot.teamName}
+                      </span>
+
+                      {/* Traded indicator */}
+                      {isTraded && (
+                        <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/40 text-center leading-tight">
+                          via {pick!.tradedFrom!.teamName}
+                        </span>
+                      )}
+
+                      {/* Own pick subtle indicator */}
+                      {!isTraded && (
+                        <span className="text-[7px] text-muted-foreground/20 font-medium">#{pickNo}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -649,32 +653,34 @@ function UpcomingDraft({ draft }: { draft: EnrichedDraft }) {
         </div>
       )}
 
-      {/* Draft order */}
-      {draft.orderSet && draft.slots.length > 0 && (
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-4">Draft Order</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {draft.slots.map((slot, i) => (
-              <motion.div
-                key={slot.slot}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04, duration: 0.25 }}
-                className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-2.5 text-center"
-              >
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
-                  <span className="text-[10px] font-black text-primary">{slot.slot}</span>
-                </div>
-                <Avatar avatarId={slot.avatar || null} size={40} />
-                <p className="text-xs font-semibold text-foreground leading-tight">{slot.teamName}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+      {/* Draft order and board only shown once the draft is live or complete */}
+      {isLive && (
+        <>
+          {draft.orderSet && draft.slots.length > 0 && (
+            <div>
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-4">Draft Order</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {draft.slots.map((slot, i) => (
+                  <motion.div
+                    key={slot.slot}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04, duration: 0.25 }}
+                    className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-2.5 text-center"
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+                      <span className="text-[10px] font-black text-primary">{slot.slot}</span>
+                    </div>
+                    <Avatar avatarId={slot.avatar || null} size={40} />
+                    <p className="text-xs font-semibold text-foreground leading-tight">{slot.teamName}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+          <UpcomingDraftBoard draft={draft} />
+        </>
       )}
-
-      {/* Pick ownership board — shows where traded picks landed */}
-      <UpcomingDraftBoard draft={draft} />
 
       {/* Keepers */}
       {keepers.length > 0 && (
