@@ -421,7 +421,7 @@ export default function EnhancedHistoryView() {
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-foreground truncate">{champion.username}</span>
+                                <span className="font-bold text-foreground break-words">{champion.username}</span>
                                 {champCount > 1 && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
                                     {champCount}× Champ
