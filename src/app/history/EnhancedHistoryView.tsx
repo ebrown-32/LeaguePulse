@@ -394,10 +394,10 @@ export default function EnhancedHistoryView() {
                         }`}
                       >
                         {/* Info row */}
-                        <div className="flex items-center gap-4 md:gap-5 px-5 py-4 md:py-5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-4 md:gap-5 px-3 sm:px-5 py-4 md:py-5 flex-1 min-w-0">
                           {/* Year */}
-                          <div className="w-14 shrink-0 text-center">
-                            <div className={`font-display text-2xl font-bold leading-none ${isMostRecent ? 'text-amber-500' : 'text-foreground'}`}>
+                          <div className="w-10 sm:w-14 shrink-0 text-center">
+                            <div className={`font-display text-base sm:text-2xl font-bold leading-none ${isMostRecent ? 'text-amber-500' : 'text-foreground'}`}>
                               {champion.season}
                             </div>
                             {isMostRecent && (
@@ -408,11 +408,11 @@ export default function EnhancedHistoryView() {
                           <div className="w-px h-10 bg-border shrink-0" />
 
                           {/* Champion avatar + name */}
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                             <div className="relative shrink-0">
                               <Avatar
                                 avatarId={champion.avatar}
-                                size={44}
+                                size={36}
                                 className={`rounded-xl ${isMostRecent ? 'ring-2 ring-amber-500/40' : ''}`}
                               />
                               <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow">
