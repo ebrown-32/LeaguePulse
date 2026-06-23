@@ -32,8 +32,6 @@ type Tab = 'managers' | 'champions' | 'records' | 'activity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Seasons that have a ring model in /public/models/rings/
-const RING_SEASONS = new Set(['2024', '2025', '2026']);
 
 const RECORD_CATEGORIES = [
   { type: 'highScore',          label: 'Highest Score',    icon: Flame,              unit: 'pts',    higher: true  },
@@ -69,7 +67,8 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function EnhancedHistoryView() {
+export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?: string[] }) {
+  const RING_SEASONS = new Set(ringSeasons);
   const [loading, setLoading]                       = useState(true);
   const [error, setError]                           = useState<string | null>(null);
   const [historyData, setHistoryData]               = useState<EnhancedLeagueHistory | null>(null);
