@@ -46,11 +46,14 @@ cd LeaguePulse
 npm install
 ```
 
-Create a file named `.env.local` in the project folder with this line:
+Create a file named `.env.local` in the project folder:
 
 ```
 NEXT_PUBLIC_LEAGUE_ID=your_sleeper_league_id
+NEXT_PUBLIC_MIXPANEL_TOKEN=your_mixpanel_project_token
 ```
+
+`NEXT_PUBLIC_MIXPANEL_TOKEN` is optional. If omitted, analytics are silently disabled.
 
 Then start the app:
 
