@@ -263,3 +263,107 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* ─────────────────────────────────────────────
+   CONSTITUTION PROSE
+   Scoped to .prose-section so it doesn't bleed
+───────────────────────────────────────────── */
+.prose-section p {
+  color: hsl(var(--foreground) / 0.82);
+  line-height: 1.75;
+  margin-bottom: 0.875rem;
+  font-size: 0.9375rem;
+}
+.prose-section strong {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.prose-section em {
+  color: hsl(var(--foreground) / 0.75);
+}
+.prose-section a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-section ul {
+  list-style: disc;
+  padding-left: 1.4rem;
+  margin-bottom: 0.875rem;
+  space-y: 0.25rem;
+}
+.prose-section ol {
+  list-style: decimal;
+  padding-left: 1.4rem;
+  margin-bottom: 0.875rem;
+}
+.prose-section li {
+  color: hsl(var(--foreground) / 0.82);
+  line-height: 1.7;
+  margin-bottom: 0.25rem;
+  font-size: 0.9375rem;
+}
+.prose-section hr {
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.5rem 0;
+}
+.prose-section blockquote {
+  border-left: 3px solid hsl(var(--primary) / 0.5);
+  padding-left: 1rem;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+  margin: 1rem 0;
+}
+.prose-section table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+.prose-section thead tr {
+  background: hsl(var(--muted));
+}
+.prose-section thead th {
+  text-align: left;
+  padding: 0.6rem 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.prose-section tbody tr {
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+.prose-section tbody tr:last-child {
+  border-bottom: none;
+}
+.prose-section tbody tr:nth-child(even) {
+  background: hsl(var(--muted) / 0.3);
+}
+.prose-section td {
+  padding: 0.6rem 0.875rem;
+  color: hsl(var(--foreground) / 0.82);
+  vertical-align: top;
+}
+.prose-section code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8em;
+  background: hsl(var(--muted));
+  color: hsl(var(--primary));
+  padding: 0.15em 0.4em;
+  border-radius: 0.25rem;
+}
+/* Search highlight */
+.prose-section mark,
+mark {
+  background: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+  border-radius: 2px;
+  padding: 0 2px;
+}

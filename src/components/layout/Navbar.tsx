@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,9 @@ import {
   Newspaper,
   Receipt,
   ClipboardList,
+  Scroll,
+  Sword,
+  ChevronDown,
   Menu,
   X,
 } from 'lucide-react';
@@ -25,15 +28,22 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const navigation: NavItem[] = [
-  { name: 'Overview',      href: '/',             icon: LayoutDashboard },
-  { name: 'Matchups',      href: '/matchups',     icon: Swords          },
-  { name: 'Transactions',  href: '/transactions', icon: Receipt         },
-  { name: 'Drafts',        href: '/drafts',       icon: ClipboardList   },
-  { name: 'History',       href: '/history',      icon: Database        },
-  { name: 'Next Gen',      href: '/next-gen',     icon: Activity        },
-  { name: 'Media',         href: '/media',        icon: Newspaper       },
+const PRIMARY_NAV: NavItem[] = [
+  { name: 'Overview',  href: '/',          icon: LayoutDashboard },
+  { name: 'Matchups',  href: '/matchups',  icon: Swords          },
+  { name: 'Rivalries', href: '/rivalries', icon: Sword           },
+  { name: 'Next Gen',  href: '/next-gen',  icon: Activity        },
+  { name: 'History',   href: '/history',   icon: Database        },
 ];
+
+const MORE_NAV: NavItem[] = [
+  { name: 'Transactions', href: '/transactions', icon: Receipt      },
+  { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
+  { name: 'Media',        href: '/media',        icon: Newspaper    },
+  { name: 'Constitution', href: '/constitution', icon: Scroll       },
+];
+
+const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 interface NavbarProps {
   logoUrl?: string | null;
@@ -42,9 +52,11 @@ interface NavbarProps {
 
 export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
   const pathname  = usePathname();
-  const [isOpen,   setIsOpen]   = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [mounted,  setMounted]  = useState(false);
+  const [isOpen,    setIsOpen]    = useState(false);
+  const [moreOpen,  setMoreOpen]  = useState(false);
+  const [scrolled,  setScrolled]  = useState(false);
+  const [mounted,   setMounted]   = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -54,7 +66,21 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
-  useEffect(() => { setIsOpen(false); }, [pathname]);
+  useEffect(() => { setIsOpen(false); setMoreOpen(false); }, [pathname]);
+
+  // Close "More" dropdown on outside click
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [moreOpen]);
+
+  const isMoreActive = MORE_NAV.some(item => pathname === item.href);
 
   const navbarClass = cn(
     'sticky top-0 z-50 w-full',
@@ -90,7 +116,6 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
   return (
     <>
       <header className={navbarClass}>
-        {/* Subtle gradient line at top */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
         <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -114,7 +139,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
 
           {/* Desktop nav */}
           <div className="hidden md:flex md:items-center md:gap-1">
-            {navigation.map((item) => {
+            {PRIMARY_NAV.map(item => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -122,9 +147,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                   href={item.href}
                   className={cn(
                     'group relative flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold uppercase tracking-widest rounded-md transition-colors',
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground hover:text-foreground',
+                    isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   <item.icon className="h-3.5 w-3.5 shrink-0" />
@@ -146,6 +169,65 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                 </Link>
               );
             })}
+
+            {/* More dropdown */}
+            <div ref={moreRef} className="relative">
+              <button
+                onClick={() => setMoreOpen(o => !o)}
+                className={cn(
+                  'relative flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold uppercase tracking-widest rounded-md transition-colors',
+                  isMoreActive || moreOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {isMoreActive && (
+                  <>
+                    <motion.span
+                      layoutId="nav-pill"
+                      className="absolute inset-0 rounded-md bg-primary/8 dark:bg-primary/10"
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                    />
+                    <motion.span
+                      layoutId="nav-underline"
+                      className="absolute bottom-0 inset-x-3 h-px bg-primary rounded-full"
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                    />
+                  </>
+                )}
+                <span className="relative">More</span>
+                <ChevronDown className={cn('relative h-3 w-3 transition-transform duration-200', moreOpen && 'rotate-180')} />
+              </button>
+
+              <AnimatePresence>
+                {moreOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0,  scale: 1    }}
+                    exit={{    opacity: 0, y: -4, scale: 0.97 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-card/95 backdrop-blur-xl shadow-lg py-1.5 z-50"
+                  >
+                    {MORE_NAV.map(item => {
+                      const isActive = pathname === item.href;
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className={cn(
+                            'flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold uppercase tracking-widest transition-colors',
+                            isActive
+                              ? 'text-primary bg-primary/8'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                          )}
+                        >
+                          <item.icon className="h-3.5 w-3.5 shrink-0" />
+                          {item.name}
+                        </Link>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Right controls */}
@@ -153,11 +235,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="
-                inline-flex h-8 w-8 items-center justify-center rounded-md
-                border border-border/60 bg-card/80 text-muted-foreground
-                hover:text-foreground hover:border-border md:hidden
-              "
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-card/80 text-muted-foreground hover:text-foreground hover:border-border md:hidden"
               aria-label="Toggle menu"
             >
               {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -166,24 +244,19 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
         </nav>
       </header>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — all items */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: 1, y: 0  }}
             exit={{    opacity: 0, y: -6 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="
-              fixed inset-x-0 top-16 z-40 md:hidden
-              border-b border-border/60 bg-background/95 backdrop-blur-xl
-              shadow-[0_8px_32px_-4px_hsl(0_0%_0%/0.4)]
-            "
+            className="fixed inset-x-0 top-16 z-40 md:hidden border-b border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-4px_hsl(0_0%_0%/0.4)]"
           >
-            {/* Gradient separator */}
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
             <nav className="mx-auto max-w-7xl px-4 py-3 flex flex-col gap-0.5">
-              {navigation.map((item) => {
+              {ALL_NAV.map(item => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
