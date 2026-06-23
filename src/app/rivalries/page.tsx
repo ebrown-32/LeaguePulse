@@ -2,19 +2,27 @@ import { Sword } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import RivalryView from './RivalryView';
+import { fetchRivalriesData } from '@/lib/rivalries';
 import type { RivalriesResponse } from '@/app/api/rivalries/route';
+import { INITIAL_LEAGUE_ID } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RivalriesPage() {
+  if (!INITIAL_LEAGUE_ID) {
+    return (
+      <ErrorMessage
+        title="Failed to Load Rivalries"
+        message="No league configured"
+      />
+    );
+  }
+
   let data: RivalriesResponse | null = null;
   let errorMsg: string | null = null;
 
   try {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const res  = await fetch(`${base}/api/rivalries`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`API error ${res.status}`);
-    data = await res.json();
+    data = await fetchRivalriesData();
   } catch (err) {
     errorMsg = err instanceof Error ? err.message : 'Failed to load rivalry data';
   }
