@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Minus, Trophy, Sword, ArrowLeftRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import type { Manager, H2HEntry, GameRecord, TradeRecord, RivalriesResponse } from '@/app/api/rivalries/route';
+import { track } from '@/lib/mixpanel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -363,7 +364,14 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
 
   const openDetail = (me: Manager, them: Manager) => {
     const entry = h2h[me.userId]?.[them.userId];
-    if (entry) setDetail({ me, them, entry, tradeHistory: trades?.[me.userId]?.[them.userId] ?? [] });
+    if (!entry) return;
+    track('rivalry_drilldown_opened', {
+      team_a: me.teamName,
+      team_b: them.teamName,
+      record: `${entry.wins}-${entry.losses}`,
+      total_games: entry.wins + entry.losses,
+    });
+    setDetail({ me, them, entry, tradeHistory: trades?.[me.userId]?.[them.userId] ?? [] });
   };
 
   return (

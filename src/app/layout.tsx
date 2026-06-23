@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ThemeInjector } from '@/components/ThemeInjector';
 import { getTheme } from '@/lib/themeStorage';
+import Analytics from '@/components/analytics/Analytics';
 
 const displayFont = Space_Grotesk({
   subsets:  ['latin'],
@@ -43,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       >
         <ThemeInjector />
         <ThemeProvider>
+          <Analytics />
           <div className="flex min-h-screen flex-col">
             <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName} />
             <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
