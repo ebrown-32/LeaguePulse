@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Scroll,
   Sword,
+  Shuffle,
   ChevronDown,
   Menu,
   X,
@@ -37,6 +38,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
+  { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
   { name: 'Media',        href: '/media',        icon: Newspaper    },
@@ -244,7 +246,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
         </nav>
       </header>
 
-      {/* Mobile drawer — all items */}
+      {/* Mobile drawer, all items */}
       <AnimatePresence>
         {isOpen && (
           <motion.div

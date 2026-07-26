@@ -10,7 +10,7 @@ import {
 
 const BASE_URL = 'https://api.sleeper.app/v1';
 
-// Cache for league IDs — TTL of 1 hour so warm serverless instances pick up
+// Cache for league IDs, TTL of 1 hour so warm serverless instances pick up
 // newly linked seasons (e.g. a new pre-draft league) without waiting for a cold start.
 let leagueIdsCache: Record<string, { ids: string[]; ts: number }> = {};
 const LEAGUE_IDS_TTL_MS = 3_600_000; // 1 h
@@ -40,7 +40,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
       return [leagueId];
     }
 
-    // Traverse forward through future seasons iteratively — a single hop isn't enough
+    // Traverse forward through future seasons iteratively, a single hop isn't enough
     // if the configured NEXT_PUBLIC_LEAGUE_ID is more than one season behind the latest.
     let forwardId = leagueId;
     const forwardVisited = new Set<string>();

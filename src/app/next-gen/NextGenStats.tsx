@@ -346,7 +346,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
                     {team?.teamName}
                   </p>
                   <p className="text-xs text-primary">
-                    {team ? sub(team) : '—'}
+                    {team ? sub(team) : '-'}
                   </p>
                 </div>
               </div>

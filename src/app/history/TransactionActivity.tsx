@@ -9,7 +9,7 @@ import Avatar from '@/components/ui/Avatar';
 import type { EnrichedTransaction } from '@/app/api/transactions/route';
 import type { EnhancedLeagueHistory } from '@/lib/enhancedHistoryApi';
 
-// ── Chart palette — solid colors read from CSS vars injected by ThemeInjector ─
+// ── Chart palette: solid colors read from CSS vars injected by ThemeInjector ──
 
 const FALLBACK = { trade: '#f59e0b', waiver: '#38bdf8', freeAgent: '#34d399' };
 
@@ -320,19 +320,19 @@ export default function TransactionActivity({ historyData }: Props) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <InsightCard
           label="Most Active"
-          value={topManager?.username ?? '—'}
+          value={topManager?.username ?? '-'}
           sub={`${topManager?.total ?? 0} total moves`}
           avatar={topManager?.avatar}
         />
         <InsightCard
           label="Top Trader"
-          value={mostTrader?.username ?? '—'}
+          value={mostTrader?.username ?? '-'}
           sub={`${mostTrader?.trades ?? 0} trades made`}
           avatar={mostTrader?.avatar}
         />
         <InsightCard
           label="Waiver King"
-          value={mostWaiver?.username ?? '—'}
+          value={mostWaiver?.username ?? '-'}
           sub={`${(mostWaiver?.waivers ?? 0) + (mostWaiver?.freeAgents ?? 0)} pickups`}
           avatar={mostWaiver?.avatar}
         />

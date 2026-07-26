@@ -10,7 +10,7 @@ import { track } from '@/lib/mixpanel';
 
 function winPctLabel(wins: number, losses: number) {
   const total = wins + losses;
-  if (total === 0) return '—';
+  if (total === 0) return '-';
   return `${((wins / total) * 100).toFixed(0)}%`;
 }
 
@@ -22,7 +22,7 @@ function avg(pts: number, games: number) {
   return games === 0 ? 0 : pts / games;
 }
 
-// ── Cell intensity — based on lopsidedness, not direction ────────────────────
+// ── Cell intensity: based on lopsidedness, not direction ─────────────────────
 // Returns the same value for [A][B] and [B][A] so the matrix is symmetric.
 // 0 = perfectly even, 1 = completely one-sided.
 
@@ -160,7 +160,7 @@ function DetailPanel({
                     return (
                       <div key={i} className="text-xs rounded-lg border border-border/50 bg-muted/20 p-3">
                         <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                          {trade.season} — Week {trade.week}
+                          {trade.season}, Week {trade.week}
                         </div>
                         <div className="space-y-1.5">
                           {[
@@ -177,7 +177,7 @@ function DetailPanel({
                                 <span className="font-semibold text-foreground truncate max-w-[90px] shrink-0">{label}</span>
                                 <span className="text-muted-foreground">received:</span>
                                 <span className="text-foreground">
-                                  {assets.length > 0 ? assets.join(', ') : '—'}
+                                  {assets.length > 0 ? assets.join(', ') : '-'}
                                 </span>
                               </div>
                             );
@@ -222,7 +222,7 @@ function MatrixCell({
     return <td className="border border-border/30 w-20 h-14 bg-muted/20" />;
   }
   if (!entry || entry.wins + entry.losses === 0) {
-    return <td className="border border-border/30 w-20 h-14 text-center text-muted-foreground/30 text-xs">—</td>;
+    return <td className="border border-border/30 w-20 h-14 text-center text-muted-foreground/30 text-xs">-</td>;
   }
   const { bg, text } = cellStyle(entry.wins, entry.losses);
   const isEven  = entry.wins === entry.losses;

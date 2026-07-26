@@ -35,7 +35,7 @@ export interface LeagueSettings {
   waiverDayOfWeek: number;
   maxKeepers: number;
   draftRounds: number;
-  draftType: string | null;  // 'snake' | 'linear' | 'auction' — from draft object
+  draftType: string | null;  // 'snake' | 'linear' | 'auction', from draft object
   reserveSlots: number;
   taxiSlots: number;
   taxiDeadline: number;

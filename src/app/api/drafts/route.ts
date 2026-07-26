@@ -87,7 +87,7 @@ function buildSlots(rawDraft: any, rosters: any[], users: any[]): { slots: Draft
   const slots: DraftTeamSlot[] = [];
 
   if (!orderSet) {
-    // Draft order not yet set — assign rosters to slots in roster_id order so teams
+    // Draft order not yet set, assign rosters to slots in roster_id order so teams
     // at least appear on the board rather than showing "Team 1…N" placeholders.
     const sortedRosters = [...rosters].sort((a, b) => a.roster_id - b.roster_id).slice(0, numTeams);
     for (let i = 0; i < sortedRosters.length; i++) {
@@ -143,7 +143,7 @@ function enrichTradedFuturePicks(
 ): TradedFuturePick[] {
   const slotByRosterId = new Map(slots.map(s => [s.rosterId, s]));
 
-  // Sleeper returns the full transaction history — one entry per trade, not per pick.
+  // Sleeper returns the full transaction history, one entry per trade, not per pick.
   // Group by (round, owner_id): owner_id is always the ORIGINAL roster (the draft slot position),
   // preserved across re-trades.
   const groups = new Map<string, any[]>();

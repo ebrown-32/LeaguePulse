@@ -306,7 +306,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               )}
                             </>
                           ) : (
-                            <span className="text-muted-foreground/30 text-sm">—</span>
+                            <span className="text-muted-foreground/30 text-sm">-</span>
                           )}
                         </div>
 
@@ -357,7 +357,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         <div className="grid grid-cols-2 gap-3">
                           <StatPill
                             label="Titles"
-                            value={manager.championships > 0 ? String(manager.championships) : '—'}
+                            value={manager.championships > 0 ? String(manager.championships) : '-'}
                           />
                           <StatPill label="Avg Pts" value={formatPoints(manager.averagePointsPerGame)} />
                         </div>
@@ -461,7 +461,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                           )}
                         </div>
 
-                        {/* 3D ring — full-height right column */}
+                        {/* 3D ring: full-height right column */}
                         {RING_SEASONS.has(champion.season) && (
                           <div className="w-36 md:w-44 shrink-0 border-l border-border/40">
                             <ChampionRing modelPath={ringPath} height={160} />

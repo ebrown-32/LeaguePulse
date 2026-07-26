@@ -51,7 +51,7 @@ function MembershipSection({ s }: { s: LeagueSettings }) {
       <Row label="Teams"        value={String(s.numTeams)} />
       <Row label="League type"  value={LEAGUE_TYPE_LABELS[s.leagueType] ?? String(s.leagueType)} />
       <Row label="Season"       value={s.season} />
-      {s.leagueAverageMatch && <Row label="Median matchup" value="Enabled — each team also plays the weekly median score" />}
+      {s.leagueAverageMatch && <Row label="Median matchup" value="Enabled: each team also plays the weekly median score" />}
     </AutoSection>
   );
 }
@@ -412,7 +412,7 @@ export default function ConstitutionView({ meta, markdownSections, leagueSetting
 
   return (
     <div className="flex gap-8 items-start">
-      {/* Sidebar ToC — desktop */}
+      {/* Sidebar ToC: desktop */}
       <aside className="hidden lg:block w-64 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
         <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 px-3">Contents</div>
         <TableOfContents items={tocItems} activeId={activeId} onNavigate={scrollTo} />
@@ -482,7 +482,7 @@ export default function ConstitutionView({ meta, markdownSections, leagueSetting
 
         {/* Content */}
         <div ref={contentRef} className="space-y-0">
-          {/* Auto sections from Sleeper — hidden during search */}
+          {/* Auto sections from Sleeper: hidden during search */}
           {leagueSettings && !query.trim() && (
             <>
               <MembershipSection  s={leagueSettings} />

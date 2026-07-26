@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────
-   DESIGN TOKENS  — "Signal" design system
+   DESIGN TOKENS: "Signal" design system
    Light  = :root
    Dark   = .dark   (class set by next-themes)
 ───────────────────────────────────────────── */
@@ -41,11 +41,11 @@
   }
 
   .dark {
-    /* Accent — electric sky blue */
+    /* Accent: electric sky blue */
     --primary:            194 100% 54%;
     --primary-foreground: 222  40%  4%;
 
-    /* Backgrounds — deep space */
+    /* Backgrounds: deep space */
     --background:         222  40%  3%;   /* #050912 near-black with blue cast */
     --foreground:         210  20% 92%;   /* cool white */
     --card:               220  32%  6%;   /* #0a1020 */
@@ -142,12 +142,12 @@
    GLOW UTILITIES
 ───────────────────────────────────────────── */
 @layer utilities {
-  /* Text glow — primary accent */
+  /* Text glow: primary accent */
   .text-glow {
     text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
   }
 
-  /* Card hover glow — applied to .card-hover elements in dark mode */
+  /* Card hover glow: applied to .card-hover elements in dark mode */
   .dark .card-glow {
     transition: border-color 200ms ease, box-shadow 200ms ease;
   }

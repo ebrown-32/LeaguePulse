@@ -122,7 +122,7 @@ function formatWeekDisplay(status: string, week: number | null): string {
     case 'preseason':   return 'Preseason';
     case 'in_season':
     case 'post_season': return `Week ${getDefaultValue(week, 0)}`;
-    default:            return '—';
+    default:            return '-';
   }
 }
 

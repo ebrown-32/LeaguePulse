@@ -21,7 +21,7 @@ function summarize(tx: EnrichedTransaction): string {
     if (!a || !b) return 'Trade executed';
     const aGets = [...a.adds.map(p => p.name), ...a.picksIn.map(p => `'${p.season.slice(2)} R${p.round} pick`)].slice(0, 2).join(', ');
     const bGets = [...b.adds.map(p => p.name), ...b.picksIn.map(p => `'${p.season.slice(2)} R${p.round} pick`)].slice(0, 2).join(', ');
-    return `${a.teamName} gets ${aGets || '—'} · ${b.teamName} gets ${bGets || '—'}`;
+    return `${a.teamName} gets ${aGets || '-'} · ${b.teamName} gets ${bGets || '-'}`;
   }
   const side = tx.sides[0];
   if (!side) return 'Transaction';
