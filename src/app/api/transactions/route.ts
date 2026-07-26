@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const BASE = 'https://api.sleeper.app/v1';
 
-// Module-level cache for the 19MB players blob — too large for Next.js data cache (2MB limit).
+// Module-level cache for the 19MB players blob, too large for Next.js data cache (2MB limit).
 // Survives across requests within the same serverless function instance.
 let playersCache: { data: Record<string, any>; ts: number } | null = null;
 const PLAYERS_TTL_MS = 86_400_000; // 24 h
@@ -157,7 +157,7 @@ export async function GET() {
       // Active season: same cap. Completed seasons: through week 22 to capture playoffs.
       const maxWeek = (isOffseason || isActive) ? Math.max(1, currentNFLWeek) : 22;
 
-      // Completed seasons never change — cache aggressively. Current/offseason leagues must
+      // Completed seasons never change, cache aggressively. Current/offseason leagues must
       // always hit Sleeper fresh so new transactions appear immediately (no-store bypasses
       // the Next.js Data Cache which can survive redeployments).
       const fetchOpts: RequestInit = (isActive || isOffseason)

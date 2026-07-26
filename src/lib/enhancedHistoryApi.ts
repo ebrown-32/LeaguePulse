@@ -1012,7 +1012,7 @@ async function generateWinLossStreaks(
         }
       });
     } catch {
-      // League data unavailable (deleted/private) — skip streak for this season
+      // League data unavailable (deleted/private), skip streak for this season
     }
   }
 

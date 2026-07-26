@@ -142,7 +142,7 @@ function PickCell({
             </span>
           </>
         ) : (
-          <span className="text-[10px] text-muted-foreground/15 select-none">—</span>
+          <span className="text-[10px] text-muted-foreground/15 select-none">-</span>
         )}
       </div>
     );
@@ -501,7 +501,7 @@ function UpcomingDraftBoard({ draft }: { draft: EnrichedDraft }) {
         tradedFrom: { teamName: tp.fromTeamName, avatar: tp.fromAvatar },
       };
       // The to-slot keeps their own pick; mark it as "also has received pick" via tradedFrom on fromSlot only
-      // (no change to matrix[r][tp.toSlot] — their own pick stays as-is)
+      // (no change to matrix[r][tp.toSlot]; their own pick stays as-is)
       void fromSlotTeam; // suppress unused warning
     }
 
@@ -528,7 +528,7 @@ function UpcomingDraftBoard({ draft }: { draft: EnrichedDraft }) {
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: draft.teams * colMinPx + labelColPx }}>
-            {/* Column headers — original slot positions */}
+            {/* Column headers: original slot positions */}
             <div
               className="grid border-b border-border bg-card/80 sticky top-0 z-10"
               style={{ gridTemplateColumns: `${labelColPx}px repeat(${draft.teams}, minmax(${colMinPx}px, 1fr))` }}

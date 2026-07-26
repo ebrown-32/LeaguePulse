@@ -11,7 +11,7 @@ import type { EnrichedTransaction, PlayerSummary, DraftPickSummary, Transactions
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-// CSS-variable-driven config — colors injected by ThemeInjector server component.
+// CSS-variable-driven config, colors injected by ThemeInjector server component.
 const TYPE_CONFIG = {
   trade:      { label: 'Trade',      Icon: ArrowLeftRight, v: '--tx-trade'  },
   waiver:     { label: 'Waiver',     Icon: Gavel,          v: '--tx-waiver' },
@@ -108,7 +108,7 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
                 </div>
               ))}
               {side.adds.length === 0 && side.picksIn.length === 0 && (
-                <span className="text-xs text-muted-foreground/30 italic">—</span>
+                <span className="text-xs text-muted-foreground/30 italic">-</span>
               )}
             </div>
           </div>
