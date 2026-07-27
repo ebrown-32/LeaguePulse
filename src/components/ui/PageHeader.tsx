@@ -12,7 +12,7 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, icon, action, className }: PageHeaderProps) {
   return (
     <div className={cn('flex items-start justify-between gap-3 sm:gap-4', className)}>
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
         {/* Icon with glow ring */}
         <div className="relative shrink-0">
           <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
@@ -25,7 +25,7 @@ export function PageHeader({ title, subtitle, icon, action, className }: PageHea
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted-foreground truncate tracking-wide">
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted-foreground tracking-wide">
               {subtitle}
             </p>
           )}

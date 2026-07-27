@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import {
-  Shuffle, TrendingUp, TrendingDown, Minus, ChevronDown, Flame, Feather,
-  Waves, Anchor, ArrowRight, ArrowRightLeft, Sparkles, Grid3x3, ListTree, Info, HelpCircle,
-} from 'lucide-react';
+import { ChevronDown, ArrowRightLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -31,12 +28,31 @@ function cellFor(season: SeasonScheduleData, myRosterId: number, scheduleRosterI
   return season.matrix[String(myRosterId)]?.find(c => c.scheduleOwnerRosterId === scheduleRosterId);
 }
 
-/** Where `rosterId` would rank if their record were swapped in, everyone else held constant. */
+/**
+ * Where `rosterId` would rank if their record were swapped in, everyone else held constant.
+ *
+ * `w/l/t` here are always the head-to-head-only record from a matrix cell. Real
+ * Sleeper standings, though, rank on the *official* record, which folds in a
+ * bonus win/loss against the weekly league average for leagues that use it. That
+ * median component is opponent-independent, so it doesn't change with a schedule
+ * swap: we add the team's own (constant) median delta to their hypothetical H2H
+ * record, and rank every other team on their real official record, so the
+ * standing shown here always matches what the league would actually show. Points
+ * for is unaffected by median scoring (it's just the sum of a team's own weekly
+ * scores), so no adjustment is needed there.
+ */
 function standingRank(season: SeasonScheduleData, rosterId: number, w: number, l: number, t: number, pf: number): number {
+  const mySummary = season.summaries[String(rosterId)];
+  const medianWinDelta  = mySummary.officialWins   - mySummary.actualWins;
+  const medianLossDelta = mySummary.officialLosses - mySummary.actualLosses;
+  const medianTieDelta  = mySummary.officialTies   - mySummary.actualTies;
+
   const rows = season.teams.map(team => {
-    if (team.rosterId === rosterId) return { rosterId, w, l, t, pf };
+    if (team.rosterId === rosterId) {
+      return { rosterId, w: w + medianWinDelta, l: l + medianLossDelta, t: t + medianTieDelta, pf };
+    }
     const s = season.summaries[String(team.rosterId)];
-    return { rosterId: team.rosterId, w: s.actualWins, l: s.actualLosses, t: s.actualTies, pf: s.actualPointsFor };
+    return { rosterId: team.rosterId, w: s.officialWins, l: s.officialLosses, t: s.officialTies, pf: s.actualPointsFor };
   });
   rows.sort((a, b) => (winPct(b.w, b.l, b.t) - winPct(a.w, a.l, a.t)) || (b.pf - a.pf));
   return rows.findIndex(r => r.rosterId === rosterId) + 1;
@@ -75,8 +91,7 @@ function DifficultyStrip({ season, rosterId }: { season: SeasonScheduleData; ros
   );
 }
 
-function StatTile({ icon: Icon, label, team, value, sub, onClick }: {
-  icon: React.ComponentType<{ className?: string }>;
+function StatTile({ label, team, value, sub, onClick }: {
   label: string;
   team: ScheduleTeam;
   value: string;
@@ -90,18 +105,15 @@ function StatTile({ icon: Icon, label, team, value, sub, onClick }: {
       onClick={onClick}
       className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40"
     >
-      <div className="mb-2.5 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
-        <Icon className="h-3 w-3 text-primary/70" />
+      <div className="mb-2.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
         {label}
       </div>
       <div className="mb-1 flex items-center gap-2 min-w-0">
         <Avatar avatarId={team.avatar} size={22} className="rounded shrink-0" />
         <span className="truncate text-sm font-semibold text-foreground">{team.teamName}</span>
       </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xl font-bold tabular-nums text-foreground">{value}</span>
-        <span className="truncate text-[10px] text-muted-foreground/60">{sub}</span>
-      </div>
+      <span className="text-xl font-bold tabular-nums text-foreground">{value}</span>
+      <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground/60">{sub}</p>
     </motion.button>
   );
 }
@@ -198,7 +210,7 @@ function Simulator({
                   </p>
                 )}
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+              <span className="text-muted-foreground/40 shrink-0">&rarr;</span>
               <div className="text-center">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-primary/70">
                   {isActual ? 'Same' : 'Hypothetical'}
@@ -212,10 +224,9 @@ function Simulator({
           {!isActual && (
             <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border/40 pt-3 text-[11px]">
               <span className="flex items-center gap-1.5">
-                {winDelta > 0 ? <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-                  : winDelta < 0 ? <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
-                  : <Minus className="h-3.5 w-3.5 text-muted-foreground" />}
-                <span className="font-semibold text-foreground">{winDelta > 0 ? '+' : ''}{winDelta.toFixed(1)} wins</span>
+                <span className={cn('font-semibold', winDelta > 0 ? 'text-emerald-400' : winDelta < 0 ? 'text-rose-400' : 'text-foreground')}>
+                  {winDelta > 0 ? '+' : ''}{winDelta.toFixed(1)} wins
+                </span>
                 <span className="text-muted-foreground/60">vs actual</span>
               </span>
               <span className="flex items-center gap-1.5 text-muted-foreground/70">
@@ -367,9 +378,9 @@ function LeaderboardRow({ season, sm, expanded, onToggle, onSimulate }: {
                 </div>
                 <button
                   onClick={onSimulate}
-                  className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
+                  className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
                 >
-                  <Shuffle className="h-3 w-3" /> Try a different schedule
+                  Try a different schedule
                 </button>
               </div>
               <div className="overflow-x-auto rounded-lg border border-border/50">
@@ -475,9 +486,8 @@ function MatrixGrid({ season, onCellClick }: { season: SeasonScheduleData; onCel
           ))}
         </tbody>
       </table>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/30 p-3 text-[11px] text-muted-foreground">
-        <Grid3x3 className="h-3.5 w-3.5 text-primary/60 shrink-0" />
-        <span>Each row is one team&apos;s scores replayed against every team&apos;s schedule (columns). Darker = more wins. Ringed cell = what actually happened. Click any cell to open it in the simulator.</span>
+      <div className="border-t border-border/30 p-3 text-[11px] text-muted-foreground">
+        Each row is one team&apos;s scores replayed against every team&apos;s schedule (columns). Darker = more wins. Ringed cell = what actually happened. Click any cell to open it in the simulator.
       </div>
     </div>
   );
@@ -494,10 +504,10 @@ function LedgerTeasers({ season, onPick }: { season: SeasonScheduleData; onPick:
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatTile icon={Flame} label="Toughest Schedule" team={teamOf(season, toughest.rosterId)} value={`${(toughest.opponentStrengthAvg * 100).toFixed(0)}%`} sub="avg weekly opp strength" onClick={() => onPick(toughest.rosterId)} />
-      <StatTile icon={Feather} label="Easiest Schedule" team={teamOf(season, easiest.rosterId)} value={`${(easiest.opponentStrengthAvg * 100).toFixed(0)}%`} sub="avg weekly opp strength" onClick={() => onPick(easiest.rosterId)} />
-      <StatTile icon={Waves} label="Most Schedule-Dependent" team={teamOf(season, dependent.rosterId)} value={`±${((dependent.maxWinsAcrossSchedules - dependent.minWinsAcrossSchedules) / 2).toFixed(1)}`} sub="win swing across all slates" onClick={() => onPick(dependent.rosterId)} />
-      <StatTile icon={Anchor} label="Most Slate-Proof" team={teamOf(season, proof.rosterId)} value={`±${((proof.maxWinsAcrossSchedules - proof.minWinsAcrossSchedules) / 2).toFixed(1)}`} sub="win swing across all slates" onClick={() => onPick(proof.rosterId)} />
+      <StatTile label="Toughest Schedule" team={teamOf(season, toughest.rosterId)} value={`${(toughest.opponentStrengthAvg * 100).toFixed(0)}%`} sub="avg weekly opp strength" onClick={() => onPick(toughest.rosterId)} />
+      <StatTile label="Easiest Schedule" team={teamOf(season, easiest.rosterId)} value={`${(easiest.opponentStrengthAvg * 100).toFixed(0)}%`} sub="avg weekly opp strength" onClick={() => onPick(easiest.rosterId)} />
+      <StatTile label="Most Schedule-Dependent" team={teamOf(season, dependent.rosterId)} value={`±${((dependent.maxWinsAcrossSchedules - dependent.minWinsAcrossSchedules) / 2).toFixed(1)}`} sub="win swing across all slates" onClick={() => onPick(dependent.rosterId)} />
+      <StatTile label="Most Slate-Proof" team={teamOf(season, proof.rosterId)} value={`±${((proof.maxWinsAcrossSchedules - proof.minWinsAcrossSchedules) / 2).toFixed(1)}`} sub="win swing across all slates" onClick={() => onPick(proof.rosterId)} />
     </div>
   );
 }
@@ -534,10 +544,7 @@ const METHODOLOGY: { term: string; body: string }[] = [
 function HowItWorks() {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <HelpCircle className="h-4 w-4 text-primary/70" />
-        <h3 className="font-display text-sm font-semibold text-foreground">How Schedule Lab Works</h3>
-      </div>
+      <h3 className="mb-4 font-display text-sm font-semibold text-foreground">How Schedule Lab Works</h3>
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
         {METHODOLOGY.map(({ term, body }) => (
           <div key={term}>
@@ -654,24 +661,12 @@ export default function ScheduleLabView() {
             )}
           </div>
 
-          {seasonData.hasMedianGames && (
-            <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground/60">
-              <Info className="h-3.5 w-3.5 shrink-0 mt-px text-muted-foreground/50" />
-              This league awards a bonus win/loss against the weekly league-average score.
-              Every calculation here uses real head-to-head matchups only, since a median game
-              has no opponent to swap, official records (including the median bonus) are shown
-              alongside for reference wherever a record appears.
-            </p>
-          )}
-
           <LedgerTeasers season={seasonData} onPick={id => jumpToSimulator(id, id)} />
 
           {/* Simulator */}
           <div ref={simRef} className="space-y-2 scroll-mt-20">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                <Shuffle className="h-3 w-3 text-primary/70" /> Schedule Swap Simulator
-              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Schedule Swap Simulator</span>
               <div className="h-px flex-1 bg-border/40" />
             </div>
             {simMy !== null && simSchedule !== null && (
@@ -688,9 +683,7 @@ export default function ScheduleLabView() {
           {/* Leaderboard */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                <ListTree className="h-3 w-3 text-primary/70" /> Strength of Schedule
-              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Strength of Schedule</span>
               <div className="h-px flex-1 bg-border/40" />
             </div>
             <div className="space-y-2">
@@ -710,9 +703,7 @@ export default function ScheduleLabView() {
           {/* Multiverse matrix */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                <Sparkles className="h-3 w-3 text-primary/70" /> The Schedule Multiverse
-              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">The Schedule Multiverse</span>
               <div className="h-px flex-1 bg-border/40" />
             </div>
             <MatrixGrid season={seasonData} onCellClick={(myId, schedId) => jumpToSimulator(myId, schedId)} />

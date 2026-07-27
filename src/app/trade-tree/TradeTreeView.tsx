@@ -53,8 +53,7 @@ function OutcomeBadge({ trade }: { trade: TradeTreeEntry }) {
   const { status, leaderRosterId, margin } = trade.outcome;
   if (status === 'pending') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        <Hourglass className="h-2.5 w-2.5" />
+      <span className="inline-flex items-center rounded border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         In Progress
       </span>
     );
@@ -71,7 +70,6 @@ function OutcomeBadge({ trade }: { trade: TradeTreeEntry }) {
       className="inline-flex items-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary"
       title="Points differential since the trade"
     >
-      <TrendingUp className="h-2.5 w-2.5" />
       +{margin.toFixed(1)} net
     </span>
   );
@@ -106,7 +104,7 @@ function JourneyTrail({ asset, onJumpToTrade }: { asset: AssetResult; onJumpToTr
   if (asset.journey.length === 0) {
     return (
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
-        <CircleDot className="h-3 w-3 text-primary/60 shrink-0" />
+        <span className="h-[11px] w-[11px] shrink-0 rounded-full border-2 border-primary bg-background" />
         {asset.fate}
       </div>
     );
