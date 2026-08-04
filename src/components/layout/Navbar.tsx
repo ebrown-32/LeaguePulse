@@ -139,8 +139,10 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             )}
           </Link>
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex md:items-center md:gap-1">
+          {/* Desktop nav — kicks in at lg (1024px), not md (768px), since md
+              lands right in iPad-portrait territory (768-834px) and the full
+              5-link row plus the More dropdown doesn't fit there. */}
+          <div className="hidden lg:flex lg:items-center lg:gap-1">
             {PRIMARY_NAV.map(item => {
               const isActive = pathname === item.href;
               return (
@@ -237,7 +239,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-card/80 text-muted-foreground hover:text-foreground hover:border-border md:hidden"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-card/80 text-muted-foreground hover:text-foreground hover:border-border lg:hidden"
               aria-label="Toggle menu"
             >
               {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -254,7 +256,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             animate={{ opacity: 1, y: 0  }}
             exit={{    opacity: 0, y: -6 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="fixed inset-x-0 top-16 z-40 md:hidden border-b border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-4px_hsl(0_0%_0%/0.4)]"
+            className="fixed inset-x-0 top-16 z-40 lg:hidden border-b border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-4px_hsl(0_0%_0%/0.4)]"
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
             <nav className="mx-auto max-w-7xl px-4 py-3 flex flex-col gap-0.5">
