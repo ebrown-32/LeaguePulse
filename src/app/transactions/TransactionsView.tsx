@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeftRight, Gavel, UserPlus, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { cn } from '@/lib/utils';
 import type { EnrichedTransaction, PlayerSummary, DraftPickSummary, TransactionsResponse } from '@/app/api/transactions/route';
@@ -94,10 +95,14 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
       <div className="grid grid-cols-2 divide-x divide-border/50">
         {[sideA, sideB].map(side => (
           <div key={side.rosterId} className="px-4 pb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Avatar avatarId={side.avatar} size={20} className="rounded shrink-0" />
-              <span className="text-xs font-semibold text-foreground leading-tight line-clamp-1">{side.teamName}</span>
-            </div>
+            <TeamLink
+              userId={side.userId}
+              teamName={side.teamName}
+              avatar={side.avatar}
+              avatarSize={20}
+              className="mb-2"
+              textClassName="text-xs font-semibold text-foreground leading-tight line-clamp-1"
+            />
             <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">Gets</p>
             <div className="space-y-0.5">
               {side.adds.map(p => <PlayerRow key={p.id} player={p} variant="neutral" />)}
@@ -118,9 +123,9 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
       {/* Extra sides (3-way trades) */}
       {tx.sides.slice(2).map(side => (
         <div key={side.rosterId} className="border-t border-border/40 px-4 py-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Avatar avatarId={side.avatar} size={20} className="rounded shrink-0" />
-            <span className="text-xs font-semibold text-foreground">{side.teamName} also gets</span>
+          <div className="flex items-center gap-1 mb-1.5">
+            <TeamLink userId={side.userId} teamName={side.teamName} avatar={side.avatar} avatarSize={20} textClassName="text-xs font-semibold text-foreground" />
+            <span className="text-xs font-semibold text-foreground">also gets</span>
           </div>
           <div className="space-y-0.5">
             {side.adds.map(p => <PlayerRow key={p.id} player={p} variant="neutral" />)}
@@ -166,10 +171,14 @@ function ActivityCard({ tx }: { tx: EnrichedTransaction }) {
             {formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
           </span>
         </div>
-        <div className="flex items-center gap-2 mb-2.5">
-          <Avatar avatarId={side.avatar} size={20} className="rounded shrink-0" />
-          <span className="text-sm font-semibold text-foreground">{side.teamName}</span>
-        </div>
+        <TeamLink
+          userId={side.userId}
+          teamName={side.teamName}
+          avatar={side.avatar}
+          avatarSize={20}
+          className="mb-2.5"
+          textClassName="text-sm font-semibold text-foreground"
+        />
         {side.adds.length > 0 && (
           <div className="space-y-0.5">
             {side.adds.map(p => <PlayerRow key={p.id} player={p} variant="add" />)}

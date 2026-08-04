@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import Avatar from '@/components/ui/Avatar';
 import {
   Trophy,
@@ -251,7 +252,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                   const repeat  = manager.championships > 1;
 
                   return (
-                    <div key={manager.userId}>
+                    <Link href={`/team/${manager.userId}`} key={manager.userId} className="block">
                       {/* Desktop row */}
                       <div className={`hidden md:flex items-center gap-3 px-4 py-4 rounded-xl border transition-colors ${
                         isGoat
@@ -362,7 +363,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                           <StatPill label="Avg Pts" value={formatPoints(manager.averagePointsPerGame)} />
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
@@ -407,7 +408,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                           <div className="w-px h-10 bg-border shrink-0" />
 
                           {/* Champion avatar + name */}
-                          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                          <Link href={`/team/${champion.userId}`} className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
                             <div className="relative shrink-0">
                               <Avatar
                                 avatarId={champion.avatar}
@@ -429,7 +430,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">League Champion</div>
                             </div>
-                          </div>
+                          </Link>
 
                           {/* Stats */}
                           <div className="hidden sm:flex items-center gap-6 shrink-0">
@@ -451,13 +452,13 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
 
                           {/* Runner-up */}
                           {runnerUp && (
-                            <div className="hidden md:flex items-center gap-2.5 shrink-0 pl-4 border-l border-border">
+                            <Link href={`/team/${runnerUp.userId}`} className="hidden md:flex items-center gap-2.5 shrink-0 pl-4 border-l border-border hover:opacity-80 transition-opacity">
                               <Avatar avatarId={runnerUp.avatar} size={28} className="rounded-lg shrink-0" />
                               <div>
                                 <div className="text-xs font-medium text-foreground truncate max-w-[90px]">{runnerUp.username}</div>
                                 <div className="text-[10px] text-muted-foreground">Runner-up</div>
                               </div>
-                            </div>
+                            </Link>
                           )}
                         </div>
 
@@ -553,7 +554,8 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         : ((catMax - record.value) / catRange) * 100;
 
                       return (
-                        <div
+                        <Link
+                          href={`/team/${record.userId}`}
                           key={`${record.season}-${record.type}-${record.userId}-${record.week ?? 'season'}`}
                           className={`flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-colors ${
                             isFirst
@@ -604,7 +606,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               {activeCategory.unit || 'record'}
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       );
                     })
                   )}

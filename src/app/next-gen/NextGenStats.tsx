@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getAdvancedTeamMetrics } from '@/lib/api';
@@ -375,7 +376,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
               >
                 <Card className="h-full hover:shadow-md transition-shadow duration-300">
                   <CardHeader>
-                    <div className="flex items-center space-x-4">
+                    <Link href={`/team/${team.userId}`} className="flex items-center space-x-4 hover:opacity-80 transition-opacity">
                       <Avatar avatarId={team.avatar} size={48} className="rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-lg text-foreground truncate">
@@ -392,7 +393,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
                           </div>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   </CardHeader>
 
                   <CardContent className="space-y-5">
@@ -426,22 +427,14 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
                       <StatBadge label="Efficiency"    value={`${team.efficiency.score.toFixed(0)}%`}    icon={Rocket}      />
                     </div>
 
-                    {/* Streak Info */}
-                    <div className="flex justify-between items-center text-sm pt-1 border-t border-border">
-                      <div>
-                        <span className="text-muted-foreground">Longest Streak:</span>
-                        <span className="ml-1 font-semibold text-foreground">
-                          {team.momentum.longestWinStreak}W
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Luck:</span>
-                        <span className={`ml-1 font-semibold ${
-                          team.luck.luckRating > 0 ? 'text-emerald-500' : 'text-rose-500'
-                        }`}>
-                          {team.luck.luckRating > 0 ? '+' : ''}{team.luck.luckRating.toFixed(1)}
-                        </span>
-                      </div>
+                    {/* Luck */}
+                    <div className="flex items-center text-sm pt-1 border-t border-border">
+                      <span className="text-muted-foreground">Luck:</span>
+                      <span className={`ml-1 font-semibold ${
+                        team.luck.luckRating > 0 ? 'text-emerald-500' : 'text-rose-500'
+                      }`}>
+                        {team.luck.luckRating > 0 ? '+' : ''}{team.luck.luckRating.toFixed(1)}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
@@ -467,7 +460,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
               >
                 <Card className="h-full">
                   <CardHeader>
-                    <div className="flex items-center space-x-3">
+                    <Link href={`/team/${team.userId}`} className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
                       <Avatar avatarId={team.avatar} size={32} className="rounded" />
                       <div>
                         <CardTitle className="text-base text-foreground">
@@ -477,7 +470,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
                           {team.record.wins}-{team.record.losses} ({team.record.winPct.toFixed(1)}%)
                         </p>
                       </div>
-                    </div>
+                    </Link>
                   </CardHeader>
                   <CardContent>
                     <MetricRadar metrics={radarMetrics} team={team} />
@@ -574,14 +567,8 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
                         </div>
 
                         <div className="p-4 bg-card border border-border rounded-lg space-y-3">
-                          <h5 className="text-sm font-semibold text-foreground">Streak Analysis</h5>
+                          <h5 className="text-sm font-semibold text-foreground">Form &amp; Luck</h5>
                           <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Longest Win Streak:</span>
-                              <span className="font-semibold text-foreground">
-                                {metrics.find(t => t.userId === selectedTeam)?.momentum.longestWinStreak} games
-                              </span>
-                            </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Late Season Record:</span>
                               <span className="font-semibold text-foreground">

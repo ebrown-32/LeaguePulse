@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   ScatterChart, Scatter, Cell,
@@ -135,17 +136,21 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 
 // ── Insight card ──────────────────────────────────────────────────────────────
 
-function InsightCard({ label, value, sub, avatar: av }: { label: string; value: string; sub?: string; avatar?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
+function InsightCard({ label, value, sub, avatar: av, userId }: { label: string; value: string; sub?: string; avatar?: string; userId?: string }) {
+  const content = (
+    <>
       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-1">{label}</p>
       <div className="flex items-center gap-2">
         {av !== undefined && <Avatar avatarId={av} size={24} className="rounded-lg shrink-0" />}
         <p className="font-display text-lg font-bold text-foreground leading-tight">{value}</p>
       </div>
       {sub && <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{sub}</p>}
-    </div>
+    </>
   );
+  if (userId) {
+    return <Link href={`/team/${userId}`} className="block rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 transition-colors">{content}</Link>;
+  }
+  return <div className="rounded-xl border border-border bg-card px-4 py-3">{content}</div>;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -323,18 +328,21 @@ export default function TransactionActivity({ historyData }: Props) {
           value={topManager?.username ?? '-'}
           sub={`${topManager?.total ?? 0} total moves`}
           avatar={topManager?.avatar}
+          userId={topManager?.userId}
         />
         <InsightCard
           label="Top Trader"
           value={mostTrader?.username ?? '-'}
           sub={`${mostTrader?.trades ?? 0} trades made`}
           avatar={mostTrader?.avatar}
+          userId={mostTrader?.userId}
         />
         <InsightCard
           label="Waiver King"
           value={mostWaiver?.username ?? '-'}
           sub={`${(mostWaiver?.waivers ?? 0) + (mostWaiver?.freeAgents ?? 0)} pickups`}
           avatar={mostWaiver?.avatar}
+          userId={mostWaiver?.userId}
         />
         <InsightCard
           label="Activity ↔ Wins"

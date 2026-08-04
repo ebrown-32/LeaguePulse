@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Minus, Trophy, Sword, ArrowLeftRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import type { Manager, H2HEntry, GameRecord, TradeRecord, RivalriesResponse } from '@/app/api/rivalries/route';
 import { track } from '@/lib/mixpanel';
 
@@ -102,15 +103,9 @@ function DetailPanel({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Avatar avatarId={me.avatar}   size={28} className="rounded-lg shrink-0" />
-              <span className="font-semibold text-sm text-foreground truncate">{me.teamName}</span>
-            </div>
+            <TeamLink userId={me.userId} teamName={me.teamName} avatar={me.avatar} avatarSize={28} avatarClassName="rounded-lg" className="min-w-0 font-semibold text-sm text-foreground" />
             <Sword className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Avatar avatarId={them.avatar} size={28} className="rounded-lg shrink-0" />
-              <span className="font-semibold text-sm text-foreground truncate">{them.teamName}</span>
-            </div>
+            <TeamLink userId={them.userId} teamName={them.teamName} avatar={them.avatar} avatarSize={28} avatarClassName="rounded-lg" className="min-w-0 font-semibold text-sm text-foreground" />
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 shrink-0 ml-2">
             <X className="h-4 w-4" />
@@ -450,12 +445,15 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
                 <th className="border border-border/30 bg-muted/40 p-2 min-w-[120px]" />
                 {sortedManagers.map(m => (
                   <th key={m.userId} className="border border-border/30 bg-muted/40 p-2 min-w-[80px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <Avatar avatarId={m.avatar} size={24} className="rounded-md" />
-                      <span className="text-[10px] font-semibold text-foreground leading-tight text-center line-clamp-2 max-w-[72px]">
-                        {m.teamName}
-                      </span>
-                    </div>
+                    <TeamLink
+                      userId={m.userId}
+                      teamName={m.teamName}
+                      avatar={m.avatar}
+                      avatarSize={24}
+                      avatarClassName="rounded-md"
+                      className="flex-col gap-1"
+                      textClassName="text-[10px] font-semibold text-foreground leading-tight text-center line-clamp-2 max-w-[72px]"
+                    />
                   </th>
                 ))}
               </tr>
@@ -464,10 +462,14 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
               {sortedManagers.map(rowM => (
                 <tr key={rowM.userId}>
                   <td className="border border-border/30 bg-muted/20 p-2">
-                    <div className="flex items-center gap-2">
-                      <Avatar avatarId={rowM.avatar} size={24} className="rounded-md shrink-0" />
-                      <span className="text-xs font-semibold text-foreground truncate max-w-[80px]">{rowM.teamName}</span>
-                    </div>
+                    <TeamLink
+                      userId={rowM.userId}
+                      teamName={rowM.teamName}
+                      avatar={rowM.avatar}
+                      avatarSize={24}
+                      avatarClassName="rounded-md"
+                      textClassName="text-xs font-semibold text-foreground max-w-[80px]"
+                    />
                   </td>
                   {sortedManagers.map(colM => (
                     <MatrixCell

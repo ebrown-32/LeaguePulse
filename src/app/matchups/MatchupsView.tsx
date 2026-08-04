@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
@@ -301,7 +302,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                   <CardContent className="p-0">
                     <div className="space-y-px">
                       {/* Team 1 */}
-                      <div className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
+                      <Link href={`/team/${user1.user_id}`} className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
                         matchupComplete && team1Winning
                           ? 'bg-primary/[0.04] border-l-4 border-primary'
                           : isTie && matchupComplete
@@ -345,7 +346,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                             </div>
                           )}
                         </div>
-                      </div>
+                      </Link>
 
                       {/* VS Divider */}
                       <div className="relative py-1.5">
@@ -360,7 +361,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                       </div>
 
                       {/* Team 2 */}
-                      <div className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
+                      <Link href={`/team/${user2.user_id}`} className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
                         matchupComplete && team2Winning
                           ? 'bg-primary/[0.04] border-l-4 border-primary'
                           : isTie && matchupComplete
@@ -404,7 +405,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                             </div>
                           )}
                         </div>
-                      </div>
+                      </Link>
                     </div>
 
                     {/* Matchup Summary */}
