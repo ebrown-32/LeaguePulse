@@ -47,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Analytics />
           <div className="flex min-h-screen flex-col">
             <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName} />
-            <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+            <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
               {children}
             </main>
             <Footer />

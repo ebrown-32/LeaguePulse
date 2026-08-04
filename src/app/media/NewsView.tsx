@@ -1,94 +1,72 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import {
-  ChevronUp,
-  ChevronDown,
-  Heart,
-  Share2,
-  ExternalLink,
-} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ChevronIcon, HeartIcon, ArticleIcon, ShareIcon, InjuryIcon, TrendingIcon } from '@/components/icons/MediaIcons';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import MediaDetailModal from './MediaDetailModal';
+import type { FeedItem } from '@/lib/mediaSources';
 
-interface Article {
-  headline: string;
-  description: string;
-  published: string;
-  images: {
-    url: string;
-    caption: string;
-    height: number;
-    width: number;
-  }[];
-  links: {
-    web: {
-      href: string;
-    };
-  };
-  byline?: string;
-}
+const STATUS_COLOR: Record<string, string> = {
+  Out: 'text-rose-400 bg-rose-500/10 border-rose-400/20',
+  'Injured Reserve': 'text-rose-400 bg-rose-500/10 border-rose-400/20',
+  Doubtful: 'text-amber-400 bg-amber-500/10 border-amber-400/20',
+  Questionable: 'text-amber-400 bg-amber-500/10 border-amber-400/20',
+  Active: 'text-emerald-400 bg-emerald-500/10 border-emerald-400/20',
+};
 
-export default function NewsView() {
-  const [articles, setArticles] = useState<Article[]>([]);
+export default function NewsView({ teamId }: { teamId?: string }) {
+  const [items, setItems] = useState<FeedItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [likedArticles, setLikedArticles] = useState<Set<number>>(new Set());
+  const [liked, setLiked] = useState<Set<number>>(new Set());
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [page, setPage] = useState(0);
-  const [dominantColor, setDominantColor] = useState('#1a1a2e');
-  const [secondaryColor, setSecondaryColor] = useState('#0f4392');
+  const [dominantColor, setDominantColor] = useState('26, 26, 46');
+  const [secondaryColor, setSecondaryColor] = useState('15, 67, 146');
   const [showTooltip, setShowTooltip] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [detailItem, setDetailItem] = useState<FeedItem | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const fetchNews = useCallback(async (pageNum: number) => {
-    try {
-      const response = await fetch(`/api/news?limit=20&page=${pageNum}`);
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-      const data = await response.json();
-      return data.articles || [];
-    } catch (error) {
-      console.error('Failed to fetch news:', error);
-      return [];
-    }
-  }, []);
+  const loadPage = (offset: number) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: '40' });
+    if (teamId) params.set('team', teamId);
+    return fetch(`/api/media/feed?${params}`).then(res => res.json());
+  };
 
-  // Initial news load
   useEffect(() => {
-    const loadInitialNews = async () => {
-      const initialArticles = await fetchNews(0);
-      setArticles(initialArticles);
-      setLoading(false);
-    };
+    let cancelled = false;
+    setLoading(true);
+    setCurrentIndex(0);
+    loadPage(0)
+      .then(data => {
+        if (cancelled) return;
+        setItems(data.feed || []);
+        setHasMore(!!data.hasMore);
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [teamId]);
 
-    loadInitialNews();
-  }, [fetchNews]);
-
-  // Load more articles when near the end
+  // Fetch the next page as the user approaches the end of what's loaded, so
+  // swiping through feels continuous instead of hitting a wall.
   useEffect(() => {
-    const loadMore = async () => {
-      if (currentIndex >= articles.length - 5 && !loadingMore) {
-        setLoadingMore(true);
-        const nextPage = page + 1;
-        const newArticles = await fetchNews(nextPage);
-        
-        if (newArticles.length > 0) {
-          setPage(nextPage);
-          setArticles(prevArticles => {
-            const existingHeadlines = new Set(prevArticles.map(a => a.headline));
-            const uniqueNewArticles = newArticles.filter((a: Article) => !existingHeadlines.has(a.headline));
-            return [...prevArticles, ...uniqueNewArticles];
-          });
-        }
-        setLoadingMore(false);
-      }
-    };
+    if (!hasMore || loadingMore || !items.length) return;
+    if (currentIndex < items.length - 5) return;
 
-    loadMore();
-  }, [currentIndex, articles.length, fetchNews, loadingMore, page]);
+    setLoadingMore(true);
+    loadPage(items.length)
+      .then(data => {
+        setItems(prev => [...prev, ...(data.feed || [])]);
+        setHasMore(!!data.hasMore);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  }, [currentIndex, items.length, hasMore, loadingMore]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -105,21 +83,22 @@ export default function NewsView() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [items.length]);
 
-  // Color extraction effect
+  // Extract a mood color from the current card's image to theme the backdrop
   useEffect(() => {
     const extractColorsFromCurrentImage = async () => {
-      if (!articles.length || !articles[currentIndex]?.images?.[0]?.url) return;
-      
-      const imageUrl = articles[currentIndex].images[0].url;
+      if (!items.length || !items[currentIndex]?.imageUrl) return;
+
+      const imageUrl = items[currentIndex].imageUrl!;
       try {
         const img = document.createElement('img');
         img.crossOrigin = 'anonymous';
         img.src = imageUrl;
-        
-        await new Promise((resolve) => {
+
+        await new Promise((resolve, reject) => {
           img.onload = resolve;
+          img.onerror = reject;
         });
 
         const canvas = document.createElement('canvas');
@@ -131,8 +110,7 @@ export default function NewsView() {
         ctx.drawImage(img, 0, 0);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let r = 0, g = 0, b = 0;
-        let count = 0;
+        let r = 0, g = 0, b = 0, count = 0;
 
         for (let i = 0; i < imageData.length; i += 16) {
           r += imageData[i];
@@ -145,33 +123,30 @@ export default function NewsView() {
         g = Math.floor(g / count);
         b = Math.floor(b / count);
 
-        const darkerR = Math.floor(r * 0.7);
-        const darkerG = Math.floor(g * 0.7);
-        const darkerB = Math.floor(b * 0.7);
-
-        setDominantColor(`rgb(${r}, ${g}, ${b})`);
-        setSecondaryColor(`rgb(${darkerR}, ${darkerG}, ${darkerB})`);
-      } catch (error) {
-        console.error('Failed to extract colors:', error);
+        setDominantColor(`${Math.floor(r * 0.35)}, ${Math.floor(g * 0.35)}, ${Math.floor(b * 0.35)}`);
+        setSecondaryColor(`${Math.floor(r * 0.12)}, ${Math.floor(g * 0.12)}, ${Math.floor(b * 0.12)}`);
+      } catch {
+        // Cross-origin images can fail to sample; the default gradient stands in.
       }
     };
 
     extractColorsFromCurrentImage();
-  }, [articles, currentIndex]);
+  }, [items, currentIndex]);
 
   const paginate = (direction: number) => {
     setCurrentIndex((prevIndex) => {
       let nextIndex = prevIndex + direction;
-      if (nextIndex < 0) nextIndex = articles.length - 1;
-      if (nextIndex >= articles.length) nextIndex = 0;
+      if (nextIndex < 0) nextIndex = items.length - 1;
+      if (nextIndex >= items.length) nextIndex = 0;
       return nextIndex;
     });
     setShowFullDescription(false);
+    setCopied(false);
   };
 
   const toggleLike = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setLikedArticles(prev => {
+    setLiked(prev => {
       const newSet = new Set(prev);
       if (newSet.has(index)) {
         newSet.delete(index);
@@ -182,49 +157,63 @@ export default function NewsView() {
     });
   };
 
-  const shareArticle = async (article: Article, e: React.MouseEvent) => {
+  // Native OS share sheet where supported (still in-app, just handing off to
+  // the system); falls back to a clipboard copy otherwise — no separate
+  // copy-link button, since that would just duplicate this fallback.
+  const shareItem = async (item: FeedItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await navigator.share({
-        title: article.headline,
-        text: article.description,
-        url: article.links.web.href
-      });
-    } catch (error) {
-      window.open(article.links.web.href, '_blank');
+    const shareData: ShareData = { title: item.title };
+    if (item.subtitle) shareData.text = item.subtitle;
+    if (item.url) shareData.url = item.url;
+
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share(shareData);
+      } catch {
+        // User backed out of the share sheet — nothing to do.
+      }
+      return;
     }
+
+    const fallbackText = item.url || `${item.title}${item.subtitle ? `\n${item.subtitle}` : ''}`;
+    navigator.clipboard.writeText(fallbackText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
   };
 
   useEffect(() => {
-    // Hide tooltip after 3 seconds
-    const timer = setTimeout(() => {
-      setShowTooltip(false);
-    }, 3000);
-
+    const timer = setTimeout(() => setShowTooltip(false), 3000);
     return () => clearTimeout(timer);
   }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (!articles.length) return null;
+  if (!items.length) {
+    return (
+      <div className="flex h-[calc(100vh-6rem)] items-center justify-center text-muted-foreground text-sm px-4 text-center">
+        {teamId ? "Nothing mentioning this team's roster right now." : 'Nothing to show right now.'}
+      </div>
+    );
+  }
 
-  const article = articles[currentIndex];
-  const mainImage = article.images?.[0];
-  const isLiked = likedArticles.has(currentIndex);
+  const item = items[currentIndex];
+  const isLiked = liked.has(currentIndex);
 
   return (
-    <div className="relative h-[calc(100vh-6rem)] w-full overflow-hidden bg-gray-900 dark:bg-gray-900 bg-white">
-      {/* Initial tooltip */}
+    <div
+      className="relative h-[calc(100vh-6rem)] w-full overflow-hidden transition-colors duration-700"
+      style={{ background: `linear-gradient(160deg, rgb(${dominantColor}), rgb(${secondaryColor}))` }}
+    >
       <AnimatePresence>
         {showTooltip && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-6 py-3 rounded-full 
-              bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700
-              text-gray-800 dark:text-white text-sm font-medium backdrop-blur-md"
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-6 py-3 rounded-full
+              bg-black/50 shadow-xl border border-white/10 text-white text-sm font-medium backdrop-blur-md"
           >
-            Swipe or use arrow keys to navigate articles
+            Swipe or use arrow keys to browse
           </motion.div>
         )}
       </AnimatePresence>
@@ -235,37 +224,37 @@ export default function NewsView() {
           initial={{ opacity: 0, y: 200 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -200 }}
-          transition={{
-            type: "spring",
-            stiffness: 300,
-            damping: 30
-          }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           className="relative h-full w-full max-w-5xl mx-auto"
+          style={{ touchAction: 'none' }}
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.3}
+          onDragEnd={(_, info) => {
+            if (info.offset.y < -80) paginate(1);
+            else if (info.offset.y > 80) paginate(-1);
+          }}
         >
-          {/* Navigation Indicators */}
-          <div className="absolute left-0 md:-left-16 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-4 z-20">
+          {/* Navigation Indicators (desktop only — mobile relies on swipe/tap) */}
+          <div className="hidden md:flex absolute md:-left-16 top-1/2 -translate-y-1/2 flex-col items-center space-y-4 z-20">
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="p-2 rounded-full bg-white/80 dark:bg-white/10 backdrop-blur-md 
-                hover:bg-gray-100 dark:hover:bg-white/20 transition-colors 
-                border border-gray-200 dark:border-white/10 shadow-lg"
+              className="p-2 rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-colors border border-white/10 shadow-lg"
               onClick={() => paginate(-1)}
-              aria-label="Previous article"
+              aria-label="Previous"
             >
-              <ChevronUp className="w-6 h-6 text-gray-700 dark:text-white" />
+              <ChevronIcon direction="up" className="w-6 h-6 text-white" />
             </motion.button>
-            
+
             <div className="py-4 flex flex-col items-center space-y-2">
-              {articles.slice(Math.max(0, currentIndex - 2), Math.min(articles.length, currentIndex + 3)).map((_, idx) => {
+              {items.slice(Math.max(0, currentIndex - 2), Math.min(items.length, currentIndex + 3)).map((_, idx) => {
                 const currentIdx = idx + Math.max(0, currentIndex - 2);
                 return (
                   <div
                     key={currentIdx}
                     className={`w-1 h-6 rounded-full transition-all duration-300 shadow-lg ${
-                      currentIdx === currentIndex 
-                        ? 'bg-gray-800 dark:bg-white scale-100' 
-                        : 'bg-gray-400 dark:bg-white/30 scale-75'
+                      currentIdx === currentIndex ? 'bg-white scale-100' : 'bg-white/30 scale-75'
                     }`}
                   />
                 );
@@ -275,30 +264,28 @@ export default function NewsView() {
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="p-2 rounded-full bg-white/80 dark:bg-white/10 backdrop-blur-md 
-                hover:bg-gray-100 dark:hover:bg-white/20 transition-colors 
-                border border-gray-200 dark:border-white/10 shadow-lg"
+              className="p-2 rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-colors border border-white/10 shadow-lg"
               onClick={() => paginate(1)}
-              aria-label="Next article"
+              aria-label="Next"
             >
-              <ChevronDown className="w-6 h-6 text-gray-700 dark:text-white" />
+              <ChevronIcon direction="down" className="w-6 h-6 text-white" />
             </motion.button>
           </div>
 
           {/* Main Content */}
           <div className="relative h-full flex flex-col md:flex-row items-center justify-center p-4 md:p-8 gap-8">
-            {/* Image Section */}
-            <motion.div 
+            {/* Image / kind-icon Section */}
+            <motion.div
               className="relative w-full md:w-2/3 h-[40vh] md:h-[70vh] rounded-3xl overflow-hidden shadow-2xl cursor-pointer group"
               onClick={() => paginate(1)}
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.3 }}
             >
-              {mainImage ? (
+              {item.imageUrl ? (
                 <>
                   <Image
-                    src={mainImage.url}
-                    alt={mainImage.caption || article.headline}
+                    src={item.imageUrl}
+                    alt={item.title}
                     fill
                     className="object-cover"
                     priority
@@ -307,13 +294,16 @@ export default function NewsView() {
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
                 </>
               ) : (
-                <div className="w-full h-full bg-gradient-to-b from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-950" />
+                <div className="w-full h-full flex items-center justify-center bg-white/5">
+                  {item.kind === 'injury' && <InjuryIcon className="w-20 h-20 text-white/15" />}
+                  {item.kind === 'trending' && <TrendingIcon className="w-20 h-20 text-white/15" />}
+                  {item.kind === 'article' && <ArticleIcon className="w-20 h-20 text-white/15" />}
+                </div>
               )}
-              
-              {/* Click indicator */}
+
               <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center backdrop-blur-sm">
                 <span className="text-white text-lg font-medium px-6 py-3 rounded-full bg-white/10 border border-white/20 shadow-xl">
-                  Click to see next article
+                  Click to see next
                 </span>
               </div>
             </motion.div>
@@ -324,70 +314,67 @@ export default function NewsView() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="backdrop-blur-xl bg-white/80 dark:bg-white/10 rounded-3xl p-6 
-                  border border-gray-200 dark:border-white/10 shadow-2xl 
-                  text-gray-800 dark:text-white"
+                className="backdrop-blur-xl bg-white/10 rounded-3xl p-6 border border-white/10 shadow-2xl text-white"
               >
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/50">
+                    {item.source}
+                  </span>
+                  {item.status && (
+                    <span className={cn('text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded border', STATUS_COLOR[item.status] || 'text-white/60 bg-white/10 border-white/20')}>
+                      {item.status}
+                    </span>
+                  )}
+                </div>
                 <h2 className="text-2xl md:text-3xl font-bold mb-4 leading-tight">
-                  {article.headline}
+                  {item.title}
                 </h2>
-                <div 
-                  className={`text-gray-600 dark:text-gray-200 text-sm md:text-base mb-4 cursor-pointer ${showFullDescription ? '' : 'line-clamp-3'}`}
+                <div
+                  className={`text-white/70 text-sm md:text-base mb-4 cursor-pointer ${showFullDescription ? '' : 'line-clamp-3'}`}
                   onClick={() => setShowFullDescription(!showFullDescription)}
                 >
-                  {article.description}
-                </div>
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-300 mb-6">
-                  <span>{new Date(article.published).toLocaleDateString()}</span>
-                  {article.byline && (
-                    <>
-                      <span className="mx-2">•</span>
-                      <span>{article.byline}</span>
-                    </>
-                  )}
+                  {item.subtitle}
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center space-x-6 pt-4 border-t border-gray-200 dark:border-white/10">
+                <div className="flex items-center space-x-6 pt-4 border-t border-white/10">
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={(e) => toggleLike(currentIndex, e)}
                     className="flex flex-col items-center"
-                    aria-label={isLiked ? "Unlike article" : "Like article"}
+                    aria-label={isLiked ? 'Unlike' : 'Like'}
                   >
-                    {isLiked ? (
-                      <Heart className="w-8 h-8 text-red-500 drop-shadow-glow-red" />
-                    ) : (
-                      <Heart className="w-8 h-8 text-gray-700 dark:text-white" />
-                    )}
-                    <span className="text-sm mt-1">Like</span>
+                    <HeartIcon filled={isLiked} className={isLiked ? 'w-6 h-6 text-rose-400 drop-shadow-glow-red' : 'w-6 h-6 text-white'} />
+                    <span className="text-xs mt-1">Like</span>
                   </motion.button>
 
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={(e) => shareArticle(article, e)}
-                    className="flex flex-col items-center"
-                    aria-label="Share article"
+                    onClick={(e) => shareItem(item, e)}
+                    className="flex flex-col items-center text-white"
+                    aria-label="Share"
                   >
-                    <Share2 className="w-8 h-8 text-gray-700 dark:text-white" />
-                    <span className="text-sm mt-1">Share</span>
+                    <ShareIcon className="w-6 h-6" />
+                    <span className="text-xs mt-1">{copied ? 'Copied' : 'Share'}</span>
                   </motion.button>
 
-                  <motion.a
-                    href={article.links.web.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center text-gray-700 dark:text-white"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    aria-label="Read full article"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <ExternalLink className="w-8 h-8" />
-                    <span className="text-sm mt-1">Read</span>
-                  </motion.a>
+                  {item.kind === 'article' && item.url && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailItem(item);
+                      }}
+                      className="flex flex-col items-center text-white"
+                      aria-label="Read full article"
+                    >
+                      <ArticleIcon className="w-6 h-6" />
+                      <span className="text-xs mt-1">Read</span>
+                    </motion.button>
+                  )}
                 </div>
               </motion.div>
             </div>
@@ -395,18 +382,13 @@ export default function NewsView() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Loading indicator */}
-      {loadingMore && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-          <LoadingSpinner />
-        </div>
-      )}
-
       <style jsx global>{`
         .drop-shadow-glow-red {
-          filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5));
+          filter: drop-shadow(0 0 8px rgba(244, 63, 94, 0.5));
         }
       `}</style>
+
+      <MediaDetailModal item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
   );
-} 
+}

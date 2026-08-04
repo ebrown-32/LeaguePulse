@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* Extracted in-app article bodies (server-sanitized HTML from Readability) —
+   scoped prose styling since no typography plugin is installed. */
+.media-prose {
+  color: hsl(var(--foreground));
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+.media-prose p { margin: 0 0 1em; }
+.media-prose h2, .media-prose h3, .media-prose h4 {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin: 1.5em 0 0.5em;
+}
+.media-prose h2 { font-size: 1.15rem; }
+.media-prose h3 { font-size: 1.05rem; }
+.media-prose h4 { font-size: 1rem; }
+.media-prose ul, .media-prose ol { margin: 0 0 1em 1.25em; }
+.media-prose li { margin-bottom: 0.4em; }
+.media-prose blockquote {
+  border-left: 2px solid hsl(var(--primary) / 0.4);
+  padding-left: 1em;
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+  margin: 1em 0;
+}
+.media-prose img { border-radius: 0.75rem; margin: 1em 0; max-width: 100%; height: auto; }
+.media-prose figcaption { font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-top: -0.5em; margin-bottom: 1em; }
+.media-prose strong { font-weight: 700; }
+
 /* ─────────────────────────────────────────────
    DESIGN TOKENS: "Signal" design system
    Light  = :root
