@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import {
-  ArrowLeftRight, ChevronDown, Hourglass, TrendingUp, GitBranch, ArrowRight,
-  CircleDot, Users, Layers, Activity,
+  ArrowLeftRight, ChevronDown, TrendingUp, GitBranch, ArrowRight,
+  Users, Layers, Activity,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { cn } from '@/lib/utils';
 import type {
@@ -277,10 +278,7 @@ function TradeSidePanel({ side }: { side: TradeSideResult }) {
   return (
     <div className="px-4 pb-3 min-w-0">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar avatarId={side.avatar} size={20} className="rounded shrink-0" />
-          <span className="truncate text-xs font-semibold text-foreground leading-tight">{side.teamName}</span>
-        </div>
+        <TeamLink userId={side.userId} teamName={side.teamName} avatar={side.avatar} avatarSize={20} className="min-w-0" textClassName="text-xs font-semibold text-foreground leading-tight" />
         <span className="shrink-0 text-[10px] font-bold tabular-nums text-muted-foreground/70">
           {side.totalPoints.toFixed(1)} pts
         </span>

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { ChevronDown, ArrowRightLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import { cn } from '@/lib/utils';
 import type {
   ScheduleLabResponse, SeasonScheduleData, TeamScheduleSummary, MatrixCell, ScheduleTeam,
@@ -189,7 +191,7 @@ function Simulator({
         {/* Headline comparison */}
         <div className="rounded-lg border border-border/50 bg-background/40 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+            <Link href={`/team/${me.userId}`} className="flex items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
               <Avatar avatarId={me.avatar} size={36} className="rounded-lg shrink-0" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">{me.teamName}</p>
@@ -197,7 +199,7 @@ function Simulator({
                   {isActual ? 'their actual schedule' : <>with <span className="text-foreground font-medium">{scheduleTeam.teamName}</span>&apos;s schedule</>}
                 </p>
               </div>
-            </div>
+            </Link>
 
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-center">
@@ -443,10 +445,15 @@ function MatrixGrid({ season, onCellClick }: { season: SeasonScheduleData; onCel
             </th>
             {teams.map(t => (
               <th key={t.rosterId} className="border border-border/30 bg-muted/40 p-2 min-w-[76px]">
-                <div className="flex flex-col items-center gap-1">
-                  <Avatar avatarId={t.avatar} size={22} className="rounded-md" />
-                  <span className="text-[9px] font-semibold text-foreground leading-tight text-center line-clamp-2 max-w-[68px]">{t.teamName}</span>
-                </div>
+                <TeamLink
+                  userId={t.userId}
+                  teamName={t.teamName}
+                  avatar={t.avatar}
+                  avatarSize={22}
+                  avatarClassName="rounded-md"
+                  className="flex-col gap-1"
+                  textClassName="text-[9px] font-semibold text-foreground leading-tight text-center line-clamp-2 max-w-[68px]"
+                />
               </th>
             ))}
           </tr>
@@ -455,10 +462,14 @@ function MatrixGrid({ season, onCellClick }: { season: SeasonScheduleData; onCel
           {teams.map(rowTeam => (
             <tr key={rowTeam.rosterId}>
               <td className="border border-border/30 bg-card p-2 sticky left-0 z-10">
-                <div className="flex items-center gap-2">
-                  <Avatar avatarId={rowTeam.avatar} size={22} className="rounded-md shrink-0" />
-                  <span className="text-xs font-semibold text-foreground truncate max-w-[90px]">{rowTeam.teamName}</span>
-                </div>
+                <TeamLink
+                  userId={rowTeam.userId}
+                  teamName={rowTeam.teamName}
+                  avatar={rowTeam.avatar}
+                  avatarSize={22}
+                  avatarClassName="rounded-md"
+                  textClassName="text-xs font-semibold text-foreground max-w-[90px]"
+                />
               </td>
               {teams.map(colTeam => {
                 const cell = cellFor(season, rowTeam.rosterId, colTeam.rosterId)!;

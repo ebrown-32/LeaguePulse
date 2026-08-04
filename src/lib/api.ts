@@ -679,7 +679,7 @@ export async function getAdvancedTeamMetrics(leagueId: string, season?: string):
         metric.efficiency.winEfficiency = totalGames > 0 ? (metric.record.wins || 0) / totalGames : 0;
         metric.efficiency.scoringEfficiency = calculateScoringEfficiency(metric.points.weeklyScores);
         
-        metric.momentum.score = calculateMomentumScore(metric.momentum.finalWeeksWinRate, metric.momentum.longestWinStreak);
+        metric.momentum.score = calculateMomentumScore(metric.momentum.finalWeeksWinRate);
         
         metric.luck.score = calculateLuckScore(metric.luck.expectedWins, metric.record.wins || 0, metric.luck.closeLosses);
         metric.luck.luckRating = (metric.record.wins || 0) - metric.luck.expectedWins;
@@ -896,7 +896,7 @@ async function calculateAdvancedSeasonMetrics(
         scoringEfficiency: calculateScoringEfficiency(weeklyScores),
       },
       momentum: {
-        score: calculateMomentumScore(lateSeasonWinRate, winStreak),
+        score: calculateMomentumScore(lateSeasonWinRate),
         lateSeasonRecord: `${lateSeasonWins}-${lateSeasonMatchups.length - lateSeasonWins}`,
         finalWeeksWinRate: lateSeasonWinRate,
         longestWinStreak: winStreak,
@@ -962,10 +962,8 @@ function calculateScoringEfficiency(weeklyScores: number[]): number {
   return mean / Math.sqrt(variance + 1); // Add 1 to avoid division by zero
 }
 
-function calculateMomentumScore(lateSeasonWinRate: number, longestWinStreak: number): number {
-  const winRateScore = lateSeasonWinRate * 100;
-  const streakScore = Math.min(100, longestWinStreak * 20); // 5+ game streak = 100
-  return (winRateScore + streakScore) / 2;
+function calculateMomentumScore(lateSeasonWinRate: number): number {
+  return lateSeasonWinRate * 100;
 }
 
 function calculateExpectedWins(teamScores: number[], allScores: number[]): number {
@@ -2028,52 +2026,54 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
           }
         });
 
-        // Find champion
-        const finalWeek = playoffWeeks[playoffWeeks.length - 1];
-        const championshipMatchups = finalWeek.filter(m => typeof m.points === 'number' && m.points > 0);
-        
-        if (championshipMatchups.length >= 2) {
-          const matchupGroups = new Map<number, any[]>();
-          championshipMatchups.forEach(matchup => {
-            if (!matchupGroups.has(matchup.matchup_id)) {
-              matchupGroups.set(matchup.matchup_id, []);
-            }
-            matchupGroups.get(matchup.matchup_id)!.push(matchup);
-          });
-          
-          const championshipGame = Array.from(matchupGroups.values()).find(group => group.length === 2);
-          
-          if (championshipGame) {
-            const [team1, team2] = championshipGame;
-            const winner = team1.points > team2.points ? team1 : team2;
-            const loser = team1.points > team2.points ? team2 : team1;
-            
-            const championRoster = rosters.find(r => r.roster_id === winner.roster_id);
-            const championUser = championRoster ? users.find(u => u.user_id === championRoster.owner_id) : null;
-            
-            if (championUser) {
-              seasonAnalysis.champions.push({ ...championRoster, user: championUser });
-              seasonAnalysis.userSeasonStats[championUser.user_id].championship = true;
-              
-              const championshipKey = `${league.season}-${championUser.user_id}`;
-              if (!processedChampionships.has(championshipKey)) {
-                processedChampionships.add(championshipKey);
-                records.push({
-                  type: 'championship',
-                  season: league.season,
-                  userId: championUser.user_id,
-                  username: championUser.display_name,
-                  avatar: championUser.avatar,
-                  value: 1,
-                  description: `${championUser.display_name} won the ${league.season} championship`,
-                  details: {
-                    championshipScore: winner.points,
-                    opponentScore: loser.points,
-                    playoffWeeks: playoffWeeks.length,
-                    season: league.season,
-                  }
-                });
+        // Find champion via Sleeper's authoritative bracket, not by guessing which
+        // matchup group in the final week is "the championship". Multiple placement
+        // games (e.g. a 3rd-place consolation game) run in that same final week, and
+        // picking "the first 2-team group" by array order can pick up the wrong one.
+        const bracket = await getPlayoffBracket(leagueId).catch(() => null);
+        const championshipMatch = bracket?.winners_bracket?.find((m: any) => m.p === 1 && m.w);
+
+        if (championshipMatch) {
+          const winnerRosterId = championshipMatch.w;
+          const loserRosterId = championshipMatch.t1 === winnerRosterId ? championshipMatch.t2 : championshipMatch.t1;
+
+          const championRoster = rosters.find(r => r.roster_id === winnerRosterId);
+          const championUser = championRoster ? users.find(u => u.user_id === championRoster.owner_id) : null;
+
+          if (championUser) {
+            // Pull the real final score from whichever playoff week has this pairing
+            let winnerScore = 0, loserScore = 0;
+            for (const week of playoffWeeks) {
+              const winnerEntry = week.find(m => m.roster_id === winnerRosterId);
+              const loserEntry = week.find(m => m.roster_id === loserRosterId);
+              if (winnerEntry && loserEntry && winnerEntry.matchup_id === loserEntry.matchup_id && typeof winnerEntry.points === 'number') {
+                winnerScore = winnerEntry.points;
+                loserScore = loserEntry.points;
+                break;
               }
+            }
+
+            seasonAnalysis.champions.push({ ...championRoster, user: championUser });
+            seasonAnalysis.userSeasonStats[championUser.user_id].championship = true;
+
+            const championshipKey = `${league.season}-${championUser.user_id}`;
+            if (!processedChampionships.has(championshipKey)) {
+              processedChampionships.add(championshipKey);
+              records.push({
+                type: 'championship',
+                season: league.season,
+                userId: championUser.user_id,
+                username: championUser.display_name,
+                avatar: championUser.avatar,
+                value: 1,
+                description: `${championUser.display_name} won the ${league.season} championship`,
+                details: {
+                  championshipScore: winnerScore,
+                  opponentScore: loserScore,
+                  playoffWeeks: playoffWeeks.length,
+                  season: league.season,
+                }
+              });
             }
           }
         }

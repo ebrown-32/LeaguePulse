@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import { PageLayout } from '@/components/layout/PageLayout';
 import {
   getLeagueInfo,
@@ -170,7 +172,7 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
     const u2 = users.find((u: any) => u.user_id === r2?.owner_id);
     if (!r1 || !r2 || !u1 || !u2) return null;
     const p1 = t1.points ?? 0, p2 = t2.points ?? 0;
-    return { id: t1.matchup_id, team1: { name: censorTeamName(u1.metadata?.team_name || u1.display_name), avatar: u1.avatar, points: p1 }, team2: { name: censorTeamName(u2.metadata?.team_name || u2.display_name), avatar: u2.avatar, points: p2 }, isHighlight: p1 + p2 > 200 || (Math.abs(p1 - p2) < 10 && p1 + p2 > 0), totalPoints: p1 + p2 };
+    return { id: t1.matchup_id, team1: { userId: u1.user_id, name: censorTeamName(u1.metadata?.team_name || u1.display_name), avatar: u1.avatar, points: p1 }, team2: { userId: u2.user_id, name: censorTeamName(u2.metadata?.team_name || u2.display_name), avatar: u2.avatar, points: p2 }, isHighlight: p1 + p2 > 200 || (Math.abs(p1 - p2) < 10 && p1 + p2 > 0), totalPoints: p1 + p2 };
   }).filter(Boolean).sort((a: any, b: any) => { if (a.isHighlight !== b.isHighlight) return a.isHighlight ? -1 : 1; return b.totalPoints - a.totalPoints; }).slice(0, 6);
 }
 
@@ -364,13 +366,17 @@ export default function Home() {
                           'flex items-center gap-3 px-4 py-3.5',
                           t1Winning && 'bg-primary/[0.04]',
                         )}>
-                          <Avatar avatarId={matchup.team1.avatar} size={30} className="rounded-lg shrink-0" />
-                          <span className={cn(
-                            'flex-1 text-sm font-medium leading-tight',
-                            t1Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                          )}>
-                            {matchup.team1.name}
-                          </span>
+                          <TeamLink
+                            userId={matchup.team1.userId}
+                            teamName={matchup.team1.name}
+                            avatar={matchup.team1.avatar}
+                            avatarSize={30}
+                            avatarClassName="rounded-lg"
+                            className={cn(
+                              'flex-1 min-w-0 text-sm font-medium leading-tight',
+                              t1Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
+                            )}
+                          />
                           <span className={cn(
                             'font-display text-xl font-bold tabular-nums shrink-0',
                             t1Winning ? 'text-primary' : 'text-muted-foreground',
@@ -391,13 +397,17 @@ export default function Home() {
                           'flex items-center gap-3 px-4 py-3.5',
                           t2Winning && 'bg-primary/[0.04]',
                         )}>
-                          <Avatar avatarId={matchup.team2.avatar} size={30} className="rounded-lg shrink-0" />
-                          <span className={cn(
-                            'flex-1 text-sm font-medium leading-tight',
-                            t2Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                          )}>
-                            {matchup.team2.name}
-                          </span>
+                          <TeamLink
+                            userId={matchup.team2.userId}
+                            teamName={matchup.team2.name}
+                            avatar={matchup.team2.avatar}
+                            avatarSize={30}
+                            avatarClassName="rounded-lg"
+                            className={cn(
+                              'flex-1 min-w-0 text-sm font-medium leading-tight',
+                              t2Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
+                            )}
+                          />
                           <span className={cn(
                             'font-display text-xl font-bold tabular-nums shrink-0',
                             t2Winning ? 'text-primary' : 'text-muted-foreground',
@@ -458,7 +468,8 @@ export default function Home() {
                         const totalGames = s.totalWins + s.totalLosses + s.totalTies;
                         const avgPF = totalGames > 0 ? s.totalPoints / totalGames : 0;
                         return (
-                          <div
+                          <Link
+                            href={`/team/${s.userId}`}
                             key={s.userId}
                             className={cn(
                               'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none group',
@@ -523,7 +534,7 @@ export default function Home() {
                             <div className="md:hidden text-right shrink-0">
                               <p className="text-xs font-mono font-semibold text-foreground">{s.totalWins}-{s.totalLosses}</p>
                             </div>
-                          </div>
+                          </Link>
                         );
                       })
 
@@ -541,7 +552,8 @@ export default function Home() {
                         const isBubble   = i === playoffTeams;
 
                         return (
-                          <div
+                          <Link
+                            href={`/team/${user.user_id}`}
                             key={roster.roster_id}
                             className={cn(
                               'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none',
@@ -613,7 +625,7 @@ export default function Home() {
                             <div className="md:hidden text-right shrink-0">
                               <p className="text-xs font-mono font-semibold text-foreground">{formatRecord(wins, losses, ties)}</p>
                             </div>
-                          </div>
+                          </Link>
                         );
                       })}
                 </div>

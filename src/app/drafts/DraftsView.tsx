@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { CalendarDays, Clock, Users, Layers, Trophy, Star, Zap } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
+import TeamLink from '@/components/ui/TeamLink';
 import { cn } from '@/lib/utils';
 import type { EnrichedDraft, DraftPickEnriched, DraftTeamSlot, TradedFuturePick, DraftsResponse } from '@/app/api/drafts/route';
 
@@ -671,8 +672,14 @@ function UpcomingDraft({ draft }: { draft: EnrichedDraft }) {
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
                       <span className="text-[10px] font-black text-primary">{slot.slot}</span>
                     </div>
-                    <Avatar avatarId={slot.avatar || null} size={40} />
-                    <p className="text-xs font-semibold text-foreground leading-tight">{slot.teamName}</p>
+                    <TeamLink
+                      userId={slot.userId}
+                      teamName={slot.teamName}
+                      avatar={slot.avatar || ''}
+                      avatarSize={40}
+                      className="flex-col gap-2.5"
+                      textClassName="text-xs font-semibold text-foreground leading-tight"
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -697,9 +704,14 @@ function UpcomingDraft({ draft }: { draft: EnrichedDraft }) {
               if (slotKeepers.length === 0) return null;
               return (
                 <div key={slot.slot} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <Avatar avatarId={slot.avatar || null} size={24} className="rounded shrink-0" />
-                    <span className="text-sm font-semibold text-foreground">{slot.teamName}</span>
+                  <div className="mb-3">
+                    <TeamLink
+                      userId={slot.userId}
+                      teamName={slot.teamName}
+                      avatar={slot.avatar || ''}
+                      avatarSize={24}
+                      textClassName="text-sm font-semibold text-foreground"
+                    />
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {slotKeepers.map(pick => (
