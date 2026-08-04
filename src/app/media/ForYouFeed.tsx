@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import MediaDetailModal from './MediaDetailModal';
+import { ArticleIcon, InjuryIcon, TrendingIcon } from '@/components/icons/MediaIcons';
 import type { FeedItem } from '@/lib/mediaSources';
 
 const PAGE_SIZE = 20;
@@ -19,6 +20,18 @@ const KIND_DOT: Record<FeedItem['kind'], string> = {
   article: 'bg-primary',
   injury: 'bg-rose-500',
   trending: 'bg-emerald-500',
+};
+
+const KIND_ICON: Record<FeedItem['kind'], typeof ArticleIcon> = {
+  article: ArticleIcon,
+  injury: InjuryIcon,
+  trending: TrendingIcon,
+};
+
+const KIND_TINT: Record<FeedItem['kind'], string> = {
+  article: 'bg-primary/10 text-primary',
+  injury: 'bg-rose-500/10 text-rose-500',
+  trending: 'bg-emerald-500/10 text-emerald-500',
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -39,6 +52,8 @@ function timeAgo(iso: string): string {
 }
 
 function FeedCard({ item, index, onOpen }: { item: FeedItem; index: number; onOpen: (item: FeedItem) => void }) {
+  const KindIcon = KIND_ICON[item.kind];
+
   return (
     <motion.button
       onClick={() => onOpen(item)}
@@ -55,8 +70,8 @@ function FeedCard({ item, index, onOpen }: { item: FeedItem; index: number; onOp
             className="h-16 w-16 shrink-0 rounded-lg object-cover border border-border"
           />
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border bg-muted">
-            <span className={cn('h-2 w-2 rounded-full', KIND_DOT[item.kind])} />
+          <div className={cn('flex h-16 w-16 shrink-0 items-center justify-center rounded-lg', KIND_TINT[item.kind])}>
+            <KindIcon className="h-7 w-7" />
           </div>
         )}
 

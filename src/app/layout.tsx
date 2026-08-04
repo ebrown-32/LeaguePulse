@@ -4,6 +4,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ThemeInjector } from '@/components/ThemeInjector';
+import { InstallPromptProvider } from '@/components/pwa/InstallPromptProvider';
 import { getTheme } from '@/lib/themeStorage';
 import Analytics from '@/components/analytics/Analytics';
 
@@ -44,14 +45,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       >
         <ThemeInjector />
         <ThemeProvider>
-          <Analytics />
-          <div className="flex min-h-screen flex-col">
-            <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName} />
-            <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
-              {children}
-            </main>
-            <Footer />
-          </div>
+          <InstallPromptProvider logoUrl={theme.logoUrl} leagueName={theme.leagueName}>
+            <Analytics />
+            <div className="flex min-h-screen flex-col">
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName} />
+              <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
+                {children}
+              </main>
+              <Footer />
+            </div>
+          </InstallPromptProvider>
         </ThemeProvider>
       </body>
     </html>

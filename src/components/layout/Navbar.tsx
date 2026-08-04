@@ -22,6 +22,8 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
+import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
+import { AddSquareIcon } from '@/components/icons/AppIcons';
 
 interface NavItem {
   name: string;
@@ -59,6 +61,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
   const [scrolled,  setScrolled]  = useState(false);
   const [mounted,   setMounted]   = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const { platform, isStandalone, openModal } = useInstallPrompt();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -279,6 +282,19 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                   </Link>
                 );
               })}
+
+              {platform !== 'other' && !isStandalone && (
+                <>
+                  <div className="my-1.5 border-t border-border/60" />
+                  <button
+                    onClick={() => { setIsOpen(false); openModal(); }}
+                    className="flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent"
+                  >
+                    <AddSquareIcon className="h-4 w-4 shrink-0" />
+                    <span>Add to Home Screen</span>
+                  </button>
+                </>
+              )}
             </nav>
           </motion.div>
         )}
