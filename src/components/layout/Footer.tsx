@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { unstable_noStore as noStore } from 'next/cache';
 import Logo from '@/components/ui/Logo';
 import { GithubIcon, ExternalLink, Settings } from 'lucide-react';
 import { getTheme } from '@/lib/themeStorage';
 
 export default async function Footer() {
+  // See RootLayout: admin-saved branding must not be served from a cached render.
+  noStore();
   const theme = await getTheme();
   const year = new Date().getFullYear();
 

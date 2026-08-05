@@ -18,10 +18,10 @@ import {
 } from '@/lib/api';
 import {
   Trophy,
+  Home as HomeIcon,
   BarChart3,
   Users,
   User,
-  LayoutDashboard,
   Flame,
   Clock,
   Sparkles,
@@ -128,12 +128,6 @@ function formatWeekDisplay(status: string, week: number | null): string {
   }
 }
 
-function getLeagueSubtitle(league: any, nflState: any, seasons: string[], historyData: any): string {
-  const currentSeason = nflState?.season ?? league?.season ?? new Date().getFullYear().toString();
-  if (historyData?.totalSeasons > 1) return `Season ${currentSeason}, ${historyData.totalSeasons} seasons of competition.`;
-  return `Season ${currentSeason} · ${new Date().toLocaleDateString()}`;
-}
-
 function getSeasonContext(league: any, nflState: any): string | null {
   switch (getEffectiveLeagueStatus(league, nflState)) {
     case 'pre_draft':   return league.draft_id ? `Draft: ${formatDraftDate(league.draft_id)}` : 'Draft not scheduled.';
@@ -144,15 +138,6 @@ function getSeasonContext(league: any, nflState: any): string | null {
     case 'complete':    return 'Season completed.';
     default:            return null;
   }
-}
-
-function getWeekContext(league: any, nflState: any): string {
-  const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
-  const week = nflState?.week ?? 0;
-  if (effectiveStatus === 'in_season' || effectiveStatus === 'post_season') {
-    return week >= (league.settings?.playoff_week_start ?? 15) ? 'Playoffs' : 'Regular Season';
-  }
-  return '';
 }
 
 function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): any[] {
@@ -178,21 +163,31 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
 
 // ─── Stat card component ─────────────────────────────────────────────────────
 
-function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string; value: string; sub?: string | null }) {
+/** Small chip used along the hero's context row. */
+function HeroChip({ icon: Icon, children, accent = false }: { icon?: any; children: React.ReactNode; accent?: boolean }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-none group min-w-[158px] md:min-w-0">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-          {label}
-        </p>
-        <p className="font-display text-lg font-bold text-foreground leading-tight">
-          {value}
-        </p>
-        {sub && <p className="mt-1 text-xs text-muted-foreground leading-snug">{sub}</p>}
-      </div>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-widest backdrop-blur-sm',
+        accent
+          ? 'border-primary/30 bg-primary/10 text-primary'
+          : 'border-border bg-background/60 text-muted-foreground',
+      )}
+    >
+      {Icon && <Icon className="h-3 w-3" />}
+      {children}
+    </span>
+  );
+}
+
+/** One metric in the thin "league at a glance" strip. */
+function PulseStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="font-display text-xl font-bold tabular-nums text-foreground sm:text-2xl">{value}</span>
+      <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-widest text-muted-foreground sm:text-[10px]">
+        {label}
+      </span>
     </div>
   );
 }
@@ -299,34 +294,158 @@ export default function Home() {
   const effectiveStatus = getEffectiveLeagueStatus(league, nflState);
   const playoffTeams    = getDefaultValue(league.settings?.playoff_teams, 6);
 
+  // ── Spotlight subject ──────────────────────────────────────────────────
+  // Once games are on the board the standings leader is the live story; before
+  // then (preseason, where every record is 0-0) that card would be empty, so
+  // the reigning champion carries it instead.
+  const gamesPlayed = sortedRosters.some(
+    (r: any) => getDefaultValue(r.settings?.wins, 0) + getDefaultValue(r.settings?.losses, 0) > 0,
+  );
+
+  const leaderRoster = gamesPlayed ? sortedRosters[0] : null;
+  const leaderUser   = leaderRoster ? users.find((u: any) => u.user_id === leaderRoster.owner_id) : null;
+
+  const reigningChampion = historyData?.champions?.length
+    ? [...historyData.champions].sort((a: any, b: any) => parseInt(b.season) - parseInt(a.season))[0]
+    : null;
+
+  const spotlight = leaderUser && leaderRoster
+    ? {
+        eyebrow: 'Current Leader',
+        name:    censorTeamName(leaderUser.metadata?.team_name || leaderUser.display_name),
+        avatar:  leaderUser.avatar,
+        userId:  leaderUser.user_id,
+        line:    formatRecord(
+          getDefaultValue(leaderRoster.settings?.wins, 0),
+          getDefaultValue(leaderRoster.settings?.losses, 0),
+          getDefaultValue(leaderRoster.settings?.ties, 0),
+        ),
+        lineLabel: 'Record',
+        metric:  formatPoints(
+          getDefaultValue(leaderRoster.settings?.fpts, 0) +
+          getDefaultValue(leaderRoster.settings?.fpts_decimal, 0) / 100,
+        ),
+        metricLabel: 'Points For',
+      }
+    : reigningChampion
+      ? {
+          eyebrow: 'Reigning Champion',
+          name:    censorTeamName(reigningChampion.username),
+          avatar:  reigningChampion.avatar,
+          userId:  reigningChampion.userId,
+          // Career title count rather than that season's record — the
+          // championship record doesn't always carry a `details.record`, and
+          // an em-dash in the hero card is worse than no stat at all.
+          line:    String(
+            historyData.champions.filter((c: any) => c.userId === reigningChampion.userId).length,
+          ),
+          lineLabel: 'Career Titles',
+          // No second stat: the season they won is already implied by
+          // "Reigning Champion", so spelling it out just added noise.
+          metric:  undefined,
+          metricLabel: undefined,
+        }
+      : null;
+
+  const currentSeason = nflState?.season ?? league?.season ?? '';
+  const headerSubtitle = historyData?.totalSeasons > 1
+    ? `Season ${currentSeason} · ${historyData.totalSeasons} seasons of competition`
+    : `Season ${currentSeason}`;
+
   return (
     <PageLayout
-      title={league.name}
-      subtitle={getLeagueSubtitle(league, nflState, seasons, historyData)}
-      icon={<LayoutDashboard className="h-5 w-5" />}
-      action={commissioner && (
-        <div className="hidden md:flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs">
-          <User className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-muted-foreground">Commissioner:</span>
-          <span className="font-medium text-foreground">{commissioner.display_name}</span>
-        </div>
-      )}
+      title="Home"
+      subtitle={headerSubtitle}
+      icon={<HomeIcon className="h-5 w-5" />}
     >
-      <div className="space-y-8">
+      <div className="space-y-6">
 
-        {/* ── Stat cards: snap-scroll on mobile, grid on md+ ── */}
-        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible md:pb-0">
-          {[
-            { icon: Clock,    label: 'Season Status', value: formatLeagueStatus(effectiveStatus),     sub: getSeasonContext(league, nflState) },
-            { icon: Users,    label: 'League Size',   value: `${league.total_rosters} Teams`,         sub: league.scoring_settings?.rec ? 'PPR Scoring' : 'Standard Scoring' },
-            { icon: BarChart3,label: 'Current Week',  value: formatWeekDisplay(effectiveStatus, effectiveWeek), sub: getWeekContext(league, nflState) || undefined },
-            { icon: Sparkles, label: 'Playoff Race',  value: `${playoffTeams} Spots`,                 sub: `Starts week ${league.settings?.playoff_week_start ?? 15}` },
-          ].map(({ icon, label, value, sub }) => (
-            <div key={label} className="snap-start shrink-0 w-[calc(50vw-1.25rem)] sm:w-auto md:w-auto">
-              <StatCard icon={icon} label={label} value={value} sub={sub} />
+        {/* ── Command bar ───────────────────────────────────────────────────
+            One card instead of a hero + spotlight + four tiles + a stat strip.
+            The league name lives in the navbar, so repeating it here as a
+            headline was pure duplication; the space goes to the spotlight
+            and the league's running totals instead. */}
+        <section className="relative overflow-hidden rounded-3xl border border-border bg-card">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_0%_0%,hsl(var(--primary)/0.16),transparent_58%)]" />
+          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+          <div className="relative p-5 sm:p-7">
+            {/* Context row — everything the four stat tiles used to say. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <HeroChip icon={Clock} accent>{formatLeagueStatus(effectiveStatus)}</HeroChip>
+              {/* In preseason the week label is just the status again — skip
+                  it rather than print "Preseason" twice in a row. */}
+              {formatWeekDisplay(effectiveStatus, effectiveWeek) !== formatLeagueStatus(effectiveStatus) && (
+                <HeroChip icon={BarChart3}>{formatWeekDisplay(effectiveStatus, effectiveWeek)}</HeroChip>
+              )}
+              <HeroChip icon={Users}>{league.total_rosters} Teams</HeroChip>
+              <HeroChip>{league.scoring_settings?.rec ? 'PPR' : 'Standard'}</HeroChip>
+              <HeroChip icon={Sparkles}>{playoffTeams} Playoff Spots</HeroChip>
+
+              {commissioner && (
+                <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground lg:inline-flex">
+                  <User className="h-3.5 w-3.5" />
+                  Commissioner
+                  <span className="font-semibold text-foreground">{commissioner.display_name}</span>
+                </span>
+              )}
             </div>
-          ))}
-        </div>
+
+            {getSeasonContext(league, nflState) && (
+              <p className="mt-3 text-sm text-muted-foreground">{getSeasonContext(league, nflState)}</p>
+            )}
+
+            {/* Spotlight — the leader once games are on the board, the
+                reigning champion before then. */}
+            {spotlight && (
+              <Link href={`/team/${spotlight.userId}`} className="group mt-6 flex items-center gap-4 sm:gap-5">
+                <div className="relative shrink-0">
+                  <Avatar
+                    avatarId={spotlight.avatar}
+                    size={64}
+                    className="rounded-2xl ring-2 ring-primary/40 transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <span className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+                    <Trophy className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                    {spotlight.eyebrow}
+                  </p>
+                  <p className="mt-1 truncate font-display text-2xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-3xl">
+                    {spotlight.name}
+                  </p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {spotlight.lineLabel}{' '}
+                    <span className="font-semibold text-foreground">{spotlight.line}</span>
+                    {spotlight.metric && (
+                      <>
+                        <span className="mx-2 text-border">·</span>
+                        {spotlight.metricLabel}{' '}
+                        <span className="font-semibold text-foreground">{spotlight.metric}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </Link>
+            )}
+
+            {/* League totals */}
+            {historyData && historyData.totalSeasons > 0 && (
+              <>
+                <div className="mt-6 h-px bg-gradient-to-r from-primary/25 via-border to-transparent" />
+                <div className="grid grid-cols-2 gap-y-5 pt-5 sm:grid-cols-4">
+                  <PulseStat label="Seasons"       value={String(historyData.totalSeasons)} />
+                  <PulseStat label="Games Played"  value={historyData.totalGames.toLocaleString()} />
+                  <PulseStat label="All-Time High" value={formatPoints(historyData.highestScore)} />
+                  <PulseStat label="Champions"     value={String(historyData.uniqueChampionsCount)} />
+                </div>
+              </>
+            )}
+          </div>
+        </section>
 
         {/* ── Transaction ticker ── */}
         <TransactionTicker />

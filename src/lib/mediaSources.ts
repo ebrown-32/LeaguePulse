@@ -208,7 +208,9 @@ async function loadAllTrendingPlayers(): Promise<TrendingEntry[]> {
   return trendingCache(async () => {
     const [adds, drops, players] = await Promise.all([
       sleeperAPI.fetchTrendingPlayers('add', 24, 25),
-      sleeperAPI.fetchTrendingPlayers('drop', 24, 8),
+      // Drops get the same depth as adds now that they have their own view;
+      // the old cap of 8 only made sense when they were a feed afterthought.
+      sleeperAPI.fetchTrendingPlayers('drop', 24, 25),
       sleeperAPI.fetchPlayers(),
     ]);
 
@@ -249,6 +251,9 @@ export interface FeedItem {
   publishedAt: string; // ISO — real for articles/injuries, staggered-synthetic for trending
 }
 
+export type FeedKind = FeedItem['kind'];
+export type TrendType = TrendingEntry['type'];
+
 export interface FeedPage {
   items: FeedItem[];
   hasMore: boolean;
@@ -262,15 +267,25 @@ export interface FeedPage {
  * window by rank (highest add-count = most recent) so they interleave
  * instead of clustering artificially at "now".
  */
-export async function getUnifiedFeed(offset = 0, limit = 20, team?: FantasyTeam): Promise<FeedPage> {
+export async function getUnifiedFeed(
+  offset = 0,
+  limit = 20,
+  team?: FantasyTeam,
+  kinds?: FeedKind[],
+  trend: TrendType = 'add',
+): Promise<FeedPage> {
+  // Each tab asks for the kinds it actually renders, so an unused source is
+  // never fetched (the waiver tab shouldn't pay for 120 articles).
+  const want = (kind: FeedKind) => !kinds?.length || kinds.includes(kind);
+
   // Waiver-wire trends are global by nature (they're about players NOT on
   // any given roster) and were never actually filtered by team — showing them
   // inside a "curated for your team" view just reads as noise, so they're
   // dropped entirely once a team is selected rather than left unfiltered.
   const [articles, injuries, trending] = await Promise.all([
-    getArticles(120, team),
-    getInjuries(team).catch(() => []),
-    team ? Promise.resolve([]) : getTrendingPlayers().catch(() => []),
+    want('article') ? getArticles(120, team) : Promise.resolve([]),
+    want('injury') ? getInjuries(team).catch(() => []) : Promise.resolve([]),
+    want('trending') && !team ? getTrendingPlayers().catch(() => []) : Promise.resolve([]),
   ]);
 
   const articleItems: FeedItem[] = articles.map(a => ({
@@ -301,14 +316,19 @@ export async function getUnifiedFeed(offset = 0, limit = 20, team?: FantasyTeam)
       publishedAt: i.date,
     }));
 
-  const trendingAdds = trending.filter(t => t.type === 'add').slice(0, 25);
+  const trendingOfType = trending.filter(t => t.type === trend).slice(0, 25);
   const lookbackMs = 24 * 60 * 60 * 1000;
-  const staggerMs = trendingAdds.length > 1 ? lookbackMs / trendingAdds.length : 0;
-  const trendingItems: FeedItem[] = trendingAdds.map((t, idx) => ({
-    id: `trending_${t.playerId}`,
+  const staggerMs = trendingOfType.length > 1 ? lookbackMs / trendingOfType.length : 0;
+  const trendingItems: FeedItem[] = trendingOfType.map((t, idx) => ({
+    // Direction is part of the id because a churning player can appear in
+    // both the add and drop lists at once — same playerId, two cards, and a
+    // duplicate React key if the type isn't included.
+    id: `trending_${t.type}_${t.playerId}`,
     kind: 'trending',
     title: `${t.name} (${t.position} - ${t.team})`,
-    subtitle: `Added on ${t.count.toLocaleString()} rosters in the last 24 hours`,
+    subtitle: t.type === 'drop'
+      ? `Dropped from ${t.count.toLocaleString()} rosters in the last 24 hours`
+      : `Added on ${t.count.toLocaleString()} rosters in the last 24 hours`,
     source: 'Sleeper',
     count: t.count,
     trendType: t.type,

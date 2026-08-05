@@ -4,26 +4,27 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import type { ThemeConfig, FontPairKey, TxColors } from '@/lib/themeConfig';
-import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME } from '@/lib/themeConfig';
+import type { ThemeConfig, FontPairKey, TxColors, PaletteKey } from '@/lib/themeConfig';
+import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME, palettes, buildThemeCss } from '@/lib/themeConfig';
 import { cn } from '@/lib/utils';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
-function hexToHsl(hex: string): { h: number; s: number } | null {
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return null;
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  if (max === min) return { h: 0, s: 0 };
-  const d = max - min;
   const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) };
+  const d = max - min;
   const s = d / (l > 0.5 ? 2 - max - min : max + min);
   let h = 0;
   if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
   else if (max === g) h = ((b - r) / d + 2) / 6;
   else h = ((r - g) / d + 4) / 6;
-  return { h: Math.round(h * 360), s: Math.round(s * 100) };
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -37,35 +38,46 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-// ─── Live DOM injection (mirrors ThemeInjector server logic) ─────────────────
+// ─── Live DOM injection ─────────────────────────────────────────────────────
+// Injects the *same* stylesheet buildThemeCss() produces on the server, rather
+// than resolving one mode into inline styles on :root. Two reasons that
+// matters: inline vars beat the stylesheet permanently and got stuck on
+// whichever mode was active when you edited (toggling dark/light afterwards
+// left stale colours), and they couldn't preview fonts or surface tokens at
+// all. Appended to <body> so it lands after ThemeInjector's own <style> and
+// therefore wins on document order.
 
-function hexRgba(hex: string, a: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+const PREVIEW_STYLE_ID = 'lp-theme-preview';
+const PREVIEW_FONT_ID  = 'lp-theme-preview-font';
+
+function applyThemePreview(t: ThemeConfig) {
+  let style = document.getElementById(PREVIEW_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement('style');
+    style.id = PREVIEW_STYLE_ID;
+    document.body.appendChild(style);
+  }
+  style.textContent = buildThemeCss(t);
+
+  // The server only ships a <link> for the *saved* font, so previewing a
+  // different pairing needs its webfont pulled in too.
+  const pair = fontPairs[t.fontPair] ?? fontPairs[DEFAULT_THEME.fontPair];
+  let link = document.getElementById(PREVIEW_FONT_ID) as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement('link');
+    link.id  = PREVIEW_FONT_ID;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
+  const href = `https://fonts.googleapis.com/css2?${pair.googleQuery}&display=swap`;
+  if (link.getAttribute('href') !== href) link.setAttribute('href', href);
 }
 
-function applyThemeToDOM(t: ThemeConfig) {
-  const root  = document.documentElement;
-  const dark  = root.classList.contains('dark');
-  const hD = t.primaryH,            sD = t.primaryS;
-  const hL = t.primaryHLight ?? hD, sL = t.primarySLight ?? sD;
-  const primary = dark ? `${hD} ${sD}% 44%` : `${hL} ${sL}% 35%`;
-  root.style.setProperty('--primary', primary);
-  root.style.setProperty('--ring',    primary);
-  root.style.setProperty('--radius', `${t.radiusRem}rem`);
-  const c = dark ? t.txColorsDark : t.txColorsLight;
-  root.style.setProperty('--tx-trade',       c.trade);
-  root.style.setProperty('--tx-trade-muted', hexRgba(c.trade, 0.10));
-  root.style.setProperty('--tx-trade-dim',   hexRgba(c.trade, 0.30));
-  root.style.setProperty('--tx-trade-grad',  `linear-gradient(to right,${hexRgba(c.trade, 0.80)},${hexRgba(c.trade, 0.40)},transparent)`);
-  root.style.setProperty('--tx-waiver',       c.waiver);
-  root.style.setProperty('--tx-waiver-muted', hexRgba(c.waiver, 0.10));
-  root.style.setProperty('--tx-waiver-dim',   hexRgba(c.waiver, 0.30));
-  root.style.setProperty('--tx-waiver-grad',  `linear-gradient(to right,${hexRgba(c.waiver, 0.80)},${hexRgba(c.waiver, 0.40)},transparent)`);
-  root.style.setProperty('--tx-fa',           c.freeAgent);
-  root.style.setProperty('--tx-fa-muted',     hexRgba(c.freeAgent, 0.10));
-  root.style.setProperty('--tx-fa-dim',       hexRgba(c.freeAgent, 0.30));
-  root.style.setProperty('--tx-fa-grad',      `linear-gradient(to right,${hexRgba(c.freeAgent, 0.80)},${hexRgba(c.freeAgent, 0.40)},transparent)`);
+/** These nodes aren't React-managed, so they'd otherwise survive client-side
+ *  navigation and keep overriding the real theme on every other page. */
+function clearThemePreview() {
+  document.getElementById(PREVIEW_STYLE_ID)?.remove();
+  document.getElementById(PREVIEW_FONT_ID)?.remove();
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -91,7 +103,7 @@ function Preview({ h, s, radius, lightness = 44 }: { h: number; s: number; radiu
         <div className="h-2 w-2 rounded-full" style={{ background: accent }} />
         <span className="font-semibold text-foreground text-xs">League Pulse</span>
         <div className="ml-auto flex items-center gap-2">
-          {['Overview','Matchups','History'].map((n, i) => (
+          {['Home','Matchups','History'].map((n, i) => (
             <span key={n} className={cn(
               'text-[10px] font-medium px-2 py-0.5 rounded',
               i === 0 ? 'text-foreground' : 'text-muted-foreground',
@@ -175,8 +187,12 @@ export default function AppearancePage() {
 
   // Apply CSS variables immediately whenever theme state changes (once authed)
   useEffect(() => {
-    if (authed) applyThemeToDOM(theme);
+    if (authed) applyThemePreview(theme);
   }, [theme, authed]);
+
+  // Drop the preview override when leaving the page, so an unsaved experiment
+  // doesn't follow the admin around the rest of the app.
+  useEffect(() => clearThemePreview, []);
 
   // Load current theme once authenticated
   const loadTheme = useCallback(async (pwd: string) => {
@@ -187,8 +203,8 @@ export default function AppearancePage() {
       const data: ThemeConfig = await res.json();
       const merged = { ...DEFAULT_THEME, ...data };
       setTheme(merged);
-      setCustomHexDark(hslToHex(merged.primaryH,      merged.primaryS,      44));
-      setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, 35));
+      setCustomHexDark(hslToHex(merged.primaryH,       merged.primaryS,      merged.primaryL));
+      setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, merged.primaryLLight));
     }
   }, []);
 
@@ -254,8 +270,8 @@ export default function AppearancePage() {
         const defaults: ThemeConfig = await res.json();
         const merged = { ...DEFAULT_THEME, ...defaults };
         setTheme(merged);
-        setCustomHexDark(hslToHex(merged.primaryH,      merged.primaryS,      44));
-        setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, 35));
+        setCustomHexDark(hslToHex(merged.primaryH,       merged.primaryS,      merged.primaryL));
+        setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, merged.primaryLLight));
       }
     } finally {
       setResetting(false);
@@ -275,13 +291,13 @@ export default function AppearancePage() {
     }));
   };
 
-  const setAccent = (h: number, s: number) => {
+  const setAccent = (h: number, s: number, l: number) => {
     if (accentMode === 'dark') {
-      setTheme(t => ({ ...t, primaryH: h, primaryS: s }));
-      setCustomHexDark(hslToHex(h, s, 44));
+      setTheme(t => ({ ...t, primaryH: h, primaryS: s, primaryL: l }));
+      setCustomHexDark(hslToHex(h, s, l));
     } else {
-      setTheme(t => ({ ...t, primaryHLight: h, primarySLight: s }));
-      setCustomHexLight(hslToHex(h, s, 35));
+      setTheme(t => ({ ...t, primaryHLight: h, primarySLight: s, primaryLLight: l }));
+      setCustomHexLight(hslToHex(h, s, l));
     }
   };
 
@@ -289,11 +305,28 @@ export default function AppearancePage() {
     const hsl = hexToHsl(hex);
     if (accentMode === 'dark') {
       setCustomHexDark(hex);
-      if (hsl) setTheme(t => ({ ...t, primaryH: hsl.h, primaryS: hsl.s }));
+      if (hsl) setTheme(t => ({ ...t, primaryH: hsl.h, primaryS: hsl.s, primaryL: hsl.l }));
     } else {
       setCustomHexLight(hex);
-      if (hsl) setTheme(t => ({ ...t, primaryHLight: hsl.h, primarySLight: hsl.s }));
+      if (hsl) setTheme(t => ({ ...t, primaryHLight: hsl.h, primarySLight: hsl.s, primaryLLight: hsl.l }));
     }
+  };
+
+  /** Selecting a palette also adopts its designed accent and transaction
+   *  colours — the pairing is the point. Both pickers below can still
+   *  override afterwards. */
+  const setPalette = (key: PaletteKey) => {
+    const p = palettes[key];
+    setTheme(t => ({
+      ...t,
+      palette:       key,
+      primaryH:      p.accentDark.h,  primaryS: p.accentDark.s,  primaryL: p.accentDark.l,
+      primaryHLight: p.accentLight.h, primarySLight: p.accentLight.s, primaryLLight: p.accentLight.l,
+      txColorsDark:  p.txDark,
+      txColorsLight: p.txLight,
+    }));
+    setCustomHexDark(hslToHex(p.accentDark.h, p.accentDark.s, p.accentDark.l));
+    setCustomHexLight(hslToHex(p.accentLight.h, p.accentLight.s, p.accentLight.l));
   };
 
   // ── Login gate ──
@@ -426,6 +459,48 @@ export default function AppearancePage() {
           {/* Controls */}
           <div className="space-y-6">
 
+            {/* ── Color palette ── */}
+            <section className="rounded-lg border border-border bg-card p-6 space-y-4">
+              <div>
+                <h2 className="font-display text-base font-semibold text-foreground">Color Palette</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sets every surface — backgrounds, cards, borders, and text — in both light and dark mode
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(Object.entries(palettes) as [PaletteKey, typeof palettes[PaletteKey]][]).map(([key, p]) => {
+                  const isActive = theme.palette === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setPalette(key)}
+                      className={cn(
+                        'flex flex-col items-start gap-2.5 rounded-md border p-4 text-left transition-none',
+                        isActive ? 'border-primary bg-primary/10' : 'border-border bg-background hover:border-border/80',
+                      )}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <span className={cn('text-sm font-semibold', isActive ? 'text-primary' : 'text-foreground')}>
+                          {p.name}
+                        </span>
+                        {isActive && <CheckIcon className="h-3.5 w-3.5 text-primary" />}
+                      </div>
+
+                      {/* Swatch strip: ground, surface, accent, text */}
+                      <div className="flex w-full overflow-hidden rounded border border-border/60">
+                        {p.swatches.map((c, i) => (
+                          <div key={i} className="h-7 flex-1" style={{ background: c }} />
+                        ))}
+                      </div>
+
+                      <p className="text-[11px] leading-snug text-muted-foreground">{p.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             {/* ── Accent color ── */}
             <section className="rounded-lg border border-border bg-card p-6 space-y-4">
               <div>
@@ -456,14 +531,14 @@ export default function AppearancePage() {
               {/* Presets */}
               <div className="flex flex-wrap gap-2">
                 {accentPresets.map((p) => {
-                  const activeH  = accentMode === 'dark' ? theme.primaryH      : theme.primaryHLight;
-                  const activeS  = accentMode === 'dark' ? theme.primaryS      : theme.primarySLight;
-                  const l        = accentMode === 'dark' ? 44 : 35;
+                  const activeH  = accentMode === 'dark' ? theme.primaryH : theme.primaryHLight;
+                  const activeS  = accentMode === 'dark' ? theme.primaryS : theme.primarySLight;
+                  const l        = accentMode === 'dark' ? p.l : p.lLight;
                   const isActive = activeH === p.h && activeS === p.s;
                   return (
                     <button
                       key={p.name}
-                      onClick={() => setAccent(p.h, p.s)}
+                      onClick={() => setAccent(p.h, p.s, l)}
                       title={p.name}
                       className={cn(
                         'group relative h-8 w-8 rounded-full border-2 transition-none',
@@ -744,7 +819,7 @@ export default function AppearancePage() {
                 h={accentMode === 'dark' ? theme.primaryH : theme.primaryHLight}
                 s={accentMode === 'dark' ? theme.primaryS : theme.primarySLight}
                 radius={theme.radiusRem}
-                lightness={accentMode === 'dark' ? 44 : 35}
+                lightness={accentMode === 'dark' ? theme.primaryL : theme.primaryLLight}
               />
               <p className="mt-3 text-center text-xs text-muted-foreground">
                 Changes are reflected above instantly. Save to apply site-wide.

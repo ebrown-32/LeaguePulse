@@ -1,20 +1,23 @@
 {
+  "palette": "carbon",
   "primaryH": 45,
   "primaryS": 93,
-  "primaryHLight": 45,
-  "primarySLight": 93,
+  "primaryL": 52,
+  "primaryHLight": 38,
+  "primarySLight": 92,
+  "primaryLLight": 38,
   "radiusRem": 0,
   "fontPair": "syne-dm",
   "logoUrl": "/dominationleague.png",
   "leagueName": "The Domination League",
   "txColorsDark": {
-    "trade": "#f87171",
-    "waiver": "#fb923c",
-    "freeAgent": "#fbbf24"
+    "trade": "#fbbf24",
+    "waiver": "#60a5fa",
+    "freeAgent": "#a3a3a3"
   },
   "txColorsLight": {
-    "trade": "#dc2626",
-    "waiver": "#ea580c",
-    "freeAgent": "#d97706"
+    "trade": "#b45309",
+    "waiver": "#1d4ed8",
+    "freeAgent": "#737373"
   }
 }

@@ -33,10 +33,27 @@ async function ensureDataDir() {
   catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
-// In-memory cache. Avoids hitting storage on every request within the same instance.
+// In-memory cache. Deliberately short-lived: getTheme() runs several times per
+// render (root layout, ThemeInjector, Footer), and this collapses those into a
+// single read without letting an admin save go unnoticed.
+//
+// It used to be 5 minutes, which is why saved changes appeared not to apply —
+// Next bundles route handlers and server components separately, so saveTheme()
+// busting *its* module instance's cache never reached the render path's copy,
+// and noStore() doesn't touch a module-level cache.
 let memCache: ThemeConfig | null = null;
 let memCacheExpiry = 0;
-const MEM_TTL = 5 * 60 * 1000; // 5 minutes
+let memCacheMtimeMs = 0;
+const MEM_TTL = 1000; // 1s
+
+/** 0 when the file doesn't exist yet (or on the Redis backend). */
+async function themeFileMtime(): Promise<number> {
+  try {
+    return (await fs.stat(THEME_FILE)).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
 
 async function connectRedis(): Promise<void> {
   // Hard 2-second timeout so a slow/misconfigured Redis never blocks page loads
@@ -49,7 +66,11 @@ async function connectRedis(): Promise<void> {
 }
 
 export async function getTheme(): Promise<ThemeConfig> {
-  if (memCache && Date.now() < memCacheExpiry) return memCache;
+  if (memCache && Date.now() < memCacheExpiry) {
+    // On the file backend an mtime change proves another process or bundle
+    // wrote a new theme, so the cache is stale no matter how fresh the TTL is.
+    if (redis || (await themeFileMtime()) === memCacheMtimeMs) return memCache;
+  }
 
   try {
     if (redis) {
@@ -76,6 +97,7 @@ export async function getTheme(): Promise<ThemeConfig> {
     const result = theme ?? { ...DEFAULT_THEME };
     memCache = result;
     memCacheExpiry = Date.now() + MEM_TTL;
+    memCacheMtimeMs = await themeFileMtime();
     return result;
   } catch {
     return { ...DEFAULT_THEME };
@@ -99,6 +121,7 @@ export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfi
   // Bust in-memory cache so the new theme is served immediately
   memCache = next;
   memCacheExpiry = Date.now() + MEM_TTL;
+  memCacheMtimeMs = await themeFileMtime();
   return next;
 }
 

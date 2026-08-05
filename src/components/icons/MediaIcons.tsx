@@ -96,6 +96,28 @@ export function TrendingIcon(props: IconProps) {
   );
 }
 
+// Mirror of TrendingIcon, for waiver drops.
+export function TrendingDownIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 7l6 6 4-4 8 8" />
+      <path d="M15 17h6v-6" />
+    </svg>
+  );
+}
+
+// Four-up tile grid — the browsing view, as opposed to one-at-a-time.
+export function GridIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    </svg>
+  );
+}
+
 export function ListIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

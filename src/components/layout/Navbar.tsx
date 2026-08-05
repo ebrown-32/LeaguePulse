@@ -32,7 +32,7 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { name: 'Overview',  href: '/',          icon: LayoutDashboard },
+  { name: 'Home',      href: '/',          icon: LayoutDashboard },
   { name: 'Matchups',  href: '/matchups',  icon: Swords          },
   { name: 'Rivalries', href: '/rivalries', icon: Sword           },
   { name: 'Next Gen',  href: '/next-gen',  icon: Activity        },
@@ -87,30 +87,47 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
 
   const isMoreActive = MORE_NAV.some(item => pathname === item.href);
 
+  // Lighter and more transparent at rest so the ambient background reads
+  // through it; condenses into frosted glass once you scroll.
   const navbarClass = cn(
     'sticky top-0 z-50 w-full',
-    'bg-background/80 backdrop-blur-xl',
+    'transition-[background-color,border-color,box-shadow] duration-300',
     scrolled
-      ? 'border-b border-border/60 shadow-[0_1px_0_hsl(var(--border)/0.4),0_4px_24px_-4px_hsl(0_0%_0%/0.4)]'
-      : 'border-b border-border/30',
+      ? 'bg-background/85 backdrop-blur-2xl border-b border-border/70 shadow-[0_1px_0_hsl(var(--border)/0.5),0_10px_36px_-10px_hsl(0_0%_0%/0.55)]'
+      : 'bg-background/55 backdrop-blur-xl border-b border-border/25',
+  );
+
+  const brand = (
+    <>
+      <div className="relative shrink-0">
+        {/* Accent halo blooms on hover */}
+        <div className="absolute -inset-2 rounded-full bg-primary/25 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <Logo
+          src={logoUrl}
+          className="relative h-11 w-11 lg:h-14 lg:w-14 object-contain drop-shadow-[0_2px_10px_hsl(0_0%_0%/0.45)] transition-transform duration-300 group-hover:scale-105"
+        />
+      </div>
+      {leagueName ? (
+        <div className="flex flex-col leading-tight min-w-0">
+          <span className="font-display text-base lg:text-xl font-bold text-foreground truncate">{leagueName}</span>
+          <span className="text-[9px] lg:text-[10px] font-semibold tracking-[0.22em] text-primary/80 uppercase">
+            powered by League Pulse
+          </span>
+        </div>
+      ) : (
+        <span className="font-display text-base lg:text-xl font-bold tracking-widest text-foreground uppercase">
+          League <span className="text-primary">Pulse</span>
+        </span>
+      )}
+    </>
   );
 
   if (!mounted) {
     return (
       <header className={navbarClass}>
-        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Logo src={logoUrl} />
-            {leagueName ? (
-              <div className="flex flex-col leading-none">
-                <span className="font-display text-sm font-semibold text-foreground">{leagueName}</span>
-                <span className="text-[9px] font-medium tracking-widest text-primary/70 uppercase">powered by League Pulse</span>
-              </div>
-            ) : (
-              <span className="font-display text-sm font-semibold tracking-wide text-foreground">
-                LEAGUE <span className="text-primary">PULSE</span>
-              </span>
-            )}
+        <nav className="mx-auto flex h-16 lg:h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-3 shrink-0 group">
+            {brand}
           </Link>
           <div className="h-8 w-8" />
         </nav>
@@ -123,23 +140,10 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
       <header className={navbarClass}>
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
-        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <nav className="mx-auto flex h-16 lg:h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-            <div className="relative">
-              <Logo src={logoUrl} />
-              <div className="absolute inset-0 blur-md opacity-0 group-hover:opacity-60 transition-opacity duration-300 bg-primary rounded-full" />
-            </div>
-            {leagueName ? (
-              <div className="flex flex-col leading-none">
-                <span className="font-display text-sm font-semibold text-foreground">{leagueName}</span>
-                <span className="text-[9px] font-medium tracking-widest text-primary/70 uppercase">powered by League Pulse</span>
-              </div>
-            ) : (
-              <span className="font-display text-sm font-semibold tracking-widest text-foreground uppercase">
-                League <span className="text-primary">Pulse</span>
-              </span>
-            )}
+          <Link href="/" className="flex items-center gap-3 shrink-0 group">
+            {brand}
           </Link>
 
           {/* Desktop nav — kicks in at lg (1024px), not md (768px), since md
@@ -153,26 +157,31 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'group relative flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold uppercase tracking-widest rounded-md transition-colors',
-                    isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                    'group relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold uppercase tracking-widest rounded-lg transition-colors',
+                    isActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
                   )}
                 >
-                  <item.icon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{item.name}</span>
+                  {/* Pill is rendered first and the label lifted above it —
+                      previously the absolutely-positioned pill painted over
+                      the icon and text, dimming them. */}
                   {isActive && (
                     <>
                       <motion.span
                         layoutId="nav-pill"
-                        className="absolute inset-0 rounded-md bg-primary/8 dark:bg-primary/10"
+                        className="absolute inset-0 rounded-lg bg-gradient-to-b from-primary/20 via-primary/10 to-primary/5 ring-1 ring-inset ring-primary/25"
                         transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                       />
                       <motion.span
                         layoutId="nav-underline"
-                        className="absolute bottom-0 inset-x-3 h-px bg-primary rounded-full"
+                        className="absolute -bottom-px inset-x-2.5 h-[2px] rounded-full bg-gradient-to-r from-transparent via-primary to-transparent shadow-[0_0_10px_hsl(var(--primary)/0.7)]"
                         transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                       />
                     </>
                   )}
+                  <item.icon className="relative h-3.5 w-3.5 shrink-0" />
+                  <span className="relative">{item.name}</span>
                 </Link>
               );
             })}
@@ -182,20 +191,22 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
               <button
                 onClick={() => setMoreOpen(o => !o)}
                 className={cn(
-                  'relative flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold uppercase tracking-widest rounded-md transition-colors',
-                  isMoreActive || moreOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                  'relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold uppercase tracking-widest rounded-lg transition-colors',
+                  isMoreActive || moreOpen
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
                 )}
               >
                 {isMoreActive && (
                   <>
                     <motion.span
                       layoutId="nav-pill"
-                      className="absolute inset-0 rounded-md bg-primary/8 dark:bg-primary/10"
+                      className="absolute inset-0 rounded-lg bg-gradient-to-b from-primary/20 via-primary/10 to-primary/5 ring-1 ring-inset ring-primary/25"
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                     />
                     <motion.span
                       layoutId="nav-underline"
-                      className="absolute bottom-0 inset-x-3 h-px bg-primary rounded-full"
+                      className="absolute -bottom-px inset-x-2.5 h-[2px] rounded-full bg-gradient-to-r from-transparent via-primary to-transparent shadow-[0_0_10px_hsl(var(--primary)/0.7)]"
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                     />
                   </>
