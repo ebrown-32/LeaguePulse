@@ -37,73 +37,75 @@
 .media-prose strong { font-weight: 700; }
 
 /* ─────────────────────────────────────────────
-   DESIGN TOKENS: "Signal" design system
-   Light  = :root
-   Dark   = .dark   (class set by next-themes)
+   DESIGN TOKENS — baseline only.
+   These mirror the default "Prussian" palette so the very first paint is
+   already correct; ThemeInjector then overrides them with whatever palette
+   the admin has saved (see lib/themeConfig.ts → buildThemeCss).
+   Light = :root, Dark = .dark (class set by next-themes)
 ───────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Accent */
-    --primary:            194 90% 36%;
-    --primary-foreground: 0   0%  100%;
+    /* Accent: amber-orange #fca311, darkened for legibility on white */
+    --primary:            37  98% 42%;
+    --primary-foreground: 0   0%   0%;
 
-    /* Backgrounds */
-    --background:         210 28% 96%;
-    --foreground:         222 35%  8%;
-    --card:               0   0%  100%;
-    --card-foreground:    222 35%  8%;
-    --popover:            0   0%  100%;
-    --popover-foreground: 222 35%  8%;
+    /* Backgrounds: alabaster paper */
+    --background:         0   0%  98%;
+    --foreground:         221 51% 16%;   /* prussian blue #14213d */
+    --card:               0   0% 100%;
+    --card-foreground:    221 51% 16%;
+    --popover:            0   0% 100%;
+    --popover-foreground: 221 51% 16%;
 
     /* Surfaces */
-    --secondary:          210 20% 91%;
-    --secondary-foreground: 222 25% 18%;
-    --muted:              210 20% 91%;
-    --muted-foreground:   215 14% 44%;
-    --accent:             210 18% 88%;
-    --accent-foreground:  222 35%  8%;
+    --secondary:          0   0%  92%;
+    --secondary-foreground: 221 51% 16%;
+    --muted:              0   0%  92%;
+    --muted-foreground:   0   0%  36%;
+    --accent:             0   0%  90%;
+    --accent-foreground:  221 51% 16%;
 
     /* Status */
     --destructive:        0  72% 51%;
     --destructive-foreground: 0 0% 98%;
 
     /* Structure */
-    --border:             210 16% 84%;
-    --input:              210 16% 84%;
-    --ring:               194 90% 36%;
-    --radius:             0.375rem;
+    --border:             0   0%  87%;
+    --input:              0   0%  87%;
+    --ring:               37  98% 42%;
+    --radius:             0.5rem;
   }
 
   .dark {
-    /* Accent: electric sky blue */
-    --primary:            194 100% 54%;
-    --primary-foreground: 222  40%  4%;
+    /* Accent: amber-orange #fca311 */
+    --primary:            37  98% 53%;
+    --primary-foreground: 0   0%   0%;
 
-    /* Backgrounds: deep space */
-    --background:         222  40%  3%;   /* #050912 near-black with blue cast */
-    --foreground:         210  20% 92%;   /* cool white */
-    --card:               220  32%  6%;   /* #0a1020 */
-    --card-foreground:    210  20% 92%;
-    --popover:            220  30%  8%;
-    --popover-foreground: 210  20% 92%;
+    /* Backgrounds: pure black ground, prussian-blue surfaces */
+    --background:         0   0%   0%;   /* #000000 */
+    --foreground:         0   0%  90%;   /* alabaster #e5e5e5 */
+    --card:               222 52%  6%;   /* #080d19 */
+    --card-foreground:    0   0%  90%;
+    --popover:            221 51% 10%;   /* #0c1425 */
+    --popover-foreground: 0   0%  90%;
 
     /* Surfaces */
-    --secondary:          220  25% 11%;
-    --secondary-foreground: 210 18% 80%;
-    --muted:              220  25% 11%;
-    --muted-foreground:   220  12% 48%;
-    --accent:             220  28% 10%;
-    --accent-foreground:  210  20% 92%;
+    --secondary:          221 51% 10%;
+    --secondary-foreground: 0 0%  80%;
+    --muted:              221 51% 10%;
+    --muted-foreground:   0   0%  60%;   /* #999999 */
+    --accent:             220 51% 13%;   /* #101b31 */
+    --accent-foreground:  0   0%  90%;
 
     /* Status */
     --destructive:        0   62% 45%;
     --destructive-foreground: 0 0% 98%;
 
     /* Structure */
-    --border:             220  22% 13%;
-    --input:              220  22% 13%;
-    --ring:               194 100% 54%;
-    --radius:             0.375rem;
+    --border:             220 51% 13%;
+    --input:              220 51% 13%;
+    --ring:               37  98% 53%;
+    --radius:             0.5rem;
   }
 }
 
@@ -125,14 +127,73 @@
     font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
   }
 
-  /* Dot-grid background in dark mode */
-  .dark body {
-    background-image: radial-gradient(
-      circle,
-      hsl(220 22% 13% / 0.9) 1px,
-      transparent 1px
-    );
-    background-size: 28px 28px;
+  /* ── Ambient field ──────────────────────────────────────────────────────
+     Replaces the old 28px dot grid, which tiled edge-to-edge at uniform
+     strength and read as wallpaper. Two fixed, non-interactive layers,
+     both driven by palette tokens so they follow the selected theme:
+
+       ::before  slow-drifting accent glows (the "aurora")
+       ::after   a fine 64px grid, masked so it fades out down the page
+
+     Both sit behind content and neither ever intercepts pointer events. */
+
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* Only the glow layer drifts, so only it needs overscan. The grid animates
+     opacity alone, so it sits flush to the viewport — which also keeps its
+     mask percentages honest (they were being measured against a 120%-tall
+     box before, which is what cut the grid off just under the navbar). */
+  body::before { inset: -10%; }
+  body::after  { inset: 0; }
+
+  body::before {
+    background:
+      radial-gradient(38rem 30rem at 12% -8%,  hsl(var(--primary) / 0.10), transparent 62%),
+      radial-gradient(34rem 26rem at 88% 4%,   hsl(var(--primary) / 0.05), transparent 60%),
+      radial-gradient(42rem 32rem at 50% 108%, hsl(var(--primary) / 0.06), transparent 64%);
+    animation: ambient-drift 44s ease-in-out infinite alternate;
+  }
+
+  body::after {
+    background-image:
+      linear-gradient(to right,  hsl(var(--border) / 0.16) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.16) 1px, transparent 1px);
+    background-size: 64px 64px;
+    /* Holds full strength through most of the viewport, then dissolves into
+       the ground near the bottom — a linear fade is predictable, where the
+       previous radial one collapsed to nothing a few hundred pixels in. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, hsl(0 0% 0% / 0.35) 82%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 58%, hsl(0 0% 0% / 0.35) 82%, transparent 100%);
+    animation: ambient-grid 36s linear infinite;
+  }
+
+  /* Light mode carries far less of both — the glows read as smudges on
+     near-white, and the grid competes with content. */
+  :root:not(.dark) body::before { opacity: 0.55; }
+  :root:not(.dark) body::after  { opacity: 0.5; }
+
+  @keyframes ambient-drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to   { transform: translate3d(0, -1.5%, 0) scale(1.05); }
+  }
+
+  /* Drifts exactly one 64px cell over the cycle so the loop is seamless,
+     with a gentle brightness breathe layered on top. */
+  @keyframes ambient-grid {
+    0%   { background-position:  0    0,     0    0;    opacity: 0.9; }
+    50%  { background-position: 32px 32px,  32px 32px;  opacity: 0.55; }
+    100% { background-position: 64px 64px,  64px 64px;  opacity: 0.9; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::before,
+    body::after { animation: none; }
   }
 
   h1, h2, h3, h4, h5, h6 {

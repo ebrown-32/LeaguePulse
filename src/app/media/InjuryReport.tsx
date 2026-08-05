@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import InfiniteScrollSentinel from './InfiniteScrollSentinel';
 import type { InjuryEntry } from '@/lib/mediaSources';
 
 const STATUS_COLOR: Record<string, string> = {
@@ -30,6 +31,10 @@ export default function InjuryReport({ teamId }: { teamId?: string }) {
   const [activeStatuses, setActiveStatuses] = useState<string[]>(DEFAULT_STATUSES);
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(30);
+
+  // The full list is already client-side, so "loading more" is just revealing
+  // the next slice as the user scrolls.
+  const revealMore = useCallback(() => setVisibleCount(c => c + 30), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,16 +147,11 @@ export default function InjuryReport({ teamId }: { teamId?: string }) {
         </div>
       )}
 
-      {visibleCount < filtered.length && (
-        <div className="text-center pt-3">
-          <button
-            onClick={() => setVisibleCount(c => c + 30)}
-            className="px-6 py-2.5 rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors text-sm font-medium text-foreground"
-          >
-            Show more
-          </button>
-        </div>
-      )}
+      <InfiniteScrollSentinel
+        hasMore={visibleCount < filtered.length}
+        loading={false}
+        onLoadMore={revealMore}
+      />
     </div>
   );
 }

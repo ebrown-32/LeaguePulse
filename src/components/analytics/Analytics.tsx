@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { initMixpanel, track } from '@/lib/mixpanel';
 
 const PAGE_NAMES: Record<string, string> = {
-  '/':             'Overview',
+  '/':             'Home',
   '/matchups':     'Matchups',
   '/rivalries':    'Rivalries',
   '/next-gen':     'Next Gen Stats',

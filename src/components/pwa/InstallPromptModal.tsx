@@ -74,10 +74,10 @@ export default function InstallPromptModal({
 
               {platform === 'ios' && (
                 <div className="space-y-4">
-                  <Step icon={<ShareIosIcon className="h-4.5 w-4.5" />}>
+                  <Step icon={<ShareIosIcon className="h-5 w-5" />}>
                     Tap the <strong className="font-semibold">Share</strong> button in Safari's toolbar
                   </Step>
-                  <Step icon={<AddSquareIcon className="h-4.5 w-4.5" />}>
+                  <Step icon={<AddSquareIcon className="h-5 w-5" />}>
                     Scroll down and tap <strong className="font-semibold">Add to Home Screen</strong>
                   </Step>
                   <Step icon={<span className="text-sm font-bold">✓</span>}>
@@ -98,10 +98,10 @@ export default function InstallPromptModal({
 
               {platform === 'android' && !canInstallNatively && (
                 <div className="space-y-4">
-                  <Step icon={<MenuDotsIcon className="h-4.5 w-4.5" />}>
+                  <Step icon={<MenuDotsIcon className="h-5 w-5" />}>
                     Tap the <strong className="font-semibold">menu</strong> button in your browser's toolbar
                   </Step>
-                  <Step icon={<AddSquareIcon className="h-4.5 w-4.5" />}>
+                  <Step icon={<AddSquareIcon className="h-5 w-5" />}>
                     Select <strong className="font-semibold">Add to Home Screen</strong> or <strong className="font-semibold">Install App</strong>
                   </Step>
                 </div>
