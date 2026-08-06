@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import type { ThemeConfig, FontPairKey, TxColors, PaletteKey } from '@/lib/themeConfig';
+import type { ThemeConfig, FontPairKey, TxColors, PaletteKey, BackgroundStyle, MotionLevel } from '@/lib/themeConfig';
 import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME, palettes, buildThemeCss } from '@/lib/themeConfig';
 import { cn } from '@/lib/utils';
 
@@ -684,6 +684,73 @@ export default function AppearancePage() {
                     </div>
                   );
                 })}
+              </div>
+            </section>
+
+            {/* ── Interface ── */}
+            <section className="rounded-lg border border-border bg-card p-6 space-y-5">
+              <div>
+                <h2 className="font-display text-base font-semibold text-foreground">Interface</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ambient backdrop and motion. Both apply site-wide the moment you save.
+                </p>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">Background</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'grid',  label: 'Grid',  hint: 'Subtle animated field' },
+                      { id: 'plain', label: 'Plain', hint: 'Flat, no backdrop' },
+                    ] as { id: BackgroundStyle; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTheme(t => ({ ...t, background: opt.id }))}
+                        className={cn(
+                          'rounded-md border p-3 text-left transition-none',
+                          theme.background === opt.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-border/80',
+                        )}
+                      >
+                        <span className={cn('block text-sm font-semibold', theme.background === opt.id ? 'text-primary' : 'text-foreground')}>
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">Motion</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'full',    label: 'Full',    hint: 'Transitions + drift' },
+                      { id: 'reduced', label: 'Reduced', hint: 'Minimal movement' },
+                    ] as { id: MotionLevel; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTheme(t => ({ ...t, motion: opt.id }))}
+                        className={cn(
+                          'rounded-md border p-3 text-left transition-none',
+                          theme.motion === opt.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-border/80',
+                        )}
+                      >
+                        <span className={cn('block text-sm font-semibold', theme.motion === opt.id ? 'text-primary' : 'text-foreground')}>
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    A visitor&apos;s own “reduce motion” OS setting always wins over this.
+                  </p>
+                </div>
               </div>
             </section>
 

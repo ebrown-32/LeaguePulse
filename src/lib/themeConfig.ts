@@ -3,12 +3,23 @@
  * Actual storage functions live in themeStorage.ts (server-only).
  */
 
-export type FontPairKey = 'bricolage-dm' | 'syne-dm' | 'fraunces-outfit' | 'outfit';
+export type FontPairKey =
+  | 'bricolage-dm' | 'syne-dm'     | 'fraunces-outfit' | 'outfit'
+  | 'anton-inter'  | 'bebas-inter' | 'oswald-roboto'
+  | 'space-inter'  | 'playfair-source' | 'unbounded-dm' | 'instrument-inter'
+  | 'archivo-inter'| 'chakra-inter'    | 'sora-inter'   | 'dmserif-dm'
+  | 'rubikmono-inter' | 'teko-inter'   | 'familjen-inter' | 'baskerville-inter';
+
+export type BackgroundStyle = 'grid' | 'plain';
+export type MotionLevel = 'full' | 'reduced';
 
 export type PaletteKey =
-  | 'prussian' | 'harbor'   | 'ensign'   | 'midnight'
-  | 'carbon'   | 'evergreen'| 'oxblood'  | 'sunset'
-  | 'mocha'    | 'porcelain';
+  | 'prussian' | 'harbor'    | 'ensign'  | 'midnight'
+  | 'carbon'   | 'evergreen' | 'oxblood' | 'sunset'
+  | 'mocha'    | 'porcelain' | 'nord'    | 'synthwave'
+  | 'ember'    | 'ultraviolet' | 'copper' | 'sakura'
+  | 'gridiron' | 'slate'     | 'goldenrod' | 'tidal'
+  | 'crimson'  | 'linen';
 
 /**
  * A full surface ramp, not just an accent. Every value is a bare HSL triplet
@@ -73,6 +84,8 @@ export interface ThemeConfig {
   primaryLLight: number;      // light mode accent lightness
   radiusRem:     number;      // e.g. 0, 0.25, 0.5, 0.75, 1
   fontPair:      FontPairKey;
+  background:    BackgroundStyle; // ambient grid behind content, or nothing
+  motion:        MotionLevel;     // page transitions + ambient drift
   logoUrl:       string | null;
   leagueName:    string | null;
   txColorsDark:  TxColors;
@@ -400,6 +413,366 @@ export const palettes: Record<PaletteKey, PaletteDefinition> = {
       primaryForeground: '0 0% 100%',
     },
   },
+
+  nord: {
+    name:        'Nord',
+    description: 'Arctic slate with a frost-blue accent',
+    swatches:    ['#2e3440', '#3b4252', '#88c0d0', '#a3be8c', '#eceff4'],
+    accentDark:  { h: 193, s: 43, l: 67 },
+    accentLight: { h: 210, s: 34, l: 38 },
+    txDark:      { trade: '#88c0d0', waiver: '#a3be8c', freeAgent: '#d8dee9' },
+    txLight:     { trade: '#417b8c', waiver: '#5a7247', freeAgent: '#6b7280' },
+    dark: {
+      background: '220 16% 12%', foreground: '218 27% 92%',
+      card: '220 16% 22%', cardForeground: '218 27% 92%',
+      popover: '220 16% 26%', popoverForeground: '218 27% 92%',
+      secondary: '220 15% 29%', secondaryForeground: '218 20% 84%',
+      muted: '220 15% 29%', mutedForeground: '219 18% 70%',
+      accent: '220 16% 28%', accentForeground: '218 27% 92%',
+      border: '220 14% 34%', input: '220 14% 34%',
+      primaryForeground: '220 16% 12%',
+    },
+    light: {
+      background: '218 27% 94%', foreground: '220 16% 18%',
+      card: '0 0% 100%', cardForeground: '220 16% 18%',
+      popover: '0 0% 100%', popoverForeground: '220 16% 18%',
+      secondary: '218 22% 91%', secondaryForeground: '220 16% 24%',
+      muted: '218 22% 91%', mutedForeground: '220 12% 42%',
+      accent: '218 20% 88%', accentForeground: '220 16% 18%',
+      border: '218 18% 84%', input: '218 18% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  synthwave: {
+    name:        'Synthwave',
+    description: 'Neon magenta and cyan over deep violet',
+    swatches:    ['#0d0221', '#241734', '#ff2a6d', '#05d9e8', '#d1f7ff'],
+    accentDark:  { h: 340, s: 100, l: 62 },
+    accentLight: { h: 340, s: 82, l: 42 },
+    txDark:      { trade: '#ff2a6d', waiver: '#05d9e8', freeAgent: '#b39ddb' },
+    txLight:     { trade: '#c2185b', waiver: '#00838f', freeAgent: '#6a5acd' },
+    dark: {
+      background: '263 82% 7%', foreground: '191 100% 92%',
+      card: '271 38% 17%', cardForeground: '191 100% 92%',
+      popover: '271 36% 21%', popoverForeground: '191 100% 92%',
+      secondary: '271 32% 24%', secondaryForeground: '191 60% 84%',
+      muted: '271 32% 24%', mutedForeground: '280 24% 70%',
+      accent: '271 34% 23%', accentForeground: '191 100% 92%',
+      border: '271 30% 29%', input: '271 30% 29%',
+      primaryForeground: '263 82% 8%',
+    },
+    light: {
+      background: '280 40% 96%', foreground: '263 60% 16%',
+      card: '0 0% 100%', cardForeground: '263 60% 16%',
+      popover: '0 0% 100%', popoverForeground: '263 60% 16%',
+      secondary: '280 30% 92%', secondaryForeground: '263 50% 22%',
+      muted: '280 30% 92%', mutedForeground: '271 20% 42%',
+      accent: '280 28% 89%', accentForeground: '263 60% 16%',
+      border: '280 24% 85%', input: '280 24% 85%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  ember: {
+    name:        'Ember',
+    description: 'Charcoal with a molten orange-red core',
+    swatches:    ['#0c0a09', '#1c1917', '#f97316', '#fbbf24', '#fafaf9'],
+    accentDark:  { h: 25, s: 95, l: 56 },
+    accentLight: { h: 21, s: 90, l: 42 },
+    txDark:      { trade: '#f97316', waiver: '#fbbf24', freeAgent: '#a8a29e' },
+    txLight:     { trade: '#c2410c', waiver: '#b45309', freeAgent: '#78716c' },
+    dark: {
+      background: '20 14% 4%', foreground: '60 9% 96%',
+      card: '20 12% 12%', cardForeground: '60 9% 96%',
+      popover: '20 11% 16%', popoverForeground: '60 9% 96%',
+      secondary: '20 10% 19%', secondaryForeground: '60 6% 85%',
+      muted: '20 10% 19%', mutedForeground: '24 8% 64%',
+      accent: '20 11% 18%', accentForeground: '60 9% 96%',
+      border: '20 9% 24%', input: '20 9% 24%',
+      primaryForeground: '20 14% 5%',
+    },
+    light: {
+      background: '60 9% 95%', foreground: '20 14% 12%',
+      card: '0 0% 100%', cardForeground: '20 14% 12%',
+      popover: '0 0% 100%', popoverForeground: '20 14% 12%',
+      secondary: '60 7% 92%', secondaryForeground: '20 12% 18%',
+      muted: '60 7% 92%', mutedForeground: '24 8% 42%',
+      accent: '40 10% 89%', accentForeground: '20 14% 12%',
+      border: '40 8% 85%', input: '40 8% 85%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  ultraviolet: {
+    name:        'Ultraviolet',
+    description: 'Near-black with an electric violet charge',
+    swatches:    ['#08070c', '#17132a', '#8b5cf6', '#22d3ee', '#ede9fe'],
+    accentDark:  { h: 258, s: 90, l: 70 },
+    accentLight: { h: 262, s: 78, l: 46 },
+    txDark:      { trade: '#8b5cf6', waiver: '#22d3ee', freeAgent: '#c4b5fd' },
+    txLight:     { trade: '#6d28d9', waiver: '#0e7490', freeAgent: '#7c6f9b' },
+    dark: {
+      background: '255 26% 4%', foreground: '258 60% 94%',
+      card: '253 37% 12%', cardForeground: '258 60% 94%',
+      popover: '253 34% 16%', popoverForeground: '258 60% 94%',
+      secondary: '253 30% 19%', secondaryForeground: '258 40% 85%',
+      muted: '253 30% 19%', mutedForeground: '258 24% 70%',
+      accent: '253 32% 18%', accentForeground: '258 60% 94%',
+      border: '253 28% 25%', input: '253 28% 25%',
+      primaryForeground: '255 26% 5%',
+    },
+    light: {
+      background: '258 40% 96%', foreground: '253 40% 14%',
+      card: '0 0% 100%', cardForeground: '253 40% 14%',
+      popover: '0 0% 100%', popoverForeground: '253 40% 14%',
+      secondary: '258 30% 92%', secondaryForeground: '253 34% 20%',
+      muted: '258 30% 92%', mutedForeground: '253 18% 42%',
+      accent: '258 28% 89%', accentForeground: '253 40% 14%',
+      border: '258 24% 85%', input: '258 24% 85%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  copper: {
+    name:        'Copper',
+    description: 'Deep teal patina with a burnished copper accent',
+    swatches:    ['#04201f', '#0b3b38', '#c96f3f', '#5eead4', '#e8f5f3'],
+    accentDark:  { h: 24, s: 62, l: 66 },
+    accentLight: { h: 20, s: 60, l: 38 },
+    txDark:      { trade: '#c96f3f', waiver: '#5eead4', freeAgent: '#9fbdb8' },
+    txLight:     { trade: '#9a4f26', waiver: '#0f766e', freeAgent: '#5b7a75' },
+    dark: {
+      background: '178 68% 7%', foreground: '172 30% 93%',
+      card: '176 68% 14%', cardForeground: '172 30% 93%',
+      popover: '176 60% 18%', popoverForeground: '172 30% 93%',
+      secondary: '176 50% 21%', secondaryForeground: '172 22% 84%',
+      muted: '176 50% 21%', mutedForeground: '174 20% 66%',
+      accent: '176 54% 20%', accentForeground: '172 30% 93%',
+      border: '176 44% 26%', input: '176 44% 26%',
+      primaryForeground: '178 68% 8%',
+    },
+    light: {
+      background: '172 30% 95%', foreground: '178 55% 12%',
+      card: '0 0% 100%', cardForeground: '178 55% 12%',
+      popover: '0 0% 100%', popoverForeground: '178 55% 12%',
+      secondary: '172 24% 91%', secondaryForeground: '178 45% 18%',
+      muted: '172 24% 91%', mutedForeground: '176 18% 40%',
+      accent: '172 22% 88%', accentForeground: '178 55% 12%',
+      border: '172 20% 84%', input: '172 20% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  sakura: {
+    name:        'Sakura',
+    description: 'Soft blossom pinks over warm charcoal',
+    swatches:    ['#12090d', '#2c1620', '#f472b6', '#fcd34d', '#fdf2f8'],
+    accentDark:  { h: 330, s: 85, l: 70 },
+    accentLight: { h: 333, s: 71, l: 45 },
+    txDark:      { trade: '#f472b6', waiver: '#fcd34d', freeAgent: '#e5c6d4' },
+    txLight:     { trade: '#be185d', waiver: '#b45309', freeAgent: '#8a6b78' },
+    dark: {
+      background: '336 33% 6%', foreground: '327 73% 96%',
+      card: '332 34% 13%', cardForeground: '327 73% 96%',
+      popover: '332 31% 17%', popoverForeground: '327 73% 96%',
+      secondary: '332 27% 20%', secondaryForeground: '327 40% 86%',
+      muted: '332 27% 20%', mutedForeground: '330 20% 70%',
+      accent: '332 29% 19%', accentForeground: '327 73% 96%',
+      border: '332 25% 26%', input: '332 25% 26%',
+      primaryForeground: '336 33% 7%',
+    },
+    light: {
+      background: '327 73% 97%', foreground: '332 40% 15%',
+      card: '0 0% 100%', cardForeground: '332 40% 15%',
+      popover: '0 0% 100%', popoverForeground: '332 40% 15%',
+      secondary: '327 45% 93%', secondaryForeground: '332 34% 21%',
+      muted: '327 45% 93%', mutedForeground: '332 18% 44%',
+      accent: '327 40% 90%', accentForeground: '332 40% 15%',
+      border: '327 34% 86%', input: '327 34% 86%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  gridiron: {
+    name:        'Gridiron',
+    description: 'Turf green and chalk white with a pigskin accent',
+    swatches:    ['#08130d', '#123524', '#d97706', '#4ade80', '#f0fdf4'],
+    accentDark:  { h: 32, s: 88, l: 58 },
+    accentLight: { h: 28, s: 90, l: 38 },
+    txDark:      { trade: '#d97706', waiver: '#4ade80', freeAgent: '#d6e8dc' },
+    txLight:     { trade: '#a15c07', waiver: '#15803d', freeAgent: '#5f7a6b' },
+    dark: {
+      background: '150 42% 5%', foreground: '138 60% 95%',
+      card: '152 50% 14%', cardForeground: '138 60% 95%',
+      popover: '152 45% 18%', popoverForeground: '138 60% 95%',
+      secondary: '152 38% 21%', secondaryForeground: '138 30% 85%',
+      muted: '152 38% 21%', mutedForeground: '145 22% 68%',
+      accent: '152 42% 20%', accentForeground: '138 60% 95%',
+      border: '152 34% 26%', input: '152 34% 26%',
+      primaryForeground: '150 42% 6%',
+    },
+    light: {
+      background: '138 55% 96%', foreground: '152 45% 12%',
+      card: '0 0% 100%', cardForeground: '152 45% 12%',
+      popover: '0 0% 100%', popoverForeground: '152 45% 12%',
+      secondary: '138 32% 91%', secondaryForeground: '152 40% 18%',
+      muted: '138 32% 91%', mutedForeground: '150 18% 40%',
+      accent: '138 28% 88%', accentForeground: '152 45% 12%',
+      border: '138 24% 84%', input: '138 24% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  slate: {
+    name:        'Slate',
+    description: 'Cool graphite with a clean sky accent',
+    swatches:    ['#0b0f14', '#1b232e', '#38bdf8', '#a3e635', '#e2e8f0'],
+    accentDark:  { h: 199, s: 89, l: 62 },
+    accentLight: { h: 201, s: 85, l: 36 },
+    txDark:      { trade: '#38bdf8', waiver: '#a3e635', freeAgent: '#94a3b8' },
+    txLight:     { trade: '#0369a1', waiver: '#4d7c0f', freeAgent: '#475569' },
+    dark: {
+      background: '210 30% 6%', foreground: '213 31% 91%',
+      card: '213 26% 14%', cardForeground: '213 31% 91%',
+      popover: '213 24% 18%', popoverForeground: '213 31% 91%',
+      secondary: '213 20% 21%', secondaryForeground: '213 22% 82%',
+      muted: '213 20% 21%', mutedForeground: '213 16% 66%',
+      accent: '213 22% 20%', accentForeground: '213 31% 91%',
+      border: '213 18% 26%', input: '213 18% 26%',
+      primaryForeground: '210 30% 7%',
+    },
+    light: {
+      background: '213 31% 94%', foreground: '213 30% 14%',
+      card: '0 0% 100%', cardForeground: '213 30% 14%',
+      popover: '0 0% 100%', popoverForeground: '213 30% 14%',
+      secondary: '213 24% 91%', secondaryForeground: '213 26% 20%',
+      muted: '213 24% 91%', mutedForeground: '213 14% 42%',
+      accent: '213 22% 88%', accentForeground: '213 30% 14%',
+      border: '213 18% 84%', input: '213 18% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  goldenrod: {
+    name:        'Goldenrod',
+    description: 'Espresso depths with a rich gold accent',
+    swatches:    ['#12100b', '#2a2418', '#eab308', '#84cc16', '#fefce8'],
+    accentDark:  { h: 45, s: 93, l: 58 },
+    accentLight: { h: 40, s: 92, l: 36 },
+    txDark:      { trade: '#eab308', waiver: '#84cc16', freeAgent: '#d6d3c4' },
+    txLight:     { trade: '#a16207', waiver: '#4d7c0f', freeAgent: '#78716c' },
+    dark: {
+      background: '45 22% 5%', foreground: '55 92% 95%',
+      card: '43 27% 13%', cardForeground: '55 92% 95%',
+      popover: '43 25% 17%', popoverForeground: '55 92% 95%',
+      secondary: '43 21% 20%', secondaryForeground: '55 40% 85%',
+      muted: '43 21% 20%', mutedForeground: '45 20% 66%',
+      accent: '43 23% 19%', accentForeground: '55 92% 95%',
+      border: '43 19% 25%', input: '43 19% 25%',
+      primaryForeground: '45 22% 6%',
+    },
+    light: {
+      background: '55 80% 96%', foreground: '43 32% 13%',
+      card: '0 0% 100%', cardForeground: '43 32% 13%',
+      popover: '0 0% 100%', popoverForeground: '43 32% 13%',
+      secondary: '55 44% 91%', secondaryForeground: '43 28% 19%',
+      muted: '55 44% 91%', mutedForeground: '45 18% 41%',
+      accent: '55 38% 88%', accentForeground: '43 32% 13%',
+      border: '52 32% 84%', input: '52 32% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  tidal: {
+    name:        'Tidal',
+    description: 'Abyssal blue-green with an aqua accent',
+    swatches:    ['#03141c', '#0a2a38', '#2dd4bf', '#f472b6', '#e0f7fa'],
+    accentDark:  { h: 172, s: 66, l: 55 },
+    accentLight: { h: 176, s: 72, l: 32 },
+    txDark:      { trade: '#2dd4bf', waiver: '#f472b6', freeAgent: '#9ec6d0' },
+    txLight:     { trade: '#0f766e', waiver: '#be185d', freeAgent: '#4b6c78' },
+    dark: {
+      background: '196 72% 6%', foreground: '187 60% 93%',
+      card: '195 70% 13%', cardForeground: '187 60% 93%',
+      popover: '195 62% 17%', popoverForeground: '187 60% 93%',
+      secondary: '195 52% 20%', secondaryForeground: '187 32% 84%',
+      muted: '195 52% 20%', mutedForeground: '190 26% 67%',
+      accent: '195 56% 19%', accentForeground: '187 60% 93%',
+      border: '195 46% 25%', input: '195 46% 25%',
+      primaryForeground: '196 72% 7%',
+    },
+    light: {
+      background: '187 55% 95%', foreground: '195 60% 12%',
+      card: '0 0% 100%', cardForeground: '195 60% 12%',
+      popover: '0 0% 100%', popoverForeground: '195 60% 12%',
+      secondary: '187 36% 91%', secondaryForeground: '195 50% 18%',
+      muted: '187 36% 91%', mutedForeground: '193 20% 40%',
+      accent: '187 32% 88%', accentForeground: '195 60% 12%',
+      border: '187 28% 84%', input: '187 28% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  crimson: {
+    name:        'Crimson',
+    description: 'Blackened plum with a scarlet edge',
+    swatches:    ['#0e0709', '#2b0f16', '#ef4444', '#fb923c', '#fee2e2'],
+    accentDark:  { h: 0, s: 84, l: 63 },
+    accentLight: { h: 0, s: 74, l: 42 },
+    txDark:      { trade: '#ef4444', waiver: '#fb923c', freeAgent: '#e0b7bb' },
+    txLight:     { trade: '#b91c1c', waiver: '#c2410c', freeAgent: '#8b5f63' },
+    dark: {
+      background: '345 34% 5%', foreground: '0 86% 95%',
+      card: '346 47% 12%', cardForeground: '0 86% 95%',
+      popover: '346 42% 16%', popoverForeground: '0 86% 95%',
+      secondary: '346 34% 19%', secondaryForeground: '0 40% 86%',
+      muted: '346 34% 19%', mutedForeground: '350 22% 68%',
+      accent: '346 38% 18%', accentForeground: '0 86% 95%',
+      border: '346 30% 25%', input: '346 30% 25%',
+      primaryForeground: '345 34% 6%',
+    },
+    light: {
+      background: '0 80% 97%', foreground: '346 45% 14%',
+      card: '0 0% 100%', cardForeground: '346 45% 14%',
+      popover: '0 0% 100%', popoverForeground: '346 45% 14%',
+      secondary: '0 45% 93%', secondaryForeground: '346 38% 20%',
+      muted: '0 45% 93%', mutedForeground: '348 20% 43%',
+      accent: '0 38% 90%', accentForeground: '346 45% 14%',
+      border: '0 32% 86%', input: '0 32% 86%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
+
+  linen: {
+    name:        'Linen',
+    description: 'Light-first oatmeal with a deep teal accent',
+    swatches:    ['#1c1a17', '#33302a', '#0d9488', '#c2410c', '#faf7f0'],
+    accentDark:  { h: 174, s: 62, l: 52 },
+    accentLight: { h: 175, s: 84, l: 28 },
+    txDark:      { trade: '#2dd4bf', waiver: '#fb923c', freeAgent: '#cfc9bd' },
+    txLight:     { trade: '#0f766e', waiver: '#c2410c', freeAgent: '#7a7266' },
+    dark: {
+      background: '35 12% 7%', foreground: '40 38% 94%',
+      card: '35 11% 15%', cardForeground: '40 38% 94%',
+      popover: '35 10% 19%', popoverForeground: '40 38% 94%',
+      secondary: '35 9% 22%', secondaryForeground: '40 22% 84%',
+      muted: '35 9% 22%', mutedForeground: '38 14% 68%',
+      accent: '35 10% 21%', accentForeground: '40 38% 94%',
+      border: '35 8% 27%', input: '35 8% 27%',
+      primaryForeground: '35 12% 8%',
+    },
+    light: {
+      background: '40 44% 96%', foreground: '35 20% 14%',
+      card: '0 0% 100%', cardForeground: '35 20% 14%',
+      popover: '0 0% 100%', popoverForeground: '35 20% 14%',
+      secondary: '40 30% 91%', secondaryForeground: '35 18% 20%',
+      muted: '40 30% 91%', mutedForeground: '36 14% 42%',
+      accent: '40 26% 88%', accentForeground: '35 20% 14%',
+      border: '38 22% 84%', input: '38 22% 84%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
 };
 
 export const DEFAULT_THEME: ThemeConfig = {
@@ -412,6 +785,8 @@ export const DEFAULT_THEME: ThemeConfig = {
   primaryLLight: 42,
   radiusRem:     0.5,
   fontPair:      'bricolage-dm',
+  background:    'grid',
+  motion:        'full',
   logoUrl:       null,
   leagueName:    null,
   txColorsDark:  DEFAULT_TX_DARK,
@@ -447,6 +822,96 @@ export const fontPairs: Record<FontPairKey, {
     body:        'Outfit',
     googleQuery: 'family=Outfit:wght@300;400;500;600;700',
     preview:     'Clean & Minimal',
+  },
+  'anton-inter': {
+    display:     'Anton',
+    body:        'Inter',
+    googleQuery: 'family=Anton&family=Inter:wght@300;400;500;600;700',
+    preview:     'Bold & Athletic',
+  },
+  'bebas-inter': {
+    display:     'Bebas Neue',
+    body:        'Inter',
+    googleQuery: 'family=Bebas+Neue&family=Inter:wght@300;400;500;600;700',
+    preview:     'Condensed & Loud',
+  },
+  'oswald-roboto': {
+    display:     'Oswald',
+    body:        'Roboto',
+    googleQuery: 'family=Oswald:wght@400;500;600;700&family=Roboto:wght@300;400;500;700',
+    preview:     'Broadcast & Classic',
+  },
+  'space-inter': {
+    display:     'Space Grotesk',
+    body:        'Inter',
+    googleQuery: 'family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700',
+    preview:     'Technical & Sharp',
+  },
+  'playfair-source': {
+    display:     'Playfair Display',
+    body:        'Source Sans 3',
+    googleQuery: 'family=Playfair+Display:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700',
+    preview:     'Classic & Refined',
+  },
+  'unbounded-dm': {
+    display:     'Unbounded',
+    body:        'DM Sans',
+    googleQuery: 'family=Unbounded:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600',
+    preview:     'Expressive & Wide',
+  },
+  'instrument-inter': {
+    display:     'Instrument Serif',
+    body:        'Inter',
+    googleQuery: 'family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700',
+    preview:     'Editorial & Elegant',
+  },
+  'archivo-inter': {
+    display:     'Archivo Black',
+    body:        'Inter',
+    googleQuery: 'family=Archivo+Black&family=Inter:wght@300;400;500;600;700',
+    preview:     'Heavy & Impactful',
+  },
+  'chakra-inter': {
+    display:     'Chakra Petch',
+    body:        'Inter',
+    googleQuery: 'family=Chakra+Petch:wght@500;600;700&family=Inter:wght@300;400;500;600;700',
+    preview:     'Sporty & Angular',
+  },
+  'teko-inter': {
+    display:     'Teko',
+    body:        'Inter',
+    googleQuery: 'family=Teko:wght@500;600;700&family=Inter:wght@300;400;500;600;700',
+    preview:     'Tall & Scoreboard',
+  },
+  'rubikmono-inter': {
+    display:     'Rubik Mono One',
+    body:        'Inter',
+    googleQuery: 'family=Rubik+Mono+One&family=Inter:wght@300;400;500;600;700',
+    preview:     'Blocky & Retro',
+  },
+  'sora-inter': {
+    display:     'Sora',
+    body:        'Inter',
+    googleQuery: 'family=Sora:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700',
+    preview:     'Modern & Neutral',
+  },
+  'familjen-inter': {
+    display:     'Familjen Grotesk',
+    body:        'Inter',
+    googleQuery: 'family=Familjen+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700',
+    preview:     'Swiss & Quiet',
+  },
+  'dmserif-dm': {
+    display:     'DM Serif Display',
+    body:        'DM Sans',
+    googleQuery: 'family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600',
+    preview:     'Stately & Serif',
+  },
+  'baskerville-inter': {
+    display:     'Libre Baskerville',
+    body:        'Inter',
+    googleQuery: 'family=Libre+Baskerville:wght@400;700&family=Inter:wght@300;400;500;600;700',
+    preview:     'Bookish & Traditional',
   },
 };
 

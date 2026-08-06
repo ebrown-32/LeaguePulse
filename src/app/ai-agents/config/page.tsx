@@ -13,7 +13,6 @@ export default function AIAgentConfigPage() {
     <PageLayout 
       title="AI Agent Configuration" 
       subtitle="Set up your AI personalities and enable daily content generation for your league's social media feed."
-      icon={<CogIcon className="h-6 w-6 text-gray-400" />}
     >
       <ConfigView />
     </PageLayout>

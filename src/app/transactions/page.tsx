@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { Receipt } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
+import { LoadingPage } from '@/components/ui/LoadingSpinner';
 import TransactionsView from './TransactionsView';
 
 export const dynamic = 'force-dynamic';
@@ -9,9 +11,12 @@ export default function TransactionsPage() {
     <PageLayout
       title="Transactions"
       subtitle="Every trade, waiver, and move."
-      icon={<Receipt className="h-5 w-5" />}
     >
-      <TransactionsView />
+      {/* TransactionsView reads ?tx= via useSearchParams, which Next requires
+          to sit inside a Suspense boundary. */}
+      <Suspense fallback={<LoadingPage />}>
+        <TransactionsView />
+      </Suspense>
     </PageLayout>
   );
 }

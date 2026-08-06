@@ -12,11 +12,9 @@ export default async function Footer() {
 
   return (
     <footer className="relative border-t border-border/50 bg-card/50 backdrop-blur-sm">
-      {/* Top gradient line */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="py-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+        <div className="grid gap-8 py-10 sm:grid-cols-2 lg:flex lg:flex-row lg:items-center lg:justify-between">
 
           {/* Brand */}
           <div className="flex flex-col gap-3">
@@ -80,7 +78,7 @@ export default async function Footer() {
           </div>
 
           {/* Credits */}
-          <div className="flex flex-col gap-1 items-start md:items-end">
+          <div className="flex flex-col gap-1 items-start lg:items-end">
             <p className="text-xs text-muted-foreground">
               © {year}{' '}
               <a

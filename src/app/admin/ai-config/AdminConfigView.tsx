@@ -234,7 +234,7 @@ export default function AdminConfigView() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-blue-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="bg-gray-800/50 backdrop-blur rounded-2xl p-8 border border-gray-700 max-w-md w-full">
           <div className="text-center mb-6">
             <LockClosedIcon className="h-12 w-12 text-blue-400 mx-auto mb-4" />
@@ -286,7 +286,7 @@ export default function AdminConfigView() {
   const systemHealth = generationStats?.systemHealth;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-blue-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">

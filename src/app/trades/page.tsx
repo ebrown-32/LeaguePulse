@@ -9,7 +9,6 @@ export default function TradesPage() {
     <PageLayout
       title="Trade Ideas"
       subtitle="Swipe on AI-suggested trades based on your league's actual rosters and scoring"
-      icon={<ArrowLeftRight className="h-6 w-6 text-primary" />}
     >
       <TradeSwiper />
     </PageLayout>

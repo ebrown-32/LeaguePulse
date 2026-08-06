@@ -123,44 +123,24 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-family: var(--font-body, var(--font-body-fallback, 'DM Sans', system-ui, sans-serif));
     font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
   }
 
   /* ── Ambient field ──────────────────────────────────────────────────────
-     Replaces the old 28px dot grid, which tiled edge-to-edge at uniform
-     strength and read as wallpaper. Two fixed, non-interactive layers,
-     both driven by palette tokens so they follow the selected theme:
+     One fixed, non-interactive layer: a fine 64px grid driven by the palette's
+     border token, masked so it fades out down the page. The accent-glow washes
+     that used to sit under it were removed — stacked radial gradients read as
+     noise against a flat palette.
 
-       ::before  slow-drifting accent glows (the "aurora")
-       ::after   a fine 64px grid, masked so it fades out down the page
+     Toggled by the admin panel via data-bg / data-motion on <html>. */
 
-     Both sit behind content and neither ever intercepts pointer events. */
-
-  body::before,
   body::after {
     content: '';
     position: fixed;
+    inset: 0;
     z-index: -1;
     pointer-events: none;
-  }
-
-  /* Only the glow layer drifts, so only it needs overscan. The grid animates
-     opacity alone, so it sits flush to the viewport — which also keeps its
-     mask percentages honest (they were being measured against a 120%-tall
-     box before, which is what cut the grid off just under the navbar). */
-  body::before { inset: -10%; }
-  body::after  { inset: 0; }
-
-  body::before {
-    background:
-      radial-gradient(38rem 30rem at 12% -8%,  hsl(var(--primary) / 0.10), transparent 62%),
-      radial-gradient(34rem 26rem at 88% 4%,   hsl(var(--primary) / 0.05), transparent 60%),
-      radial-gradient(42rem 32rem at 50% 108%, hsl(var(--primary) / 0.06), transparent 64%);
-    animation: ambient-drift 44s ease-in-out infinite alternate;
-  }
-
-  body::after {
     background-image:
       linear-gradient(to right,  hsl(var(--border) / 0.16) 1px, transparent 1px),
       linear-gradient(to bottom, hsl(var(--border) / 0.16) 1px, transparent 1px);
@@ -173,15 +153,12 @@
     animation: ambient-grid 36s linear infinite;
   }
 
-  /* Light mode carries far less of both — the glows read as smudges on
-     near-white, and the grid competes with content. */
-  :root:not(.dark) body::before { opacity: 0.55; }
-  :root:not(.dark) body::after  { opacity: 0.5; }
+  /* Light mode carries less — the grid competes with content on near-white. */
+  :root:not(.dark) body::after { opacity: 0.5; }
 
-  @keyframes ambient-drift {
-    from { transform: translate3d(0, 0, 0) scale(1); }
-    to   { transform: translate3d(0, -1.5%, 0) scale(1.05); }
-  }
+  /* Admin-controlled: hide the field entirely, or keep it but hold it still. */
+  html[data-bg='plain'] body::after      { display: none; }
+  html[data-motion='reduced'] body::after { animation: none; }
 
   /* Drifts exactly one 64px cell over the cycle so the loop is seamless,
      with a gentle brightness breathe layered on top. */
@@ -192,12 +169,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body::before,
     body::after { animation: none; }
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+    font-family: var(--font-display, var(--font-display-fallback, 'Space Grotesk', system-ui, sans-serif));
     @apply tracking-tight;
   }
 
@@ -223,10 +199,10 @@
 ───────────────────────────────────────────── */
 @layer utilities {
   .font-display {
-    font-family: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+    font-family: var(--font-display, var(--font-display-fallback, 'Space Grotesk', system-ui, sans-serif));
   }
   .font-body {
-    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-family: var(--font-body, var(--font-body-fallback, 'DM Sans', system-ui, sans-serif));
   }
   .tabular-nums {
     font-variant-numeric: tabular-nums;

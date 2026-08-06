@@ -6,8 +6,10 @@
   "primaryHLight": 38,
   "primarySLight": 92,
   "primaryLLight": 38,
-  "radiusRem": 0,
-  "fontPair": "syne-dm",
+  "radiusRem": 0.5,
+  "fontPair": "chakra-inter",
+  "background": "grid",
+  "motion": "full",
   "logoUrl": "/dominationleague.png",
   "leagueName": "The Domination League",
   "txColorsDark": {

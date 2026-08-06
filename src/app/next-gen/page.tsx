@@ -28,7 +28,6 @@ export default async function NextGenStatsPage() {
       <PageLayout
         title="Next-Gen Stats"
         subtitle="Advanced analytics and performance metrics powered by League Pulse."
-        icon={<Activity className="h-6 w-6" />}
       >
         <NextGenStats
           initialMetrics={initialMetrics}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeftRight, Gavel, UserPlus, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -234,6 +235,9 @@ function Skeleton() {
 // ── Main view ────────────────────────────────────────────────────────────────
 
 export default function TransactionsView() {
+  // Deep link target, e.g. /transactions?tx=123 from a player's move history.
+  const focusTxId = useSearchParams().get('tx');
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [all,          setAll]         = useState<EnrichedTransaction[]>([]);
   const [seasons,      setSeasons]     = useState<string[]>([]);
   const [loading,      setLoading]     = useState(true);
@@ -253,6 +257,25 @@ export default function TransactionsView() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Once data lands, widen any filter that would hide the linked transaction,
+  // then scroll it into view and flash it so the target is unmistakable.
+  useEffect(() => {
+    if (!focusTxId || !all.length) return;
+    const target = all.find(t => t.transactionId === focusTxId);
+    if (!target) return;
+
+    setTypeFilter('All');
+    setSelectedTeams(new Set());
+    setSeasonFilter(target.season);
+    setHighlightId(focusTxId);
+
+    const timer = setTimeout(() => {
+      document.getElementById(`tx-${focusTxId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    const clear = setTimeout(() => setHighlightId(null), 2600);
+    return () => { clearTimeout(timer); clearTimeout(clear); };
+  }, [focusTxId, all]);
 
   // Teams available for the current season filter (used to populate pills)
   const availableTeams = useMemo(() => {
@@ -418,10 +441,16 @@ export default function TransactionsView() {
               {txs.map((tx, i) => (
                 <motion.div
                   key={tx.transactionId}
+                  id={`tx-${tx.transactionId}`}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18, delay: i * 0.025 }}
+                  className={cn(
+                    'rounded-xl transition-shadow duration-500',
+                    highlightId === tx.transactionId &&
+                      'ring-2 ring-primary/70 shadow-[0_0_28px_-4px_hsl(var(--primary)/0.5)]',
+                  )}
                 >
                   {tx.type === 'trade' ? <TradeCard tx={tx} /> : <ActivityCard tx={tx} />}
                 </motion.div>

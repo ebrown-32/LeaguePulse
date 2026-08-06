@@ -35,7 +35,6 @@ export default async function ConstitutionPage() {
     <PageLayout
       title="Constitution"
       subtitle={meta.description ?? 'Rules, bylaws, and governing documents.'}
-      icon={<Scroll className="h-6 w-6 text-primary" />}
     >
       <ConstitutionView
         meta={meta}

@@ -113,7 +113,7 @@ export default function ConfigView() {
   const systemHealth = generationStats?.systemHealth;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-blue-900 text-white p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* System Status */}
         <div className="bg-gray-800/50 backdrop-blur rounded-2xl p-6 border border-gray-700">
@@ -169,7 +169,7 @@ export default function ConfigView() {
         </div>
 
         {/* Quick Setup Guide */}
-        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 backdrop-blur rounded-2xl p-6 border border-blue-700/50">
+        <div className="bg-card backdrop-blur rounded-2xl p-6 border border-blue-700/50">
           <div className="flex items-center gap-3 mb-4">
             <InformationCircleIcon className="h-6 w-6 text-blue-400" />
             <h2 className="text-xl font-bold">Quick Setup for Commissioners</h2>

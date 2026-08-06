@@ -13,7 +13,6 @@ export default function AIAgentsPage() {
     <PageLayout 
       title="AI Agents" 
       subtitle="Your personalized AI league personalities. Get custom takes, analysis, and social media content for your league."
-      icon={<SparklesIcon className="h-6 w-6 text-gray-400" />}
     >
       <AgentsView />
     </PageLayout>

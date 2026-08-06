@@ -24,7 +24,6 @@ export default function HistoryPage() {
     <PageLayout
       title="League History"
       subtitle="Stats, records, and insights."
-      icon={<Database className="h-6 w-6 text-primary" />}
     >
       <EnhancedHistoryView ringSeasons={ringSeasons} />
     </PageLayout>

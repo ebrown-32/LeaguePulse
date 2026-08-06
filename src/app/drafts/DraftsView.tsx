@@ -63,7 +63,7 @@ function Countdown({ targetMs }: { targetMs: number }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent p-8 text-center">
+    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
       <div className="flex items-center justify-center gap-2 mb-5">
         <Clock className="h-4 w-4 text-primary" />
         <p className="text-xs font-bold uppercase tracking-widest text-primary/70">Draft Begins In</p>
@@ -756,7 +756,7 @@ function DraftHero({ draft }: { draft: EnrichedDraft }) {
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* Gradient top bar */}
-      <div className="h-1 bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
+      <div className="h-1 bg-primary/60" />
       <div className="flex flex-wrap items-center gap-4 px-6 py-5">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">

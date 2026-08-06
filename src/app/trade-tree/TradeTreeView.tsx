@@ -694,7 +694,7 @@ export default function TradeTreeView() {
                 <span className="text-[10px] text-muted-foreground/40">{list.length} trade{list.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="relative space-y-3 pl-5 sm:pl-6">
-                <div className="absolute left-[7px] sm:left-[9px] top-3 bottom-3 w-px bg-gradient-to-b from-primary/40 via-border to-transparent" />
+                <div className="absolute left-[7px] sm:left-[9px] top-3 bottom-3 w-px bg-border" />
                 <AnimatePresence initial={false}>
                   {list.map((trade, i) => (
                     <motion.div

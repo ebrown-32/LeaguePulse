@@ -9,7 +9,6 @@ export default async function MatchupsPage() {
     <PageLayout
       title="Matchups"
       subtitle="The slate."
-      icon={<Swords className="h-6 w-6" />}
     >
       <MatchupsView />
     </PageLayout>
