@@ -109,7 +109,6 @@ export default function MediaView() {
     <PageLayout
       title="Media"
       subtitle="A one-stop hub for NFL news, injuries, and waiver buzz."
-      icon={<BroadcastIcon className="h-6 w-6 text-primary" />}
     >
       {tabNavigation}
 

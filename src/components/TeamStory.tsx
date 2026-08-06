@@ -76,7 +76,7 @@ export default function TeamStory({ user, seasonData, records }: TeamStoryProps)
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
+        <Card className="bg-card border-border">
           <CardContent className="p-8">
             <div className="flex items-center space-x-6">
               <Avatar avatarId={user.avatar} size={80} className="rounded-lg" />
@@ -146,9 +146,9 @@ export default function TeamStory({ user, seasonData, records }: TeamStoryProps)
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                     className={`flex items-center justify-between p-4 rounded-lg ${
                       performance.championship 
-                        ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20' 
+                        ? 'bg-primary/5 border border-primary/20' 
                         : performance.playoffAppearance 
-                        ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20'
+                        ? 'bg-muted/50 border border-border'
                         : 'bg-white/5'
                     }`}
                   >

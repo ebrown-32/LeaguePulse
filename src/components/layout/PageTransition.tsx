@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
@@ -18,7 +19,14 @@ import { usePathname } from 'next/navigation';
  */
 export default function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const reduceMotion = useReducedMotion();
+  const systemReduce = useReducedMotion();
+  // The admin's Motion setting is published on <html> by the root layout, so
+  // it applies without threading theme state through every client component.
+  const [adminReduce, setAdminReduce] = useState(false);
+  useEffect(() => {
+    setAdminReduce(document.documentElement.dataset.motion === 'reduced');
+  }, []);
+  const reduceMotion = systemReduce || adminReduce;
 
   return (
     <motion.div

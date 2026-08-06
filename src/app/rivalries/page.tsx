@@ -40,7 +40,6 @@ export default async function RivalriesPage() {
     <PageLayout
       title="Rivalry Tracker"
       subtitle="All-time head-to-head records across every season."
-      icon={<Sword className="h-6 w-6 text-primary" />}
     >
       <RivalryView data={data} />
     </PageLayout>

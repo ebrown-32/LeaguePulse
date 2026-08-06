@@ -356,7 +356,6 @@ export default function Home() {
     <PageLayout
       title="Home"
       subtitle={headerSubtitle}
-      icon={<HomeIcon className="h-5 w-5" />}
     >
       <div className="space-y-6">
 
@@ -366,9 +365,6 @@ export default function Home() {
             headline was pure duplication; the space goes to the spotlight
             and the league's running totals instead. */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-card">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_0%_0%,hsl(var(--primary)/0.16),transparent_58%)]" />
-          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
           <div className="relative p-5 sm:p-7">
             {/* Context row — everything the four stat tiles used to say. */}
@@ -435,7 +431,7 @@ export default function Home() {
             {/* League totals */}
             {historyData && historyData.totalSeasons > 0 && (
               <>
-                <div className="mt-6 h-px bg-gradient-to-r from-primary/25 via-border to-transparent" />
+                <div className="mt-6 h-px bg-border" />
                 <div className="grid grid-cols-2 gap-y-5 pt-5 sm:grid-cols-4">
                   <PulseStat label="Seasons"       value={String(historyData.totalSeasons)} />
                   <PulseStat label="Games Played"  value={historyData.totalGames.toLocaleString()} />
@@ -477,7 +473,7 @@ export default function Home() {
                         className="relative rounded-xl border border-border bg-background overflow-hidden"
                       >
                         {matchup.isHighlight && (
-                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-orange-500/60 to-transparent" />
+                          <div className="absolute inset-x-0 top-0 h-px bg-primary/50" />
                         )}
 
                         {/* Team 1 */}

@@ -38,9 +38,9 @@ const KIND_TEXT: Record<FeedItem['kind'], string> = {
 /** Gradient used for the thumbnail slot when an item has no image, so those
  *  cards still fill a 16:9 tile instead of leaving a hole in the grid. */
 const KIND_PANEL: Record<FeedItem['kind'], string> = {
-  article: 'from-primary/25 via-primary/10 to-transparent text-primary',
-  injury: 'from-rose-500/25 via-rose-500/10 to-transparent text-rose-500',
-  trending: 'from-emerald-500/25 via-emerald-500/10 to-transparent text-emerald-500',
+  article: 'bg-primary/10 text-primary',
+  injury: 'bg-rose-500/10 text-rose-500',
+  trending: 'bg-emerald-500/10 text-emerald-500',
 };
 
 // Waiver drops are the one case where `kind` alone doesn't determine the
@@ -51,7 +51,7 @@ function displayFor(item: FeedItem) {
       label: 'Dropped',
       dot: 'bg-rose-500',
       text: 'text-rose-500',
-      panel: 'from-rose-500/25 via-rose-500/10 to-transparent text-rose-500',
+      panel: 'bg-rose-500/10 text-rose-500',
       Icon: TrendingDownIcon,
       showBadge: true,
     };
@@ -107,7 +107,7 @@ function FeedCard({ item, index, onOpen }: { item: FeedItem; index: number; onOp
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
           />
         ) : (
-          <div className={cn('flex h-full w-full items-center justify-center bg-gradient-to-br', panel)}>
+          <div className={cn('flex h-full w-full items-center justify-center ', panel)}>
             <KindIcon className="h-9 w-9 opacity-80 transition-transform duration-500 group-hover:scale-110" />
           </div>
         )}
@@ -185,7 +185,7 @@ function FeedRow({ item, index, onOpen }: { item: FeedItem; index: number; onOpe
           />
         ) : (
           <div className={cn(
-            'flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br sm:h-20 sm:w-20',
+            'flex h-16 w-16 shrink-0 items-center justify-center rounded-lg sm:h-20 sm:w-20',
             panel,
           )}>
             <KindIcon className="h-7 w-7 opacity-80" />

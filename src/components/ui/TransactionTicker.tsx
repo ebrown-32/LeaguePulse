@@ -95,8 +95,6 @@ export default function TransactionTicker({ className }: TransactionTickerProps)
         className={className}
       >
         <div className="relative rounded-xl border border-border bg-card overflow-visible">
-          {/* Primary gradient accent at top */}
-          <div className="absolute inset-x-0 top-0 h-px rounded-t-xl bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
 
           {/* Stub header */}
           <div className="flex items-center justify-between px-5 py-3">

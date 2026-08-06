@@ -64,7 +64,7 @@ export default function ChampionRing({ modelPath, height = 220 }: ChampionRingPr
   return (
     <>
       <div
-        className="relative w-full rounded-xl overflow-hidden bg-gradient-to-b from-background to-card/60"
+        className="relative w-full rounded-xl overflow-hidden bg-card/60"
         style={{ height }}
       >
         <RingCanvas modelPath={modelPath} />

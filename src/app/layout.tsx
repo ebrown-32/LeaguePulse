@@ -12,14 +12,14 @@ import Analytics from '@/components/analytics/Analytics';
 
 const displayFont = Space_Grotesk({
   subsets:  ['latin'],
-  variable: '--font-display',
+  variable: '--font-display-fallback',
   weight:   ['400', '500', '600', '700'],
   display:  'swap',
 });
 
 const bodyFont = DM_Sans({
   subsets:  ['latin'],
-  variable: '--font-body',
+  variable: '--font-body-fallback',
   weight:   ['300', '400', '500', '600', '700'],
   display:  'swap',
 });
@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const theme = await getTheme();
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-bg={theme.background} data-motion={theme.motion} suppressHydrationWarning>
       <body
         className={`
           ${displayFont.variable} ${bodyFont.variable}

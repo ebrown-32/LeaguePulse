@@ -9,7 +9,6 @@ export default function DraftsPage() {
     <PageLayout
       title="Drafts"
       subtitle="Every pick, every round, every season."
-      icon={<ClipboardList className="h-5 w-5" />}
     >
       <DraftsView />
     </PageLayout>
