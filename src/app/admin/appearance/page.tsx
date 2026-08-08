@@ -464,7 +464,7 @@ export default function AppearancePage() {
               <div>
                 <h2 className="font-display text-base font-semibold text-foreground">Color Palette</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Sets every surface — backgrounds, cards, borders, and text — in both light and dark mode
+                  Sets every surface, backgrounds, cards, borders, and text, in both light and dark mode
                 </p>
               </div>
 

@@ -102,7 +102,7 @@ export default function PlayerDetailModal({
             <div className="relative overflow-hidden border-b border-border p-6">
               <div className="relative">
                 <span className={cn('inline-flex rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-widest', posStyle.badge)}>
-                  {p?.position ?? '—'}
+                  {p?.position ?? ','}
                 </span>
                 <h2 className="mt-3 font-display text-2xl font-bold leading-tight text-foreground">
                   {p?.name ?? 'Player'}
@@ -143,8 +143,8 @@ export default function PlayerDetailModal({
                       <div className="grid grid-cols-3 gap-3">
                         {[
                           { label: 'PPR Pts', value: p.points.toFixed(1) },
-                          { label: 'Per Game', value: p.pointsPerGame != null ? p.pointsPerGame.toFixed(1) : '—' },
-                          { label: 'Pos Rank', value: p.positionRank != null ? `#${p.positionRank}` : '—' },
+                          { label: 'Per Game', value: p.pointsPerGame != null ? p.pointsPerGame.toFixed(1) : ',' },
+                          { label: 'Pos Rank', value: p.positionRank != null ? `#${p.positionRank}` : ',' },
                         ].map(s => (
                           <div key={s.label} className="rounded-xl border border-border bg-background/50 p-3 text-center">
                             <p className="font-display text-xl font-bold tabular-nums text-foreground">{s.value}</p>
@@ -211,7 +211,7 @@ export default function PlayerDetailModal({
                     </ol>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      No recorded moves — rostered since joining the league, or acquired in a draft.
+                      No recorded moves, rostered since joining the league, or acquired in a draft.
                     </p>
                   )}
                 </div>

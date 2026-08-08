@@ -145,7 +145,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             {brand}
           </Link>
 
-          {/* Desktop nav — kicks in at lg (1024px), not md (768px), since md
+          {/* Desktop nav, kicks in at lg (1024px), not md (768px), since md
               lands right in iPad-portrait territory (768-834px) and the full
               5-link row plus the More dropdown doesn't fit there. */}
           <div className="hidden xl:flex xl:items-center xl:gap-1">
@@ -162,7 +162,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                       : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
                   )}
                 >
-                  {/* Pill is rendered first and the label lifted above it —
+                  {/* Pill is rendered first and the label lifted above it ,
                       previously the absolutely-positioned pill painted over
                       the icon and text, dimming them. */}
                   {isActive && (
