@@ -1,5 +1,5 @@
 import { generateObject } from 'ai';
-import { gateway } from 'ai';
+import { claude, MODEL_FAST } from '@/lib/ai/claude';
 import { z } from 'zod';
 
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
@@ -300,7 +300,7 @@ export async function generateTradeProposals(leagueId: string): Promise<TradeRes
   const prompt = buildPrompt(teams, currentWeek);
 
   const { object } = await generateObject({
-    model: gateway('anthropic/claude-haiku-4-5'),
+    model: claude(MODEL_FAST),
     schema: AiResponseSchema,
     prompt,
   });

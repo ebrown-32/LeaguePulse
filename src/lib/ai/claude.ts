@@ -1,7 +1,7 @@
 /**
  * Single chokepoint for every Claude call in the app.
  *
- * Replaces the hand-rolled fetch-with-fallback in llmService.ts: the project
+ * Replaces the hand-rolled fetch-with-fallback of the retired ai-agents stack:
  * already depends on the Vercel AI SDK, which gives us structured output via
  * generateObject — the thing trade grading and article scaffolding actually
  * need, and which raw chat completions can't guarantee.
