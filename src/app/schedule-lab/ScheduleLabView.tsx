@@ -376,7 +376,7 @@ function LeaderboardRow({ season, sm, expanded, onToggle, onSimulate }: {
                     <span>Official record: <span className="font-semibold text-foreground">{fmtRecord(sm.officialWins, sm.officialLosses, sm.officialTies)}</span></span>
                   )}
                   <span>Opp PPG faced: <span className="font-semibold text-foreground">{(sm.actualPointsAgainst / Math.max(1, sm.gamesPlayed)).toFixed(1)}</span></span>
-                  <span>Wins across every possible schedule: <span className="font-semibold text-foreground">{sm.minWinsAcrossSchedules.toFixed(1)}–{sm.maxWinsAcrossSchedules.toFixed(1)}</span> (spread of {range.toFixed(1)})</span>
+                  <span>Wins across every possible schedule: <span className="font-semibold text-foreground">{sm.minWinsAcrossSchedules.toFixed(1)},{sm.maxWinsAcrossSchedules.toFixed(1)}</span> (spread of {range.toFixed(1)})</span>
                 </div>
                 <button
                   onClick={onSimulate}

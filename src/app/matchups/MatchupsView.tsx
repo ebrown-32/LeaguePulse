@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
@@ -20,6 +21,7 @@ interface MatchupsViewProps {
 }
 
 export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewProps) {
+  const [openMatchup, setOpenMatchup] = useState<MatchupTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [league, setLeague] = useState<any>(null);
@@ -295,7 +297,15 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                         )}
                       </div>
 
-                      <div />
+                      <button
+                        onClick={() => setOpenMatchup({
+                          a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: user1.avatar },
+                          b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: user2.avatar },
+                        })}
+                        className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                      >
+                        Details
+                      </button>
                     </div>
                   </CardHeader>
 
@@ -428,6 +438,8 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
           })}
         </motion.div>
       )}
+
+      <MatchupDetailModal target={openMatchup} onClose={() => setOpenMatchup(null)} />
     </div>
   );
 }

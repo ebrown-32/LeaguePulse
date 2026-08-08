@@ -97,7 +97,7 @@ function FeedCard({ item, index, onOpen }: { item: FeedItem; index: number; onOp
       transition={{ duration: 0.28, delay: Math.min(index % PAGE_SIZE, 10) * 0.03 }}
       className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/40"
     >
-      {/* Thumbnail — fixed 16:9 so every tile lines up on the row baseline */}
+      {/* Thumbnail, fixed 16:9 so every tile lines up on the row baseline */}
       <div className="relative aspect-[16/9] w-full overflow-hidden">
         {item.imageUrl ? (
           <img
@@ -134,7 +134,7 @@ function FeedCard({ item, index, onOpen }: { item: FeedItem; index: number; onOp
         )}
       </div>
 
-      {/* Body — the subtitle is dropped on the narrowest screens so two
+      {/* Body, the subtitle is dropped on the narrowest screens so two
           tiles per row stay short enough to scan. */}
       <div className="flex flex-1 flex-col p-2.5 sm:p-3.5">
         <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-foreground transition-colors group-hover:text-primary sm:text-sm">

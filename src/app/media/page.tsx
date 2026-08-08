@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import MediaView from './MediaView';
 import { Metadata } from 'next';
 
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function MediaPage() {
-  return <MediaView />;
+  // useSearchParams inside MediaView requires a boundary to prerender.
+  return (
+    <Suspense fallback={null}>
+      <MediaView />
+    </Suspense>
+  );
 } 

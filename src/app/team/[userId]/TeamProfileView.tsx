@@ -228,7 +228,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
   }
 
   const { career } = data;
-  const seasonRange = data.firstSeason === data.currentSeason ? data.firstSeason : `${data.firstSeason}–${data.currentSeason}`;
+  const seasonRange = data.firstSeason === data.currentSeason ? data.firstSeason : `${data.firstSeason}-${data.currentSeason}`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8 pb-16 space-y-8">

@@ -16,7 +16,7 @@ function winPctLabel(wins: number, losses: number) {
 }
 
 function recordLabel(wins: number, losses: number) {
-  return `${wins}–${losses}`;
+  return `${wins}-${losses}`;
 }
 
 function avg(pts: number, games: number) {
@@ -387,7 +387,7 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
           }},
           { label: 'Most Even', pair: mostEvenly, desc: (p: typeof mostEvenly) => {
             const total = p.e1.pointsFor + p.e1.pointsAgainst;
-            return `${p.e1.wins}–${p.e1.losses} · ${total.toFixed(1)} combined pts`;
+            return `${p.e1.wins}-${p.e1.losses} · ${total.toFixed(1)} combined pts`;
           }},
         ].map(({ label, pair, desc }) => pair && (
           <button

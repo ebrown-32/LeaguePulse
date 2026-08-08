@@ -139,10 +139,10 @@ const SCORING_GROUPS: { label: string; rows: { key: string; label: string; yard?
   {
     label: 'Kicker',
     rows: [
-      { key: 'fgm_0_19',  label: 'FG 0–19 yds' },
-      { key: 'fgm_20_29', label: 'FG 20–29 yds' },
-      { key: 'fgm_30_39', label: 'FG 30–39 yds' },
-      { key: 'fgm_40_49', label: 'FG 40–49 yds' },
+      { key: 'fgm_0_19',  label: 'FG 0,19 yds' },
+      { key: 'fgm_20_29', label: 'FG 20,29 yds' },
+      { key: 'fgm_30_39', label: 'FG 30,39 yds' },
+      { key: 'fgm_40_49', label: 'FG 40,49 yds' },
       { key: 'fgm_50p',   label: 'FG 50+ yds' },
       { key: 'xpm',       label: 'Extra Point Made' },
       { key: 'fgmiss',    label: 'FG Missed' },
@@ -158,11 +158,11 @@ const SCORING_GROUPS: { label: string; rows: { key: string; label: string; yard?
       { key: 'safe',     label: 'Safety' },
       { key: 'blk_kick', label: 'Blocked Kick' },
       { key: 'pts_allow_0',    label: 'Points Allowed: 0' },
-      { key: 'pts_allow_1_6',  label: 'Points Allowed: 1–6' },
-      { key: 'pts_allow_7_13', label: 'Points Allowed: 7–13' },
-      { key: 'pts_allow_14_20',label: 'Points Allowed: 14–20' },
-      { key: 'pts_allow_21_27',label: 'Points Allowed: 21–27' },
-      { key: 'pts_allow_28_34',label: 'Points Allowed: 28–34' },
+      { key: 'pts_allow_1_6',  label: 'Points Allowed: 1,6' },
+      { key: 'pts_allow_7_13', label: 'Points Allowed: 7,13' },
+      { key: 'pts_allow_14_20',label: 'Points Allowed: 14,20' },
+      { key: 'pts_allow_21_27',label: 'Points Allowed: 21,27' },
+      { key: 'pts_allow_28_34',label: 'Points Allowed: 28,34' },
       { key: 'pts_allow_35p',  label: 'Points Allowed: 35+' },
     ],
   },
@@ -217,7 +217,7 @@ function ScheduleSection({ s }: { s: LeagueSettings }) {
   return (
     <AutoSection id="schedule-playoffs" title="Schedule & Playoffs">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-        {regularSeasonWeeks && <Chip label="Regular season" value={`Wks 1–${regularSeasonWeeks}`} />}
+        {regularSeasonWeeks && <Chip label="Regular season" value={`Wks 1,${regularSeasonWeeks}`} />}
         {s.playoffWeekStart > 0 && <Chip label="Playoffs begin"  value={`Week ${s.playoffWeekStart}`} />}
         {s.playoffTeams > 0     && <Chip label="Playoff teams"   value={String(s.playoffTeams)} />}
         {playoffRounds          && <Chip label="Playoff rounds"  value={String(playoffRounds)} />}

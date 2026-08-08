@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { PageLayout } from '@/components/layout/PageLayout';
+import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
 import {
   getLeagueInfo,
   getLeagueRosters,
@@ -17,18 +18,12 @@ import {
   generateComprehensiveLeagueHistory,
 } from '@/lib/api';
 import {
-  Trophy,
   Home as HomeIcon,
-  BarChart3,
-  Users,
-  User,
   Flame,
-  Clock,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
+import LeagueCarousel from '@/components/home/LeagueCarousel';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
@@ -163,23 +158,6 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
 
 // ─── Stat card component ─────────────────────────────────────────────────────
 
-/** Small chip used along the hero's context row. */
-function HeroChip({ icon: Icon, children, accent = false }: { icon?: any; children: React.ReactNode; accent?: boolean }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-widest backdrop-blur-sm',
-        accent
-          ? 'border-primary/30 bg-primary/10 text-primary'
-          : 'border-border bg-background/60 text-muted-foreground',
-      )}
-    >
-      {Icon && <Icon className="h-3 w-3" />}
-      {children}
-    </span>
-  );
-}
-
 /** One metric in the thin "league at a glance" strip. */
 function PulseStat({ label, value }: { label: string; value: string }) {
   return (
@@ -208,6 +186,7 @@ export default function Home() {
   const [historyData,      setHistoryData]      = useState<any>(null);
   const [currentWeekMatchups, setCurrentWeekMatchups] = useState<any[]>([]);
   const [allTimeUserStats, setAllTimeUserStats] = useState<any>(null);
+  const [openMatchup, setOpenMatchup] = useState<MatchupTarget | null>(null);
 
   const effectiveWeek = nflState?.season_type === 'regular' ? nflState.week : 1;
 
@@ -348,9 +327,7 @@ export default function Home() {
       : null;
 
   const currentSeason = nflState?.season ?? league?.season ?? '';
-  const headerSubtitle = historyData?.totalSeasons > 1
-    ? `Season ${currentSeason} · ${historyData.totalSeasons} seasons of competition`
-    : `Season ${currentSeason}`;
+  const headerSubtitle = `Season ${currentSeason}`;
 
   return (
     <PageLayout
@@ -360,88 +337,52 @@ export default function Home() {
       <div className="space-y-6">
 
         {/* ── Command bar ───────────────────────────────────────────────────
-            One card instead of a hero + spotlight + four tiles + a stat strip.
-            The league name lives in the navbar, so repeating it here as a
-            headline was pure duplication; the space goes to the spotlight
-            and the league's running totals instead. */}
-        <section className="relative overflow-hidden rounded-3xl border border-border bg-card">
-
-          <div className="relative p-5 sm:p-7">
-            {/* Context row — everything the four stat tiles used to say. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <HeroChip icon={Clock} accent>{formatLeagueStatus(effectiveStatus)}</HeroChip>
-              {/* In preseason the week label is just the status again — skip
-                  it rather than print "Preseason" twice in a row. */}
-              {formatWeekDisplay(effectiveStatus, effectiveWeek) !== formatLeagueStatus(effectiveStatus) && (
-                <HeroChip icon={BarChart3}>{formatWeekDisplay(effectiveStatus, effectiveWeek)}</HeroChip>
-              )}
-              <HeroChip icon={Users}>{league.total_rosters} Teams</HeroChip>
-              <HeroChip>{league.scoring_settings?.rec ? 'PPR' : 'Standard'}</HeroChip>
-              <HeroChip icon={Sparkles}>{playoffTeams} Playoff Spots</HeroChip>
-
-              {commissioner && (
-                <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground lg:inline-flex">
-                  <User className="h-3.5 w-3.5" />
-                  Commissioner
-                  <span className="font-semibold text-foreground">{commissioner.display_name}</span>
-                </span>
-              )}
+            Deliberately sparse: three facts, the current story, and the
+            league totals. Earlier versions stacked five chips, a status
+            sentence, and a commissioner line, which buried the one thing
+            worth looking at. */}
+        <section className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="p-5 sm:p-6">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="font-semibold uppercase tracking-widest text-primary">
+                {formatLeagueStatus(effectiveStatus)}
+              </span>
+              <span>·</span>
+              <span>{league.total_rosters} teams</span>
+              <span>·</span>
+              <span>{league.scoring_settings?.rec ? 'PPR' : 'Standard'}</span>
             </div>
 
-            {getSeasonContext(league, nflState) && (
-              <p className="mt-3 text-sm text-muted-foreground">{getSeasonContext(league, nflState)}</p>
-            )}
-
-            {/* Spotlight — the leader once games are on the board, the
-                reigning champion before then. */}
             {spotlight && (
-              <Link href={`/team/${spotlight.userId}`} className="group mt-6 flex items-center gap-4 sm:gap-5">
-                <div className="relative shrink-0">
-                  <Avatar
-                    avatarId={spotlight.avatar}
-                    size={64}
-                    className="rounded-2xl ring-2 ring-primary/40 transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <span className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
-                    <Trophy className="h-3.5 w-3.5" />
-                  </span>
-                </div>
+              <Link href={`/team/${spotlight.userId}`} className="group mt-5 flex items-center gap-4">
+                <Avatar avatarId={spotlight.avatar} size={52} className="shrink-0 rounded-xl" />
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     {spotlight.eyebrow}
                   </p>
-                  <p className="mt-1 truncate font-display text-2xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-3xl">
+                  <p className="mt-0.5 truncate font-display text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-2xl">
                     {spotlight.name}
                   </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {spotlight.lineLabel}{' '}
-                    <span className="font-semibold text-foreground">{spotlight.line}</span>
-                    {spotlight.metric && (
-                      <>
-                        <span className="mx-2 text-border">·</span>
-                        {spotlight.metricLabel}{' '}
-                        <span className="font-semibold text-foreground">{spotlight.metric}</span>
-                      </>
-                    )}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {spotlight.lineLabel} <span className="font-semibold text-foreground">{spotlight.line}</span>
                   </p>
                 </div>
               </Link>
             )}
 
-            {/* League totals */}
             {historyData && historyData.totalSeasons > 0 && (
-              <>
-                <div className="mt-6 h-px bg-border" />
-                <div className="grid grid-cols-2 gap-y-5 pt-5 sm:grid-cols-4">
-                  <PulseStat label="Seasons"       value={String(historyData.totalSeasons)} />
-                  <PulseStat label="Games Played"  value={historyData.totalGames.toLocaleString()} />
-                  <PulseStat label="All-Time High" value={formatPoints(historyData.highestScore)} />
-                  <PulseStat label="Champions"     value={String(historyData.uniqueChampionsCount)} />
-                </div>
-              </>
+              <div className="mt-6 grid grid-cols-2 gap-y-4 border-t border-border pt-5 sm:grid-cols-4">
+                <PulseStat label="Seasons"       value={String(historyData.totalSeasons)} />
+                <PulseStat label="Games"         value={historyData.totalGames.toLocaleString()} />
+                <PulseStat label="Best Score"    value={formatPoints(historyData.highestScore)} />
+                <PulseStat label="Champions"     value={String(historyData.uniqueChampionsCount)} />
+              </div>
             )}
           </div>
         </section>
+
+        {/* ── Live content from the AI desk + media feed ── */}
+        <LeagueCarousel />
 
         {/* ── Transaction ticker ── */}
         <TransactionTicker />
@@ -451,10 +392,7 @@ export default function Home() {
           <div>
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <CardTitle>This Week&apos;s Battles</CardTitle>
-                </div>
+                <CardTitle>This Week&apos;s Battles</CardTitle>
                 <span className="rounded border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   Week {effectiveWeek}
                 </span>
@@ -468,9 +406,13 @@ export default function Home() {
                     const t1Winning = hasScores && p1 > p2;
                     const t2Winning = hasScores && p2 > p1;
                     return (
-                      <div
+                      <button
                         key={matchup.id}
-                        className="relative rounded-xl border border-border bg-background overflow-hidden"
+                        onClick={() => setOpenMatchup({
+                          a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
+                          b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
+                        })}
+                        className="relative w-full overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-primary/40"
                       >
                         {matchup.isHighlight && (
                           <div className="absolute inset-x-0 top-0 h-px bg-primary/50" />
@@ -481,17 +423,13 @@ export default function Home() {
                           'flex items-center gap-3 px-4 py-3.5',
                           t1Winning && 'bg-primary/[0.04]',
                         )}>
-                          <TeamLink
-                            userId={matchup.team1.userId}
-                            teamName={matchup.team1.name}
-                            avatar={matchup.team1.avatar}
-                            avatarSize={30}
-                            avatarClassName="rounded-lg"
-                            className={cn(
-                              'flex-1 min-w-0 text-sm font-medium leading-tight',
-                              t1Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                            )}
-                          />
+                          <span className="flex min-w-0 flex-1 items-center gap-2">
+                            <Avatar avatarId={matchup.team1.avatar} size={30} className="shrink-0 rounded-lg" />
+                            <span className={cn('min-w-0 truncate text-sm font-medium leading-tight',
+                              t1Winning ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                              {matchup.team1.name}
+                            </span>
+                          </span>
                           <span className={cn(
                             'font-display text-xl font-bold tabular-nums shrink-0',
                             t1Winning ? 'text-primary' : 'text-muted-foreground',
@@ -512,17 +450,13 @@ export default function Home() {
                           'flex items-center gap-3 px-4 py-3.5',
                           t2Winning && 'bg-primary/[0.04]',
                         )}>
-                          <TeamLink
-                            userId={matchup.team2.userId}
-                            teamName={matchup.team2.name}
-                            avatar={matchup.team2.avatar}
-                            avatarSize={30}
-                            avatarClassName="rounded-lg"
-                            className={cn(
-                              'flex-1 min-w-0 text-sm font-medium leading-tight',
-                              t2Winning ? 'text-foreground font-semibold' : 'text-muted-foreground',
-                            )}
-                          />
+                          <span className="flex min-w-0 flex-1 items-center gap-2">
+                            <Avatar avatarId={matchup.team2.avatar} size={30} className="shrink-0 rounded-lg" />
+                            <span className={cn('min-w-0 truncate text-sm font-medium leading-tight',
+                              t2Winning ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                              {matchup.team2.name}
+                            </span>
+                          </span>
                           <span className={cn(
                             'font-display text-xl font-bold tabular-nums shrink-0',
                             t2Winning ? 'text-primary' : 'text-muted-foreground',
@@ -536,7 +470,7 @@ export default function Home() {
                             <Flame className="h-3.5 w-3.5 text-orange-500" />
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -549,10 +483,7 @@ export default function Home() {
         <div>
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-primary" />
-                <CardTitle>Standings</CardTitle>
-              </div>
+              <CardTitle>Standings</CardTitle>
               <SeasonSelect
                 seasons={seasons}
                 selectedSeason={selectedSeason}
@@ -749,6 +680,8 @@ export default function Home() {
           </Card>
         </div>
       </div>
+
+      <MatchupDetailModal target={openMatchup} onClose={() => setOpenMatchup(null)} />
     </PageLayout>
   );
 }

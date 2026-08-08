@@ -155,7 +155,7 @@ export default function MediaDetailModal({ item, onClose }: { item: FeedItem | n
                 </div>
               )}
 
-              {/* We couldn't pull the full text in-app for this one — rather than
+              {/* We couldn't pull the full text in-app for this one, rather than
                   leave the user with just the summary, hand them a direct way out
                   to read it at the source instead. */}
               {fullArticle && !fullArticle.available && item.url && (

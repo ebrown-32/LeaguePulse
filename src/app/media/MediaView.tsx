@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { PageLayout } from '@/components/layout/PageLayout';
 import ForYouFeed from './ForYouFeed';
 import InjuryReport from './InjuryReport';
 import TeamFilterBar from './TeamFilterBar';
-import { PulseIcon, InjuryIcon, TrendingIcon, TrendingDownIcon, BroadcastIcon, GridIcon, ListIcon } from '@/components/icons/MediaIcons';
+import AIDeskView from './AIDeskView';
+import { PulseIcon, InjuryIcon, TrendingIcon, TrendingDownIcon, GridIcon, ListIcon, BroadcastIcon } from '@/components/icons/MediaIcons';
 
-type Tab = 'foryou' | 'waivers' | 'injuries';
+type Tab = 'foryou' | 'waivers' | 'injuries' | 'desk';
 type TrendType = 'add' | 'drop';
 type ViewMode = 'grid' | 'list';
 
@@ -16,6 +18,7 @@ const TABS: { id: Tab; label: string; icon: typeof PulseIcon }[] = [
   { id: 'foryou', label: 'For You', icon: PulseIcon },
   { id: 'waivers', label: 'Waiver Wire', icon: TrendingIcon },
   { id: 'injuries', label: 'Injury Report', icon: InjuryIcon },
+  { id: 'desk', label: 'AI Desk', icon: BroadcastIcon },
 ];
 
 // "For You" is now news + injury context only; waiver trends live in their
@@ -24,7 +27,11 @@ const FORYOU_KINDS = 'article,injury';
 const WAIVER_KINDS = 'trending';
 
 export default function MediaView() {
-  const [activeTab, setActiveTab] = useState<Tab>('foryou');
+  // ?tab=desk lets the home page wire link straight into the AI desk.
+  const params = useSearchParams();
+  const requested = params.get('tab');
+  const initialTab: Tab = TABS.some(t => t.id === requested) ? (requested as Tab) : 'foryou';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [trend, setTrend] = useState<TrendType>('add');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -112,9 +119,9 @@ export default function MediaView() {
     >
       {tabNavigation}
 
-      {/* Waiver trends are league-wide by nature — they're about players on
-          nobody's roster yet — so the per-team filter doesn't apply there. */}
-      {activeTab !== 'waivers' && <TeamFilterBar selected={teamId} onSelect={setTeamId} />}
+      {/* Waiver trends are league-wide by nature, they're about players on
+          nobody's roster yet, so the per-team filter doesn't apply there. */}
+      {activeTab !== 'waivers' && activeTab !== 'desk' && <TeamFilterBar selected={teamId} onSelect={setTeamId} />}
 
       {activeTab === 'foryou' && (
         <>
@@ -134,6 +141,8 @@ export default function MediaView() {
       )}
 
       {activeTab === 'injuries' && <InjuryReport teamId={teamId ?? undefined} />}
+
+      {activeTab === 'desk' && <AIDeskView />}
     </PageLayout>
   );
 }

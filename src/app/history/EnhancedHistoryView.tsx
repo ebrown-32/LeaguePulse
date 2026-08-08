@@ -289,7 +289,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         </div>
 
                         <span className="w-24 text-right font-mono text-sm text-foreground">
-                          {manager.totalWins}–{manager.totalLosses}{manager.totalTies > 0 ? `–${manager.totalTies}` : ''}
+                          {manager.totalWins},{manager.totalLosses}{manager.totalTies > 0 ? `,${manager.totalTies}` : ''}
                         </span>
                         <span className={`w-16 text-right text-sm font-bold tabular-nums ${isGoat ? 'text-amber-500' : 'text-foreground'}`}>
                           {(manager.winPercentage * 100).toFixed(1)}%
@@ -342,7 +342,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               {(manager.winPercentage * 100).toFixed(1)}%
                             </div>
                             <div className="text-xs font-mono text-muted-foreground">
-                              {manager.totalWins}–{manager.totalLosses}
+                              {manager.totalWins},{manager.totalLosses}
                             </div>
                           </div>
                         </div>
@@ -583,7 +583,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               )}
                               {record.details?.winnerScore !== undefined && record.details?.loserScore !== undefined && (
                                 <span className="text-muted-foreground/60 font-mono">
-                                  {record.details.winnerScore.toFixed(1)}–{record.details.loserScore.toFixed(1)}
+                                  {record.details.winnerScore.toFixed(1)},{record.details.loserScore.toFixed(1)}
                                 </span>
                               )}
                             </div>

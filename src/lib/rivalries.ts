@@ -183,6 +183,12 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
         const s1 = a.points ?? 0;
         const s2 = b.points ?? 0;
 
+        // Sleeper returns scheduled-but-unplayed fixtures for the current
+        // season as 0-0. They must not count: they inflated every record (the
+        // else branch below awarded u2 a phantom win) and a zero margin reads
+        // as a maximally close game to anything scoring rivalry intensity.
+        if (s1 === 0 && s2 === 0) continue;
+
         ensure(u1, u2);
         ensure(u2, u1);
 
@@ -191,8 +197,9 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
         h2h[u2][u1].pointsFor     += s2;
         h2h[u2][u1].pointsAgainst += s1;
 
-        if (s1 > s2) { h2h[u1][u2].wins++; h2h[u2][u1].losses++; }
-        else         { h2h[u1][u2].losses++; h2h[u2][u1].wins++; }
+        // A genuine tie is neither a win nor a loss for either side.
+        if (s1 > s2)      { h2h[u1][u2].wins++;   h2h[u2][u1].losses++; }
+        else if (s2 > s1) { h2h[u1][u2].losses++; h2h[u2][u1].wins++; }
 
         h2h[u1][u2].games.push({ season, week, score: s1, opponentScore: s2, isPlayoff });
         h2h[u2][u1].games.push({ season, week, score: s2, opponentScore: s1, isPlayoff });

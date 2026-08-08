@@ -65,7 +65,7 @@ function PlayerRow({ player, onOpen, best }: { player: PlayerCard; onOpen: () =>
 
       <span className="relative shrink-0 text-right">
         <span className="block font-display text-base font-bold tabular-nums text-foreground">
-          {player.points != null ? player.points.toFixed(1) : '—'}
+          {player.points != null ? player.points.toFixed(1) : ','}
         </span>
         <span className="block text-[10px] text-muted-foreground">
           {player.pointsPerGame != null ? `${player.pointsPerGame.toFixed(1)}/gm` : 'no games'}

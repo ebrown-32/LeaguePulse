@@ -3,6 +3,10 @@
     {
       "path": "/api/ai-agents/auto-generate",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/ai/cron",
+      "schedule": "0 13 * * *"
     }
   ]
 }
