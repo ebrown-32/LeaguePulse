@@ -16,6 +16,7 @@ import {
   Sword,
   Shuffle,
   Shirt,
+  ListOrdered,
   ChevronDown,
   Menu,
   X,
@@ -42,6 +43,11 @@ const PRIMARY_NAV: NavItem[] = [
 
 const MORE_NAV: NavItem[] = [
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
+  // Power Rankings (/analyzer) is built and working but unlinked: the free
+  // FantasyPros tier caps every board at 10 rows, so only ~40 of ~200
+  // rostered players are ranked and team scores are not trustworthy yet.
+  // Re-add this entry once a tier without the row cap is available.
+  { name: 'Player Rankings', href: '/rankings',  icon: ListOrdered  },
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },

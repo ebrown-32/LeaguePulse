@@ -104,8 +104,18 @@ async function writeJson(key: string, file: string, value: unknown): Promise<voi
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // EROFS / EACCES is the read-only serverless filesystem.
+    // Distinguish "never configured" from "configured but the connection
+    // dropped". The singleton above nulls itself on any Redis error, so
+    // reaching here with REDIS_URL set means the connection failed, not that
+    // it was missing. Reporting the latter sends you debugging the wrong thing.
+    const readOnly = /EROFS|EACCES|read-only/i.test(msg);
+    const configured = Boolean(process.env.REDIS_URL?.trim());
     throw new StorageUnavailableError(
-      /EROFS|EACCES|read-only/i.test(msg) ? 'read-only filesystem and no REDIS_URL' : msg,
+      !readOnly ? msg
+        : configured
+          ? 'REDIS_URL is set but the Redis connection failed, so writes fell back to the ' +
+            'read-only filesystem. Run the diagnostics in /admin/ai-desk for the exact error.'
+          : 'read-only filesystem and no REDIS_URL',
     );
   }
 }

@@ -167,11 +167,15 @@ function Preview({ h, s, radius, lightness = 44 }: { h: number; s: number; radiu
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function AppearancePage() {
+/**
+ * Theme editor. Rendered inside the single admin shell, which owns the
+ * password gate, so `adminPassword` arrives already verified.
+ */
+export default function AppearanceEditor({ adminPassword }: { adminPassword: string }) {
   const router = useRouter();
 
-  const [authed,    setAuthed]    = useState(false);
-  const [password,  setPassword]  = useState('');
+  const [authed,    setAuthed]    = useState(true);
+  const [password,  setPassword]  = useState(adminPassword);
   const [authError, setAuthError] = useState('');
   const [loading,   setLoading]   = useState(false);
   const [saved,     setSaved]     = useState(false);
@@ -194,6 +198,7 @@ export default function AppearancePage() {
   // doesn't follow the admin around the rest of the app.
   useEffect(() => clearThemePreview, []);
 
+
   // Load current theme once authenticated
   const loadTheme = useCallback(async (pwd: string) => {
     const res = await fetch('/api/admin/theme', {
@@ -207,6 +212,9 @@ export default function AppearancePage() {
       setCustomHexLight(hslToHex(merged.primaryHLight, merged.primarySLight, merged.primaryLLight));
     }
   }, []);
+
+  // The shell already authenticated, so pull the saved theme straight away.
+  useEffect(() => { loadTheme(adminPassword); }, [adminPassword, loadTheme]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

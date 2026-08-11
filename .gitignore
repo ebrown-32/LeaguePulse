@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated AI feed: must never ship stale posts into a deployment
+data/ai-posts.json
+data/fantasypros.json

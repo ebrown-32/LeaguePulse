@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
@@ -11,12 +10,53 @@ const KIND_LABEL: Record<ContentKind, string> = {
   article: 'Article', tweet: 'Post', comment: 'Comment', tradeGrade: 'Trade Grade',
 };
 
-export default function AIDeskAdmin() {
-  const [password, setPassword] = useState('');
-  const [authed, setAuthed] = useState(false);
-  const [authError, setAuthError] = useState('');
+interface Check {
+  id: string;
+  label: string;
+  status: 'pass' | 'fail' | 'warn';
+  detail: string;
+  fix?: string;
+}
+interface DiagResult {
+  checks: Check[];
+  summary: { pass: number; warn: number; fail: number };
+  error?: string;
+}
+
+const STATUS_STYLE: Record<Check['status'], { dot: string; text: string; word: string }> = {
+  pass: { dot: 'bg-emerald-500', text: 'text-emerald-500', word: 'PASS' },
+  warn: { dot: 'bg-amber-500',   text: 'text-amber-500',   word: 'WARN' },
+  fail: { dot: 'bg-red-500',     text: 'text-red-500',     word: 'FAIL' },
+};
+
+/** Status is never colour alone: every row carries the word and a fix. */
+function CheckRow({ c }: { c: Check }) {
+  const st = STATUS_STYLE[c.status];
+  return (
+    <li className="flex gap-3 border-b border-border py-2.5 last:border-0">
+      <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', st.dot)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-semibold text-foreground">{c.label}</span>
+          <span className={cn('text-[9px] font-bold tracking-widest', st.text)}>{st.word}</span>
+        </div>
+        <p className="mt-0.5 break-words text-[11px] text-muted-foreground">{c.detail}</p>
+        {c.fix && (
+          <p className="mt-1 break-words rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] text-foreground">
+            {c.fix}
+          </p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }) {
+  const password = adminPassword;
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [queued, setQueued] = useState(0);
+  const [diag, setDiag] = useState<DiagResult | null>(null);
+  const [diagBusy, setDiagBusy] = useState(false);
 
   const [people, setPeople] = useState<Personality[]>([]);
   const [activeId, setActiveId] = useState('');
@@ -37,15 +77,20 @@ export default function AIDeskAdmin() {
     }).catch(() => {});
   }, []);
 
-  const login = async () => {
-    setAuthError('');
-    const res = await fetch('/api/admin/auth', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    if (res.ok) setAuthed(true);
-    else setAuthError('Incorrect password');
-  };
+  const runDiagnostics = useCallback(async (live: boolean) => {
+    setDiagBusy(true);
+    try {
+      const res = await fetch(`/api/ai/diagnostics${live ? '?live=1' : ''}`, {
+        headers: { 'x-admin-password': password },
+      });
+      setDiag(await res.json());
+    } catch (e) {
+      setDiag({ checks: [], summary: { pass: 0, warn: 0, fail: 0 },
+        error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setDiagBusy(false);
+    }
+  }, [password]);
 
   const active = people.find(p => p.id === activeId);
   const update = (patch: Partial<Personality>) =>
@@ -90,34 +135,64 @@ export default function AIDeskAdmin() {
     finally { setBusy(false); }
   }, []);
 
-  if (!authed) {
-    return (
-      <PageLayout title="AI Desk" subtitle="Back office, personalities and manual publishing.">
-        <div className="mx-auto max-w-sm rounded-xl border border-border bg-card p-6">
-          <label className="mb-2 block text-xs font-medium text-muted-foreground">Admin password</label>
-          <input
-            type="password" value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && login()}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          />
-          {authError && <p className="mt-2 text-xs text-rose-500">{authError}</p>}
-          <button onClick={login} className="mt-3 w-full rounded-md bg-primary py-2 text-sm font-semibold text-primary-foreground">
-            Unlock
-          </button>
-        </div>
-      </PageLayout>
-    );
-  }
 
   return (
-    <PageLayout title="AI Desk" subtitle="Back office, personalities and manual publishing.">
+    <>
       {configured === false && (
         <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-muted-foreground">
           <span className="font-semibold text-amber-500">AI is not configured. </span>
           Add <code className="font-mono text-foreground">ANTHROPIC_API_KEY</code> to <code className="font-mono text-foreground">.env.local</code>.
         </div>
       )}
+
+      {/* ── Diagnostics ─────────────────────────────────────────────────
+          Everything the desk depends on, tested for real rather than inferred
+          from whether an env var happens to be present. */}
+      <section className="mb-6 rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+              Diagnostics
+            </h2>
+            {diag && !diag.error && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                <span className="font-semibold text-emerald-500">{diag.summary.pass} pass</span>
+                {' · '}
+                <span className="font-semibold text-amber-500">{diag.summary.warn} warn</span>
+                {' · '}
+                <span className="font-semibold text-red-500">{diag.summary.fail} fail</span>
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => runDiagnostics(false)} disabled={diagBusy}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50">
+              {diagBusy ? 'Checking…' : 'Run checks'}
+            </button>
+            <button onClick={() => runDiagnostics(true)} disabled={diagBusy}
+              title="Also sends a 1-token request to Anthropic to prove the key works"
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50">
+              Test connections
+            </button>
+          </div>
+        </div>
+
+        {diag?.error && (
+          <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/5 p-2 text-[11px] text-red-500">
+            {diag.error}
+          </p>
+        )}
+        {diag && !diag.error && (
+          <ul className="mt-3">{diag.checks.map(c => <CheckRow key={c.id} c={c} />)}</ul>
+        )}
+        {!diag && !diagBusy && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Verifies the Anthropic key, the Redis round trip, the cron secret, and what the
+            feed currently holds. &ldquo;Test connections&rdquo; additionally spends one token
+            proving the API key is live.
+          </p>
+        )}
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         {/* Roster of personalities */}
@@ -248,6 +323,6 @@ export default function AIDeskAdmin() {
           </div>
         )}
       </div>
-    </PageLayout>
+    </>
   );
 }
