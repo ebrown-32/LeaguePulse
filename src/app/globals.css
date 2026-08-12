@@ -172,6 +172,56 @@
     body::after { animation: none; }
   }
 
+  /* ── Chat markdown ─────────────────────────────────────────────────────
+     Streamdown ships its own spacing; this only binds it to the palette and
+     tightens it for a small chat bubble. */
+  .chat-md > :first-child { margin-top: 0; }
+  .chat-md > :last-child  { margin-bottom: 0; }
+  .chat-md p { margin: 0 0 0.6em; line-height: 1.65; }
+  .chat-md strong { font-weight: 700; color: hsl(var(--foreground)); }
+  .chat-md ul, .chat-md ol { margin: 0 0 0.6em 1.1em; }
+  .chat-md li { margin-bottom: 0.25em; }
+  .chat-md ul { list-style: disc; }
+  .chat-md ol { list-style: decimal; }
+  .chat-md a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; }
+  .chat-md h1, .chat-md h2, .chat-md h3 {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    margin: 0.8em 0 0.4em;
+    color: hsl(var(--foreground));
+  }
+  .chat-md code {
+    background: hsl(var(--muted));
+    border-radius: 0.25rem;
+    padding: 0.1em 0.35em;
+    font-size: 0.9em;
+  }
+  .chat-md pre {
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    padding: 0.6em 0.75em;
+    overflow-x: auto;
+    margin: 0 0 0.6em;
+  }
+  .chat-md pre code { background: none; padding: 0; }
+  .chat-md blockquote {
+    border-left: 2px solid hsl(var(--primary) / 0.4);
+    padding-left: 0.75em;
+    color: hsl(var(--muted-foreground));
+    margin: 0 0 0.6em;
+  }
+  /* Tables must scroll inside the bubble rather than widen the panel. */
+  .chat-md table { display: block; overflow-x: auto; width: 100%; border-collapse: collapse; margin: 0 0 0.6em; }
+  .chat-md th, .chat-md td {
+    border: 1px solid hsl(var(--border));
+    padding: 0.3em 0.5em;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .chat-md th { background: hsl(var(--muted)); font-weight: 700; }
+  .chat-md hr { border: 0; border-top: 1px solid hsl(var(--border)); margin: 0.8em 0; }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display, var(--font-display-fallback, 'Space Grotesk', system-ui, sans-serif));
     @apply tracking-tight;

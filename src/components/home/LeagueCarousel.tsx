@@ -30,6 +30,7 @@ interface CarouselItem {
 interface AIPost {
   id: string;
   personaHandle: string;
+  personaAvatar?: string;
   kind: string;
   content: { headline?: string; text?: string };
 }
@@ -89,6 +90,9 @@ export default function LeagueCarousel({ className }: { className?: string }) {
           id: `ai-${p.id}`,
           label: p.personaHandle,
           title: p.content?.headline || p.content?.text || '',
+          // The persona's DiceBear portrait, so an AI card is visibly authored
+          // by someone rather than showing a generic placeholder.
+          imageUrl: p.personaAvatar,
           href: '/media?tab=desk',
           external: false,
           isAI: true,
@@ -205,13 +209,21 @@ export default function LeagueCarousel({ className }: { className?: string }) {
           const inner = (
             <>
               {item.imageUrl ? (
-                <div className="relative h-24 w-full shrink-0 overflow-hidden rounded-lg bg-muted">
+                <div className={cn(
+                  'relative flex h-24 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg',
+                  item.isAI ? 'bg-gradient-to-br from-primary/10 to-muted' : 'bg-muted',
+                )}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.imageUrl}
                     alt=""
                     loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className={cn(
+                      'transition-transform duration-500 group-hover:scale-105',
+                      item.isAI
+                        ? 'h-[4.5rem] w-[4.5rem] rounded-full border border-border bg-card object-cover'
+                        : 'h-full w-full object-cover',
+                    )}
                   />
                 </div>
               ) : (

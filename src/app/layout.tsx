@@ -4,6 +4,7 @@ import { Space_Grotesk, DM_Sans } from 'next/font/google';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import PageTransition from '@/components/layout/PageTransition';
+import ChatWidget from '@/components/chat/ChatWidget';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ThemeInjector } from '@/components/ThemeInjector';
 import { InstallPromptProvider } from '@/components/pwa/InstallPromptProvider';
@@ -59,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <PageTransition>{children}</PageTransition>
               </main>
               <Footer />
+              <ChatWidget />
             </div>
           </InstallPromptProvider>
         </ThemeProvider>

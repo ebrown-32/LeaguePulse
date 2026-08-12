@@ -7,6 +7,7 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getRedis, isRedisConfigured } from '../redisClient';
 import { DEFAULT_PERSONALITIES, type Personality } from './personalities';
 
 export interface FeedPost {
@@ -15,6 +16,9 @@ export interface FeedPost {
   personaName: string;
   personaHandle: string;
   personaAccent: string;
+  /** Resolved DiceBear URL, stored with the post so an avatar change does not
+   *  retroactively restyle old bylines. */
+  personaAvatar?: string;
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade';
   content: any;
   /** When it was generated. */
@@ -29,16 +33,6 @@ export interface FeedPost {
 
 const MAX_POSTS = 300;
 
-let redis: any = null;
-try {
-  const url = process.env.REDIS_URL;
-  if (url && !url.includes('your-redis')) {
-    const { createClient } = require('redis');
-    redis = createClient({ url });
-    redis.on('error', () => { redis = null; });
-  }
-} catch { /* fall back to file storage */ }
-
 const DATA_DIR   = path.join(process.cwd(), 'data');
 const POSTS_FILE = path.join(DATA_DIR, 'ai-posts.json');
 const PEOPLE_FILE = path.join(DATA_DIR, 'ai-personalities.json');
@@ -49,20 +43,11 @@ async function ensureDir() {
   try { await fs.access(DATA_DIR); } catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
-async function connect(): Promise<void> {
-  await Promise.race([
-    redis.connect(),
-    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('redis timeout')), 2000)),
-  ]);
-}
-
 async function readJson<T>(key: string, file: string, fallback: T): Promise<T> {
   try {
-    if (redis) {
-      try { if (!redis.isOpen) await connect(); } catch { redis = null; }
-    }
-    if (redis) {
-      const raw = await redis.get(key);
+    const { client } = getRedis();
+    if (client) {
+      const raw = await client.get(key);
       return raw ? JSON.parse(raw) as T : fallback;
     }
     await ensureDir();
@@ -89,13 +74,14 @@ export class StorageUnavailableError extends Error {
  * at all: the worst kind of failure, silent and invisible in the UI.
  */
 async function writeJson(key: string, file: string, value: unknown): Promise<void> {
-  if (redis) {
+  const { client, backend } = getRedis();
+  if (client) {
     try {
-      if (!redis.isOpen) await connect();
-      await redis.set(key, JSON.stringify(value));
+      await client.set(key, JSON.stringify(value));
       return;
     } catch (err) {
-      throw new StorageUnavailableError(`redis write failed: ${err instanceof Error ? err.message : err}`);
+      throw new StorageUnavailableError(
+        `${backend} write failed: ${err instanceof Error ? err.message : err}`);
     }
   }
   try {
@@ -104,21 +90,36 @@ async function writeJson(key: string, file: string, value: unknown): Promise<voi
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // EROFS / EACCES is the read-only serverless filesystem.
+    // Distinguish "never configured" from "configured but the connection
+    // dropped". The singleton above nulls itself on any Redis error, so
+    // reaching here with REDIS_URL set means the connection failed, not that
+    // it was missing. Reporting the latter sends you debugging the wrong thing.
+    const readOnly = /EROFS|EACCES|read-only/i.test(msg);
+    const configured = isRedisConfigured();
     throw new StorageUnavailableError(
-      /EROFS|EACCES|read-only/i.test(msg) ? 'read-only filesystem and no REDIS_URL' : msg,
+      !readOnly ? msg
+        : configured
+          ? 'Redis is configured but the connection failed, so writes fell back to the ' +
+            'read-only filesystem. Run the diagnostics in /admin/ai-desk for the exact error.'
+          : 'read-only filesystem and no Redis configured',
     );
   }
 }
 
 /** Which backend is live, and can we actually write to it. */
-export async function storageHealth(): Promise<{ backend: 'redis' | 'file'; writable: boolean; detail?: string }> {
-  const backend = redis ? 'redis' : 'file';
+export async function storageHealth(): Promise<{ backend: string; writable: boolean; detail?: string }> {
+  const { backend, reason } = getRedis();
+  const label = backend === 'none' ? 'file' : backend;
   try {
     const probe = await readJson<unknown>(POSTS_KEY, POSTS_FILE, []);
     await writeJson(POSTS_KEY, POSTS_FILE, probe);
-    return { backend, writable: true };
+    return { backend: label, writable: true };
   } catch (err) {
-    return { backend, writable: false, detail: err instanceof Error ? err.message : String(err) };
+    return {
+      backend: label,
+      writable: false,
+      detail: (reason ? `${reason} ` : '') + (err instanceof Error ? err.message : String(err)),
+    };
   }
 }
 
@@ -164,6 +165,30 @@ export async function lastGeneratedAt(): Promise<number> {
 export async function lastPublishAt(): Promise<number> {
   const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
   return all.reduce((max, p) => Math.max(max, new Date(p.publishAt ?? p.createdAt).getTime()), 0);
+}
+
+// ── Assistant ──────────────────────────────────────────────────────────────
+
+export interface AssistantConfig {
+  /** Shown in the chat header and used by the model to refer to itself. */
+  name: string;
+}
+
+const ASSISTANT_KEY = 'lp_ai_assistant';
+const ASSISTANT_FILE = 'ai-assistant.json';
+
+export const DEFAULT_ASSISTANT: AssistantConfig = { name: 'Captain Mike' };
+
+export async function getAssistant(): Promise<AssistantConfig> {
+  const saved = await readJson<AssistantConfig | null>(ASSISTANT_KEY, ASSISTANT_FILE, null);
+  const name = saved?.name?.trim();
+  return name ? { name } : DEFAULT_ASSISTANT;
+}
+
+export async function saveAssistant(config: AssistantConfig): Promise<void> {
+  await writeJson(ASSISTANT_KEY, ASSISTANT_FILE, {
+    name: config.name.trim().slice(0, 40) || DEFAULT_ASSISTANT.name,
+  });
 }
 
 // ── Personalities ──────────────────────────────────────────────────────────

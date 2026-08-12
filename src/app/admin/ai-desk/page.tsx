@@ -1,7 +1,6 @@
-import AIDeskAdmin from './AIDeskAdmin';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
+/** The AI desk moved into the single admin panel at /admin. */
 export default function Page() {
-  return <AIDeskAdmin />;
+  redirect('/admin');
 }

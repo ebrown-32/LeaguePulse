@@ -3,6 +3,10 @@
     {
       "path": "/api/ai/cron",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/fantasypros/refresh",
+      "schedule": "0 12 * * *"
     }
   ]
 }

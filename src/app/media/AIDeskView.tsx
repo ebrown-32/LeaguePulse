@@ -10,6 +10,7 @@ interface FeedPost {
   personaName: string;
   personaHandle: string;
   personaAccent: string;
+  personaAvatar?: string;
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade';
   content: any;
   createdAt: string;
@@ -40,13 +41,22 @@ function PostCard({ post, index }: { post: FeedPost; index: number }) {
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
       className="flex gap-3 border-b border-border px-1 py-4 last:border-0"
     >
-      {/* Initials rather than an emoji avatar, so the desk reads like a
-          newsroom byline instead of a chat app. */}
+      {/* DiceBear portrait, with initials behind it so a blocked or slow
+          request still leaves a readable byline. */}
       <span className={cn(
-        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-[11px] font-bold',
+        'relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-card text-[11px] font-bold',
         post.personaAccent,
       )}>
         {post.personaName.split(' ').map(w => w[0]).slice(0, 2).join('')}
+        {post.personaAvatar && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={post.personaAvatar}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
       </span>
 
       <div className="min-w-0 flex-1">
@@ -64,6 +74,20 @@ function PostCard({ post, index }: { post: FeedPost; index: number }) {
 
         {kind === 'article' && (
           <div className="mt-1.5">
+            {/* Articles get a hero thumbnail: the author's own portrait on an
+                accent wash, so a long-form piece reads differently from a
+                one-line take in the same column. */}
+            {post.personaAvatar && (
+              <div className="mb-2.5 flex h-28 items-center justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-br from-primary/10 to-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={post.personaAvatar}
+                  alt={`${post.personaName} portrait`}
+                  loading="lazy"
+                  className="h-24 w-24 rounded-full border border-border bg-card object-cover shadow-sm"
+                />
+              </div>
+            )}
             <h3 className="font-display text-base font-bold leading-snug text-foreground">{content.headline}</h3>
             {content.standfirst && (
               <p className="mt-0.5 text-sm text-muted-foreground">{content.standfirst}</p>

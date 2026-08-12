@@ -1,0 +1,62 @@
+/**
+ * DiceBear avatars for the AI personalities.
+ *
+ * Generated from a seed rather than stored as files, so a persona's face is
+ * stable, free, and changes only when the admin changes the style or seed.
+ * SVG is requested because DiceBear allows 50 SVG requests a second against 10
+ * for raster formats, and it stays crisp at every size the feed uses.
+ */
+
+const BASE = 'https://api.dicebear.com/10.x';
+
+/** Styles offered in the admin picker. Curated for faces that read as people
+ *  or mascots at small sizes; the abstract pattern styles look like noise in a
+ *  byline. */
+export const AVATAR_STYLES = [
+  'adventurer',
+  'avataaars',
+  'big-smile',
+  'bottts',
+  'croodles',
+  'fun-emoji',
+  'lorelei',
+  'micah',
+  'miniavs',
+  'notionists',
+  'open-peeps',
+  'personas',
+  'pixel-art',
+  'thumbs',
+] as const;
+
+export type AvatarStyle = (typeof AVATAR_STYLES)[number];
+
+export const DEFAULT_AVATAR_STYLE: AvatarStyle = 'notionists';
+
+export interface AvatarConfig {
+  /** DiceBear style id. */
+  avatarStyle?: string;
+  /** Seed controlling which face inside that style. Defaults to the persona id. */
+  avatarSeed?: string;
+}
+
+function isKnownStyle(style: string | undefined): style is AvatarStyle {
+  return Boolean(style) && (AVATAR_STYLES as readonly string[]).includes(style!);
+}
+
+/**
+ * Build the avatar URL for a persona.
+ *
+ * `fallbackSeed` is the persona id, so an admin who never touches the avatar
+ * settings still gets a distinct, stable face per personality.
+ */
+export function personaAvatarUrl(
+  persona: AvatarConfig & { id?: string; name?: string },
+  opts: { size?: number } = {},
+): string {
+  const style = isKnownStyle(persona.avatarStyle) ? persona.avatarStyle : DEFAULT_AVATAR_STYLE;
+  const seed = (persona.avatarSeed || persona.id || persona.name || 'leaguepulse').trim();
+  const params = new URLSearchParams({ seed });
+  if (opts.size) params.set('size', String(opts.size));
+  return `${BASE}/${style}/svg?${params}`;
+}

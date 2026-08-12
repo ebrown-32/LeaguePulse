@@ -5,6 +5,9 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // Streamdown ships Tailwind classes in its own dist, so they must be
+    // scanned or the chat markdown renders unstyled.
+    './node_modules/streamdown/dist/**/*.{js,mjs}',
   ],
   theme: {
     container: {

@@ -8,6 +8,9 @@
  *
  * Server-only.
  */
+import { resolvePhase } from './seasonPhase';
+import { getLeagueInfo, getNFLState } from '@/lib/api';
+import { getCurrentLeagueId } from '@/config/league';
 import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
 import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from './claude';
@@ -21,7 +24,16 @@ YOUR PERSONA
 Name: ${p.name} (${p.handle})
 Voice: ${p.voice}
 
-Write entirely in this voice. The persona affects tone and framing only —
+FANTASY FOOTBALL EXPERTISE
+You know the game properly: PPR versus standard scoring, snap share and target
+share as better signals than raw points, positional scarcity, strength of
+schedule, bye weeks, handcuffs, streaming defenses and kickers, buy-low and
+sell-high windows, and dynasty age curves (running backs fall off around 26,
+receivers and tight ends around 29, quarterbacks hold value far longer). Use
+that understanding to make the analysis genuinely sharp, and pitch it to
+whatever phase of the season the context says we are in.
+
+Write entirely in this voice. The persona affects tone and framing only,
 never the facts.`;
 }
 
@@ -32,6 +44,18 @@ const ArticleSchema = z.object({
   standfirst: z.string().describe('One-sentence summary beneath the headline'),
   body: z.string().describe('3-6 short paragraphs separated by blank lines'),
   tags: z.array(z.string()).max(4).describe('Short topic tags, lowercase'),
+});
+
+/** What the model is actually asked to emit. Paragraphs arrive as an array so
+ *  no raw newline ever has to survive inside a JSON string literal, which is
+ *  what made every article fail to parse. */
+const ArticleWireSchema = z.object({
+  headline: z.string(),
+  standfirst: z.string(),
+  paragraphs: z.array(z.string()).min(1),
+  // Trim rather than reject: an extra tag is not a reason to throw away an
+  // otherwise good article, and the model routinely returns five.
+  tags: z.array(z.string()).default([]),
 });
 
 const TweetSchema = z.object({
@@ -53,6 +77,55 @@ const TradeGradeSchema = z.object({
     .describe('low when the league data is thin, e.g. preseason with no games played'),
 });
 
+/**
+ * Ask for raw JSON and validate it ourselves.
+ *
+ * generateObject with Anthropic intermittently returns the payload wrapped in a
+ * stray envelope key, which fails schema validation with "No object generated".
+ * gradeTrade hit this first; articles hit it too, which is why long-form posts
+ * were the only kind failing in production. Deterministic parse plus one retry.
+ */
+async function generateJson<T>(opts: {
+  schema: z.ZodType<T>;
+  system: string;
+  prompt: string;
+  /** A required key, used to spot the provider's stray wrapper object. */
+  probe: string;
+}): Promise<T> {
+  const parse = (raw: string): T => {
+    let t = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const first = t.indexOf('{'), last = t.lastIndexOf('}');
+    if (first > 0 || last < t.length - 1) t = t.slice(first, last + 1);
+    // Escape any raw control characters the model left inside string literals.
+    let inString = false, escaped = false, cleaned = '';
+    for (const ch of t) {
+      if (escaped) { cleaned += ch; escaped = false; continue; }
+      if (ch === '\\') { cleaned += ch; escaped = true; continue; }
+      if (ch === '"') { inString = !inString; cleaned += ch; continue; }
+      if (inString && ch === '\n') { cleaned += '\\n'; continue; }
+      if (inString && ch === '\r') { cleaned += '\\r'; continue; }
+      if (inString && ch === '\t') { cleaned += '\\t'; continue; }
+      cleaned += ch;
+    }
+    const json = JSON.parse(cleaned);
+    const candidate = json[opts.probe] !== undefined ? json : (Object.values(json)[0] as unknown);
+    return opts.schema.parse(candidate);
+  };
+
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { text } = await generateText({
+      model: claude(MODEL_SMART),
+      system: opts.system,
+      prompt: attempt === 0
+        ? opts.prompt
+        : `${opts.prompt}\n\nYour previous reply was not valid JSON. Return only the JSON object.`,
+    });
+    try { return parse(text); } catch (e) { lastErr = e; }
+  }
+  throw new Error(`Unparseable model output: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
+}
+
 export type Article = z.infer<typeof ArticleSchema>;
 export type Tweet = z.infer<typeof TweetSchema>;
 export type Comment = z.infer<typeof CommentSchema>;
@@ -62,22 +135,46 @@ export type TradeGrade = z.infer<typeof TradeGradeSchema>;
 
 async function briefBlock(): Promise<string> {
   const brief = await buildLeagueBrief();
-  return `LEAGUE CONTEXT (the complete, authoritative record):\n\n${brief.text}`;
+  // Same phase framing the chat assistant gets, so a persona does not write
+  // start/sit copy in March or dynasty musings during a playoff week.
+  let phaseBlock = '';
+  try {
+    const leagueId = await getCurrentLeagueId();
+    const [league, nflState] = await Promise.all([getLeagueInfo(leagueId), getNFLState()]);
+    const phase = resolvePhase(nflState, league);
+    phaseBlock =
+      `\n\nSEASON PHASE: ${phase.label} (${phase.season}, week ${phase.week}).` +
+      `\nWHAT MATTERS NOW: ${phase.guidance}`;
+  } catch { /* the brief already states the phase in prose */ }
+
+  return `LEAGUE CONTEXT (the complete, authoritative record):\n\n${brief.text}${phaseBlock}`;
 }
 
 export async function writeArticle(p: Personality, topic?: string): Promise<Article> {
-  const { object } = await generateObject({
-    model: claude(MODEL_SMART),
-    schema: ArticleSchema,
-    schemaName: 'Article',
-    schemaDescription: 'A short league article',
+  const wire = await generateJson({
+    schema: ArticleWireSchema,
+    probe: 'headline',
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
 Write a short article for the league feed${topic ? ` about: ${topic}` : ''}.
 Pick the most genuinely interesting angle in the data. Reference specific
-teams, managers, and numbers from the context.`,
+teams, managers, and numbers from the context.
+
+Respond with ONLY a JSON object, no prose and no markdown fences:
+{
+  "headline": "punchy, under 90 characters",
+  "standfirst": "one sentence beneath the headline",
+  "paragraphs": ["first paragraph", "second paragraph", "third paragraph"],
+  "tags": ["short", "lowercase", "topic", "tags"]
+}`,
   });
+  const object: Article = {
+    headline: wire.headline,
+    standfirst: wire.standfirst,
+    body: wire.paragraphs.join('\n\n'),
+    tags: wire.tags.slice(0, 4),
+  };
   return stripDashes(object);
 }
 

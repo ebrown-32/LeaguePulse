@@ -1,3 +1,4 @@
+import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextRequest, NextResponse } from 'next/server';
 import { AINotConfiguredError, isAIConfigured } from '@/lib/ai/claude';
 import { personalityById, type ContentKind } from '@/lib/ai/personalities';
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       personaName: persona.name,
       personaHandle: persona.handle,
       personaAccent: persona.accent,
+      personaAvatar: personaAvatarUrl(persona),
       kind,
       content: content as any,
       createdAt: new Date().toISOString(),
