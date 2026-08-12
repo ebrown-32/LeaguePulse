@@ -1,3 +1,4 @@
+import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
 import { writeArticle, writeTweet } from '@/lib/ai/generate';
@@ -112,16 +113,21 @@ export async function GET(request: Request) {
     const { kind, persona } = plan[i];
     try {
       const content = kind === 'article' ? await writeArticle(persona) : await writeTweet(persona);
+      // Times are claimed by successful posts only. Indexing by loop position
+      // meant a failed item burned slot 0, the one that publishes immediately,
+      // and the whole batch landed in the future leaving the feed empty.
+      const slot = written.length;
       const post: FeedPost = {
         id: `${Date.now()}-${persona.id}-${i}`,
         personalityId: persona.id,
         personaName: persona.name,
         personaHandle: persona.handle,
         personaAccent: persona.accent,
+        personaAvatar: personaAvatarUrl(persona),
         kind,
         content: content as any,
         createdAt: new Date().toISOString(),
-        publishAt: new Date(times[i]).toISOString(),
+        publishAt: new Date(times[slot]).toISOString(),
         source: 'cron',
       };
       // Written one at a time so a later failure never discards earlier work.

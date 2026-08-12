@@ -5,6 +5,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { type ThemeConfig, type FontPairKey, DEFAULT_THEME, fontPairs, accentPresets } from './themeConfig';
+import { getRedis } from './redisClient';
 
 // Re-export everything from themeConfig for convenience (server-side callers)
 export { DEFAULT_THEME, fontPairs, accentPresets };
@@ -12,17 +13,9 @@ export type { ThemeConfig, FontPairKey };
 
 // ─── Storage backend ───────────────────────────────────────────────
 
-let redis: any = null;
-try {
-  const redisUrl = process.env.REDIS_URL;
-  if ((process.env.VERCEL || redisUrl) && redisUrl && !redisUrl.includes('your-redis')) {
-    const { createClient } = require('redis');
-    redis = createClient({ url: redisUrl });
-    redis.on('error', () => { redis = null; });
-  }
-} catch {
-  // fall back to file storage
-}
+// Transport selection lives in redisClient.ts, shared with the AI desk, so
+// Upstash REST and plain TCP both work here without a second copy of the setup.
+const redis = getRedis().client;
 
 const DATA_DIR   = path.join(process.cwd(), 'data');
 const THEME_FILE = path.join(DATA_DIR, 'theme.json');
@@ -55,16 +48,6 @@ async function themeFileMtime(): Promise<number> {
   }
 }
 
-async function connectRedis(): Promise<void> {
-  // Hard 2-second timeout so a slow/misconfigured Redis never blocks page loads
-  await Promise.race([
-    redis.connect(),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Redis connect timeout')), 2000)
-    ),
-  ]);
-}
-
 export async function getTheme(): Promise<ThemeConfig> {
   if (memCache && Date.now() < memCacheExpiry) {
     // On the file backend an mtime change proves another process or bundle
@@ -73,14 +56,6 @@ export async function getTheme(): Promise<ThemeConfig> {
   }
 
   try {
-    if (redis) {
-      try {
-        if (!redis.isOpen) await connectRedis();
-      } catch {
-        redis = null; // unreachable or unauthenticated, fall through
-      }
-    }
-
     let theme: ThemeConfig | null = null;
 
     if (redis) {
@@ -109,7 +84,6 @@ export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfi
   const next: ThemeConfig = { ...current, ...theme };
   try {
     if (redis) {
-      if (!redis.isOpen) await connectRedis();
       await redis.set(REDIS_KEY, JSON.stringify(next));
     } else {
       await ensureDataDir();

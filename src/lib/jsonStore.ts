@@ -10,16 +10,7 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-
-let redis: any = null;
-try {
-  const url = process.env.REDIS_URL;
-  if (url && !url.includes('your-redis')) {
-    const { createClient } = require('redis');
-    redis = createClient({ url });
-    redis.on('error', () => { redis = null; });
-  }
-} catch { /* fall back to file storage */ }
+import { getRedis } from './redisClient';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -37,20 +28,11 @@ async function ensureDir() {
   try { await fs.access(DATA_DIR); } catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
-async function connect(): Promise<void> {
-  await Promise.race([
-    redis.connect(),
-    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('redis timeout')), 2000)),
-  ]);
-}
-
 export async function readJson<T>(key: string, filename: string, fallback: T): Promise<T> {
   try {
-    if (redis) {
-      try { if (!redis.isOpen) await connect(); } catch { redis = null; }
-    }
-    if (redis) {
-      const raw = await redis.get(key);
+    const { client } = getRedis();
+    if (client) {
+      const raw = await client.get(key);
       return raw ? (JSON.parse(raw) as T) : fallback;
     }
     await ensureDir();
@@ -61,14 +43,14 @@ export async function readJson<T>(key: string, filename: string, fallback: T): P
 }
 
 export async function writeJson(key: string, filename: string, value: unknown): Promise<void> {
-  if (redis) {
+  const { client, backend } = getRedis();
+  if (client) {
     try {
-      if (!redis.isOpen) await connect();
-      await redis.set(key, JSON.stringify(value));
+      await client.set(key, JSON.stringify(value));
       return;
     } catch (err) {
       throw new StorageUnavailableError(
-        `redis write failed: ${err instanceof Error ? err.message : err}`,
+        `${backend} write failed: ${err instanceof Error ? err.message : err}`,
       );
     }
   }
@@ -83,6 +65,7 @@ export async function writeJson(key: string, filename: string, value: unknown): 
   }
 }
 
-export function storageBackend(): 'redis' | 'file' {
-  return redis ? 'redis' : 'file';
+export function storageBackend(): string {
+  const { backend } = getRedis();
+  return backend === 'none' ? 'file' : backend;
 }

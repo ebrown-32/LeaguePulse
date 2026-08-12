@@ -18,6 +18,10 @@ export interface Personality {
   accent: string;
   /** The voice instruction handed to Claude. */
   voice: string;
+  /** DiceBear style id; falls back to the shared default when unset. */
+  avatarStyle?: string;
+  /** Seed selecting the face within that style; defaults to the persona id. */
+  avatarSeed?: string;
   /** What this persona is allowed to produce. */
   kinds: ContentKind[];
   enabled: boolean;

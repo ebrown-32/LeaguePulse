@@ -9,6 +9,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { MODEL_FAST } from './claude';
+import { getRedis } from '../redisClient';
 import { getPosts, getQueuedCount, lastGeneratedAt, lastPublishAt } from './store';
 
 export type CheckStatus = 'pass' | 'fail' | 'warn';
@@ -103,61 +104,74 @@ async function checkAnthropicLive(): Promise<Check> {
  * AI desk silently stops working.
  */
 async function checkRedis(): Promise<Check> {
-  const url = process.env.REDIS_URL?.trim();
-  if (!url) {
-    return bad('redis', 'Redis', 'REDIS_URL is not set',
-      'On Vercel the filesystem is read-only, so without Redis nothing the cron ' +
-      'generates can be saved. Add REDIS_URL (Upstash gives you one) and redeploy.');
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const tcp = process.env.REDIS_URL?.trim();
+
+  // Half-configured REST is the easy mistake: Upstash shows both values and it
+  // is simple to copy one and miss the other.
+  if (restUrl && !restToken) {
+    return bad('redis', 'Redis', 'UPSTASH_REDIS_REST_URL is set but UPSTASH_REDIS_REST_TOKEN is empty',
+      'Copy the REST token from the Upstash database page (it sits directly under the REST URL) and redeploy.');
   }
-  if (url.includes('your-redis')) {
-    return bad('redis', 'Redis', 'REDIS_URL is still the placeholder value',
-      'Replace it with the real connection string.');
+  if (restToken && !restUrl) {
+    return bad('redis', 'Redis', 'UPSTASH_REDIS_REST_TOKEN is set but UPSTASH_REDIS_REST_URL is empty',
+      'Add the REST URL (https://….upstash.io) and redeploy.');
   }
-  if (url.startsWith('https://')) {
-    return bad('redis', 'Redis', 'REDIS_URL is an HTTP(S) URL, not a Redis connection string',
-      'This app uses the node-redis client, which speaks the Redis protocol. Use ' +
-      'Upstash\'s TCP endpoint (rediss://default:…@….upstash.io:6379), not the REST URL.');
+  if (!restUrl && !tcp) {
+    return bad('redis', 'Redis', 'No Redis configured',
+      'On Vercel the filesystem is read-only, so without Redis nothing the cron generates ' +
+      'can be saved. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (preferred on ' +
+      'Vercel), or REDIS_URL with a rediss:// connection string.');
   }
-  if (!/^rediss?:\/\//.test(url)) {
-    return bad('redis', 'Redis', `REDIS_URL has an unexpected scheme: ${url.split(':')[0]}://`,
-      'It should start with rediss:// (TLS, what Upstash uses) or redis://.');
+  if (!restUrl && tcp) {
+    if (tcp.includes('your-redis')) {
+      return bad('redis', 'Redis', 'REDIS_URL is still the placeholder value',
+        'Replace it with the real connection string.');
+    }
+    if (tcp.startsWith('https://')) {
+      return bad('redis', 'Redis', 'REDIS_URL holds an HTTPS URL, not a Redis connection string',
+        'That looks like the Upstash REST URL. Either set it as UPSTASH_REDIS_REST_URL ' +
+        '(with UPSTASH_REDIS_REST_TOKEN), or use the rediss:// TCP endpoint here instead.');
+    }
+    if (!/^rediss?:\/\//.test(tcp)) {
+      return bad('redis', 'Redis', `REDIS_URL has an unexpected scheme: ${tcp.split(':')[0]}://`,
+        'It should start with rediss:// (TLS, what Upstash uses) or redis://.');
+    }
   }
 
-  let client: any = null;
+  // Round trip through whichever transport resolved. A URL that parses is not
+  // the same as a Redis you can write to, and the difference is exactly where
+  // the AI desk silently stops working.
+  const { client, backend, reason } = getRedis();
+  if (!client) {
+    return bad('redis', 'Redis', reason ?? 'No client could be created',
+      'Check the connection variables and redeploy.');
+  }
+  const transport = backend === 'upstash-rest' ? 'Upstash REST' : 'Redis TCP';
   try {
-    const { createClient } = require('redis');
-    client = createClient({ url, socket: { connectTimeout: 4000, reconnectStrategy: false } });
-    // Swallow the async error event; the awaited calls below surface it properly.
-    client.on('error', () => {});
-    await client.connect();
-
     const probe = `lp_diag_${Date.now()}`;
-    await client.set(probe, 'ok', { EX: 60 });
+    await client.set(probe, 'ok');
     const read = await client.get(probe);
     await client.del(probe);
-
     if (read !== 'ok') {
-      return bad('redis', 'Redis', 'Connected, but a written value did not read back',
-        'The Redis instance is reachable but not behaving. Check the provider dashboard.');
+      return bad('redis', 'Redis', `${transport}: wrote a value but it did not read back`,
+        'The instance is reachable but not behaving. Check the Upstash dashboard.');
     }
-    const scheme = url.startsWith('rediss://') ? 'TLS' : 'plaintext';
-    return ok('redis', 'Redis', `Connected, write and read verified (${scheme})`);
+    return ok('redis', 'Redis', `${transport}: connected, write and read verified`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    let fix = 'Check the connection string and that the database is running.';
-    if (/WRONGPASS|NOAUTH|auth/i.test(msg)) {
-      fix = 'Credentials rejected. Copy a fresh connection string from the provider.';
+    let fix = 'Check the connection details and that the database is running.';
+    if (/401|403|unauthor|WRONGPASS|NOAUTH/i.test(msg)) {
+      fix = 'Credentials rejected. Copy a fresh token or connection string from Upstash.';
     } else if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(msg)) {
       fix = 'Host not found. The URL hostname looks wrong.';
     } else if (/ETIMEDOUT|timeout|ECONNREFUSED/i.test(msg)) {
-      fix = 'Could not reach the server. If this is Upstash, make sure you used the ' +
-            'TLS endpoint (rediss:// on port 6379).';
+      fix = 'Could not reach the server. On Vercel prefer the REST transport, which is plain HTTPS.';
     } else if (/SSL|TLS|wrong version number/i.test(msg)) {
-      fix = 'TLS mismatch. Upstash requires rediss:// rather than redis://.';
+      fix = 'TLS mismatch. Upstash TCP requires rediss:// rather than redis://.';
     }
-    return bad('redis', 'Redis', `Connection failed: ${msg.slice(0, 200)}`, fix);
-  } finally {
-    try { await client?.quit(); } catch { /* already down */ }
+    return bad('redis', 'Redis', `${transport} failed: ${msg.slice(0, 200)}`, fix);
   }
 }
 

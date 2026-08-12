@@ -63,6 +63,7 @@ export interface LeagueBrief {
   teams: BriefTeam[];
   recentMatchups: BriefMatchup[];
   recentMoves: BriefMove[];
+  moveTotals: { trade: number; waiver: number; free_agent: number };
   history: {
     seasons: number;
     champions: { season: string; teamName: string }[];
@@ -242,7 +243,20 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     statsSeason,
     teams,
     recentMatchups: recentMatchups.slice(0, 8),
-    recentMoves: recentMoves.slice(0, 12),
+    // Trades first, then everything else. A flat slice was dropping every
+    // trade: free agent churn outnumbers trades roughly five to one, so the
+    // cap filled with waiver noise and the assistant reported "no trades this
+    // offseason" while sixteen sat in the same week.
+    recentMoves: [
+      ...recentMoves.filter(m => m.type === 'trade').slice(0, 16),
+      ...recentMoves.filter(m => m.type !== 'trade').slice(0, 10),
+    ],
+    /** Totals across the whole window, not just the moves listed. */
+    moveTotals: {
+      trade: recentMoves.filter(m => m.type === 'trade').length,
+      waiver: recentMoves.filter(m => m.type === 'waiver').length,
+      free_agent: recentMoves.filter(m => m.type === 'free_agent').length,
+    },
     history,
     text: '',
   };
@@ -303,6 +317,13 @@ export function renderBrief(b: LeagueBrief): string {
   }
 
   if (b.recentMoves.length) {
+    const t = b.moveTotals;
+    lines.push(
+      '',
+      `TRANSACTION TOTALS (complete counts for the window): ${t.trade} trades, ` +
+      `${t.waiver} waiver claims, ${t.free_agent} free agent moves. Quote these ` +
+      'totals; the list below shows every trade but only a sample of the rest.',
+    );
     lines.push('', 'RECENT TRANSACTIONS:');
     for (const m of b.recentMoves) {
       lines.push(`  [${m.type}] ${m.week > 0 ? `wk ${m.week}` : 'offseason'}: ${m.summary}`);

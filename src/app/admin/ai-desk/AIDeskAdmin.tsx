@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
+import { AVATAR_STYLES, DEFAULT_AVATAR_STYLE, personaAvatarUrl } from '@/lib/ai/avatar';
 
 const ALL_KINDS: ContentKind[] = ['article', 'tweet', 'comment', 'tradeGrade'];
 const KIND_LABEL: Record<ContentKind, string> = {
@@ -57,6 +58,8 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
   const [queued, setQueued] = useState(0);
   const [diag, setDiag] = useState<DiagResult | null>(null);
   const [diagBusy, setDiagBusy] = useState(false);
+  const [assistantName, setAssistantName] = useState('');
+  const [assistantSaved, setAssistantSaved] = useState(false);
 
   const [people, setPeople] = useState<Personality[]>([]);
   const [activeId, setActiveId] = useState('');
@@ -76,6 +79,28 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
       setActiveId(d.personalities?.[0]?.id ?? '');
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch('/api/ai/assistant').then(r => r.json())
+      .then(d => setAssistantName(d?.name ?? '')).catch(() => {});
+  }, []);
+
+  const saveAssistant = useCallback(async () => {
+    setAssistantSaved(false);
+    try {
+      const res = await fetch('/api/ai/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ name: assistantName }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setAssistantName(d.name);
+        setAssistantSaved(true);
+        setTimeout(() => setAssistantSaved(false), 2500);
+      }
+    } catch { /* surfaced by the unchanged field */ }
+  }, [assistantName, password]);
 
   const runDiagnostics = useCallback(async (live: boolean) => {
     setDiagBusy(true);
@@ -144,6 +169,36 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
           Add <code className="font-mono text-foreground">ANTHROPIC_API_KEY</code> to <code className="font-mono text-foreground">.env.local</code>.
         </div>
       )}
+
+      {/* ── Chat assistant ── */}
+      <section className="mb-6 rounded-xl border border-border bg-card p-4">
+        <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+          Chat assistant
+        </h2>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[12rem] flex-1">
+            <span className="mb-1 block text-xs text-muted-foreground">Name</span>
+            <input
+              value={assistantName}
+              onChange={e => setAssistantName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveAssistant()}
+              maxLength={40}
+              placeholder="Captain Mike"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
+          </label>
+          <button
+            onClick={saveAssistant}
+            disabled={!assistantName.trim()}
+            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            {assistantSaved ? 'Saved' : 'Save name'}
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Shown in the chat header and used by the assistant to refer to itself.
+        </p>
+      </section>
 
       {/* ── Diagnostics ─────────────────────────────────────────────────
           Everything the desk depends on, tested for real rather than inferred
@@ -230,6 +285,47 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
           <div className="space-y-5">
             <section className="rounded-xl border border-border bg-card p-5 space-y-4">
               <h2 className="font-display text-base font-semibold text-foreground">Edit personality</h2>
+
+              {/* Avatar: DiceBear, previewed live so you can shuffle seeds
+                  until the face fits the character. */}
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={personaAvatarUrl(active)}
+                  alt={`${active.name} avatar`}
+                  className="h-16 w-16 shrink-0 rounded-full border border-border bg-card"
+                />
+                <div className="grid min-w-[16rem] flex-1 gap-2 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-muted-foreground">Avatar style</span>
+                    <select
+                      value={active.avatarStyle ?? DEFAULT_AVATAR_STYLE}
+                      onChange={e => update({ avatarStyle: e.target.value })}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+                    >
+                      {AVATAR_STYLES.map(st => <option key={st} value={st}>{st}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-muted-foreground">Seed</span>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={active.avatarSeed ?? active.id}
+                        onChange={e => update({ avatarSeed: e.target.value })}
+                        className="w-full min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => update({ avatarSeed: Math.random().toString(36).slice(2, 10) })}
+                        title="Shuffle"
+                        className="shrink-0 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Shuffle
+                      </button>
+                    </div>
+                  </label>
+                </div>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">

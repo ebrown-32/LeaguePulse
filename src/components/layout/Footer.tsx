@@ -64,7 +64,7 @@ export default async function Footer() {
               Settings
             </p>
             <Link
-              href="/admin/appearance"
+              href="/admin"
               className="
                 inline-flex items-center gap-2 rounded-md border border-border/60
                 bg-background/60 px-3 py-2 text-sm font-medium text-foreground
@@ -73,7 +73,7 @@ export default async function Footer() {
               "
             >
               <Settings className="h-4 w-4" />
-              <span>Appearance</span>
+              <span>Admin</span>
             </Link>
           </div>
 
