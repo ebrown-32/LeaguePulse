@@ -20,6 +20,9 @@ import { cn } from '@/lib/utils';
 
 interface Msg { role: 'user' | 'assistant'; content: string }
 
+/** Mirrors the server cap so the limit is visible before submitting. */
+const MAX_INPUT = 2000;
+
 /**
  * Waiting state.
  *
@@ -115,6 +118,27 @@ export default function ChatWidget() {
     vv.addEventListener('scroll', sync);
     return () => { vv.removeEventListener('resize', sync); vv.removeEventListener('scroll', sync); };
   }, [open]);
+
+  /**
+   * Stop iOS scaling the page while the sheet is open.
+   *
+   * The usual trigger is an input under 16px, which is already handled: the
+   * textarea computes to exactly 16px. But WebKit also scales to a focused
+   * field inside a position:fixed container when the keyboard opens, and no
+   * font size prevents that. Pinning maximum-scale while the sheet is open,
+   * and restoring the original meta on close, blocks it without taking
+   * pinch-zoom away from the rest of the app.
+   *
+   * Desktop is untouched; it has neither the behaviour nor the keyboard.
+   */
+  useEffect(() => {
+    if (!open || isDesktop) return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    const original = meta.getAttribute('content') ?? '';
+    meta.setAttribute('content', `${original}, maximum-scale=1, user-scalable=no`);
+    return () => { meta.setAttribute('content', original); };
+  }, [open, isDesktop]);
 
   // The page behind a full-height sheet must not scroll with it.
   useEffect(() => {
@@ -402,7 +426,11 @@ export default function ChatWidget() {
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
+            <div
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {!messages.length && (
                 <div className={cn('space-y-3', full && 'mx-auto max-w-2xl pt-6')}>
                   <p className="text-xs leading-relaxed text-muted-foreground">
@@ -466,7 +494,7 @@ export default function ChatWidget() {
             </div>
 
             <div className="border-t border-border p-2">
-              <div className={cn('flex items-end gap-2', full && 'mx-auto w-full max-w-2xl')}>
+              <div className={cn('relative flex items-end gap-2', full && 'mx-auto w-full max-w-2xl')}>
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -475,6 +503,7 @@ export default function ChatWidget() {
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
                   }}
                   rows={1}
+                  maxLength={MAX_INPUT}
                   placeholder={`Ask ${name}…`}
                   enterKeyHint="send"
                   autoComplete="off"
@@ -489,6 +518,11 @@ export default function ChatWidget() {
                     'text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none',
                   )}
                 />
+                {input.length > MAX_INPUT * 0.8 && (
+                  <span className="absolute bottom-1 right-14 text-[10px] tabular-nums text-muted-foreground">
+                    {MAX_INPUT - input.length}
+                  </span>
+                )}
                 <button
                   onClick={() => send(input)}
                   disabled={busy || !input.trim()}
