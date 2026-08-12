@@ -90,6 +90,39 @@ export default function ChatWidget() {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const [bounds, setBounds] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
+  /** Desktop gets the floating, draggable panel; touch gets a bottom sheet. */
+  const [isDesktop, setIsDesktop] = useState(true);
+  /** Height of the on-screen keyboard, so the sheet can sit above it. */
+  const [keyboard, setKeyboard] = useState(0);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  // iOS does not resize the layout viewport when the keyboard opens, so a
+  // bottom-anchored sheet ends up underneath it. visualViewport reports the
+  // genuinely visible area; the difference is the keyboard.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv || !open) return;
+    const sync = () => setKeyboard(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => { vv.removeEventListener('resize', sync); vv.removeEventListener('scroll', sync); };
+  }, [open]);
+
+  // The page behind a full-height sheet must not scroll with it.
+  useEffect(() => {
+    if (!open || isDesktop) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open, isDesktop]);
 
   // A dragged-away panel that reappears in the same odd spot next time feels
   // broken, and a stale offset in fullscreen pushed the panel off-centre and
@@ -242,9 +275,13 @@ export default function ChatWidget() {
         aria-label={open ? `Close ${name}` : `Ask ${name}`}
         whileTap={{ scale: 0.92 }}
         className={cn(
-          'fixed bottom-4 right-4 z-[62] flex h-12 w-12 items-center justify-center rounded-full',
+          'fixed bottom-4 right-4 z-[72] flex h-14 w-14 items-center justify-center rounded-full sm:h-12 sm:w-12',
           'bg-primary text-primary-foreground shadow-lg shadow-primary/25',
           'transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/40',
+          // The sheet reaches the bottom edge on touch, so a floating launcher
+          // lands squarely on top of the input. The header close button is the
+          // way out there; on desktop the launcher sits clear of the panel.
+          open && !isDesktop && 'hidden',
         )}
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -266,7 +303,7 @@ export default function ChatWidget() {
             key="scrim"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[59] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[69] bg-black/60 backdrop-blur-sm"
           />
         )}
 
@@ -280,29 +317,53 @@ export default function ChatWidget() {
             transition={{ type: 'spring', stiffness: 340, damping: 30 }}
             // Only the header starts a drag, so selecting text in the
             // transcript does not fling the panel across the screen.
-            drag={!full}
+            // Dragging is a desktop affordance; on touch it fights scrolling.
+            drag={!full && isDesktop}
             dragControls={dragControls}
             dragListener={false}
             dragMomentum={false}
             dragElastic={0}
             dragConstraints={bounds}
-            style={full ? undefined : { x, y }}
+            style={{
+              ...(full || !isDesktop ? {} : { x, y }),
+              // Lift above the on-screen keyboard rather than hiding under it.
+              ...(keyboard && !isDesktop && !full
+                ? { bottom: keyboard, height: `calc(75dvh - ${keyboard}px)` }
+                : {}),
+            }}
             className={cn(
-              'fixed z-[60] flex flex-col overflow-hidden border border-border bg-card shadow-2xl',
+              'fixed z-[70] flex flex-col overflow-hidden border border-border bg-card shadow-2xl',
               full
-                ? 'inset-3 rounded-2xl sm:inset-8 lg:inset-x-[14vw] lg:inset-y-10'
-                : 'inset-x-3 bottom-20 max-h-[70vh] rounded-2xl sm:inset-x-auto sm:right-4 sm:w-96 sm:max-h-[32rem]',
+                // Edge to edge on phones, inset on larger screens.
+                ? 'inset-0 rounded-none sm:inset-8 sm:rounded-2xl lg:inset-x-[14vw] lg:inset-y-10'
+                : cn(
+                    // Touch: a bottom sheet, where a thumb already is. dvh
+                    // rather than vh so mobile browser chrome is accounted for.
+                    'inset-x-0 bottom-0 h-[75dvh] rounded-t-2xl border-x-0 border-b-0',
+                    // Desktop: the floating card.
+                    'sm:inset-x-auto sm:bottom-20 sm:right-4 sm:h-auto sm:max-h-[32rem] sm:w-96',
+                    'sm:rounded-2xl sm:border',
+                  ),
             )}
             role="dialog"
             aria-label={name}
           >
             <div
-              onPointerDown={e => { if (!full) dragControls.start(e); }}
+              onPointerDown={e => { if (!full && isDesktop) dragControls.start(e); }}
               className={cn(
-                'flex select-none items-center gap-2 border-b border-border px-3 py-2.5',
-                !full && 'cursor-grab active:cursor-grabbing',
+                'relative flex select-none items-center gap-2 border-b border-border px-3',
+                // Taller on touch so the controls clear a 44px target.
+                'py-3.5 sm:py-2.5',
+                !full && isDesktop && 'cursor-grab active:cursor-grabbing',
               )}
             >
+              {/* Grab bar: the standard "this is a sheet" affordance. */}
+              {!full && !isDesktop && (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-muted-foreground/30"
+                />
+              )}
               <ShipWheel className="h-5 w-5 shrink-0 text-primary" />
               <span className="truncate text-xs font-bold uppercase tracking-widest text-foreground">
                 {name}
@@ -312,14 +373,14 @@ export default function ChatWidget() {
               </span>
 
               <div className="ml-auto flex items-center gap-0.5">
-                {!full && (
+                {!full && isDesktop && (
                   <GripHorizontal className="mr-1 hidden h-3.5 w-3.5 text-muted-foreground/40 sm:block" aria-hidden="true" />
                 )}
                 {messages.length > 0 && (
                   <button
                     onClick={() => { setMessages([]); setError(''); }}
                     aria-label="Clear conversation"
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-7 sm:w-7"
                   >
                     <Eraser className="h-3.5 w-3.5" />
                   </button>
@@ -327,14 +388,14 @@ export default function ChatWidget() {
                 <button
                   onClick={() => setFull(f => !f)}
                   aria-label={full ? 'Exit full screen' : 'Full screen'}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-7 sm:w-7"
                 >
                   {full ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                 </button>
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Close"
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-7 sm:w-7"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -354,7 +415,7 @@ export default function ChatWidget() {
                       <button
                         key={s}
                         onClick={() => send(s)}
-                        className="block w-full rounded-lg border border-border px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                        className="block w-full rounded-lg border border-border px-3 py-3 text-left text-[13px] text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary sm:py-2 sm:text-[11px]"
                       >
                         {s}
                       </button>
@@ -371,7 +432,7 @@ export default function ChatWidget() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18 }}
                     className={cn(
-                      'rounded-xl px-3 py-2 text-xs leading-relaxed',
+                      'rounded-xl px-3 py-2 text-[13px] leading-relaxed sm:text-xs',
                       m.role === 'user'
                         ? 'ml-auto max-w-[85%] whitespace-pre-wrap bg-primary text-primary-foreground'
                         : 'max-w-[95%] border border-border bg-muted/40 text-foreground',
@@ -415,15 +476,26 @@ export default function ChatWidget() {
                   }}
                   rows={1}
                   placeholder={`Ask ${name}…`}
-                  className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoCorrect="on"
+                  className={cn(
+                    'max-h-32 flex-1 resize-none rounded-lg border border-border bg-background px-3',
+                    // 16px is the threshold below which iOS zooms on focus.
+                    // Anything smaller here and the page jumps every time the
+                    // keyboard opens.
+                    'py-2.5 text-base sm:py-2 sm:text-xs',
+                    'min-h-[2.75rem] sm:min-h-[2.25rem]',
+                    'text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none',
+                  )}
                 />
                 <button
                   onClick={() => send(input)}
                   disabled={busy || !input.trim()}
                   aria-label="Send"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity disabled:opacity-40 sm:h-9 sm:w-9"
                 >
-                  <ArrowUp className="h-4 w-4" />
+                  <ArrowUp className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               </div>
             </div>
