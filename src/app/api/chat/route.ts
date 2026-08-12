@@ -1,6 +1,6 @@
 import { streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { claude, MODEL_SMART, isAIConfigured, GROUNDING_RULES } from '@/lib/ai/claude';
+import { claude, MODEL_FAST, isAIConfigured, GROUNDING_RULES } from '@/lib/ai/claude';
 import { buildLeagueBrief } from '@/lib/ai/leagueBrief';
 import { getRedis } from '@/lib/redisClient';
 import { getAssistant } from '@/lib/ai/store';
@@ -175,8 +175,18 @@ export async function POST(request: Request) {
 
   try {
     const result = streamText({
-      model: claude(MODEL_SMART),
+      // Haiku, not Sonnet. This is retrieval-and-summarise over data the tools
+      // hand back, not open-ended reasoning, and it is the one endpoint any
+      // visitor can trigger. Sonnet costs several times more per token for no
+      // gain on this workload.
+      model: claude(MODEL_FAST),
       system,
+      providerOptions: {
+        // The system prompt carries the ~1k-token league brief plus the rules
+        // and is byte-identical across every turn and every visitor. Caching it
+        // makes repeat turns dramatically cheaper than re-sending it.
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
       messages,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       // Several rounds so the model can look something up, read it, and answer.
