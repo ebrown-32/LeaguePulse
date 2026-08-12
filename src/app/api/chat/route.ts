@@ -194,7 +194,15 @@ export async function POST(request: Request) {
       tools: {
         ...(await buildChatTools()),
         // Runs on Anthropic's side, so there is no search API key to manage.
-        web_search: anthropic.tools.webSearch_20260209({ maxUses: 3 }),
+        // allowedCallers must be pinned to 'direct': the default permits
+        // programmatic callers, which Haiku does not support, and the whole
+        // request 400s. Haiku is the right model here on cost, so the tool
+        // adapts rather than the model.
+        // The 20260209 web search defaults to permitting programmatic callers,
+        // which Haiku rejects outright, and this SDK version gives no way to
+        // pin allowed_callers. The 20250305 tool predates that mechanism and
+        // works on Haiku, which is the model this endpoint wants on cost.
+        web_search: anthropic.tools.webSearch_20250305({ maxUses: 3 }),
       },
     });
     return result.toTextStreamResponse({
