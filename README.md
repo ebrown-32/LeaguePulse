@@ -1,44 +1,63 @@
+<div align="center">
+
 # League Pulse
 
-A full-featured website for your Sleeper fantasy football league. Built with Next.js, TypeScript, and Tailwind CSS.
+**Turn your Sleeper league into a real website.**
 
-Live demo: https://league-pulse.vercel.app/
+Standings, rivalries, history, drafts, roster tools, expert rankings, an AI media desk, and a chat assistant that actually knows your league — all from a single league ID.
 
----
+[**View the live demo →**](https://league-pulse.vercel.app/)
 
-## What's included
+Next.js · TypeScript · Tailwind CSS · Sleeper API
 
-### Weekly tools
-- **Overview** — Standings, recent scores, league activity, and a snapshot of the current week at a glance.
-- **Matchups** — Full matchup breakdown for every week of the season, with scores and team info.
-- **Transactions** — A feed of every trade, waiver pickup, and drop across the whole season.
-
-### League intelligence
-- **Rivalry Tracker** — All-time head-to-head records between every pair of managers. Includes a color-coded matrix, win percentages, and a game-by-game history for any matchup.
-- **History** — Season-by-season champions, runner-ups, all-time records, and a record book for high scores, low scores, and more. Champions get a 3D rotating championship ring.
-- **Next-Gen Stats** — Advanced analytics for every manager: consistency, explosiveness, clutch factor, efficiency, momentum, and luck scores. Includes a radar chart and weekly score breakdown.
-
-### League reference
-- **Drafts** — Past draft results with full pick-by-pick boards. Shows traded picks and final ownership.
-- **Constitution** — A beautiful, searchable league rulebook. League settings (roster, scoring, playoffs, waivers, draft format) are pulled live from Sleeper and stay up to date automatically. The rest is yours to customize in a single markdown file.
-- **Media** — Live NFL news and league media content.
-
-### Design
-- Responsive layout that works on any screen size.
-- Dark and light mode.
-- Connects to your Sleeper account automatically using just your league ID.
+</div>
 
 ---
 
-## Setup
+## What this is
 
-### What you need
+Sleeper is great for playing fantasy football and not much else. There is nowhere to settle an argument about who owns whom, no record book, no place for the league's running jokes to live.
 
-- Node.js 18 or later
-- A Sleeper fantasy football league
-- Your Sleeper league ID (found in your league URL: `sleeper.app/leagues/YOUR_ID`)
+League Pulse is that place. Give it your league ID and it pulls everything from Sleeper automatically — every season, every trade, every matchup you have ever played — and turns it into a site your league will actually visit.
 
-### Run locally
+**No database to set up. No accounts to create. No data to enter.** One environment variable and it builds itself.
+
+---
+
+## What you get
+
+### Every week
+- **Home** — league status, the current story, and this week's matchups. Tap any matchup for both rosters, previous meetings, and a rivalry score.
+- **Matchups** — every week, every score, same drill-down.
+- **Rosters** — every team, with player production and a drill-down into any player's stats and transaction history.
+- **Transactions** — every trade, waiver claim, and drop, draft picks included.
+
+### The receipts
+- **Rivalries** — all-time head-to-head between every pair of managers, as a colour-coded matrix with game-by-game history.
+- **History** — champions by season, all-time records, and a record book. Champions get a 3D championship ring.
+- **Next Gen** — consistency, explosiveness, clutch, efficiency, momentum, and luck for every manager.
+- **Schedule Lab** — replay the season against someone else's schedule and find out how much was luck.
+- **Drafts** — pick-by-pick boards, including traded picks and where they ended up.
+- **Trade Tree** — follow a trade forward through everything it eventually became.
+
+### The fun part
+- **Media** — real NFL news, waiver wire trends, and the injury report.
+- **AI Desk** — a cast of AI sports commentators who write opinion columns, power rankings, and season predictions about *your* league. They read the actual record, take sides, and name names.
+- **Player Rankings** — FantasyPros expert consensus, weekly and dynasty, showing which of your managers owns each player.
+- **Chat assistant** — ask anything about your league in plain English. It reads your live Sleeper data and can search the web for NFL news.
+
+Light and dark mode, 22 colour palettes, 19 font pairings, works on any screen, installs as an app.
+
+---
+
+## Get started in two minutes
+
+You need [Node.js 18+](https://nodejs.org) and your Sleeper league ID — the number in your league's URL:
+
+```
+https://sleeper.app/leagues/1234567890123456789
+                            └──── this ────┘
+```
 
 ```bash
 git clone https://github.com/ebrown-32/LeaguePulse
@@ -46,64 +65,102 @@ cd LeaguePulse
 npm install
 ```
 
-Create a file named `.env.local` in the project folder:
+Create a file called `.env.local`:
 
+```bash
+NEXT_PUBLIC_LEAGUE_ID=paste_your_league_id_here
 ```
-NEXT_PUBLIC_LEAGUE_ID=your_sleeper_league_id
-NEXT_PUBLIC_MIXPANEL_TOKEN=your_mixpanel_project_token
-```
-
-`NEXT_PUBLIC_MIXPANEL_TOKEN` is optional. If omitted, analytics are silently disabled.
-
-Then start the app:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000` in your browser.
+Open **http://localhost:3000**. Your league is already there — every season it has ever played.
 
-### Deploy to Vercel (free, recommended)
+---
 
-Vercel is the easiest way to put your league site online.
+## Put it online
 
-1. Fork this repo to your GitHub account.
+Vercel hosts this free and redeploys every time you push.
+
+1. **Fork** this repo to your GitHub account.
 2. Go to [vercel.com](https://vercel.com) and sign in with GitHub.
-3. Click **Add New > Project** and select your forked repo.
-4. Before clicking Deploy, open **Environment Variables** and add:
-   - Name: `NEXT_PUBLIC_LEAGUE_ID`
-   - Value: your Sleeper league ID
-5. Click **Deploy**.
+3. **Add New → Project**, and pick your fork.
+4. Open **Environment Variables** and add `NEXT_PUBLIC_LEAGUE_ID` with your league ID.
+5. **Deploy.**
 
-Your site will be live at `your-project-name.vercel.app`. Any time you push changes to GitHub, Vercel redeploys automatically.
+You will be live at `your-project.vercel.app`. Share it with your league.
+
+> Environment variables only reach **new** deployments. After changing one, redeploy.
 
 ---
 
-## Customizing the look and feel
+## Make it yours
 
-League Pulse has a built-in appearance editor at `/admin/appearance`. From there you can change the accent color, font pairing, and border radius to match your league's style. Changes apply instantly and are saved for all visitors.
+### Lock the admin panel
 
-To access the admin page, you need to set an admin password in your environment variables:
-
-```
-ADMIN_PASSWORD=your_password_here
+```bash
+ADMIN_PASSWORD=something_only_you_know
 ```
 
-If you skip this, the default password is `admin123`. Change it before deploying publicly.
+Then visit `/admin` to change the colour palette, fonts, background, and motion. Changes apply instantly for everyone.
 
-On Vercel, add `ADMIN_PASSWORD` the same way you added your league ID: go to your project settings, open **Environment Variables**, and add it there. Redeploy after saving.
+### Write your constitution
 
-Once logged in, go to `/admin/appearance` on your site to open the editor.
-
----
-
-## Customizing the constitution
-
-The league rulebook lives in `content/constitution.md`. Open it in any text editor and write your rules in standard markdown. The sections for roster, scoring, playoffs, waivers, and draft format are pulled from Sleeper automatically and do not need to be written manually.
+The rulebook lives in `content/constitution.md` — plain markdown, write whatever your league needs. Roster, scoring, playoff, waiver, and draft settings are pulled from Sleeper automatically, so they never go stale.
 
 ---
 
-## Updating
+## Optional extras
+
+Everything above works with just a league ID. These two add-ons need a little more.
+
+### Give your league a media desk
+
+AI commentators that argue about your league, publish power rankings, and predict the season — plus the chat assistant.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+UPSTASH_REDIS_REST_URL=https://....upstash.io
+UPSTASH_REDIS_REST_TOKEN=...
+CRON_SECRET=any_random_string
+```
+
+- Get an API key from the [Anthropic console](https://console.anthropic.com/).
+- Get free Redis from [Upstash](https://upstash.com) — take the **REST** URL and token. Vercel's filesystem is read-only, so this is where posts and settings are saved.
+- `CRON_SECRET` can be any random string; it keeps the scheduled job private.
+
+Then open `/admin` → **AI Desk** → **Test connections** to confirm everything is wired up, and **Run scheduler** to publish the first batch. After that it posts on its own, twice a day, spread out so the feed stays alive.
+
+You can rename the assistant, rewrite each commentator's personality, and reroll their avatars from the same panel.
+
+### Add expert rankings
+
+```bash
+FANTASY_PROS=your_api_key
+```
+
+Request a free key from [FantasyPros](https://secure.fantasypros.com/api-keys/request/). Rankings refresh once a day on their own.
+
+---
+
+## All environment variables
+
+| Variable | Needed for |
+|---|---|
+| `NEXT_PUBLIC_LEAGUE_ID` | **Everything.** Your Sleeper league ID. |
+| `ADMIN_PASSWORD` | The admin panel. Set this before going public. |
+| `ANTHROPIC_API_KEY` | AI desk and chat assistant. |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Saving anything in production. |
+| `CRON_SECRET` | Keeping the scheduled jobs private. |
+| `FANTASY_PROS` | Player Rankings. |
+| `NEXT_PUBLIC_MIXPANEL_TOKEN` | Analytics. Optional. |
+
+Prefer a `rediss://` connection string? Use `REDIS_URL` instead of the Upstash pair.
+
+---
+
+## Staying up to date
 
 ```bash
 git pull origin main
@@ -115,11 +172,11 @@ npm run build
 
 ## Contributing
 
-Pull requests are welcome.
+Pull requests welcome.
 
 1. Fork the repo
-2. Create a branch: `git checkout -b feature/my-feature`
-3. Commit your changes and push
+2. `git checkout -b feature/my-feature`
+3. Commit and push
 4. Open a pull request
 
 ---
@@ -130,4 +187,8 @@ Free for personal, non-commercial use. You may not resell or sublicense this pro
 
 ---
 
-Built with [Next.js](https://nextjs.org/), [Tailwind CSS](https://tailwindcss.com/), and the [Sleeper API](https://docs.sleeper.app/).
+<div align="center">
+
+Built with [Next.js](https://nextjs.org/) · [Tailwind CSS](https://tailwindcss.com/) · [Sleeper API](https://docs.sleeper.app/) · [Claude](https://www.anthropic.com/) · [DiceBear](https://www.dicebear.com/)
+
+</div>

@@ -11,7 +11,7 @@
 import { resolvePhase } from './seasonPhase';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { generateObject, generateText, stepCountIs } from 'ai';
+import { generateObject, generateText, streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { buildChatTools } from './chatTools';
 import { z } from 'zod';
@@ -97,6 +97,9 @@ async function generateJson<T>(opts: {
   research?: boolean;
   /** Ranked formats emit a row per team and truncate at the default cap. */
   maxOutputTokens?: number;
+  /** Override the model. The ranked formats emit a lot of JSON and Sonnet is
+   *  too slow for a serverless function's time budget. */
+  model?: string;
 }): Promise<T> {
   const parse = (raw: string): T => {
     let t = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
@@ -125,18 +128,22 @@ async function generateJson<T>(opts: {
     ? {
         tools: {
           ...(await buildChatTools()),
-          web_search: anthropic.tools.webSearch_20250305({ maxUses: 2 }),
+          web_search: anthropic.tools.webSearch_20250305({ maxUses: 1 }),
         },
-        stopWhen: stepCountIs(3),
+        stopWhen: stepCountIs(2),
       }
     : {};
 
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     const useResearch = attempt === 0 ? research : {};
-    const result = await generateText({
-      model: claude(MODEL_SMART),
-      maxOutputTokens: opts.maxOutputTokens ?? 4000,
+    // Streamed rather than a single blocking call. Sonnet's extended thinking
+    // shares the output budget, so the cap has to be large enough for both,
+    // and a non-streaming request that long had the connection dropped
+    // ("other side closed") before it could finish.
+    const result = streamText({
+      model: claude(opts.model ?? MODEL_SMART),
+      maxOutputTokens: opts.maxOutputTokens ?? 16000,
       // Extended thinking is on by default and shares the output budget. It
       // was consuming the entire allowance before a single character of JSON:
       // 2000 tokens returned finishReason 'length' with an empty string, and
@@ -150,15 +157,13 @@ async function generateJson<T>(opts: {
         : `${opts.prompt}\n\nYour previous reply was not usable. Do not call any tools. Return only the JSON object.`,
       ...useResearch,
     });
-    const { text } = result;
+    const text = await result.text;
     // Running out of steps mid-research leaves the last step as a tool call and
     // the text empty, so retry without tools rather than failing the piece.
     if (!text.trim()) {
       console.error('[generate] empty text', {
         attempt,
-        finishReason: (result as any).finishReason,
-        steps: (result as any).steps?.length,
-        stepTextLengths: (result as any).steps?.map((st: any) => (st.text ?? '').length),
+        finishReason: await (result as any).finishReason,
       });
       lastErr = new Error('model returned no text');
       continue;
@@ -271,9 +276,9 @@ export async function writeArticle(p: Personality, topic?: string): Promise<Arti
 
 Write an opinion column for the league feed${topic ? ` about: ${topic}` : ''}.
 
-Research first, but keep it tight: at most THREE tool calls total, then stop
-and write. Pull what you actually need (a roster, a head to head record, a
-transaction list, or one web search) and then commit to an argument.
+Research first, but keep it tight: ONE tool call, then stop and write. Pull the
+single thing your argument most needs (a roster, a head to head record, or one
+web search) and then commit to a position.
 ${EDITORIAL}
 
 Respond with ONLY a JSON object, no prose and no markdown fences:
@@ -400,7 +405,8 @@ export async function writePowerRankings(p: Personality): Promise<PowerRankings>
   return generateJson({
     schema: PowerRankingsSchema,
     probe: 'headline',
-    maxOutputTokens: 4000,
+    model: MODEL_FAST,
+    maxOutputTokens: 16000,
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
@@ -431,7 +437,8 @@ export async function writePredictions(p: Personality): Promise<Predictions> {
   return generateJson({
     schema: PredictionsSchema,
     probe: 'headline',
-    maxOutputTokens: 4000,
+    model: MODEL_FAST,
+    maxOutputTokens: 16000,
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
