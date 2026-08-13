@@ -6,7 +6,9 @@
  * brief, never from the character.
  */
 
-export type ContentKind = 'article' | 'tweet' | 'comment' | 'tradeGrade';
+export type ContentKind =
+  | 'article' | 'tweet' | 'comment' | 'tradeGrade'
+  | 'powerRankings' | 'predictions';
 
 export interface Personality {
   id: string;
@@ -40,7 +42,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'sincerely emotional about his colleagues and his league. Prone to bizarre non-sequiturs ' +
       'about cologne, steak, or his own jacket. Total confidence, zero self-awareness, ' +
       'completely lovable. Never crude.',
-    kinds: ['article', 'tweet', 'comment'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
     enabled: true,
   },
   {
@@ -100,7 +102,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'indifference of the universe, applied to a bench player. Sees managers as small ' +
       'creatures struggling against an uncaring void. Absolutely sincere, which is the joke. ' +
       'No emoji, no exclamation marks.',
-    kinds: ['article', 'tweet', 'comment'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
     enabled: true,
   },
   {
@@ -143,7 +145,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'one number that settles the argument, then a short deadpan kicker. Mildly smug, never ' +
       'cruel. Talks like a person, not a research note. Contractions, short sentences, the ' +
       'occasional exasperated aside. No emoji.',
-    kinds: ['article', 'tweet', 'comment', 'tradeGrade'],
+    kinds: ['article', 'tweet', 'comment', 'tradeGrade', 'powerRankings', 'predictions'],
     enabled: true,
   },
 ];

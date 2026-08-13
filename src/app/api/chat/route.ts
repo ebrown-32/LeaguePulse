@@ -166,6 +166,8 @@ export async function POST(request: Request) {
     '- Use web search only for information about the wider NFL (player news,',
     '  injuries, depth charts, real-world results). Never use it to answer',
     '  questions about this league, which the web does not know about.',
+    '- This league trades draft picks and the records include them. Never judge',
+    '  a trade on players alone; account for every pick that moved.',
     '- Be brief. Two or three sentences unless asked for more.',
     '- When you use a web result, name the source.',
     '',

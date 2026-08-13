@@ -6,9 +6,12 @@ import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
 import { AVATAR_STYLES, DEFAULT_AVATAR_STYLE, personaAvatarUrl } from '@/lib/ai/avatar';
 
-const ALL_KINDS: ContentKind[] = ['article', 'tweet', 'comment', 'tradeGrade'];
+const ALL_KINDS: ContentKind[] = [
+  'article', 'powerRankings', 'predictions', 'tweet', 'comment', 'tradeGrade',
+];
 const KIND_LABEL: Record<ContentKind, string> = {
   article: 'Article', tweet: 'Post', comment: 'Comment', tradeGrade: 'Trade Grade',
+  powerRankings: 'Power Rankings', predictions: 'Predictions',
 };
 
 interface Check {

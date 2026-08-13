@@ -2,7 +2,7 @@ import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextRequest, NextResponse } from 'next/server';
 import { AINotConfiguredError, isAIConfigured } from '@/lib/ai/claude';
 import { personalityById, type ContentKind } from '@/lib/ai/personalities';
-import { writeArticle, writeTweet, writeComment } from '@/lib/ai/generate';
+import { writeArticle, writeTweet, writeComment, writePowerRankings, writePredictions } from '@/lib/ai/generate';
 import { addPost, getPersonalities, type FeedPost } from '@/lib/ai/store';
 
 export const dynamic = 'force-dynamic';
@@ -32,16 +32,18 @@ export async function POST(request: NextRequest) {
     const persona = personalityById(personalityId, await getPersonalities());
     if (!persona.kinds.includes(kind)) {
       return NextResponse.json(
-        { error: `${persona.name} does not write ${kind}s` },
+        { error: `${persona.name} does not write ${kind}` },
         { status: 400 },
       );
     }
 
     const started = Date.now();
     let content: unknown;
-    if (kind === 'article')      content = await writeArticle(persona, topic);
-    else if (kind === 'tweet')   content = await writeTweet(persona, topic);
-    else if (kind === 'comment') content = await writeComment(persona, subject ?? topic ?? '');
+    if (kind === 'article')             content = await writeArticle(persona, topic);
+    else if (kind === 'powerRankings')  content = await writePowerRankings(persona);
+    else if (kind === 'predictions')    content = await writePredictions(persona);
+    else if (kind === 'tweet')          content = await writeTweet(persona, topic);
+    else if (kind === 'comment')        content = await writeComment(persona, subject ?? topic ?? '');
     else return NextResponse.json({ error: 'Use /api/ai/grade-trade for trade grades' }, { status: 400 });
 
     const post: FeedPost = {

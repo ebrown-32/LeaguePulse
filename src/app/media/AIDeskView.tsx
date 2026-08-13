@@ -11,7 +11,7 @@ interface FeedPost {
   personaHandle: string;
   personaAccent: string;
   personaAvatar?: string;
-  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade';
+  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions';
   content: any;
   createdAt: string;
 }
@@ -95,6 +95,88 @@ function PostCard({ post, index }: { post: FeedPost; index: number }) {
             <div className="mt-2 space-y-2 text-[15px] leading-relaxed text-foreground/90">
               {String(content.body || '').split(/\n{2,}/).map((p: string, i: number) => <p key={i}>{p}</p>)}
             </div>
+          </div>
+        )}
+
+        {kind === 'powerRankings' && (
+          <div className="mt-1.5">
+            <h3 className="font-display text-base font-bold leading-snug text-foreground">{content.headline}</h3>
+            {content.standfirst && (
+              <p className="mt-0.5 text-sm text-muted-foreground">{content.standfirst}</p>
+            )}
+            <ol className="mt-3 space-y-2">
+              {(content.teams ?? []).map((t: any) => (
+                <li key={t.rank} className="flex gap-3 rounded-lg border border-border px-3 py-2">
+                  <span className="w-6 shrink-0 text-center font-display text-lg font-bold text-primary">
+                    {t.rank}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t.teamName}
+                      <span className="ml-2 font-normal text-muted-foreground">{t.verdict}</span>
+                    </p>
+                    <p className="mt-0.5 text-[13px] leading-relaxed text-foreground/85">{t.reasoning}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {content.boldestTake && (
+              <p className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-[13px] text-foreground">
+                <span className="font-bold uppercase tracking-widest text-primary">Boldest take </span>
+                {content.boldestTake}
+              </p>
+            )}
+          </div>
+        )}
+
+        {kind === 'predictions' && (
+          <div className="mt-1.5">
+            <h3 className="font-display text-base font-bold leading-snug text-foreground">{content.headline}</h3>
+            {content.standfirst && (
+              <p className="mt-0.5 text-sm text-muted-foreground">{content.standfirst}</p>
+            )}
+
+            {content.champion && (
+              <div className="mt-3 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Champion pick</p>
+                <p className="mt-0.5 text-sm font-bold text-foreground">{content.champion.teamName}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-foreground/85">{content.champion.reasoning}</p>
+              </div>
+            )}
+
+            <ol className="mt-3 space-y-1">
+              {(content.standings ?? []).map((t: any) => {
+                const inPlayoffs = (content.playoffTeams ?? []).includes(t.teamName);
+                return (
+                  <li key={t.rank} className="flex items-baseline gap-3 rounded-md border border-border px-3 py-1.5">
+                    <span className="w-5 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">
+                      {t.rank}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">
+                      {t.teamName}
+                      {inPlayoffs && (
+                        <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-primary">PO</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{t.projectedRecord}</span>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {content.bustPick && (
+              <p className="mt-3 rounded-lg border border-border px-3 py-2 text-[13px] text-foreground/85">
+                <span className="font-bold uppercase tracking-widest text-muted-foreground">Most overrated </span>
+                <span className="font-semibold text-foreground">{content.bustPick.teamName}</span>
+                {'. '}{content.bustPick.reasoning}
+              </p>
+            )}
+            {content.boldestTake && (
+              <p className="mt-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-[13px] text-foreground">
+                <span className="font-bold uppercase tracking-widest text-primary">Boldest take </span>
+                {content.boldestTake}
+              </p>
+            )}
           </div>
         )}
 

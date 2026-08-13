@@ -8,7 +8,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getRedis, isRedisConfigured } from '../redisClient';
-import { DEFAULT_PERSONALITIES, type Personality } from './personalities';
+import { DEFAULT_PERSONALITIES, type Personality, type ContentKind } from './personalities';
 
 export interface FeedPost {
   id: string;
@@ -19,7 +19,7 @@ export interface FeedPost {
   /** Resolved DiceBear URL, stored with the post so an avatar change does not
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
-  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade';
+  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions';
   content: any;
   /** When it was generated. */
   createdAt: string;
@@ -193,9 +193,27 @@ export async function saveAssistant(config: AssistantConfig): Promise<void> {
 
 // ── Personalities ──────────────────────────────────────────────────────────
 
+/** Kinds added after personalities were first persisted. Anything saved before
+ *  they existed cannot have opted in, so they are granted to whoever already
+ *  writes long-form. Pre-existing kinds are left exactly as saved, so an admin
+ *  who deliberately unchecked one keeps that choice. */
+const NEW_KINDS: ContentKind[] = ['powerRankings', 'predictions'];
+
 export async function getPersonalities(): Promise<Personality[]> {
   const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
-  return saved?.length ? saved : DEFAULT_PERSONALITIES;
+  if (!saved?.length) return DEFAULT_PERSONALITIES;
+
+  const defaultsById = new Map(DEFAULT_PERSONALITIES.map(p => [p.id, p]));
+  const merged = saved.map(p => {
+    const base = defaultsById.get(p.id);
+    if (!base) return p;
+    const grants = NEW_KINDS.filter(k => base.kinds.includes(k) && !p.kinds.includes(k));
+    return grants.length ? { ...p, kinds: [...p.kinds, ...grants] } : p;
+  });
+
+  // Personalities added to the defaults since the last save should appear too.
+  const savedIds = new Set(saved.map(p => p.id));
+  return [...merged, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];
 }
 
 export async function savePersonalities(list: Personality[]): Promise<void> {

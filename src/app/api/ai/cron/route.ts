@@ -1,7 +1,7 @@
 import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
-import { writeArticle, writeTweet } from '@/lib/ai/generate';
+import { writeArticle, writeTweet, writePowerRankings, writePredictions } from '@/lib/ai/generate';
 import {
   addPost,
   getPersonalities,
@@ -31,7 +31,9 @@ const num = (key: string, fallback: number) => {
 };
 
 /** Pieces written per daily run. */
-const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 4), 8);
+// Quality over quantity: a researched column and one marquee piece beat four
+// thin takes, and each researched piece is far slower to produce.
+const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 3), 8);
 /** How many of those are long-form. Articles use the pricier model, so this is
  *  the main cost lever. */
 const ARTICLES_PER_RUN = Math.min(num('AI_ARTICLES_PER_DAY', 1), POSTS_PER_RUN);
@@ -83,6 +85,8 @@ export async function GET(request: Request) {
   if (!people.length) return NextResponse.json({ skipped: 'no-enabled-personalities' });
 
   const articleWriters = people.filter(p => p.kinds.includes('article'));
+  const rankWriters    = people.filter(p => p.kinds.includes('powerRankings'));
+  const predictWriters = people.filter(p => p.kinds.includes('predictions'));
   const postWriters    = people.filter(p => p.kinds.includes('tweet'));
   if (!postWriters.length && !articleWriters.length) {
     return NextResponse.json({ skipped: 'no-personality-writes-these-kinds' });
@@ -96,14 +100,34 @@ export async function GET(request: Request) {
   const startAt = hasBacklog ? pendingUntil + 60_000 : Date.now();
   const times = scheduleTimes(POSTS_PER_RUN, startAt);
 
-  const plan: { kind: 'article' | 'tweet'; persona: Personality }[] = [];
+  type PlannedKind = 'article' | 'tweet' | 'powerRankings' | 'predictions';
+  const plan: { kind: PlannedKind; persona: Personality }[] = [];
+
+  // One marquee piece a day beyond the article: power rankings and season
+  // predictions alternate, since running both daily would be repetitive and
+  // they are the most expensive pieces to produce.
+  const marquee: PlannedKind | null =
+    rankWriters.length || predictWriters.length
+      ? (new Date().getUTCDate() % 2 === 0 ? 'powerRankings' : 'predictions')
+      : null;
   // Spread each persona around rather than letting one dominate the day.
   const rotation = [...people].sort(() => Math.random() - 0.5);
   for (let i = 0; i < POSTS_PER_RUN; i++) {
     const wantArticle = i < ARTICLES_PER_RUN && articleWriters.length > 0;
-    const pool = wantArticle ? articleWriters : (postWriters.length ? postWriters : articleWriters);
+    // Slot 1 is the marquee piece, right after the article.
+    const wantMarquee = !wantArticle && i === ARTICLES_PER_RUN && marquee;
+
+    let kind: PlannedKind = wantArticle ? 'article' : 'tweet';
+    let pool = wantArticle ? articleWriters : postWriters;
+
+    if (wantMarquee) {
+      const marqueePool = marquee === 'powerRankings' ? rankWriters : predictWriters;
+      if (marqueePool.length) { kind = marquee; pool = marqueePool; }
+    }
+    if (!pool.length) pool = postWriters.length ? postWriters : articleWriters;
+
     const persona = rotation.find(p => pool.includes(p) && !plan.some(x => x.persona.id === p.id)) ?? pick(pool);
-    plan.push({ kind: wantArticle ? 'article' : 'tweet', persona });
+    plan.push({ kind, persona });
   }
 
   const written: { kind: string; persona: string; publishAt: string }[] = [];
@@ -112,7 +136,11 @@ export async function GET(request: Request) {
   for (let i = 0; i < plan.length; i++) {
     const { kind, persona } = plan[i];
     try {
-      const content = kind === 'article' ? await writeArticle(persona) : await writeTweet(persona);
+      const content =
+        kind === 'article'       ? await writeArticle(persona) :
+        kind === 'powerRankings' ? await writePowerRankings(persona) :
+        kind === 'predictions'   ? await writePredictions(persona) :
+                                   await writeTweet(persona);
       // Times are claimed by successful posts only. Indexing by loop position
       // meant a failed item burned slot 0, the one that publishes immediately,
       // and the whole batch landed in the future leaving the feed empty.
