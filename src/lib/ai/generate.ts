@@ -11,7 +11,9 @@
 import { resolvePhase } from './seasonPhase';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { generateObject, generateText } from 'ai';
+import { generateObject, generateText, stepCountIs } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { buildChatTools } from './chatTools';
 import { z } from 'zod';
 import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from './claude';
 import { buildLeagueBrief } from './leagueBrief';
@@ -91,6 +93,10 @@ async function generateJson<T>(opts: {
   prompt: string;
   /** A required key, used to spot the provider's stray wrapper object. */
   probe: string;
+  /** Let the writer pull live league data and search the web before writing. */
+  research?: boolean;
+  /** Ranked formats emit a row per team and truncate at the default cap. */
+  maxOutputTokens?: number;
 }): Promise<T> {
   const parse = (raw: string): T => {
     let t = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
@@ -112,19 +118,97 @@ async function generateJson<T>(opts: {
     return opts.schema.parse(candidate);
   };
 
+  // Research tools are the difference between a piece that restates the brief
+  // and one that actually digs. The budget is deliberately tight: Vercel caps a
+  // function at 60s, and an unbounded research loop blew straight past it.
+  const research = opts.research
+    ? {
+        tools: {
+          ...(await buildChatTools()),
+          web_search: anthropic.tools.webSearch_20250305({ maxUses: 2 }),
+        },
+        stopWhen: stepCountIs(3),
+      }
+    : {};
+
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { text } = await generateText({
+    const useResearch = attempt === 0 ? research : {};
+    const result = await generateText({
       model: claude(MODEL_SMART),
+      maxOutputTokens: opts.maxOutputTokens ?? 4000,
+      // Extended thinking is on by default and shares the output budget. It
+      // was consuming the entire allowance before a single character of JSON:
+      // 2000 tokens returned finishReason 'length' with an empty string, and
+      // raising the cap enough to fit both made requests long enough for the
+      // connection to drop. These calls want structured output, not visible
+      // reasoning, so the budget goes entirely to the answer.
+      providerOptions: { anthropic: { thinking: { type: 'disabled' } } },
       system: opts.system,
       prompt: attempt === 0
         ? opts.prompt
-        : `${opts.prompt}\n\nYour previous reply was not valid JSON. Return only the JSON object.`,
+        : `${opts.prompt}\n\nYour previous reply was not usable. Do not call any tools. Return only the JSON object.`,
+      ...useResearch,
     });
-    try { return parse(text); } catch (e) { lastErr = e; }
+    const { text } = result;
+    // Running out of steps mid-research leaves the last step as a tool call and
+    // the text empty, so retry without tools rather than failing the piece.
+    if (!text.trim()) {
+      console.error('[generate] empty text', {
+        attempt,
+        finishReason: (result as any).finishReason,
+        steps: (result as any).steps?.length,
+        stepTextLengths: (result as any).steps?.map((st: any) => (st.text ?? '').length),
+      });
+      lastErr = new Error('model returned no text');
+      continue;
+    }
+    try { return parse(text); } catch (e) {
+      lastErr = e;
+      console.error('[generate] unparseable output',
+        { chars: text.length, tail: text.slice(-160) });
+    }
   }
   throw new Error(`Unparseable model output: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
 }
+
+/** A ranked league table with a take attached to every team. */
+const PowerRankingsSchema = z.object({
+  headline: z.string(),
+  standfirst: z.string(),
+  teams: z.array(z.object({
+    rank: z.number(),
+    teamName: z.string(),
+    verdict: z.string().describe('One punchy line, an actual opinion'),
+    reasoning: z.string().describe('2-3 sentences citing real players, numbers or moves'),
+  })).min(2),
+  boldestTake: z.string().describe('The single most contentious claim in the piece'),
+});
+
+/** Full-season forecast: final standings, playoff field, champion. */
+const PredictionsSchema = z.object({
+  headline: z.string(),
+  standfirst: z.string(),
+  standings: z.array(z.object({
+    rank: z.number(),
+    teamName: z.string(),
+    projectedRecord: z.string().describe('e.g. 10-4'),
+    note: z.string().describe('One line on why they land there'),
+  })).min(2),
+  playoffTeams: z.array(z.string()),
+  champion: z.object({
+    teamName: z.string(),
+    reasoning: z.string().describe('3-4 sentences, specific and committed'),
+  }),
+  bustPick: z.object({
+    teamName: z.string(),
+    reasoning: z.string(),
+  }),
+  boldestTake: z.string(),
+});
+
+export type PowerRankings = z.infer<typeof PowerRankingsSchema>;
+export type Predictions = z.infer<typeof PredictionsSchema>;
 
 export type Article = z.infer<typeof ArticleSchema>;
 export type Tweet = z.infer<typeof TweetSchema>;
@@ -150,16 +234,47 @@ async function briefBlock(): Promise<string> {
   return `LEAGUE CONTEXT (the complete, authoritative record):\n\n${brief.text}${phaseBlock}`;
 }
 
+/**
+ * The editorial standard for long-form pieces.
+ *
+ * Left to itself the model writes even-handed recaps that read like a database
+ * dump with adjectives. Commentary needs a thesis, a named target, and a reason
+ * to argue back, so the brief demands all three, while the grounding rules
+ * still forbid inventing the facts underneath them.
+ */
+const EDITORIAL = `
+HOW TO WRITE THIS
+- Lead with an argument, not a summary. The first line should make someone want
+  to reply.
+- Name names. Call out specific managers and teams, and say who is overrated,
+  who is kidding themselves, and who is quietly dangerous.
+- Every opinion must be earned by evidence you actually looked up: a player's
+  production, a trade, a head to head record, a real NFL story. Research first,
+  then take the position the evidence supports.
+- Be willing to be wrong in public. Commit to a call rather than hedging with
+  "time will tell" or "only the games will decide".
+- No both-sides mush. If two things are close, say which one you would bet on
+  and why.
+- Keep the facts sacred. Sharp opinions, honest numbers.
+- This league trades draft picks, and the transaction record lists them. Never
+  judge a trade on the players alone: a deal that looks lopsided is usually
+  balanced by picks, and a future first is a real asset. If you call a trade
+  bad, account for every pick that moved in it.`;
+
 export async function writeArticle(p: Personality, topic?: string): Promise<Article> {
   const wire = await generateJson({
     schema: ArticleWireSchema,
     probe: 'headline',
+    research: true,
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
-Write a short article for the league feed${topic ? ` about: ${topic}` : ''}.
-Pick the most genuinely interesting angle in the data. Reference specific
-teams, managers, and numbers from the context.
+Write an opinion column for the league feed${topic ? ` about: ${topic}` : ''}.
+
+Research first, but keep it tight: at most THREE tool calls total, then stop
+and write. Pull what you actually need (a roster, a head to head record, a
+transaction list, or one web search) and then commit to an argument.
+${EDITORIAL}
 
 Respond with ONLY a JSON object, no prose and no markdown fences:
 {
@@ -272,4 +387,72 @@ Include one entry in "sides" for every team in the trade.`;
     try { return stripDashes(parse(text)); } catch (e) { lastErr = e; }
   }
   throw new Error(`Trade grading returned unparseable output: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
+}
+
+
+/**
+ * League power rankings: every team, ranked, with a verdict on each.
+ *
+ * Researches first so the ordering is defensible rather than vibes: rosters and
+ * expert rankings for talent, head to head and transactions for context.
+ */
+export async function writePowerRankings(p: Personality): Promise<PowerRankings> {
+  return generateJson({
+    schema: PowerRankingsSchema,
+    probe: 'headline',
+    maxOutputTokens: 4000,
+    system: systemFor(p),
+    prompt: `${await briefBlock()}
+
+Rank EVERY team in this league from best to worst and defend the order.
+
+Everything you need is in the league context above: standings, rosters, every
+transaction including the draft picks that moved, and the full history. Read it
+properly and rank on the evidence.
+${EDITORIAL}
+
+Respond with ONLY a JSON object, no prose and no markdown fences:
+{
+  "headline": "punchy, under 90 characters",
+  "standfirst": "one sentence setting up the argument",
+  "teams": [
+    { "rank": 1, "teamName": "<exact team name>", "verdict": "one punchy line",
+      "reasoning": "2-3 sentences with real evidence" }
+  ],
+  "boldestTake": "the single most contentious claim you are making"
+}`,
+  });
+}
+
+/**
+ * Season forecast: projected standings, the playoff field, a champion and a bust.
+ */
+export async function writePredictions(p: Personality): Promise<Predictions> {
+  return generateJson({
+    schema: PredictionsSchema,
+    probe: 'headline',
+    maxOutputTokens: 4000,
+    system: systemFor(p),
+    prompt: `${await briefBlock()}
+
+Predict how this whole season finishes. Commit to it.
+
+Everything you need is in the league context above, including every trade and
+the draft picks in it. Project a final record for every team, name the playoff
+field, pick a champion, and name one team you think is being badly overrated.
+${EDITORIAL}
+
+Respond with ONLY a JSON object, no prose and no markdown fences:
+{
+  "headline": "punchy, under 90 characters",
+  "standfirst": "one sentence",
+  "standings": [
+    { "rank": 1, "teamName": "<exact>", "projectedRecord": "10-4", "note": "one line" }
+  ],
+  "playoffTeams": ["<exact team names that make the playoffs>"],
+  "champion": { "teamName": "<exact>", "reasoning": "3-4 committed sentences" },
+  "bustPick": { "teamName": "<exact>", "reasoning": "2-3 sentences" },
+  "boldestTake": "the claim most likely to start an argument"
+}`,
+  });
 }

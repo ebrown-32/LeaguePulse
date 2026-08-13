@@ -199,8 +199,18 @@ export async function buildChatTools() {
             detail: (t.roster_ids ?? []).map((rid: number) => {
               const got = Object.entries(t.adds ?? {}).filter(([, r]) => r === rid).map(([pid]) => nameOf(pid));
               const lost = Object.entries(t.drops ?? {}).filter(([, r]) => r === rid).map(([pid]) => nameOf(pid));
+              // Dynasty trades are largely picks; omitting them made deals look
+              // one-sided when they were not.
+              const picks = (t.draft_picks ?? [])
+                .filter((d: any) => d.owner_id === rid)
+                .map((d: any) => {
+                  const from = byRoster.get(d.roster_id);
+                  const own = d.roster_id === rid;
+                  return `${d.season} R${d.round} pick${own ? ' (their own)' : from ? ` (originally ${from})` : ''}`;
+                });
               const team = byRoster.get(rid) ?? `Roster ${rid}`;
-              return `${team}${got.length ? ` receives ${got.join(', ')}` : ''}${lost.length ? ` drops ${lost.join(', ')}` : ''}`;
+              const received = [...got, ...picks];
+              return `${team}${received.length ? ` receives ${received.join(', ')}` : ''}${lost.length ? ` drops ${lost.join(', ')}` : ''}`;
             }).join(' | '),
           }));
         return { total: rows.length, transactions: rows.slice(0, limit) };

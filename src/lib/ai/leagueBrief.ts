@@ -187,9 +187,22 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       let summary: string;
 
       if (tx.type === 'trade') {
+        // Draft picks were being dropped entirely, which in a dynasty league
+        // is most of the value: every trade here involves them, and without
+        // them a pick-heavy deal reads as a lopsided giveaway. A pick's worth
+        // depends on whose it originally is, so name that owner too.
+        const picksFor = (rid: number) =>
+          (tx.draft_picks ?? [])
+            .filter((d: any) => d.owner_id === rid)
+            .map((d: any) => {
+              const from = rosterName.get(d.roster_id);
+              const own = d.roster_id === rid;
+              return `${d.season} round ${d.round} pick${own ? ' (their own)' : from ? ` (originally ${from})` : ''}`;
+            });
+
         const legs = rosterIds
           .map(rid => {
-            const got = forRoster(tx.adds, rid);
+            const got = [...forRoster(tx.adds, rid), ...picksFor(rid)];
             return got.length ? `${rosterName.get(rid) ?? `Roster ${rid}`} receives ${got.join(', ')}` : null;
           })
           .filter(Boolean);

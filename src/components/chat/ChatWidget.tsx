@@ -210,7 +210,19 @@ export default function ChatWidget() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open, full]);
 
-  useEffect(() => { if (open) inputRef.current?.focus(); }, [open, full]);
+  /**
+   * Autofocus on desktop only.
+   *
+   * This was the actual cause of the mobile zoom. Focusing the textarea the
+   * moment the sheet opens makes iOS raise the keyboard and scroll-and-scale
+   * to a field inside a position:fixed container, so simply tapping the
+   * launcher zoomed the page before anything had been typed. On touch the user
+   * taps the input when they are ready, which is the expected behaviour for a
+   * sheet anyway.
+   */
+  useEffect(() => {
+    if (open && isDesktop) inputRef.current?.focus();
+  }, [open, full, isDesktop]);
 
   // The name is admin-configurable, so read it rather than hardcoding.
   useEffect(() => {
