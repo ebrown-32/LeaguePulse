@@ -31,14 +31,23 @@ const num = (key: string, fallback: number) => {
 };
 
 /** Pieces written per daily run. */
-// Quality over quantity: a researched column and one marquee piece beat four
-// thin takes, and each researched piece is far slower to produce.
-const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 3), 8);
+// Quality over quantity: two considered pieces a day beat a stream of thin
+// takes, and each researched piece takes real time to produce.
+const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 2), 8);
 /** How many of those are long-form. Articles use the pricier model, so this is
  *  the main cost lever. */
 const ARTICLES_PER_RUN = Math.min(num('AI_ARTICLES_PER_DAY', 1), POSTS_PER_RUN);
 /** Window the batch is spread across. */
 const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 22);
+/**
+ * Stop starting new pieces once the invocation is this old.
+ *
+ * A serverless function is killed at maxDuration with no chance to save, so a
+ * long piece started at 50s would lose everything written before it. Whatever
+ * does not fit is simply picked up by the next run.
+ */
+const TIME_BUDGET_MS = 40_000;
+
 /** Guard against a double-trigger writing two batches the same day. */
 const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 12) * 60 * 60 * 1000;
 
@@ -132,9 +141,17 @@ export async function GET(request: Request) {
 
   const written: { kind: string; persona: string; publishAt: string }[] = [];
   const failures: string[] = [];
+  const startedAt = Date.now();
+  let deferred = 0;
 
   for (let i = 0; i < plan.length; i++) {
     const { kind, persona } = plan[i];
+
+    // Never begin a piece we cannot finish before the platform kills us.
+    if (i > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
+      deferred = plan.length - i;
+      break;
+    }
     try {
       const content =
         kind === 'article'       ? await writeArticle(persona) :
@@ -180,6 +197,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     posted: written.length,
     requested: POSTS_PER_RUN,
+    ...(deferred ? { deferred, note: 'Ran out of time; the rest roll into the next run.' } : {}),
     spreadHours: SPREAD_HOURS,
     written,
     ...(failures.length ? { failures } : {}),
