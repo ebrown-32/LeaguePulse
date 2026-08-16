@@ -2,9 +2,12 @@ import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
 import { writeArticle, writeTweet, writePowerRankings, writePredictions } from '@/lib/ai/generate';
+import { getLeagueRosters, getLeagueUsers } from '@/lib/api';
+import { getCurrentLeagueId } from '@/config/league';
 import {
   addPost,
   getPersonalities,
+  getRecentSubjects,
   lastGeneratedAt,
   lastPublishAt,
   type FeedPost,
@@ -34,9 +37,9 @@ const num = (key: string, fallback: number) => {
 // Quality over quantity: two considered pieces a day beat a stream of thin
 // takes, and each researched piece takes real time to produce.
 const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 2), 8);
-/** How many of those are long-form. Articles use the pricier model, so this is
- *  the main cost lever. */
-const ARTICLES_PER_RUN = Math.min(num('AI_ARTICLES_PER_DAY', 1), POSTS_PER_RUN);
+// AI_ARTICLES_PER_DAY is no longer read: each run leads with exactly one
+// substantial piece, rotating article -> power rankings -> predictions, and
+// fills the rest with short posts. AI_POSTS_PER_DAY still sets the batch size.
 /** Window the batch is spread across. */
 const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 22);
 /**
@@ -90,6 +93,38 @@ export async function GET(request: Request) {
     });
   }
 
+  // Who the next column is about.
+  //
+  // Left to choose freely the writers converged on whoever the brief makes
+  // loudest, which meant five straight pieces about the reigning champion.
+  // Commissioning a specific team, least recently covered first, gets the whole
+  // league written about instead.
+  let subjects: string[] = [];
+  try {
+    const leagueId = await getCurrentLeagueId();
+    const [rosters, users] = await Promise.all([
+      getLeagueRosters(leagueId), getLeagueUsers(leagueId),
+    ]);
+    const byId = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
+    const teams = rosters
+      .map((r: any) => {
+        const u = byId.get(r.owner_id);
+        return u?.metadata?.team_name || u?.display_name || '';
+      })
+      .filter(Boolean) as string[];
+
+    const recent = await getRecentSubjects();
+    // Rank by how long ago each team was last written about; never-covered
+    // teams sort first because indexOf returns -1 for them.
+    const lastSeen = (t: string) => {
+      const i = recent.indexOf(t);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : recent.length - i;
+    };
+    subjects = [...teams].sort((a, b) => lastSeen(b) - lastSeen(a));
+  } catch (err) {
+    console.error('[api/ai/cron] could not build subject rotation:', err);
+  }
+
   const people = (await getPersonalities()).filter(p => p.enabled);
   if (!people.length) return NextResponse.json({ skipped: 'no-enabled-personalities' });
 
@@ -112,33 +147,42 @@ export async function GET(request: Request) {
   type PlannedKind = 'article' | 'tweet' | 'powerRankings' | 'predictions';
   const plan: { kind: PlannedKind; persona: Personality }[] = [];
 
-  // One marquee piece a day beyond the article: power rankings and season
-  // predictions alternate, since running both daily would be repetitive and
-  // they are the most expensive pieces to produce.
-  const marquee: PlannedKind | null =
-    rankWriters.length || predictWriters.length
-      ? (new Date().getUTCDate() % 2 === 0 ? 'powerRankings' : 'predictions')
-      : null;
+  /**
+   * One substantial piece per run, then short posts.
+   *
+   * Pairing an article WITH a marquee piece never fit: the article alone spends
+   * most of the time budget, so the marquee was deferred every single run and
+   * power rankings never published at all. Rotating the lead across a three day
+   * cycle means each format actually appears, and the rest of the batch is
+   * short posts, which are quick and keep the feed moving.
+   */
+  const LEAD_CYCLE: PlannedKind[] = ['article', 'powerRankings', 'predictions'];
+  const poolFor = (k: PlannedKind) =>
+    k === 'article' ? articleWriters :
+    k === 'powerRankings' ? rankWriters :
+    k === 'predictions' ? predictWriters : postWriters;
+
+  // Day of year, so the cycle advances even if a run is missed.
+  const dayIndex = Math.floor(Date.now() / 86_400_000);
+  let lead: PlannedKind | null = null;
+  for (let i = 0; i < LEAD_CYCLE.length; i++) {
+    const candidate = LEAD_CYCLE[(dayIndex + i) % LEAD_CYCLE.length];
+    if (poolFor(candidate).length) { lead = candidate; break; }
+  }
+
   // Spread each persona around rather than letting one dominate the day.
   const rotation = [...people].sort(() => Math.random() - 0.5);
   for (let i = 0; i < POSTS_PER_RUN; i++) {
-    const wantArticle = i < ARTICLES_PER_RUN && articleWriters.length > 0;
-    // Slot 1 is the marquee piece, right after the article.
-    const wantMarquee = !wantArticle && i === ARTICLES_PER_RUN && marquee;
-
-    let kind: PlannedKind = wantArticle ? 'article' : 'tweet';
-    let pool = wantArticle ? articleWriters : postWriters;
-
-    if (wantMarquee) {
-      const marqueePool = marquee === 'powerRankings' ? rankWriters : predictWriters;
-      if (marqueePool.length) { kind = marquee; pool = marqueePool; }
-    }
+    const kind: PlannedKind = i === 0 && lead ? lead : 'tweet';
+    let pool = poolFor(kind);
     if (!pool.length) pool = postWriters.length ? postWriters : articleWriters;
 
     const persona = rotation.find(p => pool.includes(p) && !plan.some(x => x.persona.id === p.id)) ?? pick(pool);
     plan.push({ kind, persona });
   }
 
+  // Advances for every subject-bearing piece in this batch.
+  let subjectCursor = 0;
   const written: { kind: string; persona: string; publishAt: string }[] = [];
   const failures: string[] = [];
   const startedAt = Date.now();
@@ -153,11 +197,20 @@ export async function GET(request: Request) {
       break;
     }
     try {
+      // Every piece that can be about one team takes the next slot in the
+      // rotation, so a batch never doubles up and the feed works its way round
+      // the league. Power rankings and predictions are league-wide by design
+      // and cover everyone already.
+      const takesSubject = kind === 'article' || kind === 'tweet';
+      const subject = takesSubject && subjects.length
+        ? subjects[subjectCursor++ % subjects.length]
+        : undefined;
+
       const content =
-        kind === 'article'       ? await writeArticle(persona) :
+        kind === 'article'       ? await writeArticle(persona, subject) :
         kind === 'powerRankings' ? await writePowerRankings(persona) :
         kind === 'predictions'   ? await writePredictions(persona) :
-                                   await writeTweet(persona);
+                                   await writeTweet(persona, subject);
       // Times are claimed by successful posts only. Indexing by loop position
       // meant a failed item burned slot 0, the one that publishes immediately,
       // and the whole batch landed in the future leaving the feed empty.
@@ -171,6 +224,7 @@ export async function GET(request: Request) {
         personaAvatar: personaAvatarUrl(persona),
         kind,
         content: content as any,
+        ...(subject ? { subject } : {}),
         createdAt: new Date().toISOString(),
         publishAt: new Date(times[slot]).toISOString(),
         source: 'cron',
