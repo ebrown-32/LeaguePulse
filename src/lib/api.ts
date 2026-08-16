@@ -1417,7 +1417,12 @@ export async function generateLeagueStory(leagueIds: string[]): Promise<LeagueSt
       let seasonClosestGame = Infinity;
       let seasonBiggestBlowout = 0;
 
-      for (let weekIndex = 0; weekIndex < regularSeasonWeeks && weekIndex < allMatchups.length; weekIndex++) {
+      // Every week, playoffs included. The record book is about the biggest
+      // score ever posted and this league's high came in a playoff game, so
+      // stopping at the last regular season week hid it. The playoff blocks
+      // below only identify champions and playoff teams, so nothing is
+      // double counted; win/loss records elsewhere stay regular season only.
+      for (let weekIndex = 0; weekIndex < allMatchups.length; weekIndex++) {
         const weekMatchups = allMatchups[weekIndex];
         if (!weekMatchups) continue;
 
@@ -1840,7 +1845,12 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
       // Process regular season matchups
       const regularSeasonWeeks = league.settings.playoff_week_start ? league.settings.playoff_week_start - 1 : totalWeeks;
       
-      for (let weekIndex = 0; weekIndex < regularSeasonWeeks && weekIndex < allMatchups.length; weekIndex++) {
+      // Every week, playoffs included. The record book is about the biggest
+      // score ever posted and this league's high came in a playoff game, so
+      // stopping at the last regular season week hid it. The playoff blocks
+      // below only identify champions and playoff teams, so nothing is
+      // double counted; win/loss records elsewhere stay regular season only.
+      for (let weekIndex = 0; weekIndex < allMatchups.length; weekIndex++) {
         const weekMatchups = allMatchups[weekIndex];
         if (!weekMatchups) continue;
 
