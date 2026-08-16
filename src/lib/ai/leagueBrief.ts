@@ -59,6 +59,10 @@ export interface LeagueBrief {
   season: string;
   week: number;
   status: string;
+  /** Sleeper's NFL season type: 'pre', 'regular' or 'post'. The league's own
+   *  status flips to in_season before any game is played, so this is the only
+   *  reliable signal that real games have started. */
+  seasonType: string;
   statsSeason: string;
   teams: BriefTeam[];
   recentMatchups: BriefMatchup[];
@@ -223,10 +227,14 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       recentMoves.push({
         type: tx.type,
         season: league?.season ?? '',
-        // Sleeper reports offseason transactions with leg = 1, which read as
-        // "week 1" and had every persona describing offseason moves as
-        // in-season activity. Zero means offseason here.
-        week: (league?.status === 'pre_draft' || league?.status === 'drafting') ? 0 : (tx.leg ?? 0),
+        // Sleeper reports offseason and preseason transactions with leg = 1,
+        // which read as "week 1" and had the writers describing moves made in
+        // August as in-season activity. Anything before real games counts as
+        // week 0, which renders as "offseason".
+        week: (league?.status === 'pre_draft' || league?.status === 'drafting'
+               || nflState?.season_type === 'pre')
+          ? 0
+          : (tx.leg ?? 0),
         summary,
       });
     }
@@ -253,6 +261,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     season: league?.season ?? '',
     week: currentWeek,
     status: league?.status ?? 'unknown',
+    seasonType: nflState?.season_type ?? '',
     statsSeason,
     teams,
     recentMatchups: recentMatchups.slice(0, 8),
@@ -282,6 +291,19 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
 /** Plain-English statement of where the league sits in its calendar. Without
  *  this the personas guessed, and described offseason trades as week 1 games. */
 function phaseDescription(b: LeagueBrief): string {
+  // Sleeper marks a league 'in_season' as soon as it is set up for the year,
+  // which is well before kickoff, and reports a week number that during the
+  // preseason counts PRESEASON weeks. Reading those two together produced
+  // "regular season, week 2" in August with nothing played. The NFL season
+  // type is the authority on whether games have actually started.
+  if (b.seasonType === 'pre') {
+    return `PRESEASON for ${b.season}. NO regular season games have been played and there ` +
+      `are no results. Sleeper reports a preseason week counter; it is NOT a season week, so ` +
+      `never say "week N of the season" or imply the season is underway. Every record below ` +
+      `is 0-0 because nothing has counted yet. Player figures are from the ${b.statsSeason} ` +
+      `season, which is finished.`;
+  }
+
   switch (b.status) {
     case 'pre_draft':
       return `OFFSEASON. The ${b.season} draft has NOT happened yet and the season has not started. ` +

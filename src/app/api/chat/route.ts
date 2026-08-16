@@ -198,7 +198,11 @@ export async function POST(request: Request) {
     '  hold value far longer).',
     '- Tailor every answer to where the season actually is, described below.',
     ...(phase
-      ? ['', `SEASON PHASE: ${phase.label} (${phase.season}, week ${phase.week}).`,
+      // Only cite a week number once real games are being played: outside the
+      // regular season Sleeper's week counts preseason weeks and reads as if
+      // the season were underway.
+      ? ['', `SEASON PHASE: ${phase.label} (${phase.season}` +
+            `${['early', 'mid', 'late', 'playoffs'].includes(phase.phase) ? `, week ${phase.week}` : ''}).`,
          `WHAT MATTERS NOW: ${phase.guidance}`]
       : []),
     '',

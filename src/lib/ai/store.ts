@@ -29,6 +29,9 @@ export interface FeedPost {
   publishAt: string;
   /** 'cron' when auto-posted, 'admin' when produced from the back office. */
   source: 'cron' | 'admin';
+  /** The team a piece was commissioned about, so coverage can be rotated
+   *  around the league instead of piling onto whoever is most newsworthy. */
+  subject?: string;
 }
 
 const MAX_POSTS = 300;
@@ -165,6 +168,15 @@ export async function lastGeneratedAt(): Promise<number> {
 export async function lastPublishAt(): Promise<number> {
   const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
   return all.reduce((max, p) => Math.max(max, new Date(p.publishAt ?? p.createdAt).getTime()), 0);
+}
+
+/** Subjects of recent pieces, newest first. Used to spread coverage. */
+export async function getRecentSubjects(limit = 30): Promise<string[]> {
+  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  return all
+    .slice(0, limit)
+    .map(p => p.subject)
+    .filter((s): s is string => Boolean(s));
 }
 
 // ── Assistant ──────────────────────────────────────────────────────────────

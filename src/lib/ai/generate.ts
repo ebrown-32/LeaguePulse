@@ -266,7 +266,12 @@ HOW TO WRITE THIS
   balanced by picks, and a future first is a real asset. If you call a trade
   bad, account for every pick that moved in it.`;
 
-export async function writeArticle(p: Personality, topic?: string): Promise<Article> {
+/**
+ * @param subject A team the column must be about. Without one the writers all
+ *   gravitate to whoever the brief makes loudest, which produced five straight
+ *   pieces about the reigning champion.
+ */
+export async function writeArticle(p: Personality, subject?: string): Promise<Article> {
   const wire = await generateJson({
     schema: ArticleWireSchema,
     probe: 'headline',
@@ -274,7 +279,15 @@ export async function writeArticle(p: Personality, topic?: string): Promise<Arti
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
-Write an opinion column for the league feed${topic ? ` about: ${topic}` : ''}.
+Write an opinion column for the league feed.
+
+${subject
+  ? `THIS COLUMN IS ABOUT ${subject.toUpperCase()}. They are the subject: their
+roster, their moves, their outlook, their problems. Other teams appear only as
+context for the argument you are making about ${subject}. Do not make this a
+piece about the reigning champion or the busiest trader unless that is ${subject}.
+Name ${subject} in the headline.`
+  : 'Pick the most genuinely interesting angle in the data.'}
 
 Research first, but keep it tight: ONE tool call, then stop and write. Pull the
 single thing your argument most needs (a roster, a head to head record, or one
@@ -298,7 +311,12 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
   return stripDashes(object);
 }
 
-export async function writeTweet(p: Personality, topic?: string): Promise<Tweet> {
+/**
+ * @param subject A team the post must be about, for the same reason articles
+ *   take one: unprompted, every writer reaches for the loudest story in the
+ *   brief and the whole feed ends up about one manager.
+ */
+export async function writeTweet(p: Personality, subject?: string): Promise<Tweet> {
   const { object } = await generateObject({
     model: claude(MODEL_FAST),
     schema: TweetSchema,
@@ -307,9 +325,16 @@ export async function writeTweet(p: Personality, topic?: string): Promise<Tweet>
     system: systemFor(p),
     prompt: `${await briefBlock()}
 
-Write ONE short post for the league feed${topic ? ` about: ${topic}` : ''}.
-Under 280 characters. Make it land — a specific number or name beats a
-generic take.`,
+Write ONE short post for the league feed.
+
+${subject
+  ? `THIS POST IS ABOUT ${subject.toUpperCase()}. Name them. Their roster, a move
+they made, or their outlook. Do not write about the reigning champion or the
+busiest trader unless that is ${subject}.`
+  : 'Pick the sharpest thing in the data.'}
+
+Under 280 characters. Make it land: a specific number or name beats a generic
+take.`,
   });
   return stripDashes(object);
 }
