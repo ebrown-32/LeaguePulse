@@ -33,11 +33,27 @@ export type AvatarStyle = (typeof AVATAR_STYLES)[number];
 
 export const DEFAULT_AVATAR_STYLE: AvatarStyle = 'notionists';
 
+/**
+ * The style the cast uses. avataaars is the one with real wardrobe: blazers,
+ * hoodies, hats, glasses and facial hair, which is what lets each writer look
+ * like a distinct person rather than a random blob.
+ */
+export const CAST_STYLE: AvatarStyle = 'avataaars';
+
 export interface AvatarConfig {
   /** DiceBear style id. */
   avatarStyle?: string;
   /** Seed controlling which face inside that style. Defaults to the persona id. */
   avatarSeed?: string;
+  /**
+   * Extra DiceBear options for this persona, e.g. `{ clothing: 'blazerAndShirt' }`.
+   *
+   * A seed alone gives a random face, which is fine for anonymity and useless
+   * for a cast of characters: a loud anchor in a cowboy hat and a buttoned-up
+   * commissioner should not look interchangeable. Pinning hair, clothing and
+   * expression per persona is what makes them recognisable.
+   */
+  avatarOptions?: Record<string, string>;
 }
 
 function isKnownStyle(style: string | undefined): style is AvatarStyle {
@@ -58,5 +74,8 @@ export function personaAvatarUrl(
   const seed = (persona.avatarSeed || persona.id || persona.name || 'leaguepulse').trim();
   const params = new URLSearchParams({ seed });
   if (opts.size) params.set('size', String(opts.size));
+  for (const [k, v] of Object.entries(persona.avatarOptions ?? {})) {
+    if (v) params.set(k, v);
+  }
   return `${BASE}/${style}/svg?${params}`;
 }

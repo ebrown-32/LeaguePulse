@@ -2,7 +2,7 @@ import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextRequest, NextResponse } from 'next/server';
 import { AINotConfiguredError, isAIConfigured } from '@/lib/ai/claude';
 import { personalityById, type ContentKind } from '@/lib/ai/personalities';
-import { writeArticle, writeTweet, writeComment, writePowerRankings, writePredictions } from '@/lib/ai/generate';
+import { writeArticle, writeTweet, writeComment, writePowerRankings, writePredictions, angleAt } from '@/lib/ai/generate';
 import { addPost, getPersonalities, type FeedPost } from '@/lib/ai/store';
 
 export const dynamic = 'force-dynamic';
@@ -39,10 +39,12 @@ export async function POST(request: NextRequest) {
 
     const started = Date.now();
     let content: unknown;
-    if (kind === 'article')             content = await writeArticle(persona, topic);
+    // Manual runs get a random lens so repeated clicks do not repeat themselves.
+    const angle = angleAt(Math.floor(Math.random() * 1000));
+    if (kind === 'article')             content = await writeArticle(persona, topic, angle);
     else if (kind === 'powerRankings')  content = await writePowerRankings(persona);
     else if (kind === 'predictions')    content = await writePredictions(persona);
-    else if (kind === 'tweet')          content = await writeTweet(persona, topic);
+    else if (kind === 'tweet')          content = await writeTweet(persona, topic, angle);
     else if (kind === 'comment')        content = await writeComment(persona, subject ?? topic ?? '');
     else return NextResponse.json({ error: 'Use /api/ai/grade-trade for trade grades' }, { status: 400 });
 

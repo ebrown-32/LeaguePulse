@@ -7,10 +7,9 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import ForYouFeed from './ForYouFeed';
 import InjuryReport from './InjuryReport';
 import TeamFilterBar from './TeamFilterBar';
-import AIDeskView from './AIDeskView';
-import { PulseIcon, InjuryIcon, TrendingIcon, TrendingDownIcon, GridIcon, ListIcon, BroadcastIcon } from '@/components/icons/MediaIcons';
+import { PulseIcon, InjuryIcon, TrendingIcon, TrendingDownIcon, GridIcon, ListIcon } from '@/components/icons/MediaIcons';
 
-type Tab = 'foryou' | 'waivers' | 'injuries' | 'desk';
+type Tab = 'foryou' | 'waivers' | 'injuries';
 type TrendType = 'add' | 'drop';
 type ViewMode = 'grid' | 'list';
 
@@ -18,7 +17,6 @@ const TABS: { id: Tab; label: string; icon: typeof PulseIcon }[] = [
   { id: 'foryou', label: 'For You', icon: PulseIcon },
   { id: 'waivers', label: 'Waiver Wire', icon: TrendingIcon },
   { id: 'injuries', label: 'Injury Report', icon: InjuryIcon },
-  { id: 'desk', label: 'AI Desk', icon: BroadcastIcon },
 ];
 
 // "For You" is now news + injury context only; waiver trends live in their
@@ -27,7 +25,7 @@ const FORYOU_KINDS = 'article,injury';
 const WAIVER_KINDS = 'trending';
 
 export default function MediaView() {
-  // ?tab=desk lets the home page wire link straight into the AI desk.
+  // ?tab= lets a link open a specific tab directly.
   const params = useSearchParams();
   const requested = params.get('tab');
   const initialTab: Tab = TABS.some(t => t.id === requested) ? (requested as Tab) : 'foryou';
@@ -37,7 +35,11 @@ export default function MediaView() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   const tabNavigation = (
-    <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1 mb-4">
+    // Three equal columns on a phone so every tab is reachable without a
+    // hidden horizontal scroll; the fourth tab used to start past the right
+    // edge of a 390px screen and was unreachable. Back to a natural row from
+    // sm up, where there is room.
+    <div className="mb-4 -mx-1 grid grid-cols-3 gap-1 px-1 sm:flex sm:overflow-x-auto sm:no-scrollbar">
       {TABS.map(tab => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -46,12 +48,14 @@ export default function MediaView() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'flex items-center gap-1.5 shrink-0 whitespace-nowrap px-3.5 py-2 rounded-lg text-sm font-medium transition-colors',
+              'flex items-center justify-center gap-1.5 rounded-lg py-2 font-medium transition-colors',
+              // Tight enough to fit three across a narrow phone.
+              'min-w-0 px-1.5 text-[11px] sm:shrink-0 sm:whitespace-nowrap sm:px-3.5 sm:text-sm',
               isActive ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground border border-transparent'
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
-            {tab.label}
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{tab.label}</span>
           </button>
         );
       })}
@@ -121,7 +125,7 @@ export default function MediaView() {
 
       {/* Waiver trends are league-wide by nature, they're about players on
           nobody's roster yet, so the per-team filter doesn't apply there. */}
-      {activeTab !== 'waivers' && activeTab !== 'desk' && <TeamFilterBar selected={teamId} onSelect={setTeamId} />}
+      {activeTab !== 'waivers' && <TeamFilterBar selected={teamId} onSelect={setTeamId} />}
 
       {activeTab === 'foryou' && (
         <>
@@ -142,7 +146,6 @@ export default function MediaView() {
 
       {activeTab === 'injuries' && <InjuryReport teamId={teamId ?? undefined} />}
 
-      {activeTab === 'desk' && <AIDeskView />}
     </PageLayout>
   );
 }

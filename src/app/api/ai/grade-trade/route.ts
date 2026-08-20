@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'trade.sides is required' }, { status: 400 });
     }
 
-    const persona = personalityById(personalityId ?? 'analyst', DEFAULT_PERSONALITIES);
+    const persona = personalityById(personalityId ?? 'pike', DEFAULT_PERSONALITIES);
     const grade = await gradeTrade(persona, trade);
 
     return NextResponse.json({

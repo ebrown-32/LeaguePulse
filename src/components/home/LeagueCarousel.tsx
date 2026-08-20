@@ -93,7 +93,7 @@ export default function LeagueCarousel({ className }: { className?: string }) {
           // The persona's DiceBear portrait, so an AI card is visibly authored
           // by someone rather than showing a generic placeholder.
           imageUrl: p.personaAvatar,
-          href: '/media?tab=desk',
+          href: '/desk',
           external: false,
           isAI: true,
         }))
