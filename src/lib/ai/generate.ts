@@ -264,7 +264,11 @@ HOW TO WRITE THIS
 - This league trades draft picks, and the transaction record lists them. Never
   judge a trade on the players alone: a deal that looks lopsided is usually
   balanced by picks, and a future first is a real asset. If you call a trade
-  bad, account for every pick that moved in it.`;
+  bad, account for every pick that moved in it.
+- Every trade line states exactly who GETS and who GIVES UP each asset. Quote it
+  as written. Never say a team traded away a player unless that team's own
+  "gives up" list names him, and never attribute a trade to a team that is not
+  named in that line. Getting this wrong invents history about real people.`;
 
 /**
  * @param subject A team the column must be about. Without one the writers all

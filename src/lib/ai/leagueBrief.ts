@@ -204,14 +204,35 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
               return `${d.season} round ${d.round} pick${own ? ' (their own)' : from ? ` (originally ${from})` : ''}`;
             });
 
-        const legs = rosterIds
-          .map(rid => {
-            const got = [...forRoster(tx.adds, rid), ...picksFor(rid)];
-            return got.length ? `${rosterName.get(rid) ?? `Roster ${rid}`} receives ${got.join(', ')}` : null;
-          })
-          .filter(Boolean);
+        // Picks leaving a roster, mirroring picksFor.
+        const picksAwayFrom = (rid: number) =>
+          (tx.draft_picks ?? [])
+            .filter((d: any) => d.previous_owner_id === rid)
+            .map((d: any) => {
+              const from = rosterName.get(d.roster_id);
+              const own = d.roster_id === rid;
+              return `${d.season} round ${d.round} pick${own ? ' (their own)' : from ? ` (originally ${from})` : ''}`;
+            });
+
+        // BOTH directions, for EVERY participant.
+        //
+        // Previously only the "receives" side was written and any roster that
+        // received nothing was filtered out entirely, which left trades with no
+        // named counterparty. The writers then guessed who gave what and got it
+        // wrong, once crediting a team with trading away a player it never
+        // owned. Stating gives explicitly removes the inference.
+        const legs = rosterIds.map(rid => {
+          const team = rosterName.get(rid) ?? `Roster ${rid}`;
+          const got = [...forRoster(tx.adds, rid), ...picksFor(rid)];
+          const gave = [...forRoster(tx.drops, rid), ...picksAwayFrom(rid)];
+          const parts = [
+            got.length ? `gets ${got.join(', ')}` : 'gets nothing',
+            gave.length ? `gives up ${gave.join(', ')}` : 'gives up nothing',
+          ];
+          return `${team} ${parts.join(' and ')}`;
+        });
         if (!legs.length) continue;
-        summary = legs.join('; ');
+        summary = legs.join(' | ');
       } else {
         const rid = rosterIds[0];
         const team = rosterName.get(rid) ?? `Roster ${rid}`;
