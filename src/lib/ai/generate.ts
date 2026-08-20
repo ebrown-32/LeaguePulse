@@ -35,8 +35,12 @@ receivers and tight ends around 29, quarterbacks hold value far longer). Use
 that understanding to make the analysis genuinely sharp, and pitch it to
 whatever phase of the season the context says we are in.
 
-Write entirely in this voice. The persona affects tone and framing only,
-never the facts.`;
+Write entirely in this voice, and commit to it hard. The persona is not a
+light seasoning on neutral copy: it decides what you notice, what you care
+about, what you compare things to and how you say it. A reader should never
+mistake you for another writer on this desk.
+
+The persona affects tone and framing only, never the facts.`;
 }
 
 // ── Schemas ────────────────────────────────────────────────────────────────
@@ -247,6 +251,31 @@ async function briefBlock(): Promise<string> {
  * to argue back, so the brief demands all three, while the grounding rules
  * still forbid inventing the facts underneath them.
  */
+/**
+ * Angles a piece can be written from.
+ *
+ * Subject rotation alone was not enough. Given one team, every writer reached
+ * for the single loudest fact about them and five posts opened with the same
+ * sentence. Handing each piece a different lens is what actually produces a
+ * varied feed, because the writers are then looking at different things rather
+ * than the same thing in different voices.
+ */
+export const ANGLES = [
+  'their single best player, and whether one man can carry this roster',
+  'the weakest spot in their starting lineup, and what it costs them',
+  'one specific trade they made, and whether it was smart',
+  'their draft capital, and what it says about whether they are building or winning now',
+  'how they stack up against the team most likely to beat them',
+  'the manager behind the team and how they operate',
+  'the gap between how good they look on paper and how good they actually are',
+  'what has to go right for them, and what happens if it does not',
+] as const;
+
+/** Deterministic pick, so a caller can spread angles across a batch. */
+export function angleAt(index: number): string {
+  return ANGLES[Math.abs(index) % ANGLES.length];
+}
+
 const EDITORIAL = `
 HOW TO WRITE THIS
 - Lead with an argument, not a summary. The first line should make someone want
@@ -264,14 +293,20 @@ HOW TO WRITE THIS
 - This league trades draft picks, and the transaction record lists them. Never
   judge a trade on the players alone: a deal that looks lopsided is usually
   balanced by picks, and a future first is a real asset. If you call a trade
-  bad, account for every pick that moved in it.`;
+  bad, account for every pick that moved in it.
+- Every trade line states exactly who GETS and who GIVES UP each asset. Quote it
+  as written. Never say a team traded away a player unless that team's own
+  "gives up" list names him, and never attribute a trade to a team that is not
+  named in that line. Getting this wrong invents history about real people.`;
 
 /**
  * @param subject A team the column must be about. Without one the writers all
  *   gravitate to whoever the brief makes loudest, which produced five straight
  *   pieces about the reigning champion.
  */
-export async function writeArticle(p: Personality, subject?: string): Promise<Article> {
+export async function writeArticle(
+  p: Personality, subject?: string, angle?: string,
+): Promise<Article> {
   const wire = await generateJson({
     schema: ArticleWireSchema,
     probe: 'headline',
@@ -288,6 +323,7 @@ context for the argument you are making about ${subject}. Do not make this a
 piece about the reigning champion or the busiest trader unless that is ${subject}.
 Name ${subject} in the headline.`
   : 'Pick the most genuinely interesting angle in the data.'}
+${angle ? `YOUR ANGLE: ${angle}. Build the column around THAT.` : ''}
 
 Research first, but keep it tight: ONE tool call, then stop and write. Pull the
 single thing your argument most needs (a roster, a head to head record, or one
@@ -316,7 +352,9 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
  *   take one: unprompted, every writer reaches for the loudest story in the
  *   brief and the whole feed ends up about one manager.
  */
-export async function writeTweet(p: Personality, subject?: string): Promise<Tweet> {
+export async function writeTweet(
+  p: Personality, subject?: string, angle?: string,
+): Promise<Tweet> {
   const { object } = await generateObject({
     model: claude(MODEL_FAST),
     schema: TweetSchema,
@@ -328,13 +366,27 @@ export async function writeTweet(p: Personality, subject?: string): Promise<Twee
 Write ONE short post for the league feed.
 
 ${subject
-  ? `THIS POST IS ABOUT ${subject.toUpperCase()}. Name them. Their roster, a move
-they made, or their outlook. Do not write about the reigning champion or the
-busiest trader unless that is ${subject}.`
+  ? `THIS POST IS ABOUT ${subject.toUpperCase()}. Name them. Do not write about the
+reigning champion or the busiest trader unless that is ${subject}.`
   : 'Pick the sharpest thing in the data.'}
+${angle ? `YOUR ANGLE: ${angle}. Write about THAT, not whatever is loudest.` : ''}
 
-Under 280 characters. Make it land: a specific number or name beats a generic
-take.`,
+Under 280 characters.
+
+VOICE IS THE POINT. Someone who knows this cast should identify you from the
+first few words, without seeing your name. Write the way YOU talk, not the way
+a neutral analyst would: your obsessions, your speech patterns, your opinion of
+yourself. A correct but characterless post is a failure.
+
+Still anchor it to something real, a name or a number from the context above,
+but the fact is the excuse for the take, not the post itself.
+
+DO NOT OPEN BY RESTATING THE MOST OBVIOUS STATISTIC. Every writer on this desk
+reaches for the same headline number and the feed ends up reading like one
+person with different hats. Find your own way in: an accusation, a comparison,
+a memory, a question, a piece of advice nobody asked for, something you noticed
+that others would skip. The number can arrive in the second sentence, or not at
+all.`,
   });
   return stripDashes(object);
 }

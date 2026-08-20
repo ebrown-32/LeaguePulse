@@ -10,6 +10,7 @@ import {
   Database,
   Activity,
   Newspaper,
+  Megaphone,
   Receipt,
   ClipboardList,
   Scroll,
@@ -51,6 +52,7 @@ const MORE_NAV: NavItem[] = [
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
+  { name: 'The Desk',     href: '/desk',         icon: Megaphone    },
   { name: 'Media',        href: '/media',        icon: Newspaper    },
   { name: 'Constitution', href: '/constitution', icon: Scroll       },
 ];

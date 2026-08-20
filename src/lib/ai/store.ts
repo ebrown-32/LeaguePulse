@@ -223,9 +223,13 @@ export async function getPersonalities(): Promise<Personality[]> {
     return grants.length ? { ...p, kinds: [...p.kinds, ...grants] } : p;
   });
 
-  // Personalities added to the defaults since the last save should appear too.
+  // Personalities added to the defaults since the last save should appear too,
+  // and retired ones should disappear. The admin panel can only edit existing
+  // personas, never create them, so a saved entry with no matching default is
+  // one that has been removed from the cast.
   const savedIds = new Set(saved.map(p => p.id));
-  return [...merged, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];
+  const live = merged.filter(p => defaultsById.has(p.id));
+  return [...live, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];
 }
 
 export async function savePersonalities(list: Personality[]): Promise<void> {

@@ -1,7 +1,7 @@
 import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
-import { writeArticle, writeTweet, writePowerRankings, writePredictions } from '@/lib/ai/generate';
+import { writeArticle, writeTweet, writePowerRankings, writePredictions, angleAt } from '@/lib/ai/generate';
 import { getLeagueRosters, getLeagueUsers } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import {
@@ -202,15 +202,21 @@ export async function GET(request: Request) {
       // the league. Power rankings and predictions are league-wide by design
       // and cover everyone already.
       const takesSubject = kind === 'article' || kind === 'tweet';
+      const rotationIndex = subjectCursor++;
       const subject = takesSubject && subjects.length
-        ? subjects[subjectCursor++ % subjects.length]
+        ? subjects[rotationIndex % subjects.length]
+        : undefined;
+      // A different lens per piece, so two writers on the same day do not both
+      // open with the loudest number in the brief.
+      const angle = takesSubject
+        ? angleAt(rotationIndex + new Date().getUTCDate())
         : undefined;
 
       const content =
-        kind === 'article'       ? await writeArticle(persona, subject) :
+        kind === 'article'       ? await writeArticle(persona, subject, angle) :
         kind === 'powerRankings' ? await writePowerRankings(persona) :
         kind === 'predictions'   ? await writePredictions(persona) :
-                                   await writeTweet(persona, subject);
+                                   await writeTweet(persona, subject, angle);
       // Times are claimed by successful posts only. Indexing by loop position
       // meant a failed item burned slot 0, the one that publishes immediately,
       // and the whole batch landed in the future leaving the feed empty.
