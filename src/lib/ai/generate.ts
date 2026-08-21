@@ -14,6 +14,7 @@ import { getCurrentLeagueId } from '@/config/league';
 import { generateObject, generateText, streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { buildChatTools } from './chatTools';
+import { checkTradeClaims, collectText } from './factCheck';
 import { z } from 'zod';
 import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from './claude';
 import { buildLeagueBrief } from './leagueBrief';
@@ -276,6 +277,36 @@ export function angleAt(index: number): string {
   return ANGLES[Math.abs(index) % ANGLES.length];
 }
 
+/**
+ * Refuses to publish copy that contradicts the transaction record.
+ *
+ * The brief states every trade in both directions and the prompt forbids
+ * inverting it, and the writers still occasionally do. Prompt rules cannot make
+ * this guarantee; a check can. One correction attempt, then the piece is
+ * abandoned rather than published with a claim we have proven false.
+ */
+async function publishable<T>(
+  content: T,
+  regenerate: (correction: string) => Promise<T>,
+): Promise<T> {
+  const problems = await checkTradeClaims(collectText(content).join(' ')).catch(() => []);
+  if (!problems.length) return content;
+
+  console.error('[generate] false trade claim, regenerating:', problems);
+  const corrected = await regenerate(
+    'Your previous draft contained claims that contradict the transaction record:' +
+    `\n- ${problems.join('\n- ')}\n` +
+    'Re-read the trade lines in the league context. Each states who GETS and who ' +
+    'GIVES UP every asset. Write it again without those errors.',
+  );
+
+  const still = await checkTradeClaims(collectText(corrected).join(' ')).catch(() => []);
+  if (still.length) {
+    throw new Error(`Trade claims still wrong after correction: ${still.join('; ')}`);
+  }
+  return corrected;
+}
+
 const EDITORIAL = `
 HOW TO WRITE THIS
 - Lead with an argument, not a summary. The first line should make someone want
@@ -344,7 +375,20 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
     body: wire.paragraphs.join('\n\n'),
     tags: wire.tags.slice(0, 4),
   };
-  return stripDashes(object);
+  return publishable(stripDashes(object), async correction => {
+    const retry = await generateJson({
+      schema: ArticleWireSchema,
+      probe: 'headline',
+      system: systemFor(p),
+      prompt: `${await briefBlock()}\n\n${correction}\n\nRespond with ONLY the same JSON shape as before.`,
+    });
+    return stripDashes({
+      headline: retry.headline,
+      standfirst: retry.standfirst,
+      body: retry.paragraphs.join('\n\n'),
+      tags: retry.tags.slice(0, 4),
+    } as Article);
+  });
 }
 
 /**
@@ -388,7 +432,17 @@ a memory, a question, a piece of advice nobody asked for, something you noticed
 that others would skip. The number can arrive in the second sentence, or not at
 all.`,
   });
-  return stripDashes(object);
+  return publishable(stripDashes(object), async correction => {
+    const retry = await generateObject({
+      model: claude(MODEL_FAST),
+      schema: TweetSchema,
+      schemaName: 'Post',
+      schemaDescription: 'A single short social post',
+      system: systemFor(p),
+      prompt: `${await briefBlock()}\n\n${correction}`,
+    });
+    return stripDashes(retry.object);
+  });
 }
 
 export async function writeComment(p: Personality, subject: string): Promise<Comment> {
@@ -479,7 +533,7 @@ Include one entry in "sides" for every team in the trade.`;
  * expert rankings for talent, head to head and transactions for context.
  */
 export async function writePowerRankings(p: Personality): Promise<PowerRankings> {
-  return generateJson({
+  const result = await generateJson({
     schema: PowerRankingsSchema,
     probe: 'headline',
     model: MODEL_FAST,
@@ -502,16 +556,26 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
     { "rank": 1, "teamName": "<exact team name>", "verdict": "one punchy line",
       "reasoning": "2-3 sentences with real evidence" }
   ],
-  "boldestTake": "the single most contentious claim you are making"
-}`,
+  "boldestTake": "the single most contentious claim you are making"`,
   });
+
+  return publishable(result, async correction =>
+    generateJson({
+      schema: PowerRankingsSchema,
+      probe: 'headline',
+      model: MODEL_FAST,
+      maxOutputTokens: 16000,
+      system: systemFor(p),
+      prompt: [await briefBlock(), correction,
+        'Respond with ONLY the same JSON shape as before.'].join('\n\n'),
+    }));
 }
 
 /**
  * Season forecast: projected standings, the playoff field, a champion and a bust.
  */
 export async function writePredictions(p: Personality): Promise<Predictions> {
-  return generateJson({
+  const result = await generateJson({
     schema: PredictionsSchema,
     probe: 'headline',
     model: MODEL_FAST,
@@ -536,7 +600,17 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
   "playoffTeams": ["<exact team names that make the playoffs>"],
   "champion": { "teamName": "<exact>", "reasoning": "3-4 committed sentences" },
   "bustPick": { "teamName": "<exact>", "reasoning": "2-3 sentences" },
-  "boldestTake": "the claim most likely to start an argument"
-}`,
+  "boldestTake": "the claim most likely to start an argument"`,
   });
+
+  return publishable(result, async correction =>
+    generateJson({
+      schema: PredictionsSchema,
+      probe: 'headline',
+      model: MODEL_FAST,
+      maxOutputTokens: 16000,
+      system: systemFor(p),
+      prompt: [await briefBlock(), correction,
+        'Respond with ONLY the same JSON shape as before.'].join('\n\n'),
+    }));
 }
