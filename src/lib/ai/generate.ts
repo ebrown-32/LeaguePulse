@@ -307,6 +307,41 @@ async function publishable<T>(
   return corrected;
 }
 
+/**
+ * Predictions must field the league's real playoff bracket.
+ *
+ * The brief said nothing about format, so the writers assumed the common six
+ * team field and marked six of eight as making the playoffs in a league that
+ * takes four. The brief states it now, but a stated rule is not a guarantee:
+ * this counts the names and refuses anything that does not match, and checks
+ * every team named is real.
+ */
+async function checkPredictionShape(
+  content: Predictions,
+): Promise<string[]> {
+  const problems: string[] = [];
+  const brief = await buildLeagueBrief();
+  const real = new Set(brief.teams.map(t => t.teamName));
+  const expected = brief.playoffTeams;
+
+  const field = content.playoffTeams ?? [];
+  if (expected && field.length !== expected) {
+    problems.push(
+      `Named ${field.length} playoff teams; this league takes exactly ${expected}.`,
+    );
+  }
+  for (const name of [...field, content.champion?.teamName, content.bustPick?.teamName]) {
+    if (name && !real.has(name)) problems.push(`"${name}" is not a team in this league.`);
+  }
+  // The champion has to be in the field they just named.
+  if (content.champion?.teamName && field.length && !field.includes(content.champion.teamName)) {
+    problems.push(
+      `Picked ${content.champion.teamName} as champion but left them out of the playoff field.`,
+    );
+  }
+  return [...new Set(problems)];
+}
+
 const EDITORIAL = `
 HOW TO WRITE THIS
 - Lead with an argument, not a summary. The first line should make someone want
@@ -603,7 +638,30 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
   "boldestTake": "the claim most likely to start an argument"`,
   });
 
-  return publishable(result, async correction =>
+  // Two gates before this can publish: the trade-claim checker, and the
+  // playoff field actually matching the league's format.
+  const shapeProblems = await checkPredictionShape(result);
+  const fixed = shapeProblems.length
+    ? await generateJson({
+        schema: PredictionsSchema,
+        probe: 'headline',
+        model: MODEL_FAST,
+        maxOutputTokens: 16000,
+        system: systemFor(p),
+        prompt: [
+          await briefBlock(),
+          'Your previous draft got the league format wrong:\n- ' + shapeProblems.join('\n- '),
+          'Respond with ONLY the same JSON shape as before, corrected.',
+        ].join('\n\n'),
+      })
+    : result;
+
+  const stillWrong = await checkPredictionShape(fixed);
+  if (stillWrong.length) {
+    throw new Error(`Prediction format still wrong: ${stillWrong.join('; ')}`);
+  }
+
+  return publishable(fixed, async correction =>
     generateJson({
       schema: PredictionsSchema,
       probe: 'headline',

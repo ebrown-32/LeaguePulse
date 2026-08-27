@@ -63,6 +63,11 @@ export interface LeagueBrief {
    *  status flips to in_season before any game is played, so this is the only
    *  reliable signal that real games have started. */
   seasonType: string;
+  /** League format. Absent from the brief entirely until now, so the writers
+   *  guessed six playoff teams in a league that takes four. */
+  totalTeams: number;
+  playoffTeams: number;
+  playoffWeekStart: number;
   statsSeason: string;
   teams: BriefTeam[];
   recentMatchups: BriefMatchup[];
@@ -283,6 +288,9 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     week: currentWeek,
     status: league?.status ?? 'unknown',
     seasonType: nflState?.season_type ?? '',
+    totalTeams: Number(league?.total_rosters ?? 0),
+    playoffTeams: Number(league?.settings?.playoff_teams ?? 0),
+    playoffWeekStart: Number(league?.settings?.playoff_week_start ?? 0),
     statsSeason,
     teams,
     recentMatchups: recentMatchups.slice(0, 8),
@@ -349,6 +357,14 @@ function phaseDescription(b: LeagueBrief): string {
 export function renderBrief(b: LeagueBrief): string {
   const lines: string[] = [];
   lines.push(`LEAGUE: ${b.leagueName}, ${b.season} season.`);
+  if (b.totalTeams) {
+    const fmt = [`${b.totalTeams} teams`];
+    if (b.playoffTeams) fmt.push(`${b.playoffTeams} make the playoffs`);
+    if (b.playoffWeekStart) fmt.push(`playoffs begin in week ${b.playoffWeekStart}`);
+    lines.push('', 'LEAGUE FORMAT:', `  ${fmt.join(', ')}.`,
+      `  EXACTLY ${b.playoffTeams} teams make the playoffs. Never name more or fewer.`);
+  }
+
   lines.push('', 'PHASE:', `  ${phaseDescription(b)}`);
   lines.push(`Player production figures below are from the ${b.statsSeason} season (PPR).`);
 
