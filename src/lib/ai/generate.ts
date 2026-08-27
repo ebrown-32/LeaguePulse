@@ -11,7 +11,7 @@
 import { resolvePhase } from './seasonPhase';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { generateObject, generateText, streamText, stepCountIs } from 'ai';
+import { generateObject, generateText, streamText, streamObject, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { buildChatTools } from './chatTools';
 import { checkTradeClaims, collectText } from './factCheck';
@@ -85,12 +85,18 @@ const TradeGradeSchema = z.object({
 });
 
 /**
- * Ask for raw JSON and validate it ourselves.
+ * Produce a schema-shaped object from the model.
  *
- * generateObject with Anthropic intermittently returns the payload wrapped in a
- * stray envelope key, which fails schema validation with "No object generated".
- * gradeTrade hit this first; articles hit it too, which is why long-form posts
- * were the only kind failing in production. Deterministic parse plus one retry.
+ * The schema is enforced by the provider rather than requested in prose and
+ * validated afterwards. Asking for "ONLY a JSON object" and parsing the reply
+ * failed intermittently, roughly one run in three: the model would answer in a
+ * shape it invented, most often an article-like {headline, body, author}, and
+ * every ranked format shares the same `headline` key, so the wrapper probe
+ * could not tell a good reply from a wrong one. Measured over eight runs of
+ * power rankings, hand-parsing produced two unusable replies, enforcement none.
+ *
+ * Tools are the one thing enforcement cannot do, so a research pass still goes
+ * through free text and falls back to enforcement when its reply will not parse.
  */
 async function generateJson<T>(opts: {
   schema: z.ZodType<T>;
@@ -106,6 +112,31 @@ async function generateJson<T>(opts: {
    *  too slow for a serverless function's time budget. */
   model?: string;
 }): Promise<T> {
+  const model = claude(opts.model ?? MODEL_SMART);
+  const maxOutputTokens = opts.maxOutputTokens ?? 16000;
+  // Extended thinking is on by default and shares the output budget. It was
+  // consuming the entire allowance before a single character of JSON, and
+  // raising the cap enough to fit both made requests long enough for the
+  // connection to drop. These calls want structured output, not reasoning.
+  const providerOptions = { anthropic: { thinking: { type: 'disabled' as const } } };
+
+  /** Schema-enforced. The model cannot return a shape that is not this one. */
+  const enforced = async (prompt: string): Promise<T> => {
+    const result = streamObject({
+      model,
+      schema: opts.schema,
+      maxOutputTokens,
+      providerOptions,
+      system: opts.system,
+      prompt,
+    });
+    // The stream must be consumed. `result.object` only settles as chunks are
+    // read, so awaiting it alone leaves the promise pending, empties the event
+    // loop, and takes the process down with nothing printed.
+    for await (const _ of result.partialObjectStream) { /* drain */ }
+    return await result.object;
+  };
+
   const parse = (raw: string): T => {
     let t = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     const first = t.indexOf('{'), last = t.lastIndexOf('}');
@@ -126,60 +157,45 @@ async function generateJson<T>(opts: {
     return opts.schema.parse(candidate);
   };
 
-  // Research tools are the difference between a piece that restates the brief
-  // and one that actually digs. The budget is deliberately tight: Vercel caps a
-  // function at 60s, and an unbounded research loop blew straight past it.
-  const research = opts.research
-    ? {
+  // A research pass reads the live league and the web before writing, which
+  // enforcement has no way to express. Its output is still free text, so it
+  // keeps the parser, and anything unusable falls through to enforcement.
+  if (opts.research) {
+    try {
+      const result = streamText({
+        model,
+        maxOutputTokens,
+        providerOptions,
+        system: opts.system,
+        prompt: opts.prompt,
         tools: {
           ...(await buildChatTools()),
           web_search: anthropic.tools.webSearch_20250305({ maxUses: 1 }),
         },
         stopWhen: stepCountIs(2),
-      }
-    : {};
-
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const useResearch = attempt === 0 ? research : {};
-    // Streamed rather than a single blocking call. Sonnet's extended thinking
-    // shares the output budget, so the cap has to be large enough for both,
-    // and a non-streaming request that long had the connection dropped
-    // ("other side closed") before it could finish.
-    const result = streamText({
-      model: claude(opts.model ?? MODEL_SMART),
-      maxOutputTokens: opts.maxOutputTokens ?? 16000,
-      // Extended thinking is on by default and shares the output budget. It
-      // was consuming the entire allowance before a single character of JSON:
-      // 2000 tokens returned finishReason 'length' with an empty string, and
-      // raising the cap enough to fit both made requests long enough for the
-      // connection to drop. These calls want structured output, not visible
-      // reasoning, so the budget goes entirely to the answer.
-      providerOptions: { anthropic: { thinking: { type: 'disabled' } } },
-      system: opts.system,
-      prompt: attempt === 0
-        ? opts.prompt
-        : `${opts.prompt}\n\nYour previous reply was not usable. Do not call any tools. Return only the JSON object.`,
-      ...useResearch,
-    });
-    const text = await result.text;
-    // Running out of steps mid-research leaves the last step as a tool call and
-    // the text empty, so retry without tools rather than failing the piece.
-    if (!text.trim()) {
-      console.error('[generate] empty text', {
-        attempt,
-        finishReason: await (result as any).finishReason,
       });
-      lastErr = new Error('model returned no text');
-      continue;
-    }
-    try { return parse(text); } catch (e) {
-      lastErr = e;
-      console.error('[generate] unparseable output',
-        { chars: text.length, tail: text.slice(-160) });
+      const text = await result.text;
+      if (text.trim()) return parse(text);
+      console.error('[generate] research pass returned no text');
+    } catch (e) {
+      console.error('[generate] research pass unusable:', e instanceof Error ? e.message : e);
     }
   }
-  throw new Error(`Unparseable model output: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
+
+  try {
+    return await enforced(opts.prompt);
+  } catch (e) {
+    console.error('[generate] enforced generation failed, retrying:',
+      e instanceof Error ? e.message : e);
+  }
+
+  try {
+    return await enforced(
+      `${opts.prompt}\n\nYour previous reply did not fit the required shape. Fill every field.`,
+    );
+  } catch (e) {
+    throw new Error(`Unparseable model output: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 /** A ranked league table with a take attached to every team. */
@@ -533,31 +549,17 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
 }
 Include one entry in "sides" for every team in the trade.`;
 
-  // generateObject is used everywhere else, but this schema (a nested array of
-  // objects containing an enum) trips the Anthropic provider, which wraps the
-  // result in a literal "parameter name" key and fails validation. Asking for
-  // raw JSON and validating it ourselves is deterministic and keeps the same
-  // typed guarantee at the boundary.
-  const parse = (raw: string): TradeGrade => {
-    let t = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    const first = t.indexOf('{'), last = t.lastIndexOf('}');
-    if (first > 0 || last < t.length - 1) t = t.slice(first, last + 1);
-    const json = JSON.parse(t);
-    // Unwrap the provider's stray envelope if it appears.
-    const candidate = json.verdict ? json : (Object.values(json)[0] as unknown);
-    return TradeGradeSchema.parse(candidate);
-  };
-
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { text } = await generateText({
-      model: claude(MODEL_SMART),
-      system: systemFor(p),
-      prompt: attempt === 0 ? prompt : `${prompt}\n\nYour previous reply was not valid JSON. Return only the JSON object.`,
-    });
-    try { return stripDashes(parse(text)); } catch (e) { lastErr = e; }
-  }
-  throw new Error(`Trade grading returned unparseable output: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
+  // Schema-enforced, like every other generation here. This used to ask for
+  // raw JSON and parse it, on the grounds that the provider wrapped a nested
+  // array of enums in a stray envelope key; the streaming object API does not
+  // have that problem, and hand-parsing was itself failing about a third of
+  // the time by accepting a shape the model invented.
+  return stripDashes(await generateJson({
+    schema: TradeGradeSchema,
+    probe: 'verdict',
+    system: systemFor(p),
+    prompt,
+  }));
 }
 
 
@@ -591,7 +593,8 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
     { "rank": 1, "teamName": "<exact team name>", "verdict": "one punchy line",
       "reasoning": "2-3 sentences with real evidence" }
   ],
-  "boldestTake": "the single most contentious claim you are making"`,
+  "boldestTake": "the single most contentious claim you are making"
+}`,
   });
 
   return publishable(result, async correction =>
@@ -635,7 +638,8 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
   "playoffTeams": ["<exact team names that make the playoffs>"],
   "champion": { "teamName": "<exact>", "reasoning": "3-4 committed sentences" },
   "bustPick": { "teamName": "<exact>", "reasoning": "2-3 sentences" },
-  "boldestTake": "the claim most likely to start an argument"`,
+  "boldestTake": "the claim most likely to start an argument"
+}`,
   });
 
   // Two gates before this can publish: the trade-claim checker, and the
