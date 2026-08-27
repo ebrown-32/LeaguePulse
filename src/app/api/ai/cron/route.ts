@@ -55,6 +55,14 @@ const TIME_BUDGET_MS = 40_000;
 const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 12) * 60 * 60 * 1000;
 
 function authorized(request: Request): boolean {
+  // The admin panel's "Run scheduler" button. Without this the button works
+  // locally, where CRON_SECRET is usually unset, and starts returning 401 the
+  // moment the secret is set in production, which is exactly when the panel is
+  // most needed. Vercel Cron cannot send this header; an admin cannot send the
+  // Bearer one. Both callers are legitimate, so both are accepted.
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminPassword && request.headers.get('x-admin-password') === adminPassword) return true;
+
   const secret = process.env.CRON_SECRET;
   if (!secret) return true; // unset locally so the admin panel can trigger it
   return request.headers.get('authorization') === `Bearer ${secret}`;
