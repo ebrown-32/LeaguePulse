@@ -1,0 +1,57 @@
+name: Live game-day coverage
+
+# Pokes the AI desk while NFL games are on, so it can post at kickoff and react
+# to the scoreboard as it moves.
+#
+# This does not live in vercel.json because Vercel's Hobby plan allows two cron
+# jobs and runs them once a day, which is the right shape for the daily batch
+# and useless for live coverage. GitHub Actions runs this for free on a real
+# schedule instead.
+#
+# The endpoint decides whether to do anything. It checks, in order: that Sleeper
+# says we are in the regular or postseason, that an NFL window is currently open
+# in Eastern time, that its own cooldown has elapsed, and that somebody has
+# actually scored. Any tick that fails a gate returns "skipped" and costs
+# nothing, so an over-generous schedule here is harmless.
+
+on:
+  schedule:
+    # Times are UTC. Eastern is UTC-4 in season and UTC-5 from November, so each
+    # window is widened by an hour at both ends rather than split in two; the
+    # endpoint rejects the ticks that fall outside the real window.
+    #
+    # Sunday, 1pm ET onward.
+    - cron: '*/30 16-23 * * 0'
+    # Sunday night football running past midnight UTC into Monday.
+    - cron: '*/30 0-5 * * 1'
+    # Thursday night football (Friday in UTC).
+    - cron: '*/30 0-5 * * 5'
+    # Monday night football (Tuesday in UTC).
+    - cron: '*/30 0-5 * * 2'
+    # Saturday games, which appear from week 15.
+    - cron: '*/30 17-23 * * 6'
+  # So you can test it without waiting for a Sunday.
+  workflow_dispatch:
+
+jobs:
+  poke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the desk to cover the games
+        env:
+          # Repository secrets. SITE_URL is the deployment origin, e.g.
+          # https://league-pulse.vercel.app. CRON_SECRET must match the value
+          # set in Vercel.
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL and CRON_SECRET repository secrets are required."
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx still prints why before failing.
+          curl --silent --show-error --fail-with-body \
+            --max-time 90 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/ai/cron?mode=live"

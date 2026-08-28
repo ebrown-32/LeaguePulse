@@ -12,11 +12,18 @@ import { MAX_AVATAR_BYTES } from '@/lib/ai/avatarUpload';
 
 const ALL_KINDS: ContentKind[] = [
   'article', 'powerRankings', 'predictions', 'tweet', 'comment', 'tradeGrade',
+  'matchupPreview', 'kickoff', 'liveTake',
 ];
 const KIND_LABEL: Record<ContentKind, string> = {
   article: 'Article', tweet: 'Post', comment: 'Comment', tradeGrade: 'Trade Grade',
   powerRankings: 'Power Rankings', predictions: 'Predictions',
+  matchupPreview: 'Week Preview', kickoff: 'Kickoff', liveTake: 'Live',
 };
+
+/** Kinds that only work while real games are on. Publishing one by hand out of
+ *  season fails loudly rather than inventing a scoreboard, so the panel says so
+ *  up front instead of letting an admin discover it through an error. */
+const GAME_DAY_KINDS = new Set<ContentKind>(['kickoff', 'liveTake']);
 
 /**
  * Inputs are 16px on small screens and only shrink from `sm` up.

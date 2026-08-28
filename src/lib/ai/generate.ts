@@ -18,6 +18,7 @@ import { checkTradeClaims, collectText } from './factCheck';
 import { z } from 'zod';
 import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from './claude';
 import { buildLeagueBrief } from './leagueBrief';
+import { buildLiveBrief, buildUpcomingMatchups, type LiveBrief } from './liveBrief';
 import type { Personality } from './personalities';
 
 function systemFor(p: Personality): string {
@@ -233,6 +234,38 @@ const PredictionsSchema = z.object({
   boldestTake: z.string(),
 });
 
+/** A pick for every fixture in an upcoming week. */
+const MatchupPreviewSchema = z.object({
+  headline: z.string(),
+  standfirst: z.string(),
+  games: z.array(z.object({
+    teamA: z.string().describe('Exact team name, as given in the fixture list'),
+    teamB: z.string().describe('Exact team name, as given in the fixture list'),
+    pick: z.string().describe('Exact name of the team you are picking to win'),
+    confidence: z.enum(['lock', 'lean', 'coin flip']),
+    take: z.string().describe('2-3 sentences arguing the pick with real evidence'),
+  })).min(1),
+  upsetAlert: z.string().describe('The one result that would surprise the league most'),
+});
+
+/**
+ * Live game-day copy: the slate starting, and the slate in progress.
+ *
+ * One schema for both because they render identically and differ only in what
+ * the writer is looking at, which the prompt supplies. A separate near-identical
+ * schema for each would be surface with no reader-visible payoff.
+ */
+const GameBeatSchema = z.object({
+  headline: z.string(),
+  text: z.string().describe('2-4 punchy sentences. This is a live post, not a column'),
+  notes: z.array(z.object({
+    teamName: z.string().describe('Exact team name'),
+    note: z.string().describe('One line: what is happening to them right now'),
+  })).min(1),
+});
+
+export type MatchupPreview = z.infer<typeof MatchupPreviewSchema>;
+export type GameBeat = z.infer<typeof GameBeatSchema>;
 export type PowerRankings = z.infer<typeof PowerRankingsSchema>;
 export type Predictions = z.infer<typeof PredictionsSchema>;
 
@@ -675,4 +708,124 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
       prompt: [await briefBlock(), correction,
         'Respond with ONLY the same JSON shape as before.'].join('\n\n'),
     }));
+}
+
+// ── Game-day coverage ──────────────────────────────────────────────────────
+
+/**
+ * Reject any team name the model invented.
+ *
+ * Live formats name teams constantly, in a schema field rather than in prose,
+ * so a hallucinated name is both easy to spot and worth spotting: a scoreboard
+ * post about a team that does not exist is the most obviously broken thing the
+ * desk could publish.
+ */
+async function unknownTeams(names: (string | undefined)[]): Promise<string[]> {
+  const real = new Set((await buildLeagueBrief()).teams.map(t => t.teamName));
+  return [...new Set(names.filter((n): n is string => Boolean(n) && !real.has(n!)))];
+}
+
+/**
+ * Picks for every fixture in an upcoming week.
+ *
+ * The fixture list is passed in rather than left to the model: Sleeper knows
+ * exactly who plays whom, and a preview that invents a pairing is worse than
+ * no preview. `EDITORIAL` is deliberately omitted, since the standing
+ * instruction to find a controversial angle fights the job of covering all of
+ * a week's games evenly.
+ */
+export async function writeMatchupPreview(
+  p: Personality, week: number,
+): Promise<MatchupPreview> {
+  const upcoming = await buildUpcomingMatchups(week);
+  if (!upcoming) throw new Error(`No fixtures published for week ${week}`);
+
+  const prompt = `${await briefBlock()}
+
+${upcoming.text}
+
+Preview week ${week}. Work through every fixture above in order, pick a winner
+for each, and say why in a way that will annoy the loser. Rate each pick a
+"lock", a "lean" or a "coin flip" and be honest about which is which; picking
+everything as a lock is cowardice, not confidence.
+
+Argue from the record above: rosters, results so far, transactions, and history
+between these two managers. Name players.`;
+
+  const result = await generateJson({
+    schema: MatchupPreviewSchema,
+    probe: 'headline',
+    model: MODEL_FAST,
+    maxOutputTokens: 16000,
+    system: systemFor(p),
+    prompt,
+  });
+
+  const bad = await unknownTeams([
+    ...result.games.flatMap(g => [g.teamA, g.teamB, g.pick]),
+  ]);
+  if (bad.length) {
+    throw new Error(`Matchup preview named teams not in this league: ${bad.join(', ')}`);
+  }
+  // A pick has to be one of the two sides actually playing.
+  const strayPick = result.games.find(g => g.pick !== g.teamA && g.pick !== g.teamB);
+  if (strayPick) {
+    throw new Error(
+      `Picked ${strayPick.pick} in ${strayPick.teamA} vs ${strayPick.teamB}, who is not in that game`,
+    );
+  }
+  return stripDashes(result);
+}
+
+/**
+ * A post for the moment the slate kicks off, and one for it in progress.
+ *
+ * Both read the live scoreboard, which reports fantasy points and explicitly
+ * nothing about NFL game clocks. `mode` only changes the framing.
+ */
+export async function writeGameBeat(
+  p: Personality, mode: 'kickoff' | 'live', slate: string,
+  /** The caller has already built this to decide the mode; reusing it saves a
+   *  second trip to Sleeper and to the multi-megabyte player directory. */
+  brief?: LiveBrief | null,
+): Promise<GameBeat> {
+  const live = brief ?? await buildLiveBrief();
+  if (!live) throw new Error('No live week to cover');
+
+  if (mode === 'live' && !live.anyScoring) {
+    throw new Error('Nothing has been scored yet; there is no live game to describe');
+  }
+
+  const framing = mode === 'kickoff'
+    ? `${slate} is under way. Write the post that goes up as the games start:
+who has the most riding on today, which matchup is the one to watch, and who
+should be nervous. Look forward, not back.`
+    : `${slate} is in progress. Write the live post: who is winning, who is
+getting embarrassed, whose stars have shown up and whose have not. React to
+what the scoreboard actually says.`;
+
+  const prompt = `${await briefBlock()}
+
+${live.text}
+
+${framing}
+
+Keep it short and quotable. This is a live post, not a column: a few sentences
+of reaction, then one line each on the teams that matter right now. Name real
+players and real point totals from the scoreboard above and nothing else.`;
+
+  const result = await generateJson({
+    schema: GameBeatSchema,
+    probe: 'headline',
+    model: MODEL_FAST,
+    maxOutputTokens: 4000,
+    system: systemFor(p),
+    prompt,
+  });
+
+  const bad = await unknownTeams(result.notes.map(n => n.teamName));
+  if (bad.length) {
+    throw new Error(`Game post named teams not in this league: ${bad.join(', ')}`);
+  }
+  return stripDashes(result);
 }

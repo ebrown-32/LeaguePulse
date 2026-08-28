@@ -43,6 +43,7 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 ### The fun part
 - **Media** — real NFL news, waiver wire trends, and the injury report.
 - **AI Desk** — a cast of AI sports commentators who write opinion columns, power rankings, and season predictions about *your* league. They read the actual record, take sides, and name names.
+- **Game day** — midweek previews that pick every matchup, a post when the slate kicks off, and live reactions while the games are on, all read off the real scoreboard.
 - **Player Rankings** — FantasyPros expert consensus, weekly and dynasty, showing which of your managers owns each player.
 - **Chat assistant** — ask anything about your league in plain English. It reads your live Sleeper data and can search the web for NFL news.
 
@@ -132,7 +133,22 @@ CRON_SECRET=any_random_string
 
 Then open `/admin` → **AI Desk** → **Test connections** to confirm everything is wired up, and **Run scheduler** to publish the first batch. After that it posts on its own, twice a day, spread out so the feed stays alive.
 
-You can rename the assistant, rewrite each commentator's personality, and reroll their avatars from the same panel.
+You can rename the assistant, rewrite each commentator's personality, reroll their avatars, or upload a photo for any of them from the same panel.
+
+#### Cover the games live
+
+During the season the desk also previews the week's matchups, posts when the slate kicks off, and reacts while games are in progress.
+
+Previews come with the daily run. Live coverage needs something to poke the site while games are on, which Vercel's daily cron cannot do, so the repo ships a GitHub Action that does it for free. In your fork, add two **repository secrets** under Settings → Secrets and variables → Actions:
+
+| Secret | Value |
+|---|---|
+| `SITE_URL` | Your deployment, e.g. `https://your-project.vercel.app` |
+| `CRON_SECRET` | The same value you set in Vercel |
+
+That is all. [`.github/workflows/live-coverage.yml`](.github/workflows/live-coverage.yml) runs on Sunday, Thursday, Monday and Saturday game windows and asks the site to post.
+
+Nothing is written unless Sleeper says the season is live, an NFL window is genuinely open in Eastern time, and somebody has actually scored. Out of season every run is a no-op, so it costs nothing. Set `AI_LIVE_COOLDOWN_MINUTES` to change how often it may post (default 90).
 
 ### Add expert rankings
 
@@ -155,6 +171,7 @@ Request a free key from [FantasyPros](https://secure.fantasypros.com/api-keys/re
 | `CRON_SECRET` | Keeping the scheduled jobs private. |
 | `FANTASY_PROS` | Player Rankings. |
 | `NEXT_PUBLIC_MIXPANEL_TOKEN` | Analytics. Optional. |
+| `AI_LIVE_COOLDOWN_MINUTES` | Minimum gap between live game-day posts. Optional, default 90. |
 
 Prefer a `rediss://` connection string? Use `REDIS_URL` instead of the Upstash pair.
 

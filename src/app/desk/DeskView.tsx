@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import {
   MessageCircle, TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users,
+  Swords, Radio,
 } from 'lucide-react';
 
 /**
@@ -20,7 +21,13 @@ import {
  * a one-line jab can share the same column without one burying the other.
  */
 
-type Kind = 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions';
+type Kind =
+  | 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
+  | 'matchupPreview' | 'kickoff' | 'liveTake';
+
+/** Written while the games are on, and rendered inline so it reads as news
+ *  breaking rather than as a document to open. */
+const LIVE_KINDS = new Set<Kind>(['kickoff', 'liveTake']);
 
 interface FeedPost {
   id: string;
@@ -41,10 +48,14 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Newspaper } | null> 
   powerRankings: { label: 'Power Rankings', icon: TrendingUp },
   predictions: { label: 'Predictions', icon: Trophy },
   tradeGrade: { label: 'Trade Grade', icon: Scale },
+  matchupPreview: { label: 'Week Preview', icon: Swords },
+  kickoff: { label: 'Kickoff', icon: Radio },
+  liveTake: { label: 'Live', icon: Radio },
 };
 
 const FILTERS = [
   { id: 'all', label: 'Everything' },
+  { id: 'live', label: 'Game day' },
   { id: 'long', label: 'Columns' },
   { id: 'short', label: 'Tweets' },
 ] as const;
@@ -189,6 +200,58 @@ function LongForm({ post, open, onToggle }: { post: FeedPost; open: boolean; onT
                 </div>
               )}
 
+              {post.kind === 'matchupPreview' && (
+                <div className="space-y-2">
+                  {(c.games ?? []).map((g: any, i: number) => {
+                    // The pick is shown by highlighting the side that was
+                    // picked, so the call is readable without reading prose.
+                    const pickedA = g.pick === g.teamA;
+                    // Sized to content and allowed to wrap. Splitting the row
+                    // evenly with flex-1 truncated whichever name was longer,
+                    // and team names here are arbitrary user-chosen strings.
+                    const side = (name: string, picked: boolean) => (
+                      <span className={cn(
+                        'text-[13px]',
+                        picked ? 'font-bold text-foreground' : 'text-muted-foreground',
+                      )}>
+                        {name}
+                      </span>
+                    );
+                    return (
+                      <div key={i} className="rounded-lg border border-border px-3 py-2">
+                        {/* The badge sits on its own line so the two team names
+                            get the full width. Sharing a row with it truncated
+                            every name to "Ass Kick..." on a phone. */}
+                        <span className={cn(
+                          'inline-block rounded border px-1.5 py-px text-[9px] font-bold uppercase tracking-wider',
+                          g.confidence === 'lock'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+                            : g.confidence === 'coin flip'
+                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-500'
+                              : 'border-border text-muted-foreground',
+                        )}>
+                          {g.confidence}
+                        </span>
+                        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                          {side(g.teamA, pickedA)}
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            v
+                          </span>
+                          {side(g.teamB, !pickedA)}
+                        </div>
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-foreground/85">{g.take}</p>
+                      </div>
+                    );
+                  })}
+                  {c.upsetAlert && (
+                    <p className="rounded-lg border border-border px-3 py-2 text-[13px] text-foreground/85">
+                      <span className="font-bold uppercase tracking-widest text-muted-foreground">Upset alert </span>
+                      {c.upsetAlert}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {post.kind === 'tradeGrade' && (
                 <div className="space-y-2">
                   <p className="text-[14px] text-foreground">{c.verdict}</p>
@@ -217,10 +280,62 @@ function LongForm({ post, open, onToggle }: { post: FeedPost; open: boolean; onT
   );
 }
 
+/**
+ * A kickoff or in-progress post.
+ *
+ * Rendered inline rather than behind a "read it" toggle: the value of a live
+ * post is that you see it without doing anything, and it is short enough that
+ * collapsing it would save no space worth saving.
+ */
+function GameBeat({ post }: { post: FeedPost }) {
+  const c = post.content;
+  const live = post.kind === 'liveTake';
+  return (
+    <div className="mt-1.5">
+      <span className={cn(
+        'inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest',
+        live ? 'text-rose-500' : 'text-primary',
+      )}>
+        <span className="relative flex h-1.5 w-1.5">
+          {live && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75" />
+          )}
+          <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full',
+            live ? 'bg-rose-500' : 'bg-primary')} />
+        </span>
+        {live ? 'Live' : 'Kickoff'}
+      </span>
+
+      {c.headline && (
+        <p className="mt-1 font-display text-[15px] font-bold leading-snug text-foreground">
+          {c.headline}
+        </p>
+      )}
+      {c.text && (
+        <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+          {c.text}
+        </p>
+      )}
+
+      {Array.isArray(c.notes) && c.notes.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {c.notes.map((n: any, i: number) => (
+            <li key={i} className="flex gap-2 rounded-lg border border-border px-2.5 py-1.5">
+              <span className="shrink-0 text-[13px] font-semibold text-foreground">{n.teamName}</span>
+              <span className="min-w-0 text-[13px] leading-snug text-foreground/85">{n.note}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Post({ post, index, open, onToggle }: {
   post: FeedPost; index: number; open: boolean; onToggle: () => void;
 }) {
-  const isLong = post.kind !== 'tweet' && post.kind !== 'comment';
+  const isLive = LIVE_KINDS.has(post.kind);
+  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive;
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}
@@ -238,11 +353,13 @@ function Post({ post, index, open, onToggle }: {
           <AiBadge />
         </div>
 
-        {!isLong && (
+        {!isLong && !isLive && (
           <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
             {post.content.text}
           </p>
         )}
+
+        {isLive && <GameBeat post={post} />}
 
         {isLong && <LongForm post={post} open={open} onToggle={onToggle} />}
 
@@ -277,7 +394,11 @@ export default function DeskView() {
   const shown = useMemo(() => {
     if (!posts) return [];
     if (filter === 'all') return posts;
-    const long = (p: FeedPost) => p.kind !== 'tweet' && p.kind !== 'comment';
+    if (filter === 'live') {
+      return posts.filter(p => LIVE_KINDS.has(p.kind) || p.kind === 'matchupPreview');
+    }
+    const long = (p: FeedPost) =>
+      p.kind !== 'tweet' && p.kind !== 'comment' && !LIVE_KINDS.has(p.kind);
     return posts.filter(p => (filter === 'long' ? long(p) : !long(p)));
   }, [posts, filter]);
 
