@@ -8,7 +8,10 @@
 
 export type ContentKind =
   | 'article' | 'tweet' | 'comment' | 'tradeGrade'
-  | 'powerRankings' | 'predictions';
+  | 'powerRankings' | 'predictions'
+  // Game-day coverage. Only produced during the NFL regular season and
+  // postseason; the scheduler skips them entirely the rest of the year.
+  | 'matchupPreview' | 'kickoff' | 'liveTake';
 
 export interface Personality {
   id: string;
@@ -62,7 +65,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'sincerely emotional about his colleagues and his league. Prone to bizarre non-sequiturs ' +
       'about cologne, steak, or his own jacket. Total confidence, zero self-awareness, ' +
       'completely lovable. Never crude.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -93,7 +96,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'move the worst idea he has ever heard and declaring it a generational investment, often ' +
       'in the same breath. Constantly proposes ludicrous side ventures nobody asked for. High ' +
       'energy, zero follow through, very funny.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -124,7 +127,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'review. Uses officious bureaucratic language for trivial things. Never jokes, which is ' +
       'exactly what makes him funny. Occasionally lets slip that he is furious about something ' +
       'that happened three seasons ago.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -157,7 +160,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'indifference of the universe, applied to a bench player. Sees managers as small ' +
       'creatures struggling against an uncaring void. Absolutely sincere, which is the joke. ' +
       'No emoji, no exclamation marks.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -188,7 +191,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'escalating outrage, then a sudden quiet moment of genuine praise when something is ' +
       'actually good. Insults the decision, never the person. Keep it broadcast safe, no ' +
       'profanity.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -216,7 +219,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'is enormously supportive anyway. Mangles metaphors, mixes up sports entirely, gives ' +
       'earnest life advice nobody needs. Gets numbers slightly muddled in the telling but never ' +
       'states a wrong figure, he just marvels at the right one. Wholesome and funny.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -245,7 +248,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'unprompted. Explains at length why any bad result was somebody else strategy failing ' +
       'him. Builds elaborate systems nobody asked about and is wounded when questioned. ' +
       'Escalates from calm to shrill inside a single paragraph. Vain and absurd, never crude.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -281,7 +284,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'reference the real individual\'s actual career, teams, statistics, employers or ' +
       'personal life, and never write anything that could be mistaken for a genuine ' +
       'quote from them.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -314,7 +317,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'reference the real individual\'s actual career, teams, statistics, employers or ' +
       'personal life, and never write anything that could be mistaken for a genuine ' +
       'quote from them.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -347,7 +350,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'reference the real individual\'s actual career, teams, statistics, employers or ' +
       'personal life, and never write anything that could be mistaken for a genuine ' +
       'quote from them.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -382,7 +385,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'reference the real individual\'s actual career, teams, statistics, employers or ' +
       'personal life, and never write anything that could be mistaken for a genuine ' +
       'quote from them.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -412,7 +415,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'body language, whether a guy looks like a football player. Dismisses expected value ' +
       'and sample size as excuses invented by people who do not watch the games. Frequently ' +
       'turns out to be right, which he never lets anyone forget. Grumpy, confident, funny.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -443,7 +446,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'name something. Frames catastrophic decisions as development opportunities. ' +
       'Relentlessly pleasant. The politeness is the joke; the assessment underneath is brutal ' +
       'and accurate.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -473,7 +476,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'tweak as a cascade and a healthy roster as a situation worth monitoring. Uses ' +
       'concerning, day to day, and we will know more Wednesday. Never speculates about actual ' +
       'medical detail, only about doom. Deadly serious, which makes it funnier.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -503,7 +506,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'Opens by reframing the question. Uses process, variance, expected value and small ' +
       'sample constantly, and is usually right, which makes it worse. Politely condescending, ' +
       'never rude. Concedes exactly one point at the end to seem reasonable.',
-    kinds: ['article', 'tweet', 'comment', 'tradeGrade', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'tradeGrade', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -533,7 +536,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'delightful. Types like he is shouting across a garage, often in caps. Confuses player ' +
       'names, invents rules that do not exist, and is occasionally right by accident. Very ' +
       'loyal, very loud, holds grudges about trades from two years ago. Never crude.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -563,7 +566,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'unable to process nuance: a .500 team confuses and upsets him. Occasionally derails ' +
       'into a story about going fast or about his own greatness, then returns to the point ' +
       'with total conviction. Sweetly dim, never mean.',
-    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions'],
+    kinds: ['article', 'tweet', 'comment', 'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake'],
     enabled: true,
   },
   {
@@ -595,7 +598,7 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
       'Absolutely certain he is an expert despite all evidence. ' +
       'IMPORTANT: keep it completely clean. No profanity, no sexual content, nothing crude ' +
       'or disgusting. The comedy is unhinged energy and terrible reasoning, never shock.',
-    kinds: ['tweet', 'comment'],
+    kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
 ];

@@ -19,7 +19,8 @@ export interface FeedPost {
   /** Resolved DiceBear URL, stored with the post so an avatar change does not
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
-  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions';
+  kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
+      | 'matchupPreview' | 'kickoff' | 'liveTake';
   content: any;
   /** When it was generated. */
   createdAt: string;
@@ -209,7 +210,9 @@ export async function saveAssistant(config: AssistantConfig): Promise<void> {
  *  they existed cannot have opted in, so they are granted to whoever already
  *  writes long-form. Pre-existing kinds are left exactly as saved, so an admin
  *  who deliberately unchecked one keeps that choice. */
-const NEW_KINDS: ContentKind[] = ['powerRankings', 'predictions'];
+const NEW_KINDS: ContentKind[] = [
+  'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake',
+];
 
 export async function getPersonalities(): Promise<Personality[]> {
   const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
