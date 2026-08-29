@@ -63,10 +63,24 @@ function timeAgo(iso: string) {
   return hrs < 24 ? `${hrs}h` : `${Math.round(hrs / 24)}d`;
 }
 
-/** Machine-written, always labelled: it must never read as real reporting. */
+/**
+ * Machine-written, always labelled: it must never read as real reporting.
+ *
+ * One badge on the page heading rather than one per post. Every writer here
+ * is synthetic, so repeating it twenty times down the timeline was noise that
+ * said nothing a single label at the top does not, and it crowded the byline.
+ *
+ * Kept tight and barely rounded. Sitting next to a 30px display heading it
+ * only has to be legible, and any more padding or radius turns two letters
+ * into a bubble that competes with the title.
+ *
+ * `leading-none` is load bearing: line-height inherits from the heading, so
+ * without it the box is sized by the title's 36px line and the badge comes
+ * out 40px tall regardless of its own font size or padding.
+ */
 function AiBadge() {
   return (
-    <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+    <span className="ml-2.5 inline-flex shrink-0 items-center rounded-[3px] border border-primary/40 bg-primary/10 px-1.5 py-0.5 align-middle text-[9px] font-bold uppercase leading-none tracking-wider text-primary">
       AI
     </span>
   );
@@ -333,26 +347,19 @@ function Post({ post, index, open, onToggle }: {
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
       className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
     >
-      {/* The row runs the full width of the screen, the post inside it does
-          not: a 15px paragraph set across 1280px is unreadable. The inner
-          padding matches PageLayout's so the column lines up with the page
-          heading rather than floating free of it. */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex max-w-3xl gap-3 py-4">
+      {/* The divider runs edge to edge, the post puts the page's own gutters
+          back for itself so its content stays aligned with the heading. */}
+      <div className="flex gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <Avatar post={post} />
           <div className="min-w-0 flex-1">
-            {/* Two lines. Who wrote it on the first, everything that qualifies
-                it on the second. Fitting all five of these onto one row put a
-                name, a handle, a timestamp, a tag and a badge in the same
-                300px on a phone, which wrapped mid-byline and read as
-                clutter. The AI badge stays beside the name: it is a statement
-                about the author, and it must not be something you have to
-                hunt for. */}
+            {/* Two lines. Who wrote it on the first, everything that
+                qualifies it on the second. Fitting name, handle, timestamp
+                and kind onto one row put all four in the same 300px on a
+                phone, which wrapped mid-byline and read as clutter. */}
             <div className="flex items-baseline gap-2">
               <span className={cn('truncate text-[15px] font-bold', post.personaAccent)}>
                 {post.personaName}
               </span>
-              <AiBadge />
               <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted-foreground">
                 {timeAgo(post.createdAt)}
               </span>
@@ -392,7 +399,6 @@ function Post({ post, index, open, onToggle }: {
               </p>
             )}
           </div>
-        </div>
       </div>
     </motion.article>
   );
@@ -442,7 +448,11 @@ export default function DeskView() {
   }, [hasMore, shownCount]);
 
   return (
-    <PageLayout title="The Feed" subtitle="Beat writers and fans with live takes, previews and commentary." className="max-w-3xl">
+    <PageLayout
+      title={<>The Feed<AiBadge /></>}
+      subtitle="Beat writers and fans with live takes, previews and commentary."
+      className="max-w-3xl"
+    >
       {/* Full bleed. The feed escapes PageLayout's gutters so the dividers run
           edge to edge and the timeline reads as the page rather than as a
           widget sitting on it. Each post puts the gutters back for itself. */}
