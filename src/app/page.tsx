@@ -442,6 +442,7 @@ export default function Home() {
           <TrophyCase
             champions={historyData.champions}
             currentSeason={String(nflState?.season ?? new Date().getFullYear())}
+            leagueSeasons={seasons}
           />
         )}
 
