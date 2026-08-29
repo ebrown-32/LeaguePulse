@@ -636,3 +636,46 @@ mark {
   border-radius: 2px;
   padding: 0 2px;
 }
+
+@layer components {
+  /* ── Glass surfaces ────────────────────────────────────────────────────
+     A translucent card that lets the particle field and the page ground show
+     through, with a hairline top edge for the lit look.
+
+     `backdrop-filter` is the expensive part, so this is a class applied to the
+     handful of surfaces that want it rather than to every card on the site.
+     Blur on dozens of stacked elements is how a page starts dropping frames
+     while scrolling. */
+
+  .lp-glass {
+    background-color: hsl(var(--card) / 0.55);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border-color: hsl(var(--border) / 0.65);
+    /* A brighter inner top edge reads as a pane catching light. Kept subtle:
+       at full strength it looks like a border, not a highlight. */
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.07),
+      0 1px 2px hsl(0 0% 0% / 0.04);
+  }
+
+  .lp-glass:hover {
+    background-color: hsl(var(--card) / 0.7);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  /* Light mode needs more opacity, not less: a pale card at 55% over a pale
+     ground has almost no edge and the text loses its footing. */
+  :root:not(.dark) .lp-glass {
+    background-color: hsl(var(--card) / 0.72);
+  }
+  :root:not(.dark) .lp-glass:hover {
+    background-color: hsl(var(--card) / 0.85);
+  }
+
+  /* Where the browser cannot blur, fall back to an opaque card rather than a
+     washed out one that would leave text sitting on the background. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .lp-glass { background-color: hsl(var(--card)); }
+  }
+}

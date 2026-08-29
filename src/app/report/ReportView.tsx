@@ -62,7 +62,8 @@ interface Report {
 /** Every column, with the one-line explanation it needs to be readable. */
 const COLUMNS = [
   { id: 'powerRank',  label: 'Pwr',   help: 'Mean of the score, efficiency and luck ranks. Lower is better.' },
-  { id: 'record',     label: 'W-L',   help: 'Actual head to head record.' },
+  { id: 'record',     label: 'W-L',
+    help: 'Head to head record. This league plays median matches, so every week is two games: one against your opponent and one against the league median. Records here count both, which is why they match Sleeper. Points based figures like coaching efficiency and all-play are unaffected, since they measure scoring rather than results.' },
   { id: 'pointsFor',  label: 'PF',    help: 'Total points scored.' },
   { id: 'avg',        label: 'Avg',   help: 'Average score per played week.' },
   { id: 'optimal',    label: 'Opt',   help: 'Average score of the best lineup that could have been started.' },

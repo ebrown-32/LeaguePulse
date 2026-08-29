@@ -1,236 +1,155 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingBlock } from '@/components/ui/LoadingSpinner';
-import Avatar from '@/components/ui/Avatar';
-import Hint from '@/components/ui/Hint';
-import { cn } from '@/lib/utils';
+import { SeasonSelect } from '@/components/ui/SeasonSelect';
+import StandingsTable, { type AllTimeRow } from '@/components/standings/StandingsTable';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import {
+  getAllLeagueSeasons, getAllLinkedLeagueIds, getLeagueInfo,
+  getLeagueRosters, getLeagueUsers, generateComprehensiveLeagueHistory,
+} from '@/lib/api';
+import { getCurrentLeagueId } from '@/config/league';
+import { allTimePointsAgainst } from '@/lib/allTimePointsAgainst';
 
 /**
- * The table.
+ * The standings, as a page.
  *
- * Record alone hides most of what a season is: a 6-2 built on the two worst
- * teams reads the same as a 6-2 that beat everyone. Differential, all-play and
- * form are here so the table says which one you are looking at, and the
- * playoff cut is drawn on it rather than left to be counted.
+ * Same component and same data path as the home page: the record comes from
+ * Sleeper's own roster totals, so median matches and any commissioner
+ * adjustment are already inside them, and the two views can never disagree.
+ *
+ * This page previously had its own engine that rebuilt records from the weekly
+ * matchup feed. It produced different numbers from the home page and a streak
+ * that counted only head-to-head games while the record counted median games
+ * too. It has been removed rather than fixed.
  */
-
-interface Row {
-  rank: number;
-  rosterId: number;
-  userId: string;
-  teamName: string;
-  manager: string;
-  avatar: string;
-  wins: number; losses: number; ties: number; winPct: number;
-  pointsFor: number; pointsAgainst: number; differential: number;
-  form: ('W' | 'L' | 'T')[];
-  streak: number;
-  allPlayWins: number; allPlayLosses: number; allPlayPct: number;
-  inPlayoffs: boolean;
-  gamesBack: number;
-}
-interface Standings {
-  medianMatch: boolean;
-  season: string;
-  throughWeek: number;
-  leagueName: string;
-  playoffTeams: number;
-  rows: Row[];
-}
-
-const HELP = {
-  diff: 'Points for minus points against. The quickest read on whether a record is earned or scheduled.',
-  allPlay: 'Win rate if every team played every other team every week. Removes the schedule entirely.',
-  form: 'The last five results, most recent first.',
-  gb: 'Games behind the last team currently holding a playoff place.',
-};
-
-function FormPips({ form }: { form: Row['form'] }) {
-  if (!form.length) return <span className="text-muted-foreground">n/a</span>;
-  return (
-    <span className="inline-flex gap-1">
-      {form.map((r, i) => (
-        <span
-          key={i}
-          title={r === 'W' ? 'Win' : r === 'L' ? 'Loss' : 'Tie'}
-          className={cn(
-            'flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold',
-            r === 'W' ? 'bg-emerald-500/15 text-emerald-500'
-              : r === 'L' ? 'bg-rose-500/15 text-rose-500'
-                : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {r}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export default function StandingsView() {
-  const [data, setData] = useState<Standings | null>(null);
-  const [reason, setReason] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [season, setSeason] = useState('current');
   const [seasons, setSeasons] = useState<string[]>([]);
+  const [season, setSeason] = useState('');
+  const [league, setLeague] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [rosters, setRosters] = useState<any[]>([]);
+  const [allTimeStats, setAllTimeStats] = useState<any>(null);
+  const [paByUser, setPaByUser] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setData(null);
-    setReason(null);
-    fetch(`/api/standings?season=${season}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setError(d.error); return; }
-        setError(null);
-        setData(d.standings);
-        setReason(d.reason ?? null);
-        if (d.seasons?.length) setSeasons(d.seasons);
-      })
-      .catch(() => setError('Could not load standings.'));
-  }, [season]);
+    (async () => {
+      try {
+        const leagueId = await getCurrentLeagueId();
+        const [info, allSeasons, leagueUsers] = await Promise.all([
+          getLeagueInfo(leagueId), getAllLeagueSeasons(leagueId), getLeagueUsers(leagueId),
+        ]);
+        setLeague(info);
+        setUsers(leagueUsers);
+        setSeasons(allSeasons);
+        setSeason(info.season ?? allSeasons[0] ?? '');
 
-  const subtitle = data
-    ? (data.season === 'all-time'
-        ? `${data.leagueName}, every season, ${data.throughWeek} weeks played`
-        : `${data.leagueName}, ${data.season} through week ${data.throughWeek}`)
-    : 'Record, form and who is actually in the hunt.';
+        // Only meaningful once there is more than one season to total up.
+        if (allSeasons.length > 1) {
+          const linked = await getAllLinkedLeagueIds(leagueId);
+          const [comp, pa] = await Promise.all([
+            generateComprehensiveLeagueHistory(linked),
+            // The history aggregate has no points-against figure, so it is
+            // summed from each season's roster totals instead.
+            allTimePointsAgainst(leagueId),
+          ]);
+          setAllTimeStats(comp.userAllTimeStats);
+          setPaByUser(pa);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not load standings.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // Each season is its own league on Sleeper, so switching means resolving
+  // that season's league id before reading its rosters.
+  useEffect(() => {
+    if (!season || !league || season === 'all-time') return;
+    let cancelled = false;
+    (async () => {
+      setSwitching(true);
+      try {
+        const linked = await getAllLinkedLeagueIds(league.league_id);
+        let seasonLeagueId = league.league_id;
+        for (const id of linked) {
+          const info = await getLeagueInfo(id);
+          if (info.season === season) { seasonLeagueId = id; break; }
+        }
+        const next = await getLeagueRosters(seasonLeagueId);
+        if (!cancelled) setRosters(next);
+      } catch {
+        if (!cancelled) setRosters([]);
+      } finally {
+        if (!cancelled) setSwitching(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [season, league]);
+
+  const sortedRosters = useMemo(() => [...rosters].sort((a: any, b: any) => {
+    const bw = Number(b.settings?.wins ?? 0), aw = Number(a.settings?.wins ?? 0);
+    if (bw !== aw) return bw - aw;
+    // Sleeper's tiebreak is total points.
+    return (Number(b.settings?.fpts ?? 0) + Number(b.settings?.fpts_decimal ?? 0) / 100)
+         - (Number(a.settings?.fpts ?? 0) + Number(a.settings?.fpts_decimal ?? 0) / 100);
+  }), [rosters]);
+
+  const allTime: AllTimeRow[] = useMemo(() => {
+    if (season !== 'all-time' || !allTimeStats) return [];
+    return Object.entries(allTimeStats)
+      .map(([userId, s]: any) => ({
+        userId,
+        user: users.find(u => u.user_id === userId),
+        ...s,
+        totalPointsAgainst: paByUser[userId],
+      }))
+      .filter((x: any) => x.user)
+      .sort((a: any, b: any) => {
+        if (Math.abs(b.winPercentage - a.winPercentage) > 0.001) return b.winPercentage - a.winPercentage;
+        if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+        return b.championships - a.championships;
+      });
+  }, [season, allTimeStats, users, paByUser]);
+
+  if (loading) {
+    return <PageLayout title="Standings" subtitle="Loading."><LoadingBlock size={16} /></PageLayout>;
+  }
+  if (error) return <ErrorMessage title="Error" message={error} />;
+
+  const playoffTeams = Number(league?.settings?.playoff_teams ?? 0);
+  const subtitle = season === 'all-time'
+    ? `${league?.name ?? 'League'}, every season`
+    : `${league?.name ?? 'League'}, ${season} season`;
 
   return (
     <PageLayout title="Standings" subtitle={subtitle}>
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <select
-          value={season}
-          aria-label="Season"
-          onChange={e => setSeason(e.target.value)}
-          className="rounded-md border border-border bg-background px-2.5 py-1.5 text-base text-foreground focus:border-primary focus:outline-none sm:text-xs"
-        >
-          <option value="current">This season</option>
-          <option value="all-time">All time</option>
-          {seasons.map(s => <option key={s} value={s}>{s} season</option>)}
-        </select>
-        {season === 'all-time' && (
-          <span className="text-[11px] text-muted-foreground">
-            Combined across every season, by manager rather than by roster slot.
-          </span>
-        )}
+      <div className="mb-4 flex items-center justify-end">
+        <SeasonSelect
+          seasons={seasons}
+          selectedSeason={season}
+          onSeasonChange={setSeason}
+          className="w-[150px]"
+          includeAllTime={seasons.length > 1}
+        />
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-sm text-rose-500">{error}</div>
-      )}
-      {!data && !error && !reason && <LoadingBlock size={16} />}
-      {reason && (
-        <div className="rounded-xl border border-border bg-card p-6 text-center">
-          <p className="text-sm text-muted-foreground">{reason}</p>
-          <p className="mt-1 text-xs text-muted-foreground">The table fills in once week 1 is played.</p>
-        </div>
-      )}
-
-      {data && (
-        <div className="space-y-4">
-          <section className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-[13px]">
-                <thead>
-                  <tr className="border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground">
-                    <th className="px-3 py-2.5 text-left font-bold">#</th>
-                    <th className="px-2 py-2.5 text-left font-bold">Team</th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">W-L</th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">PF</th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">PA</th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">
-                      <Hint label="Diff" side="bottom">{HELP.diff}</Hint>
-                    </th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">
-                      <Hint label="All-play" side="bottom">{HELP.allPlay}</Hint>
-                    </th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">Streak</th>
-                    <th className="px-2.5 py-2.5 text-right font-bold">
-                      <Hint label="Form" side="bottom">{HELP.form}</Hint>
-                    </th>
-                    {data.playoffTeams > 0 && (
-                      <th className="px-2.5 py-2.5 text-right font-bold">
-                        <Hint label="GB" side="bottom">{HELP.gb}</Hint>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((r, i) => {
-                    // The line the table is really about: everything above it
-                    // is in, everything below is not.
-                    const cutoff = data.playoffTeams > 0 && r.rank === data.playoffTeams;
-                    return (
-                      <motion.tr
-                        key={r.userId || r.rosterId}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: Math.min(i, 12) * 0.02 }}
-                        className={cn(
-                          'border-b border-border last:border-0 hover:bg-muted/30',
-                          cutoff && 'border-b-2 border-b-primary/40',
-                        )}
-                      >
-                        <td className="px-3 py-2">
-                          <span className={cn(
-                            'inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold tabular-nums',
-                            r.inPlayoffs ? 'bg-primary/15 text-primary' : 'text-muted-foreground',
-                          )}>
-                            {r.rank}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2">
-                          <div className="flex items-center gap-2">
-                            <Avatar avatarId={r.avatar} size={24} className="shrink-0" />
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold text-foreground">{r.teamName}</span>
-                              <span className="block truncate text-[11px] text-muted-foreground">{r.manager}</span>
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-2.5 py-2 text-right font-semibold tabular-nums text-foreground">
-                          {r.wins}-{r.losses}{r.ties ? `-${r.ties}` : ''}
-                        </td>
-                        <td className="px-2.5 py-2 text-right tabular-nums text-foreground">{r.pointsFor}</td>
-                        <td className="px-2.5 py-2 text-right tabular-nums text-muted-foreground">{r.pointsAgainst}</td>
-                        <td className={cn('px-2.5 py-2 text-right font-semibold tabular-nums',
-                          r.differential > 0 ? 'text-emerald-500' : r.differential < 0 ? 'text-rose-500' : '')}>
-                          {r.differential > 0 ? '+' : ''}{r.differential}
-                        </td>
-                        <td className="px-2.5 py-2 text-right tabular-nums text-foreground">{r.allPlayPct}%</td>
-                        <td className={cn('px-2.5 py-2 text-right font-semibold tabular-nums',
-                          r.streak > 0 ? 'text-emerald-500' : r.streak < 0 ? 'text-rose-500' : 'text-muted-foreground')}>
-                          {r.streak === 0 ? 'n/a' : `${r.streak > 0 ? 'W' : 'L'}${Math.abs(r.streak)}`}
-                        </td>
-                        <td className="px-2.5 py-2 text-right"><FormPips form={r.form} /></td>
-                        {data.playoffTeams > 0 && (
-                          <td className="px-2.5 py-2 text-right tabular-nums text-muted-foreground">
-                            {r.inPlayoffs ? 'in' : r.gamesBack > 0 ? r.gamesBack : '0'}
-                          </td>
-                        )}
-                      </motion.tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {(data.playoffTeams > 0 || data.medianMatch) && (
-              <p className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-                {data.playoffTeams > 0 && (
-                  <>The line sits under place {data.playoffTeams}: this league takes {data.playoffTeams} into
-                  the playoffs. Seeded on record, with total points as the tiebreak. </>
-                )}
-                {data.medianMatch && (
-                  <>This league plays median matches, so each week is two games: one against your
-                  opponent and one against the league median.</>
-                )}
-              </p>
-            )}
-          </section>
-        </div>
+      {switching ? (
+        <LoadingBlock size={16} />
+      ) : (
+        <StandingsTable
+          rosters={season === 'all-time' ? undefined : sortedRosters}
+          users={users}
+          allTime={season === 'all-time' ? allTime : undefined}
+          playoffTeams={season === 'all-time' ? 0 : playoffTeams}
+        />
       )}
     </PageLayout>
   );

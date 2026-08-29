@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Trophy, Sofa, Flame, ChevronDown, ExternalLink } from 'lucide-react';
 import { SkeletonCards, SkeletonTable, Skeleton } from '@/components/ui/Skeleton';
 import Avatar from '@/components/ui/Avatar';
+import Hint from '@/components/ui/Hint';
 import { cn } from '@/lib/utils';
 
 /**
@@ -225,7 +226,14 @@ export default function CareerMetricsSection({ season = 'all-time' }: { season?:
                 <th className="px-2.5 py-2.5 text-right font-bold" title="Points left on the bench">Benched</th>
                 <th className="px-2.5 py-2.5 text-right font-bold" title="Bench points per week">/wk</th>
                 <th className="px-2.5 py-2.5 text-right font-bold" title="All-play win rate">AllPlay</th>
-                <th className="px-2.5 py-2.5 text-right font-bold" title="Record vs the weekly median">vs Med</th>
+                <th className="px-2.5 py-2.5 text-right font-bold">
+                  <Hint label="vs Med" side="bottom">
+                    Record against the league median score each week. If your league plays median
+                    matches this is the second game of every week, already counted in the standings.
+                    Nothing else in this table is affected by that setting: coaching efficiency,
+                    bench points and all-play all measure scoring rather than wins.
+                  </Hint>
+                </th>
               </tr>
             </thead>
             <tbody>

@@ -20,10 +20,18 @@ import {
 import {
   Home as HomeIcon,
   Flame,
+  CalendarDays,
+  Swords,
+  Trophy,
+  ArrowLeftRight,
+  Receipt,
 } from 'lucide-react';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
 import LeagueCarousel from '@/components/home/LeagueCarousel';
+import TrophyCase from '@/components/home/TrophyCase';
+import StandingsTable from '@/components/standings/StandingsTable';
+import { allTimePointsAgainst } from '@/lib/allTimePointsAgainst';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
@@ -159,15 +167,39 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
 // ─── Stat card component ─────────────────────────────────────────────────────
 
 /** One metric in the thin "league at a glance" strip. */
-function PulseStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="font-display text-xl font-bold tabular-nums text-foreground sm:text-2xl">{value}</span>
-      <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-widest text-muted-foreground sm:text-[10px]">
-        {label}
+/**
+ * One headline number.
+ *
+ * These were four bare figures crammed into a bordered strip inside the hero,
+ * where they read as an afterthought. As cards they carry their own weight and
+ * there is room to say what each one means.
+ */
+function PulseStat({ label, value, sub, icon: Icon, href }: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+}) {
+  const body = (
+    <>
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3 w-3 text-primary" />
+        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      <span className="mt-1.5 block font-display text-2xl font-bold tabular-nums leading-none text-foreground sm:text-3xl">
+        {value}
       </span>
-    </div>
+      {sub && <span className="mt-1 block text-[11px] text-muted-foreground">{sub}</span>}
+    </>
   );
+
+  const cls = 'lp-glass rounded-xl border p-3.5 transition-colors sm:p-4';
+  return href
+    ? <Link href={href} className={`${cls} hover:border-primary/40`}>{body}</Link>
+    : <div className={cls}>{body}</div>;
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -179,6 +211,10 @@ export default function Home() {
   const [users,            setUsers]            = useState<any[]>([]);
   const [rosters,          setRosters]          = useState<any[]>([]);
   const [nflState,         setNFLState]         = useState<any>(null);
+  const [totals, setTotals] = useState<{
+    totals: { trade: number; waiver: number; free_agent: number; total: number };
+    bySeason: { season: string; trades: number; total: number }[];
+  } | null>(null);
   const [seasons,          setSeasons]          = useState<string[]>([]);
   const [selectedSeason,   setSelectedSeason]   = useState('');
   const [seasonRosters,    setSeasonRosters]    = useState<any[]>([]);
@@ -186,9 +222,19 @@ export default function Home() {
   const [historyData,      setHistoryData]      = useState<any>(null);
   const [currentWeekMatchups, setCurrentWeekMatchups] = useState<any[]>([]);
   const [allTimeUserStats, setAllTimeUserStats] = useState<any>(null);
+  const [paByUser, setPaByUser] = useState<Record<string, number>>({});
   const [openMatchup, setOpenMatchup] = useState<MatchupTarget | null>(null);
 
   const effectiveWeek = nflState?.season_type === 'regular' ? nflState.week : 1;
+
+  // Counted across every season, so it arrives on its own rather than holding
+  // up the rest of the dashboard.
+  useEffect(() => {
+    fetch('/api/league-totals')
+      .then(r => r.json())
+      .then(d => { if (d?.totals) setTotals(d); })
+      .catch(() => { /* the cards fall back to a placeholder */ });
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -218,6 +264,8 @@ export default function Home() {
           const linked = await getAllLinkedLeagueIds(leagueId);
           const comp   = await generateComprehensiveLeagueHistory(linked);
           setAllTimeUserStats(comp.userAllTimeStats);
+          // Points against is not in that aggregate; sum it from the rosters.
+          setPaByUser(await allTimePointsAgainst(leagueId).catch(() => ({})));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch league data');
@@ -261,7 +309,12 @@ export default function Home() {
 
   const allTimeStandings = selectedSeason === 'all-time' && allTimeUserStats
     ? Object.entries(allTimeUserStats)
-        .map(([userId, s]: any) => ({ user: users.find((u: any) => u.user_id === userId), userId, ...s }))
+        .map(([userId, s]: any) => ({
+          user: users.find((u: any) => u.user_id === userId),
+          userId,
+          ...s,
+          totalPointsAgainst: paByUser[userId],
+        }))
         .filter((x: any) => x.user)
         .sort((a: any, b: any) => {
           if (Math.abs(b.winPercentage - a.winPercentage) > 0.001) return b.winPercentage - a.winPercentage;
@@ -327,7 +380,7 @@ export default function Home() {
       : null;
 
   const currentSeason = nflState?.season ?? league?.season ?? '';
-  const headerSubtitle = `Season ${currentSeason}`;
+  const headerSubtitle = `Season ${currentSeason} · ${formatLeagueStatus(effectiveStatus)}`;
 
   return (
     <PageLayout
@@ -336,50 +389,61 @@ export default function Home() {
     >
       <div className="space-y-6">
 
-        {/* ── Command bar ───────────────────────────────────────────────────
-            Deliberately sparse: three facts, the current story, and the
-            league totals. Earlier versions stacked five chips, a status
-            sentence, and a commissioner line, which buried the one thing
-            worth looking at. */}
-        <section className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span className="font-semibold uppercase tracking-widest text-primary">
-                {formatLeagueStatus(effectiveStatus)}
-              </span>
-              <span>·</span>
-              <span>{league.total_rosters} teams</span>
-              <span>·</span>
-              <span>{league.scoring_settings?.rec ? 'PPR' : 'Standard'}</span>
-            </div>
-
-            {spotlight && (
-              <Link href={`/team/${spotlight.userId}`} className="group mt-5 flex items-center gap-4">
-                <Avatar avatarId={spotlight.avatar} size={52} className="shrink-0 rounded-xl" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {spotlight.eyebrow}
-                  </p>
-                  <p className="mt-0.5 truncate font-display text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-2xl">
-                    {spotlight.name}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {spotlight.lineLabel} <span className="font-semibold text-foreground">{spotlight.line}</span>
-                  </p>
-                </div>
-              </Link>
-            )}
-
-            {historyData && historyData.totalSeasons > 0 && (
-              <div className="mt-6 grid grid-cols-2 gap-y-4 border-t border-border pt-5 sm:grid-cols-4">
-                <PulseStat label="Seasons"       value={String(historyData.totalSeasons)} />
-                <PulseStat label="Games"         value={historyData.totalGames.toLocaleString()} />
-                <PulseStat label="Best Score"    value={formatPoints(historyData.highestScore)} />
-                <PulseStat label="Champions"     value={String(historyData.uniqueChampionsCount)} />
-              </div>
-            )}
+        {/* ── The league at a glance ── */}
+        {historyData && historyData.totalSeasons > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <PulseStat
+              icon={CalendarDays}
+              label="Seasons"
+              value={String(historyData.totalSeasons)}
+              sub={seasons.length ? `since ${[...seasons].sort()[0]}` : undefined}
+              href="/history"
+            />
+            <PulseStat
+              icon={Swords}
+              label="Games"
+              value={historyData.totalGames.toLocaleString()}
+              sub="all time"
+              href="/matchups"
+            />
+            <PulseStat
+              icon={Flame}
+              label="Best score"
+              value={formatPoints(historyData.highestScore)}
+              sub="single week"
+              href="/history"
+            />
+            <PulseStat
+              icon={Trophy}
+              label="Champions"
+              value={String(historyData.uniqueChampionsCount)}
+              sub={`${historyData.champions.length} title${historyData.champions.length === 1 ? '' : 's'}`}
+              href="/history"
+            />
+            <PulseStat
+              icon={ArrowLeftRight}
+              label="Trades"
+              value={totals ? totals.totals.trade.toLocaleString() : '...'}
+              sub={totals ? `${totals.bySeason[0]?.trades ?? 0} this season` : undefined}
+              href="/transactions"
+            />
+            <PulseStat
+              icon={Receipt}
+              label="Moves"
+              value={totals ? totals.totals.total.toLocaleString() : '...'}
+              sub={totals ? `${totals.totals.waiver.toLocaleString()} on waivers` : undefined}
+              href="/transactions"
+            />
           </div>
-        </section>
+        )}
+
+        {/* ── Trophy case ── */}
+        {historyData && historyData.champions.length > 0 && (
+          <TrophyCase
+            champions={historyData.champions}
+            currentSeason={String(nflState?.season ?? new Date().getFullYear())}
+          />
+        )}
 
         {/* ── Live content from the AI desk + media feed ── */}
         <LeagueCarousel />
@@ -497,184 +561,13 @@ export default function Home() {
                   <LoadingSpinner />
                 </div>
               ) : (
-                <div className="space-y-0.5">
-                  {/* Column headers */}
-                  <div className="hidden md:flex items-center gap-3 py-2 px-4 mb-1">
-                    <span className="w-5 shrink-0" />
-                    <span className="flex-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Team</span>
-                    <span className="w-20 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Record</span>
-                    <span className="w-14 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Win%</span>
-                    <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">PF</span>
-                    <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">PA</span>
-                  </div>
-
-                  {/* All-time standings */}
-                  {selectedSeason === 'all-time'
-                    ? allTimeStandings.map((s: any, i: number) => {
-                        const totalGames = s.totalWins + s.totalLosses + s.totalTies;
-                        const avgPF = totalGames > 0 ? s.totalPoints / totalGames : 0;
-                        return (
-                          <Link
-                            href={`/team/${s.userId}`}
-                            key={s.userId}
-                            className={cn(
-                              'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none group',
-                              i === 0
-                                ? 'border-amber-400 bg-amber-500/[0.05] hover:bg-amber-500/[0.08]'
-                                : 'border-transparent hover:bg-accent/60',
-                            )}
-                          >
-                            <span className={cn(
-                              'w-5 shrink-0 text-center text-xs font-bold',
-                              i === 0 ? 'text-amber-500' : 'text-muted-foreground',
-                            )}>
-                              {i + 1}
-                            </span>
-                            <Avatar avatarId={s.user.avatar} size={26} className="rounded shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-foreground leading-tight line-clamp-2">
-                                  {censorTeamName(s.user.display_name)}
-                                </span>
-                                {s.championships > 0 && (
-                                  <span className={cn(
-                                    'hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border',
-                                    i === 0
-                                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                      : 'bg-primary/10 text-primary border-primary/20',
-                                  )}>
-                                    {s.championships}× Champ
-                                  </span>
-                                )}
-                              </div>
-                              {/* Mobile sub-stats */}
-                              <div className="mt-0.5 flex items-center gap-1.5 md:hidden">
-                                <span className="text-[10px] text-muted-foreground">{s.winPercentage.toFixed(1)}% win</span>
-                                <span className="text-[10px] text-muted-foreground/40">·</span>
-                                <span className="text-[10px] text-muted-foreground">{formatPoints(avgPF)} avg</span>
-                                {s.championships > 0 && (
-                                  <>
-                                    <span className="text-[10px] text-muted-foreground/40">·</span>
-                                    <span className={cn('text-[10px] font-semibold', i === 0 ? 'text-amber-500' : 'text-primary')}>
-                                      {s.championships}× Champ
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="hidden md:flex items-center gap-3 shrink-0">
-                              <span className="w-20 text-right font-mono text-sm text-foreground">
-                                {s.totalWins}-{s.totalLosses}{s.totalTies > 0 ? `-${s.totalTies}` : ''}
-                              </span>
-                              <span className="w-14 text-right text-sm text-muted-foreground">
-                                {s.winPercentage.toFixed(1)}%
-                              </span>
-                              <span className="w-16 text-right text-sm font-medium text-foreground">
-                                {formatPoints(avgPF)}
-                              </span>
-                              <span className="w-16 text-right text-sm text-muted-foreground">
-                                {formatPoints(totalGames > 0 ? s.totalPointsAgainst / totalGames : 0)}
-                              </span>
-                            </div>
-                            {/* Mobile record */}
-                            <div className="md:hidden text-right shrink-0">
-                              <p className="text-xs font-mono font-semibold text-foreground">{s.totalWins}-{s.totalLosses}</p>
-                            </div>
-                          </Link>
-                        );
-                      })
-
-                    /* Season standings */
-                    : sortedRosters.map((roster: any, i: number) => {
-                        const user = users.find((u: any) => u.user_id === roster.owner_id);
-                        if (!user) return null;
-                        const wins       = getDefaultValue(roster.settings?.wins, 0);
-                        const losses     = getDefaultValue(roster.settings?.losses, 0);
-                        const ties       = getDefaultValue(roster.settings?.ties, 0);
-                        const fpts       = getDefaultValue(roster.settings?.fpts, 0) + getDefaultValue(roster.settings?.fpts_decimal, 0) / 100;
-                        const fptsAgainst= getDefaultValue(roster.settings?.fpts_against, 0) + getDefaultValue(roster.settings?.fpts_against_decimal, 0) / 100;
-                        const winPct     = calculateWinPercentage(wins, losses, ties);
-                        const isPlayoff  = i < playoffTeams;
-                        const isBubble   = i === playoffTeams;
-
-                        return (
-                          <Link
-                            href={`/team/${user.user_id}`}
-                            key={roster.roster_id}
-                            className={cn(
-                              'relative flex items-center gap-3 rounded-md px-4 py-3 border-l-2 transition-none',
-                              isPlayoff
-                                ? 'border-primary bg-primary/[0.04] hover:bg-primary/[0.07]'
-                                : isBubble
-                                  ? 'border-primary/40 bg-primary/[0.02] hover:bg-primary/[0.04]'
-                                  : 'border-transparent hover:bg-accent/60',
-                            )}
-                          >
-                            <span className={cn(
-                              'w-5 shrink-0 text-center text-xs font-bold',
-                              isPlayoff ? 'text-primary' : isBubble ? 'text-primary/50' : 'text-muted-foreground',
-                            )}>
-                              {i + 1}
-                            </span>
-                            <Avatar avatarId={user.avatar} size={26} className="rounded shrink-0" />
-
-                            {/* Team name + inline badge */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-foreground leading-tight line-clamp-2">
-                                  {censorTeamName(user.metadata?.team_name || user.display_name)}
-                                </span>
-                                {isPlayoff && (
-                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
-                                    Playoff
-                                  </span>
-                                )}
-                                {isBubble && (
-                                  <span className="hidden md:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-primary/[0.08] text-primary/60 border border-primary/20">
-                                    Bubble
-                                  </span>
-                                )}
-                              </div>
-                              {/* Mobile sub-stats */}
-                              <div className="mt-0.5 flex items-center gap-1.5 md:hidden">
-                                <span className="text-[10px] text-muted-foreground">{winPct.toFixed(1)}% win</span>
-                                <span className="text-[10px] text-muted-foreground/40">·</span>
-                                <span className="text-[10px] text-muted-foreground">{formatPoints(fpts)} PF</span>
-                                {(isPlayoff || isBubble) && (
-                                  <>
-                                    <span className="text-[10px] text-muted-foreground/40">·</span>
-                                    <span className={cn('text-[10px] font-semibold', isPlayoff ? 'text-primary' : 'text-primary/50')}>
-                                      {isPlayoff ? 'Playoff' : 'Bubble'}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Desktop stats */}
-                            <div className="hidden md:flex items-center gap-3 shrink-0">
-                              <span className="w-20 text-right font-mono text-sm text-foreground">
-                                {formatRecord(wins, losses, ties)}
-                              </span>
-                              <span className="w-14 text-right text-sm text-muted-foreground">
-                                {winPct.toFixed(1)}%
-                              </span>
-                              <span className="w-16 text-right text-sm font-medium text-foreground">
-                                {formatPoints(fpts)}
-                              </span>
-                              <span className="w-16 text-right text-sm text-muted-foreground">
-                                {formatPoints(fptsAgainst)}
-                              </span>
-                            </div>
-
-                            {/* Mobile record */}
-                            <div className="md:hidden text-right shrink-0">
-                              <p className="text-xs font-mono font-semibold text-foreground">{formatRecord(wins, losses, ties)}</p>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                </div>
+                <StandingsTable
+                  rosters={selectedSeason === 'all-time' ? undefined : sortedRosters}
+                  users={users}
+                  allTime={selectedSeason === 'all-time' ? allTimeStandings : undefined}
+                  playoffTeams={playoffTeams}
+                  censor={censorTeamName}
+                />
               )}
             </CardContent>
           </Card>

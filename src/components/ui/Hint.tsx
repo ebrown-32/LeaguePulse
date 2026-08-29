@@ -31,6 +31,16 @@ export default function Hint({
   const wrap = useRef<HTMLSpanElement>(null);
   const id = useId();
 
+  /**
+   * Whether this device opens hints by hovering.
+   *
+   * On a mouse, hover already opened the hint by the time the click lands, so
+   * a click that toggles closes what the user just pointed at. Click only
+   * toggles where there is no hover to do the job.
+   */
+  const hoverCapable = () =>
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
@@ -53,7 +63,7 @@ export default function Hint({
         type="button"
         aria-describedby={open ? id : undefined}
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(o => (hoverCapable() ? true : !o))}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
