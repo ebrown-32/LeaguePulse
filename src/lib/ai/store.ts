@@ -37,7 +37,14 @@ export interface FeedPost {
   subject?: string;
 }
 
-const MAX_POSTS = 300;
+/**
+ * How many posts the feed keeps.
+ *
+ * Everything past this is dropped on the next write. The whole record lives in
+ * one Redis value, so an unbounded feed is a value that grows forever and a
+ * payload that gets slower to read on every publish.
+ */
+const MAX_POSTS = 100;
 
 const DATA_DIR   = path.join(process.cwd(), 'data');
 const POSTS_FILE = path.join(DATA_DIR, 'ai-posts.json');

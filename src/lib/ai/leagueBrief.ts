@@ -68,6 +68,16 @@ export interface LeagueBrief {
   totalTeams: number;
   playoffTeams: number;
   playoffWeekStart: number;
+  /**
+   * Median matches: every team plays the league median as well as its
+   * opponent, so a week is two games rather than one.
+   *
+   * Absent from the brief entirely until now, which is why the writers were
+   * projecting a 14 game season for a league that plays 28.
+   */
+  medianMatch: boolean;
+  /** Weeks before the playoffs start. */
+  regularSeasonWeeks: number;
   statsSeason: string;
   teams: BriefTeam[];
   recentMatchups: BriefMatchup[];
@@ -126,6 +136,8 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       })
       .sort((a: any, b: any) => (b.points ?? -1) - (a.points ?? -1))
       .slice(0, 5);
+
+  const playoffWeekStart = Number(league?.settings?.playoff_week_start ?? 15);
 
     return {
       teamName: u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`,
@@ -282,6 +294,10 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     };
   } catch { /* history is expensive and optional */ }
 
+  // One source for the playoff cut, so the week it starts and the regular
+  // season length derived from it can never disagree.
+  const playoffWeekStart = Number(league?.settings?.playoff_week_start ?? 15);
+
   const brief: LeagueBrief = {
     leagueName: league?.name ?? 'League',
     season: league?.season ?? '',
@@ -290,7 +306,9 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     seasonType: nflState?.season_type ?? '',
     totalTeams: Number(league?.total_rosters ?? 0),
     playoffTeams: Number(league?.settings?.playoff_teams ?? 0),
-    playoffWeekStart: Number(league?.settings?.playoff_week_start ?? 0),
+    playoffWeekStart: playoffWeekStart,
+    medianMatch: Number(league?.settings?.league_average_match ?? 0) === 1,
+    regularSeasonWeeks: Math.max(0, playoffWeekStart - 1),
     statsSeason,
     teams,
     recentMatchups: recentMatchups.slice(0, 8),
@@ -374,6 +392,25 @@ export function renderBrief(b: LeagueBrief): string {
     if (b.playoffWeekStart) fmt.push(`playoffs begin in week ${b.playoffWeekStart}`);
     lines.push('', 'LEAGUE FORMAT:', `  ${fmt.join(', ')}.`,
       `  EXACTLY ${b.playoffTeams} teams make the playoffs. Never name more or fewer.`);
+
+    if (b.medianMatch && b.regularSeasonWeeks) {
+      const games = b.regularSeasonWeeks * 2;
+      lines.push(
+        `  THIS LEAGUE PLAYS MEDIAN MATCHES. Every week is TWO games: one against`,
+        `  your scheduled opponent, and one against the league median score. A`,
+        `  ${b.regularSeasonWeeks} week regular season is therefore ${games} games, not ${b.regularSeasonWeeks}.`,
+        `  Every won-lost record you write must add up to ${games}. A record like`,
+        `  ${Math.round(games * 0.64)}-${games - Math.round(games * 0.64)} is right; ${Math.round(b.regularSeasonWeeks * 0.64)}-${b.regularSeasonWeeks - Math.round(b.regularSeasonWeeks * 0.64)} is half a season and wrong.`,
+        `  Every game has one winner and one loser, so across all ${b.totalTeams} teams the`,
+        `  wins and the losses must come to the same number: ${(b.totalTeams * games) / 2} each.`,
+        `  Get as close to that as you can: a table where the league wins far`,
+        `  more games than it loses does not describe a real season.`,
+      );
+    } else if (b.regularSeasonWeeks) {
+      lines.push(
+        `  One game per week, so a full regular season record adds up to ${b.regularSeasonWeeks}.`,
+      );
+    }
   }
 
   lines.push('', 'PHASE:', `  ${phaseDescription(b)}`);
@@ -441,6 +478,22 @@ export function renderBrief(b: LeagueBrief): string {
       lines.push(`  Earlier champions (NOT the reigning champion): ${earlier.map(c => `${c.season} — manager ${c.teamName}`).join('; ')}.`);
     }
     lines.push('  Do not describe any earlier champion as the current or most recent titleholder.');
+    // Counted explicitly. The brief named who won what but never how many
+    // each had, and a writer filled the gap by calling a one time winner a
+    // back-to-back champion.
+    const titleCount = new Map<string, number>();
+    for (const c of b.history.champions) {
+      titleCount.set(c.teamName, (titleCount.get(c.teamName) ?? 0) + 1);
+    }
+    const counts = [...titleCount.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .map(([name, n]) => `${name} ${n}`)
+      .join(', ');
+    lines.push(`  Titles won, by manager: ${counts}.`);
+    if ([...titleCount.values()].every(n => n === 1)) {
+      lines.push('  Nobody in this league has won more than one title. Never call anyone a');
+      lines.push('  repeat, back to back, or multiple time champion.');
+    }
   }
 
   return lines.join('\n');

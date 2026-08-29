@@ -40,27 +40,57 @@ export interface Champion {
   details?: { championshipScore?: number };
 }
 
-/** Rings that exist as models in public/models/rings. */
-const RING_SEASONS = ['2024', '2025', '2026', '2027', '2028', '2029'];
+/**
+ * Seasons a 3D ring model actually ships for.
+ *
+ * A league that started in 2019 has real champions with no model to show, and
+ * one starting in 2031 will too. The case still lists those seasons, it just
+ * shows the champion without a ring rather than requesting a file that is not
+ * there and rendering an empty canvas.
+ */
+const RING_MODELS = new Set(['2024', '2025', '2026', '2027', '2028', '2029']);
+
+/** How far past the current season to display unclaimed rings. */
+const FUTURE_SEASONS = 3;
 
 export default function TrophyCase({
   champions,
   currentSeason,
+  leagueSeasons = [],
 }: {
   champions: Champion[];
   /** The season being played, whose ring is still up for grabs. */
   currentSeason: string;
+  /** Every season this league has played, so the case reflects its own
+   *  history rather than a fixed range of years. */
+  leagueSeasons?: string[];
 }) {
   const bySeason = useMemo(
     () => new Map(champions.map(c => [String(c.season), c])),
     [champions],
   );
 
-  // Newest first, so the case opens on the most recent silverware.
-  const seasons = useMemo(
-    () => [...RING_SEASONS].sort((a, b) => b.localeCompare(a)),
-    [],
-  );
+  /**
+   * Every season worth a place in the case: the ones this league has played,
+   * the one being played, and a few still to come.
+   *
+   * Derived rather than listed, so a league that started in 2019 sees its own
+   * years instead of a hardcoded 2024 to 2029.
+   */
+  const seasons = useMemo(() => {
+    const set = new Set<string>([
+      ...leagueSeasons.map(String),
+      ...champions.map(c => String(c.season)),
+      String(currentSeason),
+    ].filter(y => /^\d{4}$/.test(y)));
+
+    const current = Number(currentSeason);
+    if (Number.isFinite(current)) {
+      for (let i = 1; i <= FUTURE_SEASONS; i++) set.add(String(current + i));
+    }
+    // Newest first, so the case opens on the most recent silverware.
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [leagueSeasons, champions, currentSeason]);
 
   const reigning = useMemo(
     () => [...champions].sort((a, b) => b.season.localeCompare(a.season))[0] ?? null,
@@ -162,7 +192,18 @@ export default function TrophyCase({
               // won versus not without needing a label on every one.
               className={cn(!champ && 'grayscale')}
             >
-              <ChampionRing modelPath={`/models/rings/ring-${selected}.glb`} height={200} />
+              {RING_MODELS.has(selected) ? (
+                <ChampionRing modelPath={`/models/rings/ring-${selected}.glb`} height={200} />
+              ) : (
+                // No model ships for this year. Show the season plainly rather
+                // than an empty canvas waiting on a file that does not exist.
+                <div className="flex h-[200px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/40">
+                  <Trophy className="h-7 w-7 text-muted-foreground/50" />
+                  <span className="font-display text-sm font-bold text-muted-foreground">
+                    {selected}
+                  </span>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

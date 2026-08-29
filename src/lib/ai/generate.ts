@@ -410,6 +410,32 @@ async function checkPredictionShape(
   const real = new Set(brief.teams.map(t => t.teamName));
   const expected = brief.playoffTeams;
 
+  // Projected records have to be on the right scale. A median league plays
+  // two games a week, and a stated instruction is not a guarantee: the
+  // writers produced half-length records for a whole season before the brief
+  // said anything about it, and a prompt alone would not stop them again.
+  const expectedGames = brief.regularSeasonWeeks * (brief.medianMatch ? 2 : 1);
+  if (expectedGames) {
+    for (const row of content.standings ?? []) {
+      // Tolerant of stray punctuation: the model occasionally emits "16-12,"
+      // and the record itself is right, so it is trimmed rather than refused.
+      const raw = String(row.projectedRecord ?? '').trim().replace(/[^0-9-]+$/, '');
+      const m = /^(\d+)\s*-\s*(\d+)(?:\s*-\s*(\d+))?$/.exec(raw);
+      if (!m) {
+        problems.push(`"${row.projectedRecord}" for ${row.teamName} is not a won-lost record.`);
+        continue;
+      }
+      const total = Number(m[1]) + Number(m[2]) + Number(m[3] ?? 0);
+      if (total !== expectedGames) {
+        problems.push(
+          `${row.teamName} projected ${row.projectedRecord}, which is ${total} games; ` +
+          `this league plays ${expectedGames} regular season games` +
+          `${brief.medianMatch ? ', because every week is two games including the median match' : ''}.`,
+        );
+      }
+    }
+  }
+
   const field = content.playoffTeams ?? [];
   if (expected && field.length !== expected) {
     problems.push(

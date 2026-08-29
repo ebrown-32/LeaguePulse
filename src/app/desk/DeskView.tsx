@@ -1,15 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { LoadingSpinner, LoadingBlock } from '@/components/ui/LoadingSpinner';
+import { LoadingBlock } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import {
   MessageCircle, TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users,
   Swords, Radio,
 } from 'lucide-react';
-import TabSelector from '@/components/ui/TabSelector';
+import HoneycombLoader from '@/components/ui/honeycomb-loader';
 
 /**
  * The Desk: the AI writers' timeline.
@@ -56,15 +56,6 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Newspaper } | null> 
   liveTake: { label: 'Live', icon: Radio },
 };
 
-const FILTERS = [
-  { id: 'all', label: 'Everything' },
-  { id: 'live', label: 'Game day' },
-  { id: 'long', label: 'Columns' },
-  { id: 'short', label: 'Posts' },
-  { id: 'fans', label: 'Fans' },
-] as const;
-type Filter = (typeof FILTERS)[number]['id'];
-
 function timeAgo(iso: string) {
   const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 60) return `${mins}m`;
@@ -105,32 +96,27 @@ function LongForm({ post, open, onToggle }: { post: FeedPost; open: boolean; onT
   const meta = KIND_META[post.kind];
 
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-border">
-      <button onClick={onToggle} className="w-full text-left transition-colors hover:bg-muted/40">
-        {post.personaAvatar && (
-          <div className="flex h-24 items-center justify-center border-b border-border bg-gradient-to-br from-primary/10 to-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={post.personaAvatar} alt="" loading="lazy"
-              className="h-16 w-16 rounded-full border border-border bg-card object-cover" />
-          </div>
-        )}
-        <div className="p-3">
-          {meta && (
-            <span className="mb-1.5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-primary">
-              <meta.icon className="h-3 w-3" /> {meta.label}
-            </span>
-          )}
-          <h3 className="font-display text-[15px] font-bold leading-snug text-foreground">
-            {c.headline}
-          </h3>
-          {c.standfirst && (
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{c.standfirst}</p>
-          )}
-          <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
-            {open ? 'Show less' : 'Read it'}
-            <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
-          </span>
-        </div>
+    <div className="mt-1">
+      {/* The headline is the post. There is no nested card and no second
+          avatar: a long piece and a one line jab are the same kind of object
+          in a timeline, and wrapping one of them in its own bordered panel
+          with a banner made the feed read as a list of documents. */}
+      {c.headline && (
+        <p className="text-[15px] font-semibold leading-snug text-foreground">
+          {c.headline}
+        </p>
+      )}
+      {c.standfirst && (
+        <p className="mt-1 text-[15px] leading-relaxed text-foreground/80">{c.standfirst}</p>
+      )}
+
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
+      >
+        {open ? 'Show less' : meta ? `Read the ${meta.label.toLowerCase()}` : 'Show more'}
+        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
       </button>
 
       <AnimatePresence initial={false}>
@@ -141,9 +127,9 @@ function LongForm({ post, open, onToggle }: { post: FeedPost; open: boolean; onT
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22 }}
           >
-            <div className="border-t border-border p-3">
+            <div className="mt-2.5 rounded-xl border border-border bg-muted/20 p-3">
               {post.kind === 'article' && (
-                <div className="space-y-2 text-[14px] leading-relaxed text-foreground/90">
+                <div className="space-y-2.5 text-[14px] leading-relaxed text-foreground/90">
                   {String(c.body || '').split(/\n{2,}/).map((para: string, i: number) => (
                     <p key={i}>{para}</p>
                   ))}
@@ -345,45 +331,87 @@ function Post({ post, index, open, onToggle }: {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
-      className="flex gap-3 border-b border-border px-4 py-4 transition-colors last:border-0 hover:bg-muted/20"
+      className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
     >
-      <Avatar post={post} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <span className={cn('text-sm font-semibold', post.personaAccent)}>{post.personaName}</span>
-          <span className="text-[13px] text-muted-foreground">{post.personaHandle}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-[13px] text-muted-foreground">{timeAgo(post.createdAt)}</span>
-          <AiBadge />
+      {/* The row runs the full width of the screen, the post inside it does
+          not: a 15px paragraph set across 1280px is unreadable. The inner
+          padding matches PageLayout's so the column lines up with the page
+          heading rather than floating free of it. */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex max-w-3xl gap-3 py-4">
+          <Avatar post={post} />
+          <div className="min-w-0 flex-1">
+            {/* Two lines. Who wrote it on the first, everything that qualifies
+                it on the second. Fitting all five of these onto one row put a
+                name, a handle, a timestamp, a tag and a badge in the same
+                300px on a phone, which wrapped mid-byline and read as
+                clutter. The AI badge stays beside the name: it is a statement
+                about the author, and it must not be something you have to
+                hunt for. */}
+            <div className="flex items-baseline gap-2">
+              <span className={cn('truncate text-[15px] font-bold', post.personaAccent)}>
+                {post.personaName}
+              </span>
+              <AiBadge />
+              <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted-foreground">
+                {timeAgo(post.createdAt)}
+              </span>
+            </div>
+
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[13px] text-muted-foreground">{post.personaHandle}</span>
+              {post.personaType === 'fan' && (
+                <span className="rounded bg-muted px-1 py-px text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Fan
+                </span>
+              )}
+              {(() => {
+                const meta = KIND_META[post.kind];
+                return meta ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
+                    <meta.icon className="h-3 w-3" />
+                    {meta.label}
+                  </span>
+                ) : null;
+              })()}
+            </div>
+
+            {!isLong && !isLive && (
+              <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+                {post.content.text}
+              </p>
+            )}
+
+            {isLive && <GameBeat post={post} />}
+
+            {isLong && <LongForm post={post} open={open} onToggle={onToggle} />}
+
+            {post.subject && (
+              <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Users className="h-3 w-3" /> on {post.subject}
+              </p>
+            )}
+          </div>
         </div>
-
-        {!isLong && !isLive && (
-          <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
-            {post.content.text}
-          </p>
-        )}
-
-        {isLive && <GameBeat post={post} />}
-
-        {isLong && <LongForm post={post} open={open} onToggle={onToggle} />}
-
-        {post.subject && (
-          <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Users className="h-3 w-3" /> on {post.subject}
-          </p>
-        )}
       </div>
     </motion.article>
   );
 }
 
+/** Posts revealed per page. */
+const PAGE = 20;
+
 export default function DeskView() {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [shownCount, setShownCount] = useState(PAGE);
   const [openId, setOpenId] = useState<string | null>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
-    fetch('/api/ai/posts?limit=60')
+    // The store keeps at most 100, so the whole feed arrives in one request.
+    // Paging the API as well would add a round trip per scroll for a payload
+    // that is already small, and would flicker on every reveal.
+    fetch('/api/ai/posts?limit=100')
       .then(r => r.json())
       .then(d => setPosts(d.posts ?? []))
       .catch(() => setPosts([]));
@@ -395,50 +423,30 @@ export default function DeskView() {
     return () => clearInterval(t);
   }, [load]);
 
-  const shown = useMemo(() => {
-    if (!posts) return [];
-    if (filter === 'all') return posts;
-    if (filter === 'live') {
-      return posts.filter(p => LIVE_KINDS.has(p.kind) || p.kind === 'matchupPreview');
-    }
-    if (filter === 'fans') return posts.filter(p => p.personaType === 'fan');
-    const long = (p: FeedPost) =>
-      p.kind !== 'tweet' && p.kind !== 'comment' && !LIVE_KINDS.has(p.kind);
-    return posts.filter(p => (filter === 'long' ? long(p) : !long(p)));
-  }, [posts, filter]);
+  const shown = useMemo(() => (posts ?? []).slice(0, shownCount), [posts, shownCount]);
+  const hasMore = (posts?.length ?? 0) > shownCount;
 
-  const writers = useMemo(() => {
-    const seen = new Map<string, FeedPost>();
-    for (const p of posts ?? []) if (!seen.has(p.personaHandle)) seen.set(p.personaHandle, p);
-    return [...seen.values()].slice(0, 8);
-  }, [posts]);
+  // Reveal the next page as the end of the list comes into view. The margin
+  // starts the reveal before the sentinel is actually on screen, so the
+  // timeline extends ahead of the scroll rather than pausing at the bottom.
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) setShownCount(n => n + PAGE); },
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, shownCount]);
 
   return (
-    <PageLayout title="The Feed" subtitle="Your league, posting through it.">
-      {/* Who is filing */}
-      {writers.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {writers.map(w => (
-            <span key={w.personaHandle}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-1 pr-2.5">
-              <Avatar post={w} />
-              <span className="text-[11px] font-semibold text-foreground">{w.personaHandle}</span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="mb-4">
-        <TabSelector
-          id="desk-filter"
-          aria-label="Feed filter"
-          value={filter}
-          onChange={setFilter}
-          options={FILTERS.map(f => ({ id: f.id, label: f.label }))}
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <PageLayout title="The Feed" subtitle="Beat writers and fans with live takes, previews and commentary." className="max-w-3xl">
+      {/* Full bleed. The feed escapes PageLayout's gutters so the dividers run
+          edge to edge and the timeline reads as the page rather than as a
+          widget sitting on it. Each post puts the gutters back for itself. */}
+      <div className="-mx-4 border-t border-border sm:-mx-6 lg:-mx-8">
         {posts === null ? (
           <LoadingBlock size={16} />
         ) : !shown.length ? (
@@ -450,15 +458,32 @@ export default function DeskView() {
             </p>
           </div>
         ) : (
-          shown.map((p, i) => (
-            <Post
-              key={p.id}
-              post={p}
-              index={i}
-              open={openId === p.id}
-              onToggle={() => setOpenId(openId === p.id ? null : p.id)}
-            />
-          ))
+          <>
+            {shown.map((p, i) => (
+              <Post
+                key={p.id}
+                post={p}
+                index={i}
+                open={openId === p.id}
+                onToggle={() => setOpenId(openId === p.id ? null : p.id)}
+              />
+            ))}
+
+            {hasMore && (
+              <div ref={sentinel} className="flex justify-center py-8">
+                <HoneycombLoader
+                  label="Loading more posts"
+                  style={{ ['--honeycomb-size' as string]: '10px' }}
+                />
+              </div>
+            )}
+
+            {!hasMore && shown.length > PAGE && (
+              <p className="py-8 text-center text-[11px] text-muted-foreground">
+                That is the whole feed.
+              </p>
+            )}
+          </>
         )}
       </div>
     </PageLayout>
