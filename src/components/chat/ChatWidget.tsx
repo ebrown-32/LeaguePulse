@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
-import { X, ArrowUp, ShipWheel, Maximize2, Minimize2, GripHorizontal, Eraser } from 'lucide-react';
+import { X, ArrowUp, Sparkles, Maximize2, Minimize2, GripHorizontal, Eraser } from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +52,7 @@ function ThinkingBubble() {
         transition={{ duration: 3.2, repeat: Infinity, ease: 'linear' }}
         className="text-primary"
       >
-        <ShipWheel className="h-4 w-4" />
+        <Sparkles className="h-4 w-4" />
       </motion.span>
       <span className="text-[11px] text-muted-foreground">{note}</span>
       <span className="inline-flex gap-1">
@@ -311,8 +311,12 @@ export default function ChatWidget() {
         aria-label={open ? `Close ${name}` : `Ask ${name}`}
         whileTap={{ scale: 0.92 }}
         className={cn(
-          'fixed bottom-4 right-4 z-[72] flex h-14 w-14 items-center justify-center rounded-full sm:h-12 sm:w-12',
-          'bg-primary text-primary-foreground shadow-lg shadow-primary/25',
+          'group fixed bottom-4 right-4 z-[72] flex h-14 w-14 items-center justify-center rounded-full sm:h-12 sm:w-12',
+          // A gradient rather than a flat fill, with a hairline lit edge, so
+          // it catches the eye the way the glass cards do.
+          'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground',
+          'ring-1 ring-inset ring-white/20',
+          'shadow-lg shadow-primary/30',
           'transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/40',
           // The sheet reaches the bottom edge on touch, so a floating launcher
           // lands squarely on top of the input. The header close button is the
@@ -320,15 +324,28 @@ export default function ChatWidget() {
           open && !isDesktop && 'hidden',
         )}
       >
+        {/* A slow halo, so the launcher reads as awake without demanding
+            attention. Held still when motion is turned down, where a pulsing
+            element in the corner of every page is exactly what is unwanted. */}
+        {!open && (
+          <span
+            aria-hidden
+            className="lp-chat-halo pointer-events-none absolute inset-0 rounded-full bg-primary/25"
+          />
+        )}
+
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
-            key={open ? 'x' : 'wheel'}
-            initial={{ rotate: -90, opacity: 0 }}
-            animate={{ rotate: 0, opacity: 1 }}
-            exit={{ rotate: 90, opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            key={open ? 'x' : 'spark'}
+            initial={{ rotate: -90, opacity: 0, scale: 0.7 }}
+            animate={{ rotate: 0, opacity: 1, scale: 1 }}
+            exit={{ rotate: 90, opacity: 0, scale: 0.7 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="relative"
           >
-            {open ? <X className="h-5 w-5" /> : <ShipWheel className="h-6 w-6" />}
+            {open
+              ? <X className="h-5 w-5" />
+              : <Sparkles className="h-6 w-6 transition-transform duration-300 group-hover:rotate-12 sm:h-5 sm:w-5" />}
           </motion.span>
         </AnimatePresence>
       </motion.button>
@@ -400,7 +417,7 @@ export default function ChatWidget() {
                   className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-muted-foreground/30"
                 />
               )}
-              <ShipWheel className="h-5 w-5 shrink-0 text-primary" />
+              <Sparkles className="h-5 w-5 shrink-0 text-primary" />
               <span className="truncate text-xs font-bold uppercase tracking-widest text-foreground">
                 {name}
               </span>
