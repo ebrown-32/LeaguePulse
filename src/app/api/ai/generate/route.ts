@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       personaName: persona.name,
       personaHandle: persona.handle,
       personaAccent: persona.accent,
+      personaType: persona.type ?? 'media',
       personaAvatar: personaAvatarUrl(persona),
       kind,
       content: content as any,

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Upload, Trash2, Shuffle, Check } from 'lucide-react';
+import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
@@ -174,11 +174,12 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
 
   useEffect(() => {
     fetch('/api/ai/status').then(r => r.json()).then(d => { setConfigured(d.configured); setQueued(d.queued ?? 0); }).catch(() => setConfigured(false));
-    fetch('/api/ai/personalities').then(r => r.json()).then(d => {
+    fetch('/api/ai/personalities', { headers: { 'x-admin-password': password } })
+      .then(r => r.json()).then(d => {
       setPeople(d.personalities ?? []);
       setActiveId(d.personalities?.[0]?.id ?? '');
     }).catch(() => {});
-  }, []);
+  }, [password]);
 
   useEffect(() => {
     fetch('/api/ai/assistant').then(r => r.json())
@@ -225,7 +226,51 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
     }
   }, [password]);
 
+  /** Everything the admin can see, including built-ins they have deleted. */
+  const visible = people.filter(p => !p.hidden);
   const active = people.find(p => p.id === activeId);
+
+  const addPersona = useCallback((type: 'media' | 'fan') => {
+    const id = `custom-${Date.now().toString(36)}`;
+    const fresh: Personality = {
+      id,
+      name: type === 'fan' ? 'New fan' : 'New personality',
+      handle: `@${type}${Math.random().toString(36).slice(2, 6)}`,
+      tagline: type === 'fan' ? 'One opinion, held far too hard' : 'Describe them in one line',
+      accent: 'text-primary',
+      type,
+      custom: true,
+      voice: type === 'fan'
+        ? 'A league member with exactly one opinion. Reacts, never analyses. Two sentences at most.'
+        : 'Describe how this person talks: their tone, their tics, what they always notice first.',
+      // Fans react; they do not file columns or rank the league.
+      kinds: type === 'fan' ? ['tweet', 'comment'] : ['article', 'tweet', 'comment'],
+      enabled: true,
+      avatarStyle: 'avataaars',
+      avatarSeed: id,
+    };
+    setPeople(ps => [...ps, fresh]);
+    setActiveId(id);
+    setDirty(true);
+    setSaved(false);
+  }, []);
+
+  const removePersona = useCallback((persona: Personality) => {
+    setPeople(ps => persona.custom
+      // A persona the admin made has no default to come back from, so it goes.
+      ? ps.filter(p => p.id !== persona.id)
+      // A built-in would be merged straight back in on the next read, so it is
+      // marked instead of dropped.
+      : ps.map(p => (p.id === persona.id ? { ...p, hidden: true, enabled: false } : p)));
+    setActiveId(prev => (prev === persona.id ? '' : prev));
+    setDirty(true);
+    setSaved(false);
+  }, []);
+
+  const restoreHidden = useCallback(() => {
+    setPeople(ps => ps.map(p => (p.hidden ? { ...p, hidden: false } : p)));
+    setDirty(true);
+  }, []);
   const update = useCallback((patch: Partial<Personality>) => {
     setPeople(ps => ps.map(p => (p.id === activeId ? { ...p, ...patch } : p)));
     setDirty(true);
@@ -387,7 +432,7 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
               Cast
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {enabledCount} of {people.length} on
+              {visible.filter(p => p.enabled).length} of {visible.length} on
             </span>
           </div>
 
@@ -397,7 +442,7 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
               'lg:max-h-[calc(100vh-14rem)] lg:snap-none lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0',
             )}
           >
-            {people.map(p => {
+            {visible.map(p => {
               const on = p.id === activeId;
               return (
                 <button
@@ -433,19 +478,65 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
                     <span className="hidden truncate text-[11px] text-muted-foreground lg:block">
                       {p.handle}
                     </span>
+                    {p.type === 'fan' && (
+                      <span className="mt-0.5 hidden rounded bg-muted px-1 py-px text-[8px] font-bold uppercase tracking-wider text-muted-foreground lg:inline-block">
+                        Fan
+                      </span>
+                    )}
                   </span>
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              onClick={() => addPersona('media')}
+              className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <Plus className="h-3 w-3" /> Personality
+            </button>
+            <button
+              onClick={() => addPersona('fan')}
+              className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <Plus className="h-3 w-3" /> Fan
+            </button>
+            {people.some(p => p.hidden) && (
+              <button
+                onClick={restoreHidden}
+                title="Bring back every built-in you have deleted"
+                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              >
+                <RotateCcw className="h-3 w-3" /> Restore {people.filter(p => p.hidden).length}
+              </button>
+            )}
           </div>
         </div>
 
         {active && (
           <div className="space-y-5">
             <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-              <h2 className="font-display text-base font-semibold text-foreground">
-                Edit {active.name}
-              </h2>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-display text-base font-semibold text-foreground">
+                    Edit {active.name}
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {active.type === 'fan' ? 'Fan' : 'Media personality'}
+                    {active.custom ? ', added by you' : ', built in'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removePersona(active)}
+                  title={active.custom
+                    ? 'Delete this persona'
+                    : 'Remove this built-in. You can restore it from the roster.'}
+                  className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-rose-500/40 hover:text-rose-500"
+                >
+                  <Trash2 className="h-3 w-3" /> Remove
+                </button>
+              </div>
 
               {/* Portrait: an upload wins, DiceBear is the fallback. */}
               <div className="rounded-lg border border-border bg-muted/30 p-3">

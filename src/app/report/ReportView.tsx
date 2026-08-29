@@ -47,6 +47,7 @@ interface TeamOdds {
   eliminated: boolean;
 }
 interface Report {
+  medianMatch: boolean;
   season: string;
   throughWeek: number;
   leagueName: string;
@@ -88,22 +89,45 @@ export default function ReportView() {
   const [open, setOpen] = useState<number | null>(null);
   const [help, setHelp] = useState<string | null>(null);
 
+  // 'current' means the live season through the last played week. Anything
+  // else is a completed season, which never changes.
+  const [season, setSeason] = useState('current');
+  const [week, setWeek] = useState(0);
+  const [seasons, setSeasons] = useState<string[]>([]);
+  const [weeks, setWeeks] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch('/api/report')
+    setLoading(true);
+    setReport(null);
+    setReason(null);
+    setOpen(null);
+    const qs = season === 'current'
+      ? ''
+      : `?season=${season}${week ? `&week=${week}` : ''}`;
+    fetch(`/api/report${qs}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) { setError(d.error); return; }
+        setError(null);
         setReport(d.report);
         setReason(d.reason ?? null);
+        if (d.seasons?.length) setSeasons(d.seasons);
+        setWeeks(d.weeks ?? []);
       })
-      .catch(() => setError('Could not load the report.'));
-  }, []);
+      .catch(() => setError('Could not load the report.'))
+      .finally(() => setLoading(false));
+  }, [season, week]);
 
   const positions = useMemo(() => {
     const seen = new Set<string>();
     for (const t of report?.teams ?? []) for (const p of t.pointsByPosition) seen.add(p.position);
     return [...seen];
   }, [report]);
+
+  const pickerClass =
+    'rounded-md border border-border bg-background px-2.5 py-1.5 text-base text-foreground ' +
+    'focus:border-primary focus:outline-none sm:text-xs';
 
   const subtitle = report
     ? `${report.leagueName}, ${report.season} through week ${report.throughWeek}`
@@ -115,7 +139,39 @@ export default function ReportView() {
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-sm text-rose-500">{error}</div>
       )}
 
-      {!report && !error && !reason && (
+      {/* Season and week pickers. A past report is exact, not reconstructed:
+          Sleeper stores each week's roster and points permanently. */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <select
+          value={season}
+          aria-label="Season"
+          onChange={e => { setSeason(e.target.value); setWeek(0); }}
+          className={pickerClass}
+        >
+          <option value="current">This season, to date</option>
+          {seasons.map(s => <option key={s} value={s}>{s} season</option>)}
+        </select>
+
+        {season !== 'current' && weeks.length > 0 && (
+          <select
+            value={week}
+            aria-label="Through week"
+            onChange={e => setWeek(Number(e.target.value))}
+            className={pickerClass}
+          >
+            <option value={0}>Full season</option>
+            {weeks.map(w => <option key={w} value={w}>Through week {w}</option>)}
+          </select>
+        )}
+
+        {season !== 'current' && (
+          <span className="text-[11px] text-muted-foreground">
+            Rebuilt from that week&apos;s stored rosters and scores, not from today&apos;s.
+          </span>
+        )}
+      </div>
+
+      {loading && !report && !error && !reason && (
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-4">
             <Skeleton className="h-2.5 w-28" />
@@ -265,6 +321,7 @@ export default function ReportView() {
             )}
             <p className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
               Tap a column heading for what it means. Tap a row for that team&apos;s points by position.
+              {report.medianMatch && ' Records include this league\'s weekly median match, so each week counts as two games.'}
             </p>
           </section>
 

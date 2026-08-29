@@ -739,7 +739,10 @@ async function calculateAdvancedSeasonMetrics(
   // Check if median games are enabled
   // Median games add an extra win/loss each week based on scoring vs league median
   // This affects total games played and win/loss records
-  const medianGamesEnabled = league.settings.median_wins || false;
+  // `median_wins` is not a field Sleeper returns, so this was always false
+  // and median games were silently ignored everywhere this is used. The
+  // real setting is `league_average_match`, 1 when enabled.
+  const medianGamesEnabled = Number(league.settings?.league_average_match ?? 0) === 1;
   
   // Calculate league-wide statistics
   const allScores = allMatchups.flat().map(m => m.points || 0).filter(score => score > 0);

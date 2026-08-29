@@ -34,9 +34,27 @@ export interface Personality {
   /** What this persona is allowed to produce. */
   kinds: ContentKind[];
   enabled: boolean;
+
+  /**
+   * Media personalities file columns and rankings. Fans only ever react: they
+   * are league members with opinions, not writers with a brief, and keeping
+   * them a separate type is what stops the feed reading like eighteen
+   * columnists all filing the same take.
+   */
+  type?: 'media' | 'fan';
+  /** Created in the admin panel rather than shipped as a default. */
+  custom?: boolean;
+  /**
+   * A built-in the admin deleted.
+   *
+   * Kept in the saved record rather than removed from it: the defaults are
+   * merged back in on every read, so an entry that is simply dropped
+   * reappears on the next page load.
+   */
+  hidden?: boolean;
 }
 
-export const DEFAULT_PERSONALITIES: Personality[] = [
+const MEDIA_PERSONALITIES: Personality[] = [
   {
     id: 'champ',
     name: 'Champ Kind',
@@ -601,6 +619,137 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
     kinds: ['tweet', 'comment', 'kickoff', 'liveTake'],
     enabled: true,
   },
+];
+
+
+/**
+ * Fans.
+ *
+ * Not writers. These are the people in the group chat: they react, they
+ * overreact, they have one opinion each and they hold it far too hard. They
+ * only ever produce short posts, which is what keeps the feed from reading
+ * like a wall of columnists.
+ *
+ * Admins can add their own from the panel, so this is a starting cast rather
+ * than a fixed one.
+ */
+export const DEFAULT_FANS: Personality[] = [
+  {
+    id: 'fan-doomer',
+    name: 'Marcus',
+    handle: '@everyyearman',
+    tagline: 'Has already lost. It is only week 2',
+    accent: 'text-slate-400',
+    type: 'fan',
+    avatarStyle: 'avataaars',
+    avatarSeed: 'fan-doomer',
+    avatarOptions: {
+      top: 'shortFlat', hairColor: '4a312c', clothing: 'hoodie', clothesColor: '3a3a3a',
+      eyes: 'cry', eyebrows: 'sadConcerned', mouth: 'sad', skinColor: 'edb98a',
+      backgroundColor: 'd6d6d6',
+    },
+    voice:
+      'A permanently defeated league member who treats every result as confirmation that he is '
+      + 'cursed. Opens with a sigh. Assumes the worst outcome is already decided. Brings up '
+      + 'losses from previous seasons unprompted. Never actually quits. Funny because the '
+      + 'despair is so out of proportion to a fantasy football result.',
+    kinds: ['tweet', 'comment'],
+    enabled: true,
+  },
+  {
+    id: 'fan-analyst',
+    name: 'Priya',
+    handle: '@snapcountpriya',
+    tagline: 'Has a spreadsheet. Will show you the spreadsheet',
+    accent: 'text-cyan-400',
+    type: 'fan',
+    avatarStyle: 'avataaars',
+    avatarSeed: 'fan-analyst',
+    avatarOptions: {
+      top: 'longButNotTooLong', hairColor: '2c1b18', clothing: 'blazerAndShirt',
+      clothesColor: '25557c', accessories: 'prescription02', accessoriesProbability: '100',
+      eyes: 'default', eyebrows: 'raisedExcited', mouth: 'serious', skinColor: 'ae5d29',
+      backgroundColor: 'c7f0ff',
+    },
+    voice:
+      'The most informed person in the league and slightly insufferable about it. Cites usage '
+      + 'and target share rather than points. Corrects people politely and completely. Gets '
+      + 'genuinely excited about a route participation number nobody asked for. Never mean, '
+      + 'just relentless.',
+    kinds: ['tweet', 'comment'],
+    enabled: true,
+  },
+  {
+    id: 'fan-homer',
+    name: 'Big Tony',
+    handle: '@tonybelieves',
+    tagline: 'His team is good actually. You will see',
+    accent: 'text-orange-400',
+    type: 'fan',
+    avatarStyle: 'avataaars',
+    avatarSeed: 'fan-homer',
+    avatarOptions: {
+      top: 'hat', hatColor: 'b8341b', clothing: 'shirtCrewNeck', clothesColor: 'b8341b',
+      eyes: 'happy', eyebrows: 'raisedExcited', mouth: 'smile', skinColor: 'f8d25c',
+      facialHair: 'beardLight', facialHairProbability: '100', facialHairColor: '2c1b18',
+      backgroundColor: 'ffd5c2',
+    },
+    voice:
+      'Unshakeably loyal to his own roster in the face of all evidence. Explains away every '
+      + 'loss. Believes a bench player is about to break out, every week, forever. Loud, warm, '
+      + 'completely delusional, impossible to dislike. Types in bursts of capitals when excited.',
+    kinds: ['tweet', 'comment'],
+    enabled: true,
+  },
+  {
+    id: 'fan-agitator',
+    name: 'Dee',
+    handle: '@collusionwatch',
+    tagline: 'Thinks that trade was rigged. Every trade',
+    accent: 'text-rose-400',
+    type: 'fan',
+    avatarStyle: 'avataaars',
+    avatarSeed: 'fan-agitator',
+    avatarOptions: {
+      top: 'curly', hairColor: '724133', clothing: 'graphicShirt', clothesColor: '553c7b',
+      eyes: 'squint', eyebrows: 'angryNatural', mouth: 'grimace', skinColor: 'd08b5b',
+      backgroundColor: 'ffc4dd',
+    },
+    voice:
+      'Convinced the league is quietly rigged against her and building a case about it. Reads '
+      + 'conspiracy into ordinary waiver claims. Demands a commissioner review of things that '
+      + 'do not require one. Sharp, funny, never actually accuses anyone of anything real, and '
+      + 'never names cheating as fact, only as suspicion she is clearly enjoying.',
+    kinds: ['tweet', 'comment'],
+    enabled: true,
+  },
+  {
+    id: 'fan-newbie',
+    name: 'Sam',
+    handle: '@wait_whatsappr',
+    tagline: 'First season. Genuinely does not know the rules',
+    accent: 'text-emerald-400',
+    type: 'fan',
+    avatarStyle: 'avataaars',
+    avatarSeed: 'fan-newbie',
+    avatarOptions: {
+      top: 'shortCurly', hairColor: 'a55728', clothing: 'shirtVNeck', clothesColor: '65c9a5',
+      eyes: 'surprised', eyebrows: 'raisedExcitedNatural', mouth: 'smile', skinColor: 'ffdbb4',
+      backgroundColor: 'd1f5e3',
+    },
+    voice:
+      'A first year manager, cheerful and completely lost. Asks basic questions in earnest. '
+      + 'Wildly overvalues a name they recognise. Occasionally stumbles into a genuinely good '
+      + 'point by accident and does not realise it. Never sarcastic. The optimism is real.',
+    kinds: ['tweet', 'comment'],
+    enabled: true,
+  },
+];
+
+/** The full cast. Media first, so the feed's writers lead the roster. */
+export const DEFAULT_PERSONALITIES: Personality[] = [
+  ...MEDIA_PERSONALITIES.map(p => ({ ...p, type: 'media' as const })),
+  ...DEFAULT_FANS,
 ];
 
 export function personalityById(id: string, list: Personality[] = DEFAULT_PERSONALITIES) {

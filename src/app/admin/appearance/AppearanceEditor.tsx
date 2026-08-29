@@ -740,6 +740,66 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                 </div>
 
                 <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">Click sound</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'off', label: 'Off',  hint: 'Silent' },
+                      { id: 'on',  label: 'On',   hint: 'Soft click on tap' },
+                    ] as { id: 'on' | 'off'; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTheme(t => ({ ...t, sound: opt.id }))}
+                        className={cn(
+                          'rounded-md border p-3 text-left transition-none',
+                          (theme.sound ?? 'off') === opt.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-border/80',
+                        )}
+                      >
+                        <span className={cn('block text-sm font-semibold', (theme.sound ?? 'off') === opt.id ? 'text-primary' : 'text-foreground')}>
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                    Off by default. Sound a visitor did not ask for is worse than none, so this is
+                    a deliberate choice rather than something the site does on arrival.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">Haptics</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'on',  label: 'On',  hint: 'Buzz on tap' },
+                      { id: 'off', label: 'Off', hint: 'No vibration' },
+                    ] as { id: 'on' | 'off'; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTheme(t => ({ ...t, haptics: opt.id }))}
+                        className={cn(
+                          'rounded-md border p-3 text-left transition-none',
+                          (theme.haptics ?? 'on') === opt.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-border/80',
+                        )}
+                      >
+                        <span className={cn('block text-sm font-semibold', (theme.haptics ?? 'on') === opt.id ? 'text-primary' : 'text-foreground')}>
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                    Android and desktop Chrome only. iOS exposes no vibration API to the web, so
+                    iPhones stay silent whatever this says.
+                  </p>
+                </div>
+
+                <div>
                   <label className="mb-2 block text-xs font-medium text-muted-foreground">Motion</label>
                   <div className="grid grid-cols-2 gap-2">
                     {([

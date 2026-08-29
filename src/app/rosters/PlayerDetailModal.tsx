@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CloseIcon } from '@/components/icons/MediaIcons';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { LoadingSpinner, LoadingBlock } from '@/components/ui/LoadingSpinner';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { POSITION_STYLE } from './positions';
@@ -122,7 +122,7 @@ export default function PlayerDetailModal({
             </div>
 
             {loading && !detail ? (
-              <div className="flex justify-center py-16"><LoadingSpinner className="h-7 w-7" /></div>
+              <LoadingBlock size={14} />
             ) : (
               <>
                 {/* Season production */}

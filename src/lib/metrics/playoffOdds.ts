@@ -92,13 +92,21 @@ export function simulatePlayoffOdds(
   teams: SimTeam[],
   fixtures: SimFixture[],
   playoffTeams: number,
-  opts: { simulations?: number; seed?: number } = {},
+  opts: { simulations?: number; seed?: number; medianMatch?: boolean } = {},
 ): OddsResult {
   const simulations = opts.simulations ?? 10_000;
   const field = Math.max(1, Math.min(playoffTeams || 4, teams.length));
   const rng = mulberry32(opts.seed ?? 1);
 
+  const medianMatch = opts.medianMatch ?? false;
   const index = new Map(teams.map((t, i) => [t.rosterId, i]));
+
+  // Fixtures grouped by week, so a week can be resolved as a whole.
+  const byWeek = new Map<number, SimFixture[]>();
+  for (const f of fixtures) {
+    if (!byWeek.has(f.week)) byWeek.set(f.week, []);
+    byWeek.get(f.week)!.push(f);
+  }
   const made = new Array(teams.length).fill(0);
   const topSeed = new Array(teams.length).fill(0);
   const titles = new Array(teams.length).fill(0);
@@ -122,13 +130,32 @@ export function simulatePlayoffOdds(
       pf[i] = teams[i].pointsFor;
     }
 
-    for (const f of fixtures) {
-      const ai = index.get(f.a), bi = index.get(f.b);
-      if (ai === undefined || bi === undefined) continue;
-      const sa = normal(rng, shape[ai].mean, shape[ai].sd);
-      const sb = normal(rng, shape[bi].mean, shape[bi].sd);
-      pf[ai] += sa; pf[bi] += sb;
-      if (sa > sb) wins[ai]++; else if (sb > sa) wins[bi]++;
+    // Simulated a week at a time rather than a fixture at a time, because a
+    // median league scores every team against the same weekly median and that
+    // number cannot be known until the whole week has been drawn.
+    for (const [, week] of byWeek) {
+      const drawn: { idx: number; score: number }[] = [];
+      for (const f of week) {
+        const ai = index.get(f.a), bi = index.get(f.b);
+        if (ai === undefined || bi === undefined) continue;
+        const sa = normal(rng, shape[ai].mean, shape[ai].sd);
+        const sb = normal(rng, shape[bi].mean, shape[bi].sd);
+        pf[ai] += sa; pf[bi] += sb;
+        if (sa > sb) wins[ai]++; else if (sb > sa) wins[bi]++;
+        drawn.push({ idx: ai, score: sa }, { idx: bi, score: sb });
+      }
+
+      // The second game of the week, where the league plays them. Without it a
+      // simulated season is half the length of the real one and every
+      // projected win total comes out short.
+      if (medianMatch && drawn.length) {
+        const sorted = [...drawn].map(d => d.score).sort((x, y) => x - y);
+        const mid = Math.floor(sorted.length / 2);
+        const med = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        for (const d of drawn) {
+          if (d.score > med) wins[d.idx]++;
+        }
+      }
     }
 
     // Sleeper's default: record first, total points as the tiebreak.

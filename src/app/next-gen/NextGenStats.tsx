@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import CareerMetricsSection from './CareerMetrics';
 import TabSelector from '@/components/ui/TabSelector';
+import Hint from '@/components/ui/Hint';
 
 interface NextGenStatsProps {
   initialMetrics: Awaited<ReturnType<typeof getAdvancedTeamMetrics>>;
@@ -232,6 +233,24 @@ function WeeklyScoreChart({ scores }: { scores: number[] }) {
   );
 }
 
+/** What each metric on this page actually measures. */
+const METRIC_HELP: Record<string, string> = {
+  Consistency:
+    'How steady the weekly scores are, from their coefficient of variation. High means you get roughly the same team every week; low means boom or bust.',
+  Explosiveness:
+    'How often a week clears 120% of the league average score. A high number means the ceiling is real, not that the floor is safe.',
+  Clutch:
+    'Win rate in games decided by under 10 points. Measures what happens when the matchup is genuinely in doubt.',
+  Efficiency:
+    'Points converted into wins. High means the scoring is not being wasted on weeks the schedule already decided.',
+  Momentum:
+    'Late season form and win streaks, so a team peaking into the playoffs reads differently from one that started hot.',
+  Luck:
+    'Actual wins minus the wins the scoring deserved. Positive means the schedule has been kind.',
+  PPG: 'Average points per game across every week counted in the current view.',
+  'VS. AVG': 'How far the average score sits above or below the league average.',
+};
+
 function StatBadge({ label, value, icon: Icon }: {
   label: string;
   value: string | number;
@@ -248,8 +267,12 @@ function StatBadge({ label, value, icon: Icon }: {
     >
       <div className="flex items-center space-x-2">
         <Icon className="h-4 w-4" />
-        <div>
-          <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">
+            {METRIC_HELP[label]
+              ? <Hint label={label} side="top">{METRIC_HELP[label]}</Hint>
+              : label}
+          </div>
           <div className="text-sm font-semibold">{value}</div>
         </div>
       </div>

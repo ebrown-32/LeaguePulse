@@ -4,8 +4,8 @@ import DeskView from './DeskView';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'The Desk | LeaguePulse',
-  description: 'Your league\'s AI beat writers: columns, power rankings, predictions and hot takes.',
+  title: 'The Feed | LeaguePulse',
+  description: 'Your league\'s timeline: columns, power rankings, predictions, live reactions and fans posting through it.',
 };
 
 export default function DeskPage() {

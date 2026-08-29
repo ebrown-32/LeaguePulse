@@ -357,6 +357,17 @@ function phaseDescription(b: LeagueBrief): string {
 export function renderBrief(b: LeagueBrief): string {
   const lines: string[] = [];
   lines.push(`LEAGUE: ${b.leagueName}, ${b.season} season.`);
+  // Writers kept treating a manager and their team as two different people,
+  // producing lines like "AshKashh69 made 15 moves and Just Jaxson Off made 15
+  // moves" about a single roster.
+  lines.push(
+    '',
+    'MANAGERS AND TEAMS ARE THE SAME THING:',
+    '  Every team above is run by exactly one manager. The team name and the',
+    '  manager handle are two names for one entity, never two participants.',
+    '  Never write a sentence that has both doing something separately.',
+  );
+
   if (b.totalTeams) {
     const fmt = [`${b.totalTeams} teams`];
     if (b.playoffTeams) fmt.push(`${b.playoffTeams} make the playoffs`);

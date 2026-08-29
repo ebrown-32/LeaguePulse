@@ -46,13 +46,14 @@ const PRIMARY_NAV: NavItem[] = [
   { name: 'Next Gen',      href: '/next-gen', icon: Activity        },
   { name: 'History',       href: '/history',  icon: Database        },
   { name: 'Weekly Report', href: '/report',   icon: ClipboardCheck  },
-  { name: 'The Desk',      href: '/desk',     icon: Megaphone       },
+  { name: 'The Feed',      href: '/desk',     icon: Megaphone       },
 ];
 
 const MORE_NAV: NavItem[] = [
   { name: 'Home',         href: '/',             icon: LayoutDashboard },
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
+  { name: 'Standings',    href: '/standings',    icon: ListOrdered  },
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
   // Power Rankings (/analyzer) is built and working but unlinked: the free
   // FantasyPros tier caps every board at 10 rows, so only ~40 of ~200
@@ -62,6 +63,9 @@ const MORE_NAV: NavItem[] = [
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
+  // Weather is built and reachable at /weather, but unlinked for now.
+  // Re-add this line to put it back in the menu.
+  // { name: 'Weather',      href: '/weather',      icon: CloudSun     },
   { name: 'Media',        href: '/media',        icon: Newspaper    },
   { name: 'Constitution', href: '/constitution', icon: Scroll       },
 ];
@@ -136,11 +140,11 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
         
         <Logo
           src={logoUrl}
-          className="relative h-16 w-auto lg:h-20 xl:h-24 object-contain transition-transform duration-300 group-hover:scale-105"
+          className="relative h-11 w-auto sm:h-14 lg:h-20 xl:h-24 object-contain transition-transform duration-300 group-hover:scale-105"
         />
       </div>
       {leagueName ? (
-        <span className="min-w-0 truncate font-display text-lg font-bold leading-tight text-foreground lg:text-xl xl:text-2xl">
+        <span className="line-clamp-2 min-w-0 font-display text-[15px] font-bold leading-[1.15] text-foreground sm:text-lg lg:text-xl xl:text-2xl">
           {leagueName}
         </span>
       ) : (
@@ -154,8 +158,8 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
   if (!mounted) {
     return (
       <header className={navbarClass}>
-        <nav className="mx-auto flex h-20 lg:h-24 xl:h-28 max-w-7xl items-center justify-between pl-2 pr-4 sm:pl-3 sm:pr-6 lg:pl-4 lg:pr-8">
-          <Link href="/" className="group flex min-w-0 flex-1 items-center gap-3 lg:flex-none lg:shrink">
+        <nav className="mx-auto flex h-16 sm:h-20 lg:h-24 xl:h-28 max-w-7xl items-center justify-between pl-2 pr-3 sm:pl-3 sm:pr-6 lg:pl-4 lg:pr-8">
+          <Link href="/" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none lg:shrink">
             {brand}
           </Link>
           <div className="h-8 w-8" />
@@ -169,9 +173,9 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
       <header className={navbarClass}>
         
 
-        <nav className="mx-auto flex h-20 lg:h-24 xl:h-28 max-w-7xl items-center justify-between pl-2 pr-4 sm:pl-3 sm:pr-6 lg:pl-4 lg:pr-8">
+        <nav className="mx-auto flex h-16 sm:h-20 lg:h-24 xl:h-28 max-w-7xl items-center justify-between pl-2 pr-3 sm:pl-3 sm:pr-6 lg:pl-4 lg:pr-8">
           {/* Logo */}
-          <Link href="/" className="group flex min-w-0 flex-1 items-center gap-3 lg:flex-none lg:shrink">
+          <Link href="/" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none lg:shrink">
             {brand}
           </Link>
 

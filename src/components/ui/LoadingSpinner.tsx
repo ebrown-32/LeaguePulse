@@ -1,3 +1,7 @@
+'use client';
+
+import HoneycombLoader from './honeycomb-loader';
+
 export function LoadingSpinner({ className = 'h-5 w-5' }: { className?: string }) {
   return (
     <svg
@@ -23,10 +27,40 @@ export function LoadingSpinner({ className = 'h-5 w-5' }: { className?: string }
   );
 }
 
-export function LoadingPage() {
+/**
+ * A section or page waiting on data.
+ *
+ * The honeycomb rather than the spinner: this is the app's loading mark, and
+ * it should be the same one whether the whole app is opening or one panel is
+ * fetching. The spinner survives only for the few places a honeycomb cannot
+ * go, namely inside a button, where its cells need roughly three times the
+ * space of the box they are sized from.
+ */
+export function LoadingPage({ size = 18, className = 'min-h-[400px]' }: {
+  /** Drives --honeycomb-size, so the whole mark scales from one number. */
+  size?: number;
+  className?: string;
+}) {
   return (
-    <div className="flex min-h-[400px] items-center justify-center">
-      <LoadingSpinner className="h-8 w-8" />
+    <div className={`flex items-center justify-center ${className}`}>
+      <HoneycombLoader style={{ ['--honeycomb-size' as string]: `${size}px` }} />
+    </div>
+  );
+}
+
+/**
+ * The inline version, for a panel rather than a page.
+ *
+ * Padding is generous because the cells extend well past the element box: a
+ * honeycomb in a tight container clips its own outer ring.
+ */
+export function LoadingBlock({ size = 14, className = '' }: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center justify-center py-16 ${className}`}>
+      <HoneycombLoader style={{ ['--honeycomb-size' as string]: `${size}px` }} />
     </div>
   );
 }

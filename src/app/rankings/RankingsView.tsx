@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import Avatar from '@/components/ui/Avatar';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { LoadingSpinner, LoadingBlock } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE'] as const;
@@ -147,7 +147,7 @@ export default function RankingsView() {
   return (
     <PageLayout title="Player Rankings" subtitle={subtitle}>
       {!data ? (
-        <div className="flex justify-center py-20"><LoadingSpinner className="h-8 w-8" /></div>
+        <LoadingBlock size={16} />
       ) : !data.configured ? (
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="text-sm font-semibold text-foreground">FantasyPros is not configured</p>
