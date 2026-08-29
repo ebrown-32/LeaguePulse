@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { cn } from '@/lib/utils';
+import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';
 
@@ -89,26 +90,14 @@ export default function AdminShell() {
 
   return (
     <PageLayout title="Admin" subtitle={active.blurb}>
-      <div className="mb-6 inline-flex rounded-lg border border-border bg-card p-0.5">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'relative rounded-md px-4 py-1.5 text-xs font-semibold transition-colors',
-              tab === t.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab === t.id && (
-              <motion.span
-                layoutId="admin-tab"
-                className="absolute inset-0 rounded-md bg-primary"
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-              />
-            )}
-            <span className="relative">{t.label}</span>
-          </button>
-        ))}
+      <div className="mb-6">
+        <TabSelector
+          id="admin"
+          aria-label="Admin section"
+          value={tab}
+          onChange={setTab}
+          options={TABS.map(t => ({ id: t.id, label: t.label }))}
+        />
       </div>
 
       {/* Both editors stay mounted-on-demand rather than always: the theme

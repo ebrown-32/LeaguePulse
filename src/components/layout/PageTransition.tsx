@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
@@ -13,9 +13,24 @@ import { usePathname } from 'next/navigation';
  * plain motion.div on the pathname gives the same perceived polish with none
  * of that.
  *
- * The transform is small and settles at zero — framer clears it to
- * `transform: none` at rest, so it never becomes a containing block for the
- * `position: fixed` modals that render inside pages.
+ * Two things were making this feel choppy rather than smooth:
+ *
+ * 1. The page animated upward while the browser was separately scrolling to
+ *    the top, because `scroll-behavior: smooth` was set globally. Two
+ *    animations moving the same content in the same axis at once. The global
+ *    smooth scroll is gone, and nothing here translates any more, so a scroll
+ *    restoration has nothing to fight.
+ * 2. No compositor hint, so a heavy route repainted the whole document on
+ *    every frame of the fade. `will-change: opacity` while animating, dropped
+ *    the instant it settles, keeps the layer for the fade and no longer.
+ *
+ * The fade is opacity only, and that is a constraint rather than a
+ * simplification. `transform`, `filter` and `contain: paint` all make an
+ * element a containing block for `position: fixed` descendants, which would
+ * anchor the chat launcher, the search palette and every modal rendered
+ * inside a page to this wrapper instead of the viewport. `opacity` creates a
+ * stacking context but never a containing block, so it is the one property
+ * here that is safe to animate on a wrapper around arbitrary page content.
  */
 export default function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,12 +43,31 @@ export default function PageTransition({ children }: { children: React.ReactNode
   }, []);
   const reduceMotion = systemReduce || adminReduce;
 
+  const [animating, setAnimating] = useState(true);
+  const first = useRef(true);
+
+  // Scroll to the top synchronously on a route change, before paint, so the
+  // new page never appears mid-scroll. Next does this too, but on a dynamic
+  // route it can land after the fade has started.
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    setAnimating(true);
+  }, [pathname]);
+
   return (
     <motion.div
       key={pathname}
-      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: reduceMotion ? 0.15 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{
+        duration: reduceMotion ? 0.12 : 0.26,
+        // Fast out of the gate, long gentle settle. The old curve spent its
+        // first frames barely moving, which read as a stall before the fade.
+        ease: [0.16, 1, 0.3, 1],
+      }}
+      onAnimationComplete={() => setAnimating(false)}
+      style={{ willChange: animating ? 'opacity' : undefined }}
     >
       {children}
     </motion.div>

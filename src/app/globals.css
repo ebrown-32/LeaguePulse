@@ -118,7 +118,19 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    /*
+     * Deliberately NOT `scroll-behavior: smooth`.
+     *
+     * Next scrolls to the top on every navigation. With smooth scrolling set
+     * globally that scroll is animated, so a route change ran a scroll-up and
+     * a fade-in at the same time and the two fought each other. That was the
+     * choppiness. Anywhere that genuinely wants a smooth scroll asks for it,
+     * either with the `scroll-smooth` utility or scrollIntoView.
+     */
+
+    /* Stops the whole page rubber-banding when a scroller inside it ends,
+       which is what makes native apps feel planted. */
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -158,6 +170,9 @@
 
   /* Admin-controlled: hide the field entirely, or keep it but hold it still. */
   html[data-bg='plain'] body::after      { display: none; }
+  /* The particle field replaces the grid rather than layering over it; both
+     at once reads as clutter, and the canvas already carries its own lines. */
+  html[data-bg='particles'] body::after  { display: none; }
   html[data-motion='reduced'] body::after { animation: none; }
 
   /* Drifts exactly one 64px cell over the cycle so the loop is seamless,
@@ -170,6 +185,48 @@
 
   @media (prefers-reduced-motion: reduce) {
     body::after { animation: none; }
+  }
+
+  /* Async content arriving above the viewport pushes what you are reading.
+     Anchoring holds your place instead. */
+  body {
+    overflow-anchor: auto;
+  }
+
+  /* ── Loading skeletons ─────────────────────────────────────────────────
+     One sweeping highlight across a muted base. Driven by background-position
+     rather than opacity: a dozen elements pulsing their alpha together reads
+     as flashing, which on a full table is genuinely unpleasant.
+
+     The sweep is tinted with the accent at very low alpha so it belongs to
+     whatever palette is active instead of being a grey shimmer bolted on. */
+
+  .lp-skeleton {
+    background-color: hsl(var(--muted));
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.07) 40%,
+      hsl(var(--primary) / 0.10) 50%,
+      hsl(var(--foreground) / 0.07) 60%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: lp-shimmer 1.6s ease-in-out infinite;
+  }
+
+  @keyframes lp-shimmer {
+    from { background-position: -120% 0; }
+    to   { background-position:  220% 0; }
+  }
+
+  /* Held still rather than hidden: the placeholder still has to hold the
+     layout, it just stops moving. */
+  html[data-motion='reduced'] .lp-skeleton { animation: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lp-skeleton { animation: none; }
   }
 
   /* ── Chat markdown ─────────────────────────────────────────────────────

@@ -35,7 +35,8 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 ### The receipts
 - **Rivalries** — all-time head-to-head between every pair of managers, as a colour-coded matrix with game-by-game history.
 - **History** — champions by season, all-time records, and a record book. Champions get a 3D championship ring.
-- **Next Gen** — consistency, explosiveness, clutch, efficiency, momentum, and luck for every manager.
+- **Weekly Report** — playoff odds from 10,000 Monte Carlo simulations, coaching efficiency against the best lineup you could have started, points left on the bench, all-play records, points by position, and a composite power ranking.
+- **Next Gen** — consistency, explosiveness, clutch, efficiency, momentum, and luck for every manager, plus a career record book: all-time coaching efficiency, points left on the bench, all-play and median records, and career points by position across every season played.
 - **Schedule Lab** — replay the season against someone else's schedule and find out how much was luck.
 - **Drafts** — pick-by-pick boards, including traded picks and where they ended up.
 - **Trade Tree** — follow a trade forward through everything it eventually became.
@@ -47,7 +48,7 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 - **Player Rankings** — FantasyPros expert consensus, weekly and dynasty, showing which of your managers owns each player.
 - **Chat assistant** — ask anything about your league in plain English. It reads your live Sleeper data and can search the web for NFL news.
 
-Light and dark mode, 22 colour palettes, 19 font pairings, works on any screen, installs as an app.
+Light and dark mode, 22 colour palettes, 19 font pairings, an optional animated particle backdrop, a custom browser tab title and favicon, and search on Cmd-K. Works on any screen, installs as an app.
 
 ---
 
@@ -205,6 +206,14 @@ Free for personal, non-commercial use. You may not resell or sublicense this pro
 ---
 
 <div align="center">
+
+### Credit
+
+The **Weekly Report** metrics — coaching efficiency, optimal lineups, all-play records, points by position — were popularised by the [Fantasy Football Metrics Weekly Report](https://github.com/uberfastman/fantasy-football-metrics-weekly-report) by [uberfastman](https://github.com/uberfastman), a Python tool that emails a full PDF report and supports Yahoo, ESPN, CBS, Sleeper and Fleaflicker. If you want the complete report with charts and per-team pages, use it directly.
+
+LeaguePulse implements those metric *definitions* independently in TypeScript against the Sleeper API. That project is licensed **GPL-3.0** and LeaguePulse is not, so no code from it is copied, vendored, or linked.
+
+---
 
 Built with [Next.js](https://nextjs.org/) · [Tailwind CSS](https://tailwindcss.com/) · [Sleeper API](https://docs.sleeper.app/) · [Claude](https://www.anthropic.com/) · [DiceBear](https://www.dicebear.com/)
 
