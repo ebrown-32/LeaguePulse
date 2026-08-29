@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
+import CareerMetricsSection from './CareerMetrics';
+import TabSelector from '@/components/ui/TabSelector';
 
 interface NextGenStatsProps {
   initialMetrics: Awaited<ReturnType<typeof getAdvancedTeamMetrics>>;
@@ -260,7 +262,7 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
   const [loading, setLoading] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState('all-time');
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'cards' | 'radar' | 'comparison'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'radar' | 'comparison' | 'career'>('cards');
 
   const handleSeasonChange = async (season: string) => {
     setLoading(true);
@@ -307,22 +309,18 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
     <div className="space-y-8">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
-        {/* View Mode Toggle */}
-        <div className="flex bg-muted rounded-lg p-1 gap-1">
-          {(['cards', 'radar', 'comparison'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-all ${
-                viewMode === mode
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {mode === 'comparison' ? 'Compare' : mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
-        </div>
+        <TabSelector
+          id="next-gen-view"
+          aria-label="Stats view"
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { id: 'cards', label: 'Cards' },
+            { id: 'radar', label: 'Radar' },
+            { id: 'comparison', label: 'Compare' },
+            { id: 'career', label: 'Career' },
+          ] as const}
+        />
 
         <SeasonSelect
           seasons={seasons}
@@ -480,6 +478,11 @@ export default function NextGenStats({ initialMetrics, seasons, leagueId }: Next
             ))}
           </motion.div>
         )}
+
+        {/* The all-time record. Its own tab rather than a slab at the foot of
+            the page, where it sat below three view modes and an explainer and
+            was effectively undiscoverable. */}
+        {viewMode === 'career' && <CareerMetricsSection season={selectedSeason} />}
 
         {viewMode === 'comparison' && (
           <motion.div

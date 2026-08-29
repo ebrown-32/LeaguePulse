@@ -12,6 +12,7 @@ import {
   Newspaper,
   Megaphone,
   Receipt,
+  ClipboardCheck,
   ClipboardList,
   Scroll,
   Sword,
@@ -27,6 +28,7 @@ import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
 import { AddSquareIcon } from '@/components/icons/AppIcons';
+import SearchPalette from './SearchPalette';
 
 interface NavItem {
   name: string;
@@ -34,15 +36,23 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
+/**
+ * The four destinations worth a permanent slot.
+ *
+ * Home is reachable from the logo, and Matchups and Rivalries moved into the
+ * menu: they are things you look up, where these four are things you read.
+ */
 const PRIMARY_NAV: NavItem[] = [
-  { name: 'Home',      href: '/',          icon: LayoutDashboard },
-  { name: 'Matchups',  href: '/matchups',  icon: Swords          },
-  { name: 'Rivalries', href: '/rivalries', icon: Sword           },
-  { name: 'Next Gen',  href: '/next-gen',  icon: Activity        },
-  { name: 'History',   href: '/history',   icon: Database        },
+  { name: 'Next Gen',      href: '/next-gen', icon: Activity        },
+  { name: 'History',       href: '/history',  icon: Database        },
+  { name: 'Weekly Report', href: '/report',   icon: ClipboardCheck  },
+  { name: 'The Desk',      href: '/desk',     icon: Megaphone       },
 ];
 
 const MORE_NAV: NavItem[] = [
+  { name: 'Home',         href: '/',             icon: LayoutDashboard },
+  { name: 'Matchups',     href: '/matchups',     icon: Swords       },
+  { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
   // Power Rankings (/analyzer) is built and working but unlinked: the free
   // FantasyPros tier caps every board at 10 rows, so only ~40 of ~200
@@ -52,7 +62,6 @@ const MORE_NAV: NavItem[] = [
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
-  { name: 'The Desk',     href: '/desk',         icon: Megaphone    },
   { name: 'Media',        href: '/media',        icon: Newspaper    },
   { name: 'Constitution', href: '/constitution', icon: Scroll       },
 ];
@@ -76,9 +85,22 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 8);
+    // Coalesced to one read per frame. Reading scrollY straight from the
+    // event handler runs a layout read for every event a fast flick emits,
+    // which is the kind of thing that makes scrolling feel gritty.
+    let frame = 0;
+    const handler = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setScrolled(window.scrollY > 8);
+      });
+    };
     window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
+    return () => {
+      window.removeEventListener('scroll', handler);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, []);
 
   useEffect(() => { setIsOpen(false); setMoreOpen(false); }, [pathname]);
@@ -257,6 +279,16 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
+            {/* One index for the palette, built from the same nav lists so a
+                page can never be navigable but unsearchable. */}
+            <SearchPalette
+              pages={ALL_NAV.map(n => ({
+                id: n.href,
+                label: n.name,
+                href: n.href,
+                group: 'Pages',
+              }))}
+            />
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}

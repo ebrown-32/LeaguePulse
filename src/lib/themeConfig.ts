@@ -10,7 +10,7 @@ export type FontPairKey =
   | 'archivo-inter'| 'chakra-inter'    | 'sora-inter'   | 'dmserif-dm'
   | 'rubikmono-inter' | 'teko-inter'   | 'familjen-inter' | 'baskerville-inter';
 
-export type BackgroundStyle = 'grid' | 'plain';
+export type BackgroundStyle = 'grid' | 'particles' | 'plain';
 export type MotionLevel = 'full' | 'reduced';
 
 export type PaletteKey =
@@ -88,6 +88,12 @@ export interface ThemeConfig {
   motion:        MotionLevel;     // page transitions + ambient drift
   logoUrl:       string | null;
   leagueName:    string | null;
+  /** Browser tab icon. Falls back to the logo, then to the bundled default. */
+  faviconUrl:    string | null;
+  /** Browser tab and share title. Falls back to the league name. */
+  siteTitle:     string | null;
+  /** Share and search description. */
+  siteDescription: string | null;
   txColorsDark:  TxColors;
   txColorsLight: TxColors;
 }
@@ -789,6 +795,9 @@ export const DEFAULT_THEME: ThemeConfig = {
   motion:        'full',
   logoUrl:       null,
   leagueName:    null,
+  faviconUrl:    null,
+  siteTitle:     null,
+  siteDescription: null,
   txColorsDark:  DEFAULT_TX_DARK,
   txColorsLight: DEFAULT_TX_LIGHT,
 };

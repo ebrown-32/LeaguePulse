@@ -707,10 +707,11 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-medium text-muted-foreground">Background</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: 'grid',  label: 'Grid',  hint: 'Subtle animated field' },
-                      { id: 'plain', label: 'Plain', hint: 'Flat, no backdrop' },
+                      { id: 'grid',      label: 'Grid',      hint: 'Subtle animated field' },
+                      { id: 'particles', label: 'Particles', hint: 'Drifting, linked points' },
+                      { id: 'plain',     label: 'Plain',     hint: 'Flat, no backdrop' },
                     ] as { id: BackgroundStyle; label: string; hint: string }[]).map(opt => (
                       <button
                         key={opt.id}
@@ -729,6 +730,13 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                       </button>
                     ))}
                   </div>
+                  {theme.background === 'particles' && (
+                    <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                      The field is drawn on a canvas behind the whole app, so it does not appear in
+                      the preview above. Save and it is live everywhere. It follows your accent
+                      colour, and holds still when Motion is set to Reduced.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -878,6 +886,87 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                       <span className="text-xs text-muted-foreground">Preview</span>
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Browser tab title
+                  </label>
+                  <input
+                    type="text"
+                    value={theme.siteTitle ?? ''}
+                    onChange={e => setTheme(t => ({ ...t, siteTitle: e.target.value || null }))}
+                    placeholder={theme.leagueName || 'League Pulse'}
+                    maxLength={60}
+                    className="
+                      w-full rounded-md border border-border bg-background px-3 py-2
+                      text-sm text-foreground placeholder:text-muted-foreground
+                      focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
+                    "
+                  />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Shown in the browser tab, bookmarks, and when the site is shared.
+                    Defaults to your league name.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Share description
+                  </label>
+                  <input
+                    type="text"
+                    value={theme.siteDescription ?? ''}
+                    onChange={e => setTheme(t => ({ ...t, siteDescription: e.target.value || null }))}
+                    placeholder="A new way to consume fantasy football."
+                    maxLength={160}
+                    className="
+                      w-full rounded-md border border-border bg-background px-3 py-2
+                      text-sm text-foreground placeholder:text-muted-foreground
+                      focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
+                    "
+                  />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    The blurb that appears under the link when someone posts the site in a group chat.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Favicon
+                  </label>
+                  <input
+                    type="text"
+                    value={theme.faviconUrl ?? ''}
+                    onChange={e => setTheme(t => ({ ...t, faviconUrl: e.target.value || null }))}
+                    placeholder="Defaults to your logo"
+                    className="
+                      w-full rounded-md border border-border bg-background px-3 py-2
+                      text-sm text-foreground placeholder:text-muted-foreground
+                      focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
+                    "
+                  />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    The little icon in the browser tab. A square PNG at 64px or larger works best.
+                    Leave blank to use the logo above.
+                  </p>
+                  {(theme.faviconUrl || theme.logoUrl) && (
+                    <div className="mt-2 flex items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={theme.faviconUrl || theme.logoUrl || '/logo.png'}
+                        alt="Favicon preview"
+                        className="h-4 w-4 rounded-sm object-contain"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Tab icon, actual size
+                      </span>
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Tabs and share cards are cached hard by browsers. After saving, a hard refresh
+                    or a new tab may be needed before you see the change.
+                  </p>
                 </div>
               </div>
             </section>

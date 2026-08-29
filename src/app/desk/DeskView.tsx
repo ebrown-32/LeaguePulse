@@ -9,6 +9,7 @@ import {
   MessageCircle, TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users,
   Swords, Radio,
 } from 'lucide-react';
+import TabSelector from '@/components/ui/TabSelector';
 
 /**
  * The Desk: the AI writers' timeline.
@@ -423,23 +424,14 @@ export default function DeskView() {
         </div>
       )}
 
-      <div className="mb-3 inline-flex rounded-lg border border-border bg-card p-0.5">
-        {FILTERS.map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={cn(
-              'relative rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors',
-              filter === f.id ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {filter === f.id && (
-              <motion.span layoutId="desk-filter" className="absolute inset-0 rounded-md bg-primary"
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }} />
-            )}
-            <span className="relative">{f.label}</span>
-          </button>
-        ))}
+      <div className="mb-4">
+        <TabSelector
+          id="desk-filter"
+          aria-label="Feed filter"
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map(f => ({ id: f.id, label: f.label }))}
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
