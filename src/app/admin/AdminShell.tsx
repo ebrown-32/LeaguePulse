@@ -70,7 +70,10 @@ export default function AdminShell() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && login()}
-            autoFocus
+            // Desktop only. Focusing a field on mount raises the keyboard
+            // immediately on a phone, which is jarring and, on iOS, was
+            // itself enough to trigger the viewport zoom.
+            autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           {error && <p className="mt-2 text-xs text-rose-500">{error}</p>}

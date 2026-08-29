@@ -27,7 +27,7 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 ## What you get
 
 ### Every week
-- **Home** — league status, the current story, and this week's matchups. Tap any matchup for both rosters, previous meetings, and a rivalry score.
+- **Home** — the league at a glance in stat cards (seasons, games, best score, champions, trades, total moves), a trophy case with every championship ring in 3D including the ones nobody has won yet, and this week's matchups. Tap any matchup for both rosters, previous meetings, and a rivalry score.
 - **Matchups** — every week, every score, same drill-down.
 - **Rosters** — every team, with player production and a drill-down into any player's stats and transaction history.
 - **Transactions** — every trade, waiver claim, and drop, draft picks included.
@@ -35,7 +35,8 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 ### The receipts
 - **Rivalries** — all-time head-to-head between every pair of managers, as a colour-coded matrix with game-by-game history.
 - **History** — champions by season, all-time records, and a record book. Champions get a 3D championship ring.
-- **Weekly Report** — playoff odds from 10,000 Monte Carlo simulations, coaching efficiency against the best lineup you could have started, points left on the bench, all-play records, points by position, and a composite power ranking.
+- **Standings** — the table with point differential, all-play record, median record and the playoff cut drawn on it. Filter by season or all time. Records come straight from Sleeper, so they always agree with it.
+- **Weekly Report** — playoff odds from 10,000 Monte Carlo simulations, coaching efficiency against the best lineup you could have started, points left on the bench, all-play records, points by position, and a composite power ranking. Any past season or week can be rebuilt exactly, since Sleeper stores each week's rosters and scores permanently.
 - **Next Gen** — consistency, explosiveness, clutch, efficiency, momentum, and luck for every manager, plus a career record book: all-time coaching efficiency, points left on the bench, all-play and median records, and career points by position across every season played.
 - **Schedule Lab** — replay the season against someone else's schedule and find out how much was luck.
 - **Drafts** — pick-by-pick boards, including traded picks and where they ended up.
@@ -43,7 +44,7 @@ League Pulse is that place. Give it your league ID and it pulls everything from 
 
 ### The fun part
 - **Media** — real NFL news, waiver wire trends, and the injury report.
-- **AI Desk** — a cast of AI sports commentators who write opinion columns, power rankings, and season predictions about *your* league. They read the actual record, take sides, and name names.
+- **The Feed** — a cast of AI commentators who write opinion columns, power rankings and season predictions about *your* league, plus fans who post at managers, teams and players from the group chat. Add, edit and delete both from the admin panel.
 - **Game day** — midweek previews that pick every matchup, a post when the slate kicks off, and live reactions while the games are on, all read off the real scoreboard.
 - **Player Rankings** — FantasyPros expert consensus, weekly and dynasty, showing which of your managers owns each player.
 - **Chat assistant** — ask anything about your league in plain English. It reads your live Sleeper data and can search the web for NFL news.
@@ -175,6 +176,8 @@ Request a free key from [FantasyPros](https://secure.fantasypros.com/api-keys/re
 | `AI_LIVE_COOLDOWN_MINUTES` | Minimum gap between live game-day posts. Optional, default 90. |
 
 Prefer a `rediss://` connection string? Use `REDIS_URL` instead of the Upstash pair.
+
+Weather needs no key at all: fixtures and venues come from ESPN's public scoreboard, forecasts from [Open-Meteo](https://open-meteo.com). Both are free.
 
 ---
 

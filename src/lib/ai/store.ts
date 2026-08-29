@@ -16,6 +16,8 @@ export interface FeedPost {
   personaName: string;
   personaHandle: string;
   personaAccent: string;
+  /** Media or fan, so the feed can separate writers from the group chat. */
+  personaType?: 'media' | 'fan';
   /** Resolved DiceBear URL, stored with the post so an avatar change does not
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
@@ -226,13 +228,30 @@ export async function getPersonalities(): Promise<Personality[]> {
     return grants.length ? { ...p, kinds: [...p.kinds, ...grants] } : p;
   });
 
-  // Personalities added to the defaults since the last save should appear too,
-  // and retired ones should disappear. The admin panel can only edit existing
-  // personas, never create them, so a saved entry with no matching default is
-  // one that has been removed from the cast.
+  // Personalities added to the defaults since the last save should appear too.
+  //
+  // A saved entry with no matching default is either one the admin created, in
+  // which case it stays, or a built-in retired from the code, in which case it
+  // goes. Deleting a built-in is recorded with `hidden` rather than by dropping
+  // the entry, because the defaults are merged back in right here and a dropped
+  // one would simply reappear.
   const savedIds = new Set(saved.map(p => p.id));
-  const live = merged.filter(p => defaultsById.has(p.id));
-  return [...live, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];
+  const live = merged.filter(p => p.custom || defaultsById.has(p.id));
+  return [...live, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))]
+    .filter(p => !p.hidden);
+}
+
+/**
+ * Every persona including deleted built-ins, for the admin panel only.
+ *
+ * The public read filters hidden entries; without this the admin could delete
+ * a built-in and then have no way to bring it back short of clearing storage.
+ */
+export async function getPersonalitiesForAdmin(): Promise<Personality[]> {
+  const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
+  if (!saved?.length) return DEFAULT_PERSONALITIES;
+  const savedIds = new Set(saved.map(p => p.id));
+  return [...saved, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];
 }
 
 export async function savePersonalities(list: Personality[]): Promise<void> {

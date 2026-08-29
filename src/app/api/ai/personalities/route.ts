@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPersonalities, savePersonalities } from '@/lib/ai/store';
+import { getPersonalities, getPersonalitiesForAdmin, savePersonalities } from '@/lib/ai/store';
 import { avatarProblem } from '@/lib/ai/avatarUpload';
 import type { Personality } from '@/lib/ai/personalities';
 
@@ -9,8 +9,15 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
 }
 
-export async function GET() {
-  return NextResponse.json({ personalities: await getPersonalities() });
+/**
+ * The public read hides deleted built-ins; the admin read does not, so a
+ * delete can be undone from the panel rather than only by clearing storage.
+ */
+export async function GET(req: NextRequest) {
+  const forAdmin = authorized(req);
+  return NextResponse.json({
+    personalities: forAdmin ? await getPersonalitiesForAdmin() : await getPersonalities(),
+  });
 }
 
 export async function PUT(req: NextRequest) {

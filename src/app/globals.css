@@ -61,7 +61,7 @@
     --secondary:          0   0%  92%;
     --secondary-foreground: 221 51% 16%;
     --muted:              0   0%  92%;
-    --muted-foreground:   0   0%  36%;
+    --muted-foreground:   0   0%  30%;   /* lifted for small text */
     --accent:             0   0%  90%;
     --accent-foreground:  221 51% 16%;
 
@@ -93,7 +93,7 @@
     --secondary:          221 51% 10%;
     --secondary-foreground: 0 0%  80%;
     --muted:              221 51% 10%;
-    --muted-foreground:   0   0%  60%;   /* #999999 */
+    --muted-foreground:   0   0%  72%;   /* lifted for small text */
     --accent:             220 51% 13%;   /* #101b31 */
     --accent-foreground:  0   0%  90%;
 
@@ -191,6 +191,97 @@
      Anchoring holds your place instead. */
   body {
     overflow-anchor: auto;
+  }
+
+  /* ── iOS zoom guard ────────────────────────────────────────────────────
+     Safari on iOS zooms the whole viewport whenever a focused field renders
+     below 16px, and it does not zoom back out. The user is then left pinching
+     to recover, which is what made the admin login unusable on a phone.
+
+     Done here as one rule rather than at every call site: there are two dozen
+     form controls across the app and any new one would inherit the bug. The
+     exclusions are the input types that never trigger it, and whose sizing is
+     deliberate. */
+
+  @media (max-width: 640px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='color']):not([type='range']):not([type='file']),
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  /* ── Honeycomb loader ──────────────────────────────────────────────────
+     Seven hexagons pulsing outward in sequence.
+
+     Each cell is a rectangle with a triangle glued to the top and bottom via
+     ::before and ::after, which is the only way to get a hexagon that scales
+     cleanly and inherits a colour. Everything is driven off --honeycomb-size
+     so the whole thing resizes from one number, and colour comes from
+     currentColor so it belongs to whatever palette is active.
+
+     The 2.1s cycle with 0.1s stagger is what makes the pulse travel around the
+     ring rather than flashing all at once. */
+
+  .honeycomb {
+    --honeycomb-size: 24px;
+    position: relative;
+    height: var(--honeycomb-size);
+    width: var(--honeycomb-size);
+    color: hsl(var(--primary));
+  }
+
+  .honeycomb div {
+    position: absolute;
+    width: var(--honeycomb-size);
+    height: calc(var(--honeycomb-size) / 2);
+    margin-top: calc(var(--honeycomb-size) / 4);
+    background: currentColor;
+    /* `backwards` holds the first frame during the delay, so a cell is
+       invisible until its turn instead of appearing then popping. */
+    animation: honeycomb 2.1s infinite backwards;
+  }
+
+  .honeycomb div::before,
+  .honeycomb div::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-left: calc(var(--honeycomb-size) / 2) solid transparent;
+    border-right: calc(var(--honeycomb-size) / 2) solid transparent;
+  }
+
+  .honeycomb div::before {
+    top: calc(var(--honeycomb-size) / -4);
+    border-bottom: calc(var(--honeycomb-size) / 4) solid currentColor;
+  }
+
+  .honeycomb div::after {
+    bottom: calc(var(--honeycomb-size) / -4);
+    border-top: calc(var(--honeycomb-size) / 4) solid currentColor;
+  }
+
+  /* Six cells around one. The delays walk the ring; the centre goes last. */
+  .honeycomb div:nth-child(1) { animation-delay: 0s;   left: calc(var(--honeycomb-size) * -1.17); top: 0; }
+  .honeycomb div:nth-child(2) { animation-delay: 0.1s; left: calc(var(--honeycomb-size) * -0.58); top: calc(var(--honeycomb-size) * 0.92); }
+  .honeycomb div:nth-child(3) { animation-delay: 0.2s; left: calc(var(--honeycomb-size) * 0.58);  top: calc(var(--honeycomb-size) * 0.92); }
+  .honeycomb div:nth-child(4) { animation-delay: 0.3s; left: calc(var(--honeycomb-size) * 1.17);  top: 0; }
+  .honeycomb div:nth-child(5) { animation-delay: 0.4s; left: calc(var(--honeycomb-size) * 0.58);  top: calc(var(--honeycomb-size) * -0.92); }
+  .honeycomb div:nth-child(6) { animation-delay: 0.5s; left: calc(var(--honeycomb-size) * -0.58); top: calc(var(--honeycomb-size) * -0.92); }
+  .honeycomb div:nth-child(7) { animation-delay: 0.6s; left: 0; top: 0; }
+
+  @keyframes honeycomb {
+    0%, 20%, 80%, 100% { opacity: 0; transform: scale(0); }
+    30%, 70%           { opacity: 1; transform: scale(1); }
+  }
+
+  /* Motion turned down: the cells hold steady instead of pulsing, so the mark
+     is still there and still says "working" without the movement. */
+  html[data-motion='reduced'] .honeycomb div { animation: none; opacity: 1; transform: scale(1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .honeycomb div { animation: none; opacity: 1; transform: scale(1); }
   }
 
   /* ── Loading skeletons ─────────────────────────────────────────────────
@@ -544,4 +635,47 @@ mark {
   color: hsl(var(--foreground));
   border-radius: 2px;
   padding: 0 2px;
+}
+
+@layer components {
+  /* ── Glass surfaces ────────────────────────────────────────────────────
+     A translucent card that lets the particle field and the page ground show
+     through, with a hairline top edge for the lit look.
+
+     `backdrop-filter` is the expensive part, so this is a class applied to the
+     handful of surfaces that want it rather than to every card on the site.
+     Blur on dozens of stacked elements is how a page starts dropping frames
+     while scrolling. */
+
+  .lp-glass {
+    background-color: hsl(var(--card) / 0.55);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border-color: hsl(var(--border) / 0.65);
+    /* A brighter inner top edge reads as a pane catching light. Kept subtle:
+       at full strength it looks like a border, not a highlight. */
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.07),
+      0 1px 2px hsl(0 0% 0% / 0.04);
+  }
+
+  .lp-glass:hover {
+    background-color: hsl(var(--card) / 0.7);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  /* Light mode needs more opacity, not less: a pale card at 55% over a pale
+     ground has almost no edge and the text loses its footing. */
+  :root:not(.dark) .lp-glass {
+    background-color: hsl(var(--card) / 0.72);
+  }
+  :root:not(.dark) .lp-glass:hover {
+    background-color: hsl(var(--card) / 0.85);
+  }
+
+  /* Where the browser cannot blur, fall back to an opaque card rather than a
+     washed out one that would leave text sitting on the background. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .lp-glass { background-color: hsl(var(--card)); }
+  }
 }

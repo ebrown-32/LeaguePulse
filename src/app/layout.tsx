@@ -14,6 +14,8 @@ import ParticleField from '@/components/ParticleField';
 import type { Metadata } from 'next';
 import { DEFAULT_THEME } from '@/lib/themeConfig';
 import RouteProgress from '@/components/layout/RouteProgress';
+import AppLoader from '@/components/layout/AppLoader';
+import FeedbackProvider from '@/components/layout/FeedbackProvider';
 
 const displayFont = Space_Grotesk({
   subsets:  ['latin'],
@@ -77,6 +79,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           min-h-screen bg-background text-foreground antialiased
         `}
       >
+        <FeedbackProvider
+          sound={theme.sound === 'on'}
+          haptics={theme.haptics !== 'off'}
+        />
+        <AppLoader leagueName={theme.leagueName ?? theme.siteTitle} />
         <RouteProgress />
         <ThemeInjector />
         {theme.background === 'particles' && <ParticleField />}

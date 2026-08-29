@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { LoadingSpinner, LoadingBlock } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import {
   MessageCircle, TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users,
@@ -36,6 +36,8 @@ interface FeedPost {
   personaHandle: string;
   personaAccent: string;
   personaAvatar?: string;
+  /** Fans are league members reacting, not writers filing. */
+  personaType?: 'media' | 'fan';
   kind: Kind;
   content: any;
   createdAt: string;
@@ -58,7 +60,8 @@ const FILTERS = [
   { id: 'all', label: 'Everything' },
   { id: 'live', label: 'Game day' },
   { id: 'long', label: 'Columns' },
-  { id: 'short', label: 'Tweets' },
+  { id: 'short', label: 'Posts' },
+  { id: 'fans', label: 'Fans' },
 ] as const;
 type Filter = (typeof FILTERS)[number]['id'];
 
@@ -398,6 +401,7 @@ export default function DeskView() {
     if (filter === 'live') {
       return posts.filter(p => LIVE_KINDS.has(p.kind) || p.kind === 'matchupPreview');
     }
+    if (filter === 'fans') return posts.filter(p => p.personaType === 'fan');
     const long = (p: FeedPost) =>
       p.kind !== 'tweet' && p.kind !== 'comment' && !LIVE_KINDS.has(p.kind);
     return posts.filter(p => (filter === 'long' ? long(p) : !long(p)));
@@ -410,7 +414,7 @@ export default function DeskView() {
   }, [posts]);
 
   return (
-    <PageLayout title="The Desk" subtitle="Your league's beat writers.">
+    <PageLayout title="The Feed" subtitle="Your league, posting through it.">
       {/* Who is filing */}
       {writers.length > 0 && (
         <div className="mb-4 flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -436,7 +440,7 @@ export default function DeskView() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         {posts === null ? (
-          <div className="flex justify-center py-20"><LoadingSpinner className="h-8 w-8" /></div>
+          <LoadingBlock size={16} />
         ) : !shown.length ? (
           <div className="px-4 py-16 text-center">
             <MessageCircle className="mx-auto h-8 w-8 text-muted-foreground/40" />

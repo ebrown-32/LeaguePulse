@@ -1,5 +1,6 @@
 import { getLeagueInfo, getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
+import { getAllLinkedLeagueIds } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { optimalLineup, coachingEfficiency, type LineupPlayer } from './optimalLineup';
 import { simulatePlayoffOdds, type SimFixture, type SimTeam, type OddsResult } from './playoffOdds';
@@ -91,6 +92,8 @@ export interface TeamReport {
 }
 
 export interface WeeklyReport {
+  /** True when records include a weekly game against the league median. */
+  medianMatch: boolean;
   season: string;
   /** Last completed week included in the report. */
   throughWeek: number;
@@ -129,6 +132,25 @@ function rankBy<T>(items: T[], value: (t: T) => number): Map<T, number> {
 }
 
 /**
+ * Weeks of a season that have actually been played, for a week picker.
+ *
+ * Reads the matchup feed rather than assuming a full season: a week that was
+ * scheduled but never played comes back as all zeroes and should not be
+ * offered as something to look at.
+ */
+export async function playedWeeks(leagueId: string): Promise<number[]> {
+  const league: any = await getLeagueInfo(leagueId).catch(() => null);
+  const last = Number(league?.settings?.playoff_week_start ?? 15) - 1;
+  const weeks = await Promise.all(
+    Array.from({ length: Math.max(0, last) }, async (_, i) => {
+      const raw = await getLeagueMatchups(leagueId, i + 1).catch(() => [] as any[]);
+      return Array.isArray(raw) && raw.some(m => Number(m.points ?? 0) > 0) ? i + 1 : 0;
+    }),
+  );
+  return weeks.filter(w => w > 0);
+}
+
+/**
  * Build the report for the current season, through the last completed week.
  *
  * Weeks are treated as played only when somebody in the league scored, so a
@@ -137,6 +159,22 @@ function rankBy<T>(items: T[], value: (t: T) => number): Map<T, number> {
  */
 export async function buildWeeklyReport(): Promise<WeeklyReport | null> {
   return buildWeeklyReportFor(await getCurrentLeagueId());
+}
+
+/**
+ * Every season the league has played, newest first, with its league id.
+ *
+ * Sleeper gives each season its own league id chained by previous_league_id,
+ * so picking a past season means picking a different league.
+ */
+export async function availableSeasons(): Promise<{ season: string; leagueId: string }[]> {
+  const ids = await getAllLinkedLeagueIds(await getCurrentLeagueId());
+  const rows = await Promise.all(ids.map(async id => {
+    const l: any = await getLeagueInfo(id).catch(() => null);
+    return l?.season ? { season: String(l.season), leagueId: id } : null;
+  }));
+  return rows.filter((r): r is { season: string; leagueId: string } => r !== null)
+    .sort((a, b) => b.season.localeCompare(a.season));
 }
 
 /**
@@ -159,11 +197,26 @@ export async function buildWeeklyReportFor(
   ]);
 
   const rosterPositions: string[] = (league as any)?.roster_positions ?? [];
+  // Median matches add a second game each week against the league median, so
+  // a record built from head-to-head alone is exactly half the real one. The
+  // setting is `league_average_match`; Sleeper has no `median_wins` field.
+  const medianMatch = Number((league as any)?.settings?.league_average_match ?? 0) === 1;
   const currentWeek = Number(nflState?.week ?? 0);
   const seasonType = String(nflState?.season_type ?? '');
-  // In the preseason Sleeper's week counts preseason weeks, which are not
-  // fantasy weeks; nothing has been played, so there is no report to build.
-  const lastWeek = weekOverride ?? (seasonType === 'pre' ? 0 : Math.min(currentWeek, 18));
+  const playoffStart = Number((league as any)?.settings?.playoff_week_start ?? 15);
+
+  // A past season is over, so it runs to the end of its own regular season.
+  // Only the live season is bounded by where the NFL currently is. Reading the
+  // current week for every season meant that during the preseason, asking for
+  // a completed season returned nothing at all.
+  const isCurrentSeason = String(league?.season ?? '') === String(nflState?.season ?? '');
+  const lastWeek = weekOverride ?? (
+    !isCurrentSeason ? Math.max(0, playoffStart - 1)
+      // In the preseason Sleeper's week counts preseason weeks, which are not
+      // fantasy weeks; nothing has been played, so there is no report.
+      : seasonType === 'pre' ? 0
+        : Math.min(currentWeek, 18)
+  );
   if (lastWeek < 1) return null;
 
   const userById = new Map(users.map(u => [u.user_id, u]));
@@ -280,6 +333,13 @@ export async function buildWeeklyReportFor(
         bestStarter: ranked[0] ?? null,
         worstStarter: ranked.length > 1 ? ranked[ranked.length - 1] : null,
       });
+
+      // The median game, where the league plays them.
+      if (medianMatch) {
+        if (actual > med) report.wins++;
+        else if (actual < med) report.losses++;
+        else report.ties++;
+      }
 
       report.pointsFor = round(report.pointsFor + actual);
       report.averageOptimal = round(report.averageOptimal + opt.total);
@@ -404,10 +464,12 @@ export async function buildWeeklyReportFor(
   const odds = playoffTeams
     ? simulatePlayoffOdds(simTeams, fixtures, playoffTeams, {
         seed: Number(`${league?.season ?? 0}`.slice(-4)) * 100 + throughWeek,
+        medianMatch,
       })
     : null;
 
   return {
+    medianMatch,
     season: String(league?.season ?? nflState?.season ?? ''),
     throughWeek,
     leagueName: String((league as any)?.name ?? 'League'),
