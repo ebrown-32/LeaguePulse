@@ -70,6 +70,56 @@ const MORE_NAV: NavItem[] = [
   { name: 'Constitution', href: '/constitution', icon: Scroll       },
 ];
 
+/**
+ * The same destinations, grouped by what you would be trying to do.
+ *
+ * The mobile drawer listed all fifteen in one undifferentiated column of
+ * uppercase text, which is the hardest possible thing to scan. Grouping gives
+ * the eye somewhere to land, and the labels are the question you are asking
+ * rather than a category name: you open this menu wanting to check on the
+ * week, dig into something, catch up, or look something up.
+ */
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'This week',
+    items: [
+      { name: 'Home',      href: '/',          icon: LayoutDashboard },
+      { name: 'Matchups',  href: '/matchups',  icon: Swords          },
+      { name: 'Standings', href: '/standings', icon: ListOrdered     },
+      // The report is about the week just played, so it belongs with the
+      // other things you check on a Tuesday rather than with the deep dives.
+      { name: 'Weekly Report', href: '/report',  icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: 'Dig in',
+    items: [
+      { name: 'Next Gen',      href: '/next-gen',     icon: Activity       },
+      // Somewhere you go to explore, not to look one thing up.
+      { name: 'History',       href: '/history',      icon: Database       },
+      { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
+      { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
+    ],
+  },
+  {
+    label: 'Catch up',
+    items: [
+      { name: 'The Feed',     href: '/desk',         icon: Megaphone     },
+      { name: 'Media',        href: '/media',        icon: Newspaper     },
+      { name: 'Rosters',      href: '/rosters',      icon: Shirt         },
+      { name: 'Transactions', href: '/transactions', icon: Receipt       },
+    ],
+  },
+  {
+    label: 'Look it up',
+    items: [
+      { name: 'Drafts',          href: '/drafts',       icon: ClipboardList },
+      { name: 'Player Rankings', href: '/rankings',     icon: ListOrdered },
+      { name: 'Constitution',    href: '/constitution', icon: Scroll      },
+    ],
+  },
+];
+
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 interface NavbarProps {
@@ -255,24 +305,42 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                     animate={{ opacity: 1, y: 0,  scale: 1    }}
                     exit={{    opacity: 0, y: -4, scale: 0.97 }}
                     transition={{ duration: 0.12 }}
-                    className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-card/95 backdrop-blur-xl shadow-lg py-1.5 z-50"
+                    className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-border bg-card/95 p-2 shadow-lg backdrop-blur-xl"
                   >
-                    {MORE_NAV.map(item => {
-                      const isActive = pathname === item.href;
+                    {/* The same four groups, in the same order, as the mobile
+                        sheet. Anything already in the top bar is left out
+                        rather than repeated a few pixels below itself. */}
+                    {NAV_GROUPS.map(group => {
+                      const items = group.items.filter(
+                        item => !PRIMARY_NAV.some(p => p.href === item.href),
+                      );
+                      if (!items.length) return null;
                       return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={cn(
-                            'flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold uppercase tracking-widest transition-colors',
-                            isActive
-                              ? 'text-primary bg-primary/8'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                          )}
-                        >
-                          <item.icon className="h-3.5 w-3.5 shrink-0" />
-                          {item.name}
-                        </Link>
+                        <div key={group.label} className="mb-2 last:mb-0">
+                          <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                            {group.label}
+                          </p>
+                          {items.map(item => {
+                            const isActive = pathname === item.href;
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setMoreOpen(false)}
+                                aria-current={isActive ? 'page' : undefined}
+                                className={cn(
+                                  'flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors',
+                                  isActive
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted/60',
+                                )}
+                              >
+                                <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                {item.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </motion.div>
@@ -305,52 +373,125 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
         </nav>
       </header>
 
-      {/* Mobile drawer, all items */}
+      {/* Mobile drawer.
+
+          A full height sheet rather than the old dropdown: fifteen links in a
+          panel hanging off the header meant a cramped, scrolling list of
+          uppercase text with no structure. This has room to group them, and
+          the groups are what make it scannable. */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0  }}
-            exit={{    opacity: 0, y: -6 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="fixed inset-x-0 top-20 lg:top-24 z-40 xl:hidden border-b border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-4px_hsl(0_0%_0%/0.4)]"
-          >
-            
-            <nav className="mx-auto max-w-7xl px-4 py-3 flex flex-col gap-0.5">
-              {ALL_NAV.map(item => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-semibold uppercase tracking-widest',
-                      isActive
-                        ? 'bg-primary/10 text-primary border border-primary/20'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent',
-                    )}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsOpen(false)}
+              // Above the chat launcher at z-[72]; a modal menu should cover a
+              // floating button, not sit under it. Below the search palette
+              // at z-[80], which can be opened from anywhere.
+              className="fixed inset-0 z-[74] bg-background/70 backdrop-blur-sm xl:hidden"
+              aria-hidden
+            />
 
-              {platform !== 'other' && !isStandalone && (
-                <>
-                  <div className="my-1.5 border-t border-border/60" />
-                  <button
-                    onClick={() => { setIsOpen(false); openModal(); }}
-                    className="flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent"
-                  >
-                    <AddSquareIcon className="h-4 w-4 shrink-0" />
-                    <span>Add to Home Screen</span>
-                  </button>
-                </>
-              )}
-            </nav>
-          </motion.div>
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+              // Bounded so it never becomes a full-bleed wall of links on a
+              // tablet, and inset-safe so the last row clears the home bar.
+              className="fixed inset-y-0 right-0 z-[76] flex w-[86%] max-w-sm flex-col border-l border-border bg-card shadow-2xl xl:hidden"
+            >
+              <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Menu
+                </span>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close menu"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                {NAV_GROUPS.map((group, gi) => (
+                  <div key={group.label} className={gi > 0 ? 'mt-5' : undefined}>
+                    <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                      {group.label}
+                    </p>
+                    <div className="space-y-0.5">
+                      {group.items.map((item, i) => {
+                        const isActive = pathname === item.href;
+                        return (
+                          <motion.div
+                            key={item.href}
+                            initial={{ opacity: 0, x: 12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            // Staggered by position across the whole sheet, so
+                            // the list arrives as one movement rather than four.
+                            transition={{ delay: 0.04 + (gi * 4 + i) * 0.012, duration: 0.2 }}
+                          >
+                            <Link
+                              href={item.href}
+                              onClick={() => setIsOpen(false)}
+                              aria-current={isActive ? 'page' : undefined}
+                              className={cn(
+                                'flex min-h-[44px] items-center gap-3 rounded-lg px-2 py-2 transition-colors',
+                                isActive
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-foreground hover:bg-accent',
+                              )}
+                            >
+                              <span className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                                isActive
+                                  ? 'border-primary/30 bg-primary/10 text-primary'
+                                  : 'border-border text-muted-foreground',
+                              )}>
+                                <item.icon className="h-4 w-4" />
+                              </span>
+                              {/* Sentence case, not the uppercase widely
+                                  tracked style of the old list. At this size
+                                  that styling is actively harder to read. */}
+                              <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                                {item.name}
+                              </span>
+                              {isActive && (
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                              )}
+                            </Link>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {platform !== 'other' && !isStandalone && (
+                  <div className="mt-5 border-t border-border pt-3">
+                    <button
+                      onClick={() => { setIsOpen(false); openModal(); }}
+                      className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-foreground transition-colors hover:bg-accent"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground">
+                        <AddSquareIcon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                        Add to home screen
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </nav>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>

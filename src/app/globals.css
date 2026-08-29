@@ -638,6 +638,28 @@ mark {
 }
 
 @layer components {
+  /* The chat launcher's halo.
+
+     A slow expanding ring rather than a hard pulse: this sits in the corner of
+     every page, so anything faster reads as a notification demanding to be
+     dealt with. */
+
+  .lp-chat-halo {
+    animation: lp-halo 4.5s ease-out infinite;
+  }
+
+  @keyframes lp-halo {
+    0%   { transform: scale(1);    opacity: 0.14; }
+    70%  { transform: scale(1.22); opacity: 0; }
+    100% { transform: scale(1.22); opacity: 0; }
+  }
+
+  html[data-motion='reduced'] .lp-chat-halo { animation: none; opacity: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lp-chat-halo { animation: none; opacity: 0; }
+  }
+
   /* ── Glass surfaces ────────────────────────────────────────────────────
      A translucent card that lets the particle field and the page ground show
      through, with a hairline top edge for the lit look.
@@ -649,8 +671,11 @@ mark {
 
   .lp-glass {
     background-color: hsl(var(--card) / 0.55);
-    backdrop-filter: blur(14px) saturate(1.3);
+    /* Prefixed first, standard last. Written the other way round the
+       minifier deduplicated the pair and kept only the -webkit- one, so
+       Chromium saw no standard property at all. */
     -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
     border-color: hsl(var(--border) / 0.65);
     /* A brighter inner top edge reads as a pane catching light. Kept subtle:
        at full strength it looks like a border, not a highlight. */
