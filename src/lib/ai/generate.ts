@@ -364,6 +364,37 @@ export function angleAt(index: number): string {
 }
 
 /**
+ * A specific event the piece has been commissioned to cover, stated as fact.
+ *
+ * This has to be its own block rather than part of the angle. An angle is a
+ * lens, offered next to an instruction that the fact is only the excuse for
+ * the take, so anything put there is treated as raw material to riff on. A
+ * trade fed in that way came back exactly inverted: the team that acquired two
+ * receivers and gave up one star was published as having done the reverse.
+ *
+ * The direction is restated here in the plainest terms available, because it
+ * is the one thing that keeps getting flipped.
+ */
+function eventBlock(record?: string): string {
+  if (!record) return '';
+  return `
+THE EVENT YOU ARE COVERING, TAKEN FROM THE LEAGUE RECORD:
+${record}
+
+Those lines are the record. Read the direction before you write a word.
+Each leg names who GETS an asset and who GIVES UP an asset. A team that GETS
+a player now has him. A team that GIVES UP a player no longer does. "Traded
+away X for Y" means they lost X and gained Y, so check which column each name
+is actually in before you use a phrase like that.
+
+Name only players that appear in those lines. Do not invent what a team got
+back, do not describe a player moving in the opposite direction to the record,
+and if you are not certain who ended up with whom, write about the event
+without naming the players.
+`;
+}
+
+/**
  * Refuses to publish copy that contradicts the transaction record.
  *
  * The brief states every trade in both directions and the prompt forbids
@@ -484,6 +515,9 @@ HOW TO WRITE THIS
  */
 export async function writeArticle(
   p: Personality, subject?: string, angle?: string,
+  /** A specific transaction or result this piece must cover, verbatim from
+   *  the league record. */
+  record?: string,
 ): Promise<Article> {
   const wire = await generateJson({
     schema: ArticleWireSchema,
@@ -491,7 +525,7 @@ export async function writeArticle(
     research: true,
     system: systemFor(p),
     prompt: `${await briefBlock()}
-
+${eventBlock(record)}
 Write an opinion column for the league feed.
 
 ${subject
@@ -545,6 +579,9 @@ Respond with ONLY a JSON object, no prose and no markdown fences:
  */
 export async function writeTweet(
   p: Personality, subject?: string, angle?: string,
+  /** A specific transaction or result this post must cover, verbatim from the
+   *  league record. */
+  record?: string,
 ): Promise<Tweet> {
   const { object } = await generateObject({
     model: claude(MODEL_FAST),
@@ -553,7 +590,7 @@ export async function writeTweet(
     schemaDescription: 'A single short social post',
     system: systemFor(p),
     prompt: `${await briefBlock()}
-
+${eventBlock(record)}
 Write ONE short post for the league feed.
 
 ${p.type === 'fan' ? `TALK TO THEM, NOT ABOUT THEM.
@@ -578,8 +615,12 @@ first few words, without seeing your name. Write the way YOU talk, not the way
 a neutral analyst would: your obsessions, your speech patterns, your opinion of
 yourself. A correct but characterless post is a failure.
 
-Still anchor it to something real, a name or a number from the context above,
-but the fact is the excuse for the take, not the post itself.
+${record
+  ? `Still anchor it to the event above. The take is yours, the facts of that
+event are not: get who gave up what the right way round and everything else is
+your call.`
+  : `Still anchor it to something real, a name or a number from the context above,
+but the fact is the excuse for the take, not the post itself.`}
 
 DO NOT OPEN BY RESTATING THE MOST OBVIOUS STATISTIC. Every writer on this desk
 reaches for the same headline number and the feed ends up reading like one
@@ -601,14 +642,23 @@ all.`,
   });
 }
 
-export async function writeComment(p: Personality, subject: string): Promise<Comment> {
+export async function writeComment(
+  p: Personality, subject: string,
+  /** Set when `subject` is a transaction or result lifted from the league
+   *  record rather than a free text prompt, so the direction is stated. */
+  isRecord = false,
+): Promise<Comment> {
   const { object } = await generateObject({
     model: claude(MODEL_FAST),
     schema: CommentSchema,
     schemaName: 'Comment',
     schemaDescription: 'A short in-character reaction',
     system: systemFor(p),
-    prompt: `${await briefBlock()}
+    prompt: isRecord
+      ? `${await briefBlock()}
+${eventBlock(subject)}
+React to that event in 1-3 sentences, in character.`
+      : `${await briefBlock()}
 
 React in 1-3 sentences, in character, to this:
 

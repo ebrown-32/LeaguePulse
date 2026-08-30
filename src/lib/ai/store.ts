@@ -223,8 +223,48 @@ const NEW_KINDS: ContentKind[] = [
   'powerRankings', 'predictions', 'matchupPreview', 'kickoff', 'liveTake',
 ];
 
-export async function getPersonalities(): Promise<Personality[]> {
+/**
+ * Drops saved entries that a current default has replaced.
+ *
+ * When a character is re-homed under a new id the old entry is left behind
+ * holding the same person, so the cast ends up with two writers sharing a name
+ * and a handle. Those leftovers are removed outright rather than kept and
+ * explained: nothing downstream wants them, and an entry that exists but can
+ * never post is worse than one that is simply gone.
+ *
+ * Identity is name or handle, not id, since the id is exactly what changed.
+ * An entry under a retired id that collides with nothing is the admin's own
+ * persona and is left completely alone.
+ */
+function withoutSupersededCopies(saved: Personality[]): Personality[] {
+  const norm = (s: string) => (s ?? '').trim().toLowerCase();
+  const byId = new Map(DEFAULT_PERSONALITIES.map(p => [p.id, p]));
+  const names = new Set(DEFAULT_PERSONALITIES.map(p => norm(p.name)));
+  const handles = new Set(DEFAULT_PERSONALITIES.map(p => norm(p.handle)));
+
+  return saved.filter(p =>
+    p.custom || byId.has(p.id) || !(names.has(norm(p.name)) || handles.has(norm(p.handle))));
+}
+
+/**
+ * Reads the saved cast, clearing out superseded copies on the way.
+ *
+ * The cleaned list is written back when it differs, so the leftovers actually
+ * leave storage instead of being filtered out on every read forever. It is
+ * idempotent, so a concurrent read repeating the write costs nothing.
+ */
+async function readCast(): Promise<Personality[] | null> {
   const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
+  if (!saved?.length) return saved;
+  const cleaned = withoutSupersededCopies(saved);
+  if (cleaned.length !== saved.length) {
+    await writeJson(PEOPLE_KEY, PEOPLE_FILE, cleaned).catch(() => { /* next read retries */ });
+  }
+  return cleaned;
+}
+
+export async function getPersonalities(): Promise<Personality[]> {
+  const saved = await readCast();
   if (!saved?.length) return DEFAULT_PERSONALITIES;
 
   const defaultsById = new Map(DEFAULT_PERSONALITIES.map(p => [p.id, p]));
@@ -237,14 +277,15 @@ export async function getPersonalities(): Promise<Personality[]> {
 
   // Personalities added to the defaults since the last save should appear too.
   //
-  // A saved entry with no matching default is either one the admin created, in
-  // which case it stays, or a built-in retired from the code, in which case it
-  // goes. Deleting a built-in is recorded with `hidden` rather than by dropping
-  // the entry, because the defaults are merged back in right here and a dropped
-  // one would simply reappear.
+  // Deleting one is recorded with `hidden` rather than by dropping the entry,
+  // because the defaults are merged back in right here and a dropped one would
+  // simply reappear.
+  //
+  // Nothing else is filtered. Whether a writer takes part in the auto rotation
+  // is the `enabled` checkbox's job and the scheduler's to read, so a saved
+  // writer is in this list on the admin's say so and no other condition.
   const savedIds = new Set(saved.map(p => p.id));
-  const live = merged.filter(p => p.custom || defaultsById.has(p.id));
-  return [...live, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))]
+  return [...merged, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))]
     .filter(p => !p.hidden);
 }
 
@@ -255,7 +296,7 @@ export async function getPersonalities(): Promise<Personality[]> {
  * a built-in and then have no way to bring it back short of clearing storage.
  */
 export async function getPersonalitiesForAdmin(): Promise<Personality[]> {
-  const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
+  const saved = await readCast();
   if (!saved?.length) return DEFAULT_PERSONALITIES;
   const savedIds = new Set(saved.map(p => p.id));
   return [...saved, ...DEFAULT_PERSONALITIES.filter(p => !savedIds.has(p.id))];

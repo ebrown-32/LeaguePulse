@@ -647,6 +647,25 @@ export const DEFAULT_PERSONALITIES: Personality[] = [
   ...DEFAULT_FANS,
 ];
 
+/**
+ * Strict lookup. Returns undefined when the id is not in the list.
+ *
+ * Prefer this wherever the answer is published under someone's name. Falling
+ * back to another writer there is worse than failing: it puts words in a
+ * persona's mouth that nobody asked them to say.
+ */
+export function findPersonality(id: string, list: Personality[]): Personality | undefined {
+  return list.find(p => p.id === id);
+}
+
+/**
+ * Lookup with a fallback to the first entry.
+ *
+ * Only safe where any writer will do. This silently returned Champ Kind, the
+ * first default, whenever an id was not found, so a manual publish as a writer
+ * the resolving list did not contain went out under his byline instead. Use
+ * `findPersonality` when the identity matters.
+ */
 export function personalityById(id: string, list: Personality[] = DEFAULT_PERSONALITIES) {
-  return list.find(p => p.id === id) ?? list[0];
+  return findPersonality(id, list) ?? list[0];
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -26,6 +26,54 @@ const KIND_LABEL: Record<ContentKind, string> = {
 const GAME_DAY_KINDS = new Set<ContentKind>(['kickoff', 'liveTake']);
 
 /**
+ * What each format actually publishes.
+ *
+ * The picker used to be bare labels, so "Predictions" and "Power Rankings"
+ * looked like two flavours of the same thing and there was no way to know that
+ * one covers the whole league while another needs a subject.
+ */
+const KIND_HELP: Record<ContentKind, string> = {
+  article: 'An opinion column: headline, standfirst and three paragraphs.',
+  tweet: 'One short post, under 280 characters.',
+  comment: 'A one to three sentence reaction to something specific.',
+  tradeGrade: 'Published from a trade itself, not from here.',
+  powerRankings: 'Every team ranked with a verdict. Covers the whole league.',
+  predictions: 'Projected finish, playoff field and a champion pick. Covers the whole league.',
+  matchupPreview: 'A pick and a take for every fixture in the coming week.',
+  kickoff: 'A short post for the moment the slate starts.',
+  liveTake: 'A reaction to the live scoreboard.',
+};
+
+/**
+ * Formats that can be pointed at one event or one team.
+ *
+ * The rest are league-wide by construction: power rankings rank everybody,
+ * predictions project everybody, a week preview covers every fixture, and the
+ * live posts read whatever is on the scoreboard. Offering an event alongside
+ * those would imply a steer that the writer never receives.
+ */
+const EVENT_KINDS = new Set<ContentKind>(['article', 'tweet', 'comment']);
+
+/** Formats that cannot be published without something to react to. */
+const NEEDS_SUBJECT = new Set<ContentKind>(['comment']);
+
+const EVENT_GROUP: Record<string, string> = {
+  trade: 'Trades',
+  result: 'Results',
+  waiver: 'Waiver claims',
+  free_agent: 'Signings',
+};
+
+interface LeagueEvent {
+  id: string;
+  type: 'trade' | 'waiver' | 'free_agent' | 'result';
+  label: string;
+  detail: string;
+  subject?: string;
+  week: number;
+}
+
+/**
  * Inputs are 16px on small screens and only shrink from `sm` up.
  *
  * iOS Safari zooms the viewport whenever a focused field is under 16px, which
@@ -47,6 +95,12 @@ const FIELD =
  */
 function previewSrc(p: Personality): string {
   return p.avatarImage || personaAvatarUrl(p);
+}
+
+/** First readable line of a post, whatever shape its content takes. */
+function postPreview(post: { content: any }): string {
+  const c = post.content ?? {};
+  return c.text || c.headline || c.standfirst || c.verdict || '';
 }
 
 interface Check {
@@ -166,10 +220,18 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [feed, setFeed] = useState<any[] | null>(null);
+  const [feedBusy, setFeedBusy] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+
   const [kind, setKind] = useState<ContentKind>('tweet');
-  const [topic, setTopic] = useState('');
+  const [angle, setAngle] = useState('');
+  const [events, setEvents] = useState<LeagueEvent[] | null>(null);
+  const [eventId, setEventId] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [posted, setPosted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -185,6 +247,11 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
     fetch('/api/ai/assistant').then(r => r.json())
       .then(d => setAssistantName(d?.name ?? '')).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch('/api/ai/events', { headers: { 'x-admin-password': password } })
+      .then(r => r.json()).then(d => setEvents(d.events ?? [])).catch(() => setEvents([]));
+  }, [password]);
 
   // Leaving with unsaved edits loses them; the record only persists on save.
   useEffect(() => {
@@ -229,6 +296,43 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
   /** Everything the admin can see, including built-ins they have deleted. */
   const visible = people.filter(p => !p.hidden);
   const active = people.find(p => p.id === activeId);
+
+  /** Formats the selected writer will actually accept. Typed wide rather than
+   *  narrowed by the filter, so it can be compared against the current kind. */
+  const publishable = useMemo<ContentKind[]>(
+    () => (active ? active.kinds.filter(k => k !== 'tradeGrade') : []),
+    [active],
+  );
+
+  /**
+   * Keep the chosen format on something this writer writes.
+   *
+   * The format was plain component state and never followed the selection, so
+   * switching to a writer who does not post short takes left `tweet` selected
+   * with no button lit, and Publish came back "X does not write tweet". That
+   * is the whole of the inconsistency: the panel was asking for something the
+   * writer had never been given.
+   */
+  useEffect(() => {
+    if (publishable.length && !publishable.includes(kind)) setKind(publishable[0]);
+  }, [publishable, kind]);
+
+  /**
+   * Publishing reads the saved cast, not what is on screen.
+   *
+   * So an unsaved writer does not exist to the publish route at all, and an
+   * unsaved edit to a voice is not the voice that gets used. Both cases used
+   * to publish something other than what the panel was showing, so the button
+   * waits for the save rather than guessing.
+   */
+  const unsaved = dirty || saving;
+
+  const selectedEvent = events?.find(e => e.id === eventId) ?? null;
+  // An event only reaches the writer for the formats that take one; leaving a
+  // stale selection visible on a power ranking would promise a steer that is
+  // never sent.
+  const eventApplies = EVENT_KINDS.has(kind);
+  const missingSubject = NEEDS_SUBJECT.has(kind) && !selectedEvent && !angle.trim();
 
   const addPersona = useCallback((type: 'media' | 'fan') => {
     const id = `custom-${Date.now().toString(36)}`;
@@ -313,21 +417,66 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
 
   const generate = useCallback(async () => {
     if (!active) return;
-    setBusy(true); setError(null); setResult(null);
+    setBusy(true); setError(null); setResult(null); setPosted(null);
     try {
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ personalityId: active.id, kind, topic: topic.trim() || undefined, subject: topic.trim() || undefined }),
+        body: JSON.stringify({
+          personalityId: active.id,
+          kind,
+          // Sent as an id, not as text: the server resolves it against the
+          // same league record the writer reads, so a piece can only be
+          // commissioned about something that genuinely happened.
+          eventId: eventId || undefined,
+          angle: angle.trim() || undefined,
+        }),
       });
       const d = await res.json();
       if (!res.ok) { setError(d.setup ? `${d.error}, ${d.setup}` : d.error); return; }
-      const c = d.post?.content ?? d.content;
-      setResult(c.text ?? c.headline ?? JSON.stringify(c, null, 2));
-      setTopic('');
+      const p = d.published;
+      setPosted(
+        `Published ${KIND_LABEL[p.kind as ContentKind].toLowerCase()} as ${p.persona}`
+        + (p.event ? `, on ${p.event}` : p.subject ? `, about ${p.subject}` : '')
+        + '.',
+      );
+      setResult(d.summary || '');
+      setAngle('');
     } catch { setError('Generation failed'); }
     finally { setBusy(false); }
-  }, [active, kind, topic, password]);
+  }, [active, kind, eventId, angle, password]);
+
+  const loadFeed = useCallback(async () => {
+    setFeedBusy(true); setFeedError(null);
+    try {
+      const d = await fetch('/api/ai/posts?limit=100').then(r => r.json());
+      setFeed(d.posts ?? []);
+    } catch {
+      setFeed([]); setFeedError('Could not read the feed.');
+    } finally { setFeedBusy(false); }
+  }, []);
+
+  useEffect(() => { loadFeed(); }, [loadFeed]);
+
+  const removePost = useCallback(async (id: string) => {
+    setRemoving(id); setFeedError(null);
+    try {
+      const res = await fetch(`/api/ai/posts?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-password': password },
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setFeedError(d.error ?? `Could not remove that post (${res.status}).`);
+        return;
+      }
+      // Dropped locally rather than refetched: the store is read-modify-write,
+      // so an immediate re-read can still serve the copy that was just removed.
+      setFeed(f => (f ?? []).filter(p => p.id !== id));
+    } catch {
+      setFeedError('Could not reach the server.');
+    } finally { setRemoving(null); }
+  }, [password]);
 
   const runCron = useCallback(async () => {
     setBusy(true); setError(null); setResult(null);
@@ -693,23 +842,128 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
                 )}
               </p>
 
-              <div className="flex flex-wrap gap-1.5">
-                {active.kinds.filter(k => k !== 'tradeGrade').map(k => (
-                  <button key={k} onClick={() => setKind(k)}
-                    className={cn('min-h-[36px] rounded-md px-3 text-xs font-medium transition-colors',
-                      kind === k ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}>
-                    {KIND_LABEL[k]}
-                  </button>
-                ))}
+              {/* Who it goes out as. The writer is chosen in the list above,
+                  and with the roster scrolled away it was possible to publish
+                  as someone other than the person you thought you had open. */}
+              <div className="rounded-md border border-border bg-background px-3 py-2">
+                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={previewSrc(active)} alt="" loading="lazy"
+                    className="mr-0.5 h-6 w-6 shrink-0 rounded-full border border-border bg-card object-cover" />
+                  Publishing as <span className="font-semibold text-foreground">{active.name}</span>
+                  <span className="text-muted-foreground">{active.handle}</span>
+                </p>
+                {!active.enabled && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Not in the auto rotation, so they only post when published from here.
+                  </p>
+                )}
               </div>
 
-              <input value={topic} onChange={e => setTopic(e.target.value)}
-                placeholder="Optional angle"
-                className={cn(FIELD, 'placeholder:text-muted-foreground')} />
+              <div>
+                <span className="mb-1.5 block text-xs text-muted-foreground">Format</span>
+                {publishable.length === 0 ? (
+                  <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                    {active.name} has no formats selected. Turn one on under Writes above.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {publishable.map(k => (
+                      <button key={k} onClick={() => setKind(k)}
+                        className={cn('min-h-[36px] rounded-md border px-3 text-xs font-medium transition-colors',
+                          kind === k
+                            ? 'border-primary/40 bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:text-foreground')}>
+                        {KIND_LABEL[k]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {publishable.includes(kind) && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">{KIND_HELP[kind]}</p>
+                )}
+                {GAME_DAY_KINDS.has(kind) && (
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    Reads the live scoreboard. Outside a game window there is nothing to
+                    report and this will fail rather than invent one.
+                  </p>
+                )}
+              </div>
+
+              {/* What to cover. */}
+              <div>
+                <label className="mb-1.5 block text-xs text-muted-foreground" htmlFor="lp-event">
+                  Cover a league event
+                </label>
+                <select
+                  id="lp-event"
+                  value={eventApplies ? eventId : ''}
+                  onChange={e => setEventId(e.target.value)}
+                  disabled={!eventApplies || !events?.length}
+                  className={cn(FIELD, 'disabled:opacity-50')}
+                >
+                  <option value="">
+                    {events === null ? 'Loading recent events…'
+                      : events.length ? 'Nothing specific, let them pick'
+                      : 'No recent events on record'}
+                  </option>
+                  {Object.entries(EVENT_GROUP).map(([type, label]) => {
+                    const group = (events ?? []).filter(e => e.type === type);
+                    if (!group.length) return null;
+                    return (
+                      <optgroup key={type} label={label}>
+                        {group.map(e => (
+                          <option key={e.id} value={e.id}>{e.label}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                {!eventApplies ? (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {KIND_LABEL[kind]} covers the whole league, so it is not written about one event.
+                  </p>
+                ) : selectedEvent ? (
+                  // Exactly what the writer will be handed, so there is no
+                  // guessing about what "cover this" means. Capped and
+                  // scrollable: a five team trade runs long enough to push the
+                  // publish button off a phone screen.
+                  <p className="mt-1.5 max-h-32 overflow-y-auto rounded-md border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground">
+                    {selectedEvent.detail}
+                  </p>
+                ) : null}
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs text-muted-foreground">
+                  Angle, optional{NEEDS_SUBJECT.has(kind) && !selectedEvent
+                    ? ', or what to react to' : ''}
+                </span>
+                <input value={angle} onChange={e => setAngle(e.target.value)}
+                  placeholder={NEEDS_SUBJECT.has(kind)
+                    ? 'Something for them to react to'
+                    : 'Steer the piece, or leave blank'}
+                  className={cn(FIELD, 'placeholder:text-muted-foreground')} />
+              </label>
+
+              {missingSubject && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  A comment needs something to react to. Pick an event or write an angle.
+                </p>
+              )}
+              {unsaved && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Save the cast first. Publishing uses the saved writer, so anything unsaved
+                  here would not be what goes out.
+                </p>
+              )}
+
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button onClick={generate} disabled={busy || configured === false}
+                <button onClick={generate}
+                  disabled={busy || configured === false || !publishable.length || missingSubject || unsaved}
                   className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-40">
-                  {busy && <LoadingSpinner className="h-3.5 w-3.5" />}{busy ? 'Writing…' : 'Publish'}
+                  {busy && <LoadingSpinner className="h-3.5 w-3.5" />}
+                  {busy ? 'Writing…' : `Publish ${publishable.includes(kind) ? KIND_LABEL[kind].toLowerCase() : ''}`}
                 </button>
                 <button onClick={runCron} disabled={busy}
                   className="min-h-[44px] rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:border-primary/40 disabled:opacity-40">
@@ -718,9 +972,69 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
               </div>
 
               {error && <p className="break-words text-xs text-rose-500">{error}</p>}
+              {posted && (
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                  {posted}
+                  <a href="/desk" target="_blank" rel="noreferrer"
+                    className="font-semibold text-primary underline">
+                    Open the feed
+                  </a>
+                </p>
+              )}
               {result && (
                 <pre className="whitespace-pre-wrap break-words rounded-lg border border-border bg-background p-3 text-xs leading-relaxed text-foreground">{result}</pre>
               )}
+            </section>
+
+            {/* What is actually live, and a way to take it down.
+                Publishing was one way: a piece that came out wrong stayed up
+                until it aged past the retention cap. */}
+            <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-base font-semibold text-foreground">On the feed</h2>
+                <button onClick={loadFeed} disabled={feedBusy}
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40">
+                  <RotateCcw className={cn('h-3 w-3', feedBusy && 'animate-spin')} />
+                  Refresh
+                </button>
+              </div>
+
+              {feed === null ? (
+                <p className="text-xs text-muted-foreground">Loading the feed…</p>
+              ) : !feed.length ? (
+                <p className="text-xs text-muted-foreground">Nothing published yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {feed.map(post => (
+                    <li key={post.id}
+                      className="flex items-start gap-3 rounded-lg border border-border bg-background p-2.5">
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                          <span className="font-semibold text-foreground">{post.personaName}</span>
+                          <span>{KIND_LABEL[post.kind as ContentKind] ?? post.kind}</span>
+                          <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                        </span>
+                        <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-foreground">
+                          {postPreview(post)}
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => removePost(post.id)}
+                        disabled={removing === post.id}
+                        aria-label={`Remove ${post.personaName}'s post`}
+                        className="inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-md border border-border px-2 text-xs text-muted-foreground hover:border-rose-500/40 hover:text-rose-500 disabled:opacity-40"
+                      >
+                        {removing === post.id
+                          ? <LoadingSpinner className="h-3 w-3" />
+                          : <Trash2 className="h-3 w-3" />}
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {feedError && <p className="text-xs text-rose-500">{feedError}</p>}
             </section>
           </div>
         )}
