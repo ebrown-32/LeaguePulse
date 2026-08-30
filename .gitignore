@@ -43,3 +43,8 @@ next-env.d.ts
 # Generated AI feed: must never ship stale posts into a deployment
 data/ai-posts.json
 data/fantasypros.json
+
+# Local dev storage. Production uses Redis; these are a scratch fallback that
+# holds whatever league happened to run last, so committing them shipped one
+# league's branding and a stale writer cast to everyone who cloned the repo.
+/data

@@ -29,6 +29,7 @@ import {
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
 import LeagueCarousel from '@/components/home/LeagueCarousel';
+import HomeFeed from '@/components/home/HomeFeed';
 import TrophyCase from '@/components/home/TrophyCase';
 import StandingsTable from '@/components/standings/StandingsTable';
 import { allTimePointsAgainst } from '@/lib/allTimePointsAgainst';
@@ -437,6 +438,13 @@ export default function Home() {
           </div>
         )}
 
+        {/* ── The feed ──
+            Directly under the stats, so the way into the liveliest part of the
+            app is on screen when the page opens. It used to be reachable only
+            through the carousel below the trophy case, which on a phone put it
+            past a 3D ring render and a scroll away. */}
+        <HomeFeed />
+
         {/* ── Trophy case ── */}
         {historyData && historyData.champions.length > 0 && (
           <TrophyCase
@@ -446,7 +454,9 @@ export default function Home() {
           />
         )}
 
-        {/* ── Live content from the AI desk + media feed ── */}
+        {/* ── Outside media ──
+            Desk posts are no longer mixed in here: with the feed above, the
+            same post appeared twice on one page. */}
         <LeagueCarousel />
 
         {/* ── Transaction ticker ── */}

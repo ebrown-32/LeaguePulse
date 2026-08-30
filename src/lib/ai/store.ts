@@ -124,8 +124,12 @@ export async function storageHealth(): Promise<{ backend: string; writable: bool
   const { backend, reason } = getRedis();
   const label = backend === 'none' ? 'file' : backend;
   try {
-    const probe = await readJson<unknown>(POSTS_KEY, POSTS_FILE, []);
-    await writeJson(POSTS_KEY, POSTS_FILE, probe);
+    // Its own key. Probing by rewriting the feed meant a health check touched
+    // live content, which is a poor thing for a read-only question to do.
+    const probeKey = 'lp_storage_probe';
+    const probeFile = path.join(DATA_DIR, '.storage-probe.json');
+    await writeJson(probeKey, probeFile, { at: Date.now() });
+    await readJson<unknown>(probeKey, probeFile, null);
     return { backend: label, writable: true };
   } catch (err) {
     return {
@@ -138,8 +142,76 @@ export async function storageHealth(): Promise<{ backend: string; writable: bool
 
 // ── Posts ──────────────────────────────────────────────────────────────────
 
+/**
+ * Posts live in a Redis list, one JSON member per post.
+ *
+ * They used to be one JSON array under a single key, which made every publish
+ * a read, a modify and a write. Two overlapping publishes lose one of them:
+ * measured against the real store, eight concurrent appends kept one. That is
+ * not hypothetical here, since the daily batch, the live game-day run and a
+ * hand publish are three independent writers that can land at once.
+ *
+ * As a list, an append is a single atomic LPUSH and nothing is ever lost.
+ * Redis never parses the members either, so a post is returned byte for byte
+ * as it was stored.
+ */
+const POSTS_LIST_KEY = 'lp_ai_posts_v2';
+
+/** Serialises the file backend's read-modify-write, which has the same hazard
+ *  within a process even though there is no network in between. */
+let fileWriteChain: Promise<unknown> = Promise.resolve();
+function serialised<T>(work: () => Promise<T>): Promise<T> {
+  const next = fileWriteChain.then(work, work);
+  fileWriteChain = next.catch(() => {});
+  return next;
+}
+
+function parsePosts(raw: string[]): FeedPost[] {
+  const out: FeedPost[] = [];
+  for (const s of raw) {
+    // One unparseable member must not take the whole feed down with it.
+    try { out.push(JSON.parse(s) as FeedPost); } catch { /* skip */ }
+  }
+  return out;
+}
+
+/**
+ * Moves an existing single-key feed into the list, once.
+ *
+ * Runs only when the list is empty and the old key still holds posts, so a
+ * deployment carrying live content keeps it. The old key is left in place: it
+ * costs nothing and makes the change trivially reversible.
+ */
+async function migrateLegacyPosts(client: NonNullable<ReturnType<typeof getRedis>['client']>) {
+  if (await client.llen(POSTS_LIST_KEY) > 0) return;
+  const raw = await client.get(POSTS_KEY);
+  if (!raw) return;
+  let legacy: FeedPost[] = [];
+  try { legacy = JSON.parse(raw) as FeedPost[]; } catch { return; }
+  if (!Array.isArray(legacy) || !legacy.length) return;
+  // Oldest first, so LPUSH leaves the newest at the head.
+  for (const post of [...legacy].reverse()) {
+    await client.lpush(POSTS_LIST_KEY, JSON.stringify(post));
+  }
+  await client.ltrim(POSTS_LIST_KEY, 0, MAX_POSTS - 1);
+}
+
+/** Every stored post, newest first, before any publish-time filtering. */
+async function readPosts(): Promise<FeedPost[]> {
+  const { client } = getRedis();
+  if (client) {
+    try {
+      await migrateLegacyPosts(client);
+      return parsePosts(await client.lrange(POSTS_LIST_KEY, 0, MAX_POSTS - 1));
+    } catch {
+      return [];
+    }
+  }
+  return readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+}
+
 export async function getPosts(limit = 60): Promise<FeedPost[]> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  const all = await readPosts();
   const now = Date.now();
   return all
     .filter(p => new Date(p.publishAt ?? p.createdAt).getTime() <= now)
@@ -151,38 +223,111 @@ export async function getPosts(limit = 60): Promise<FeedPost[]> {
 /** Posts written but not yet visible. Surfaced in the admin panel so the queue
  *  is not invisible. */
 export async function getQueuedCount(): Promise<number> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  const all = await readPosts();
   const now = Date.now();
   return all.filter(p => new Date(p.publishAt ?? p.createdAt).getTime() > now).length;
 }
 
 export async function addPost(post: FeedPost): Promise<void> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
-  all.unshift(post);
-  await writeJson(POSTS_KEY, POSTS_FILE, all.slice(0, MAX_POSTS));
+  const { client, backend } = getRedis();
+  if (client) {
+    try {
+      await migrateLegacyPosts(client);
+      // One atomic append. Nothing is read first, so nothing can be lost by a
+      // publish that lands at the same moment.
+      await client.lpush(POSTS_LIST_KEY, JSON.stringify(post));
+      await client.ltrim(POSTS_LIST_KEY, 0, MAX_POSTS - 1);
+      return;
+    } catch (err) {
+      throw new StorageUnavailableError(
+        `${backend} write failed: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  await serialised(async () => {
+    const all = await readPosts();
+    all.unshift(post);
+    await writeJson(POSTS_KEY, POSTS_FILE, all.slice(0, MAX_POSTS));
+  });
 }
 
 export async function deletePost(id: string): Promise<void> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
-  await writeJson(POSTS_KEY, POSTS_FILE, all.filter(p => p.id !== id));
+  const { client } = getRedis();
+  if (client) {
+    await migrateLegacyPosts(client);
+    // Removed by exact member, so a concurrent publish is untouched. Rewriting
+    // the surviving posts instead would drop anything added in between.
+    const raw = await client.lrange(POSTS_LIST_KEY, 0, MAX_POSTS - 1);
+    const member = raw.find(s => {
+      try { return (JSON.parse(s) as FeedPost).id === id; } catch { return false; }
+    });
+    if (member) await client.lrem(POSTS_LIST_KEY, 1, member);
+    return;
+  }
+  await serialised(async () => {
+    const all = await readPosts();
+    await writeJson(POSTS_KEY, POSTS_FILE, all.filter(p => p.id !== id));
+  });
 }
 
 /** Generation time of the most recently written post, so a re-triggered cron
  *  does not produce a second batch on the same day. */
 export async function lastGeneratedAt(): Promise<number> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  const all = await readPosts();
   return all.reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
 }
 
 /** Latest scheduled publish time, so a new batch queues after the last one. */
 export async function lastPublishAt(): Promise<number> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  const all = await readPosts();
   return all.reduce((max, p) => Math.max(max, new Date(p.publishAt ?? p.createdAt).getTime()), 0);
+}
+
+// ── Likes ──────────────────────────────────────────────────────────────────
+
+/**
+ * Real reader likes, one counter per post.
+ *
+ * Counters rather than a set of who liked what: there is no sign in here, so
+ * there is no identity to record, and a per-viewer record belongs on the
+ * viewer's device. INCRBY is atomic, so simultaneous taps all count.
+ *
+ * With no Redis these are simply zero. A like is a nice-to-have, and failing a
+ * page render over one would be a poor trade.
+ */
+const LIKES_PREFIX = 'lp_ai_likes:';
+
+export async function getLikes(ids: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  if (!ids.length) return out;
+  const { client } = getRedis();
+  if (!client) return out;
+  try {
+    const values = await client.mget(ids.map(id => LIKES_PREFIX + id));
+    ids.forEach((id, i) => {
+      const n = Number(values[i]);
+      if (Number.isFinite(n) && n > 0) out[id] = n;
+    });
+  } catch { /* the feed renders without them */ }
+  return out;
+}
+
+/** @param delta +1 for a like, -1 to take one back. Never drops below zero. */
+export async function likePost(id: string, delta: 1 | -1): Promise<number> {
+  const { client } = getRedis();
+  if (!client) return 0;
+  const next = await client.incrby(LIKES_PREFIX + id, delta);
+  if (next < 0) {
+    // Someone unliked more than was there, usually cleared local storage on one
+    // device after liking on another. Clamp rather than show a negative count.
+    await client.incrby(LIKES_PREFIX + id, -next);
+    return 0;
+  }
+  return next;
 }
 
 /** Subjects of recent pieces, newest first. Used to spread coverage. */
 export async function getRecentSubjects(limit = 30): Promise<string[]> {
-  const all = await readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
+  const all = await readPosts();
   return all
     .slice(0, limit)
     .map(p => p.subject)

@@ -267,7 +267,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
       {/* Trophy case */}
       {data.rings.length > 0 ? (
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Trophy Case</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Ring Case</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {data.rings.map(ring => (
               <div key={ring.season} className="rounded-xl border border-border bg-card p-2">

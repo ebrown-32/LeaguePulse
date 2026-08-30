@@ -19,6 +19,25 @@ export interface RedisLike {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
   del(key: string): Promise<void>;
+  /**
+   * List operations, for collections that are appended to concurrently.
+   *
+   * Holding a growing collection in one JSON string means every append is a
+   * read, a modify and a write, and two of those overlapping lose one of the
+   * writes outright. Measured against the real store, eight concurrent appends
+   * to a single key kept one. A list makes the append a single atomic command,
+   * and Redis never parses the members, so the stored JSON is returned exactly
+   * as it was written.
+   */
+  lpush(key: string, value: string): Promise<number>;
+  ltrim(key: string, start: number, stop: number): Promise<void>;
+  lrange(key: string, start: number, stop: number): Promise<string[]>;
+  lrem(key: string, count: number, value: string): Promise<number>;
+  llen(key: string): Promise<number>;
+  /** Atomic counters, for values many readers change at once. Same reasoning
+   *  as the list operations: a read-modify-write would drop concurrent taps. */
+  incrby(key: string, by: number): Promise<number>;
+  mget(keys: string[]): Promise<(string | null)[]>;
 }
 
 export interface RedisResolution {
@@ -65,6 +84,14 @@ export function getRedis(): RedisResolution {
           get: (k) => c.get(k) as Promise<string | null>,
           set: async (k, v) => { await c.set(k, v); },
           del: async (k) => { await c.del(k); },
+          lpush: (k, v) => c.lpush(k, v) as Promise<number>,
+          ltrim: async (k, s, e) => { await c.ltrim(k, s, e); },
+          lrange: (k, s, e) => c.lrange(k, s, e) as Promise<string[]>,
+          lrem: (k, n, v) => c.lrem(k, n, v) as Promise<number>,
+          llen: (k) => c.llen(k) as Promise<number>,
+          incrby: (k, by) => c.incrby(k, by) as Promise<number>,
+          mget: async (keys) =>
+            keys.length ? (await c.mget(...keys)) as (string | null)[] : [],
         },
       };
       return cached;
@@ -92,6 +119,17 @@ export function getRedis(): RedisResolution {
           get: async (k) => { await ready(); return c.get(k); },
           set: async (k, v) => { await ready(); await c.set(k, v); },
           del: async (k) => { await ready(); await c.del(k); },
+          lpush: async (k, v) => { await ready(); return c.lPush(k, v); },
+          ltrim: async (k, s, e) => { await ready(); await c.lTrim(k, s, e); },
+          lrange: async (k, s, e) => { await ready(); return c.lRange(k, s, e); },
+          lrem: async (k, n, v) => { await ready(); return c.lRem(k, n, v); },
+          llen: async (k) => { await ready(); return c.lLen(k); },
+          incrby: async (k, by) => { await ready(); return c.incrBy(k, by); },
+          mget: async (keys) => {
+            if (!keys.length) return [];
+            await ready();
+            return c.mGet(keys);
+          },
         },
       };
       return cached;
