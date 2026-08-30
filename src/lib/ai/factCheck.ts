@@ -28,7 +28,11 @@ export interface TradeFact {
 }
 
 /** Verbs that assert a team sent a player away. */
-const AWAY = /\b(ship(?:ped|s|ping)?|sent|deal(?:t|ed)?|traded away|gave up|gives up|giving up|offload(?:ed)?|moved on from|flipped|dumped)\b/i;
+// "moved" is here on its own, not only as "moved on from": a post reading
+// "just moved DJ Moore and Justin Jefferson for Ja'Marr Chase" named both
+// sides the wrong way round and matched no verb at all, so it was published
+// unjudged. "traded" bare is included for the same reason.
+const AWAY = /\b(ship(?:ped|s|ping)?(?: off| out)?|sent|deal(?:t|ed)?|traded(?: away)?|trades away|gave up|gives up|giving up|offload(?:ed)?|moved(?: on from)?|moves|flipped|flips|dumped|parted with|let go of|sold)\b/i;
 /** Verbs that assert a team took a player in. */
 const IN = /\b(acquir(?:ed|es)|land(?:ed|s)|grabb(?:ed|s)|pick(?:ed)? up|brought in|added|got back|received|traded for)\b/i;
 
@@ -83,6 +87,60 @@ export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>;
   return cache;
 }
 
+/** Last name, with the common suffixes dropped. */
+function surnameOf(full: string): string {
+  const parts = full.trim().split(/\s+/).filter(w => !/^(jr\.?|sr\.?|i{1,3}|iv|v)$/i.test(w));
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
+/**
+ * Every way a traded player might be named in a post.
+ *
+ * Full-name-only matching missed the failure that prompted this: a post read
+ * "traded AWAY their two best receivers for Chase", and because it never wrote
+ * "Ja'Marr Chase" the checker saw no player at all and passed it. People write
+ * surnames, so surnames have to be matched.
+ *
+ * Two guards keep that from firing on prose. A surname is only used when it
+ * belongs to exactly one traded player, and it is matched case sensitively,
+ * because a good half of them are ordinary words: chase, brown, moore, hill,
+ * love. The capital is what separates the player from the verb.
+ */
+function aliasesFor(facts: Map<string, TradeFact>): Map<string, string[]> {
+  const count = new Map<string, number>();
+  for (const f of facts.values()) {
+    const s = surnameOf(f.player);
+    if (s) count.set(s.toLowerCase(), (count.get(s.toLowerCase()) ?? 0) + 1);
+  }
+  const out = new Map<string, string[]>();
+  for (const [key, f] of facts) {
+    const s = surnameOf(f.player);
+    const usable = s.length >= 4 && count.get(s.toLowerCase()) === 1;
+    out.set(key, usable ? [f.player, s] : [f.player]);
+  }
+  return out;
+}
+
+/**
+ * Phrasing that reverses the direction of the verb for the name that follows.
+ *
+ * "Traded away Moore for Chase" is one claim in each direction, and the verb
+ * nearest Chase is the away verb, so without this the checker reads it as
+ * Chase having been sent away and a genuine inversion passes as true.
+ */
+const RECEIVES_NEXT = /\b(?:in exchange for|in return for|for|to (?:get|land|acquire|add))\b/i;
+
+/** Where a player is named in a sentence, by any alias, or -1. */
+function findPlayer(sentence: string, aliases: string[]): number {
+  const lower = sentence.toLowerCase();
+  // The full name is unambiguous, so it wins and is matched loosely.
+  const full = lower.indexOf(aliases[0].toLowerCase());
+  if (full !== -1) return full;
+  if (aliases.length < 2) return -1;
+  const m = sentence.match(new RegExp(`\\b${aliases[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`));
+  return m?.index ?? -1;
+}
+
 /**
  * One sentence at a time: a claim never spans a full stop.
  *
@@ -103,13 +161,14 @@ function sentences(text: string): string[] {
  */
 export async function checkTradeClaims(text: string): Promise<string[]> {
   const { facts, teams } = await loadTradeFacts();
+  const aliases = aliasesFor(facts);
   const problems: string[] = [];
 
   for (const sentence of sentences(text)) {
     const lower = sentence.toLowerCase();
 
-    for (const fact of facts.values()) {
-      const iPlayer = lower.indexOf(fact.player.toLowerCase());
+    for (const [key, fact] of facts) {
+      const iPlayer = findPlayer(sentence, aliases.get(key) ?? [fact.player]);
       if (iPlayer === -1) continue;
 
       for (const team of teams) {
@@ -132,7 +191,12 @@ export async function checkTradeClaims(text: string): Promise<string[]> {
         const inbound = lastOf(IN);
         if (away === -1 && inbound === -1) continue;
 
-        if (away > inbound) {
+        // Everything after "for" is what came back, however long the list.
+        // Scoping this to the span matters: only a "for" standing between the
+        // verb and this player reverses the claim about this player.
+        const cameBack = lastOf(RECEIVES_NEXT) > Math.max(away, inbound);
+
+        if (away > inbound && !cameBack) {
           if (!fact.gaveUpBy.has(team)) {
             const truth = fact.gaveUpBy.size
               ? `${[...fact.gaveUpBy].join(', ')} gave him up`
