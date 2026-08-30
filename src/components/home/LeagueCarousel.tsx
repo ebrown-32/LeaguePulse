@@ -6,8 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * Home-page carousel of live league content: AI desk posts and the media feed,
- * interleaved so neither stream dominates.
+ * Home-page carousel of football coverage from outside the league.
  *
  * Built on native scroll-snap rather than a transform-driven slider, so touch
  * swipe, trackpad flick, and keyboard scrolling all work for free and the
@@ -23,17 +22,10 @@ interface CarouselItem {
   imageUrl?: string;
   href: string;
   external: boolean;
-  /** AI desk items are badged so they are never mistaken for real reporting. */
+  /** Retained so a future in-app source can still be badged apart. */
   isAI: boolean;
 }
 
-interface AIPost {
-  id: string;
-  personaHandle: string;
-  personaAvatar?: string;
-  kind: string;
-  content: { headline?: string; text?: string };
-}
 
 interface MediaItem {
   id: string;
@@ -46,15 +38,6 @@ interface MediaItem {
 const MAX_PER_SOURCE = 8;
 const AUTOPLAY_MS = 5000;
 
-/** Alternate the two streams so one never clumps into a long run. */
-function interleave<T>(a: T[], b: T[]): T[] {
-  const out: T[] = [];
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a[i]) out.push(a[i]);
-    if (b[i]) out.push(b[i]);
-  }
-  return out;
-}
 
 /** Autoplay is motion; respect the admin toggle and the OS preference alike. */
 function motionAllowed(): boolean {
@@ -72,47 +55,28 @@ export default function LeagueCarousel({ className }: { className?: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    const ai = fetch(`/api/ai/posts?limit=${MAX_PER_SOURCE}`)
-      .then(r => r.json())
-      .then(d => (d.posts ?? []) as AIPost[])
-      .catch(() => [] as AIPost[]);
-
-    const media = fetch(`/api/media/feed?limit=${MAX_PER_SOURCE}&kinds=article,injury`)
+    // Outside media only. The desk used to be interleaved here, but the feed
+    // now has its own section higher up the page and the same post was
+    // appearing twice on one screen. This carousel's job is what is being
+    // written about football elsewhere.
+    fetch(`/api/media/feed?limit=${MAX_PER_SOURCE * 2}&kinds=article,injury`)
       .then(r => r.json())
       .then(d => (d.feed ?? []) as MediaItem[])
-      .catch(() => [] as MediaItem[]);
-
-    Promise.all([ai, media]).then(([posts, feed]) => {
-      if (cancelled) return;
-
-      const aiItems: CarouselItem[] = posts
-        .map(p => ({
-          id: `ai-${p.id}`,
-          label: p.personaHandle,
-          title: p.content?.headline || p.content?.text || '',
-          // The persona's DiceBear portrait, so an AI card is visibly authored
-          // by someone rather than showing a generic placeholder.
-          imageUrl: p.personaAvatar,
-          href: '/desk',
-          external: false,
-          isAI: true,
-        }))
-        .filter(i => i.title);
-
-      const mediaItems: CarouselItem[] = feed
-        .map(m => ({
-          id: `media-${m.id}`,
-          label: m.source,
-          title: m.title,
-          imageUrl: m.imageUrl,
-          href: m.url || '/media',
-          external: Boolean(m.url),
-          isAI: false,
-        }))
-        .filter(i => i.title);
-
-      setItems(interleave(aiItems, mediaItems));
-    });
+      .catch(() => [] as MediaItem[])
+      .then(feed => {
+        if (cancelled) return;
+        setItems(feed
+          .map(m => ({
+            id: `media-${m.id}`,
+            label: m.source,
+            title: m.title,
+            imageUrl: m.imageUrl,
+            href: m.url || '/media',
+            external: Boolean(m.url),
+            isAI: false,
+          }))
+          .filter(i => i.title));
+      });
 
     return () => { cancelled = true; };
   }, []);

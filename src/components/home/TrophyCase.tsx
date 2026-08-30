@@ -109,7 +109,7 @@ export default function TrophyCase({
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Trophy className="h-3.5 w-3.5 text-primary" />
         <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-          Trophy case
+          Ring showcase
         </h2>
         <span className="ml-auto text-[11px] text-muted-foreground">
           {champions.length} awarded
