@@ -26,6 +26,7 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
+import PoweredBy from '@/components/ui/PoweredBy';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
 import { AddSquareIcon } from '@/components/icons/AppIcons';
 import SearchPalette from './SearchPalette';
@@ -343,6 +344,13 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                         </div>
                       );
                     })}
+
+                    {/* Signed at the bottom of the menu, below a divider, so
+                        it reads as a mark on the drawer rather than another
+                        thing to navigate to. */}
+                    <div className="mt-1 border-t border-border pt-1.5">
+                      <PoweredBy onNavigate={() => setMoreOpen(false)} />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -489,6 +497,13 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                     </button>
                   </div>
                 )}
+
+                {/* Closes the sheet. On a phone this is the one screen that is
+                    entirely ours, so it is the natural place to say what the
+                    app is. */}
+                <div className="mt-5 flex justify-center border-t border-border pt-4">
+                  <PoweredBy size="md" onNavigate={() => setIsOpen(false)} />
+                </div>
               </nav>
             </motion.div>
           </>
