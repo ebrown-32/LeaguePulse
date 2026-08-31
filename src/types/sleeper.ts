@@ -5,6 +5,10 @@ export interface SleeperUser {
   avatar: string;
   metadata: {
     team_name?: string;
+    /** The picture this manager set for their team in this league, as a full
+     *  uploads URL. Distinct from `avatar` above, which is their account
+     *  picture and is a bare id. Sleeper shows this one in a league. */
+    avatar?: string | null;
   };
   is_owner: boolean;
 }

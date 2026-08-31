@@ -8,6 +8,7 @@ import {
   buildPlayerCard,
   type PlayerCard,
 } from '@/lib/playerStats';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
         userId: r.owner_id,
         teamName: u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`,
         managerName: u?.display_name ?? '',
-        avatar: u?.avatar ?? '',
+        avatar: teamAvatar(u),
         record: {
           wins:   r.settings?.wins   ?? 0,
           losses: r.settings?.losses ?? 0,

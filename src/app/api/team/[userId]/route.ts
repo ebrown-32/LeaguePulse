@@ -4,6 +4,7 @@ import {
 } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import { generateEnhancedLeagueHistory, type EnhancedLeagueHistory, type EnhancedHistoricalRecord } from '@/lib/enhancedHistoryApi';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ async function loadShared() {
       identities.set(r.owner_id, {
         userId: r.owner_id,
         teamName: u.metadata?.team_name || u.display_name,
-        avatar: u.avatar || '',
+        avatar: teamAvatar(u),
       });
     }
   }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,7 +152,7 @@ async function loadSeason(leagueId: string): Promise<SeasonScheduleData | null> 
   for (const r of rosters) {
     const u = userById.get(r.owner_id);
     teamNameByRoster.set(r.roster_id, u?.metadata?.team_name || u?.display_name || `Team ${r.roster_id}`);
-    avatarByRoster.set(r.roster_id, u?.avatar || '');
+    avatarByRoster.set(r.roster_id, teamAvatar(u));
     userIdByRoster.set(r.roster_id, r.owner_id);
     officialRecordByRoster.set(r.roster_id, {
       wins: r.settings?.wins ?? 0,

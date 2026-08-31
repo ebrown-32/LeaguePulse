@@ -48,6 +48,26 @@ export async function getSeasonStats(season: string): Promise<Record<string, any
   return data;
 }
 
+/**
+ * Sleeper's own full-season projections, keyed by player id.
+ *
+ * Same shape as the stats payload, so `pts_ppr` means the same thing on both
+ * and past and projected production are directly comparable. These are a real
+ * published forecast, not anything derived here: roughly a thousand players
+ * carry one, and everyone else has none rather than a zero.
+ *
+ * Cached on the stats TTL. It is a 2.5MB payload that moves at most daily.
+ */
+export async function getSeasonProjections(season: string): Promise<Record<string, any>> {
+  const key = `proj:${season}`;
+  const hit = statsCache.get(key);
+  if (hit && Date.now() - hit.ts < STATS_TTL_MS) return hit.data;
+  const res = await fetch(`${BASE}/projections/nfl/regular/${season}`, { cache: 'no-store' });
+  const data = res.ok ? await res.json() : {};
+  statsCache.set(key, { data, ts: Date.now() });
+  return data;
+}
+
 /** Rows keyed TEAM_XXX are league-wide aggregates, not players. */
 function isPlayerRow(id: string): boolean {
   return !id.startsWith('TEAM_');

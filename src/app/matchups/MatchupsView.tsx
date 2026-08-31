@@ -15,6 +15,7 @@ import { getDefaultSeason } from '@/lib/utils';
 import type { SleeperMatchup } from '@/types/sleeper';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Flame, Trophy } from 'lucide-react';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 interface MatchupsViewProps {
   currentWeek?: number;
@@ -299,8 +300,8 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
                       <button
                         onClick={() => setOpenMatchup({
-                          a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: user1.avatar },
-                          b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: user2.avatar },
+                          a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: teamAvatar(user1) },
+                          b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: teamAvatar(user2) },
                         })}
                         className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                       >
@@ -321,7 +322,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                       }`}>
                         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                           <Avatar
-                            avatarId={user1.avatar}
+                            avatarId={teamAvatar(user1)}
                             size={40}
                             className={`md:w-11 md:h-11 rounded-lg ${
                               matchupComplete && team1Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'
@@ -380,7 +381,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                       }`}>
                         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                           <Avatar
-                            avatarId={user2.avatar}
+                            avatarId={teamAvatar(user2)}
                             size={40}
                             className={`md:w-11 md:h-11 rounded-lg ${
                               matchupComplete && team2Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'

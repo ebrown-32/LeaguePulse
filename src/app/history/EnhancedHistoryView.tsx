@@ -25,6 +25,7 @@ import {
   generateEnhancedLeagueHistory,
   type EnhancedLeagueHistory,
 } from '@/lib/enhancedHistoryApi';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
 
                         {/* Avatar + name + bar */}
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Avatar avatarId={manager.avatar} size={38} className="rounded-xl shrink-0" />
+                          <Avatar avatarId={teamAvatar(manager)} size={38} className="rounded-xl shrink-0" />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-sm text-foreground truncate">{manager.username}</span>
@@ -325,7 +326,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                       }`}>
                         <div className="flex items-center gap-3 mb-3">
                           <RankBadge rank={i + 1} />
-                          <Avatar avatarId={manager.avatar} size={36} className="rounded-xl shrink-0" />
+                          <Avatar avatarId={teamAvatar(manager)} size={36} className="rounded-xl shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="font-semibold text-sm text-foreground truncate">{manager.username}</span>

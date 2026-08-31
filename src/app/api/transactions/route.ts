@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,7 @@ function enrichTransactions(
   const getRoster  = (rosterId: number) => rosterById.get(rosterId);
   const getUser    = (rosterId: number) => { const r = getRoster(rosterId); return r ? userByOwnerId.get(r.owner_id) : null; };
   const teamName   = (rosterId: number) => { const u = getUser(rosterId); return u?.metadata?.team_name || u?.display_name || `Team ${rosterId}`; };
-  const avatar     = (rosterId: number) => getUser(rosterId)?.avatar || '';
+  const avatar     = (rosterId: number) => teamAvatar(getUser(rosterId));
   const userId     = (rosterId: number) => getRoster(rosterId)?.owner_id || '';
 
   return rawTxs.flatMap((tx: any) => {

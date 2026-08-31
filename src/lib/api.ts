@@ -305,7 +305,7 @@ export function getUserDisplayInfo(users: SleeperUser[], rosters: SleeperRoster[
 
   return {
     teamName: user.metadata.team_name || user.display_name,
-    avatar: user.avatar,
+    avatar: teamAvatar(user),
     userId: user.user_id,
     wins: roster.settings.wins,
     losses: roster.settings.losses,
@@ -386,7 +386,7 @@ export async function getAggregatedUserStats(leagueIds: string[], currentWeek: n
           userStats = {
           userId,
             username: user.display_name,
-          avatar: user.avatar,
+          avatar: teamAvatar(user),
           totalWins: 0,
           totalLosses: 0,
           totalTies: 0,
@@ -474,7 +474,7 @@ export async function getAggregatedUserStats(leagueIds: string[], currentWeek: n
   const finalStats = Array.from(stats.values()).map(user => ({
     userId: user.userId,
     username: user.username,
-    avatar: user.avatar,
+    avatar: teamAvatar(user),
     totalWins: user.totalWins,
     totalLosses: user.totalLosses,
     totalTies: user.totalTies,
@@ -854,7 +854,7 @@ async function calculateAdvancedSeasonMetrics(
     return {
       userId: user.user_id,
       username: user.display_name,
-      avatar: user.avatar,
+      avatar: teamAvatar(user),
       teamName: user.metadata.team_name || user.display_name,
       record: {
         wins: roster.settings.wins || 0,
@@ -1160,7 +1160,7 @@ export async function generateComprehensiveHistoricalRecords(leagueIds: string[]
                 week: weekIndex + 1,
                 userId: team1.points > team2.points ? user1.user_id : user2.user_id,
                 username: team1.points > team2.points ? user1.display_name : user2.display_name,
-                avatar: team1.points > team2.points ? user1.avatar : user2.avatar,
+                avatar: team1.points > team2.points ? teamAvatar(user1) : teamAvatar(user2),
                 value: margin,
                 description: `${team1.points > team2.points ? user1.display_name : user2.display_name} won by ${margin.toFixed(2)} points in Week ${weekIndex + 1}`,
                 details: {
@@ -1193,7 +1193,7 @@ export async function generateComprehensiveHistoricalRecords(leagueIds: string[]
           week: maxScoreWeek,
           userId: user.user_id,
           username: user.display_name,
-          avatar: user.avatar,
+          avatar: teamAvatar(user),
           value: maxScore,
           description: `${user.display_name} scored ${maxScore.toFixed(2)} points in Week ${maxScoreWeek}`,
         });
@@ -1204,7 +1204,7 @@ export async function generateComprehensiveHistoricalRecords(leagueIds: string[]
           week: minScoreWeek,
           userId: user.user_id,
           username: user.display_name,
-          avatar: user.avatar,
+          avatar: teamAvatar(user),
           value: minScore,
           description: `${user.display_name} scored ${minScore.toFixed(2)} points in Week ${minScoreWeek}`,
         });
@@ -1284,7 +1284,7 @@ export async function generateComprehensiveHistoricalRecords(leagueIds: string[]
               season: league.season,
               userId: user.user_id,
               username: user.display_name,
-              avatar: user.avatar,
+              avatar: teamAvatar(user),
               value: 1,
               description: `${user.display_name} made the playoffs in ${league.season}`,
               details: {
@@ -1925,7 +1925,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
                   week: weekNumber,
                   userId: team1.points > team2.points ? user1.user_id : user2.user_id,
                   username: team1.points > team2.points ? user1.display_name : user2.display_name,
-                  avatar: team1.points > team2.points ? user1.avatar : user2.avatar,
+                  avatar: team1.points > team2.points ? teamAvatar(user1) : teamAvatar(user2),
                   value: margin,
                   description: `${team1.points > team2.points ? user1.display_name : user2.display_name} won by ${margin.toFixed(2)} points in Week ${weekNumber}`,
                   details: {
@@ -2103,7 +2103,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             season: league.season,
             userId: user.user_id,
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             value: userStats.highestScore,
             description: `${user.display_name} scored ${userStats.highestScore.toFixed(2)} points`,
           });
@@ -2116,7 +2116,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             season: league.season,
             userId: user.user_id,
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             value: userStats.lowestScore,
             description: `${user.display_name} scored ${userStats.lowestScore.toFixed(2)} points`,
           });
@@ -2129,7 +2129,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             season: league.season,
             userId: user.user_id,
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             value: userStats.winStreak,
             description: `${user.display_name} had a ${userStats.winStreak}-game win streak`,
           });
@@ -2142,7 +2142,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             season: league.season,
             userId: user.user_id,
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             value: userStats.lossStreak,
             description: `${user.display_name} had a ${userStats.lossStreak}-game loss streak`,
           });
@@ -2155,7 +2155,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             season: league.season,
             userId: user.user_id,
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             value: 1,
             description: `${user.display_name} made the playoffs in ${league.season}`,
             details: {
@@ -2218,7 +2218,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
         if (user) {
           userAllTimeStats[userId] = {
             username: user.display_name,
-            avatar: user.avatar,
+            avatar: teamAvatar(user),
             totalWins: 0,
             totalLosses: 0,
             totalTies: 0,
@@ -2285,3 +2285,4 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
     userAllTimeStats,
   };
 } 
+import { teamAvatar } from '@/lib/teamAvatar';

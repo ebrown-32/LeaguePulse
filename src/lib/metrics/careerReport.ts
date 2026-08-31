@@ -1,6 +1,7 @@
 import { getAllLinkedLeagueIds, getLeagueInfo, getLeagueMatchups, getLeagueRosters, getLeagueUsers } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { optimalLineup, coachingEfficiency, type LineupPlayer } from './optimalLineup';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 /**
  * Career metrics: the weekly report's measures, run over every season the
@@ -162,7 +163,7 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
           entry = {
             userId,
             username: u?.display_name ?? 'Unknown',
-            avatar: u?.avatar ?? '',
+            avatar: teamAvatar(u),
             seasons: [], weeksPlayed: 0,
             actual: 0, optimal: 0, efficiency: null, benchPoints: 0, benchPerWeek: 0,
             allPlayWins: 0, allPlayLosses: 0, allPlayPct: 0, medianWins: 0, medianLosses: 0,
@@ -172,7 +173,7 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
         }
         // A manager who renamed themselves shows their current name.
         if (u?.display_name) entry.username = u.display_name;
-        if (u?.avatar) entry.avatar = u.avatar;
+        if (teamAvatar(u)) entry.avatar = teamAvatar(u);
 
         const actual = Number(m.points ?? 0);
         const pts: Record<string, number> = m.players_points ?? {};

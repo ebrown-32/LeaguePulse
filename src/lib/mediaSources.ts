@@ -2,6 +2,7 @@ import { fetchRssFeed } from './rss';
 import { sleeperAPI } from './sleeperApi';
 import { getLeagueUsers, getLeagueRosters } from './api';
 import { getCurrentLeagueId } from '@/config/league';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 const ESPN_NEWS_URL = 'http://site.api.espn.com/apis/site/v2/sports/football/nfl/news';
 const ESPN_INJURIES_URL = 'http://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries';
@@ -412,7 +413,7 @@ export async function getFantasyTeams(): Promise<FantasyTeam[]> {
         return {
           userId: r.owner_id,
           teamName: user.metadata?.team_name || user.display_name,
-          avatar: user.avatar || '',
+          avatar: teamAvatar(user),
           playerNames,
         };
       });

@@ -7,9 +7,14 @@ interface AvatarProps {
 }
 
 export default function Avatar({ avatarId, size = 40, className = '' }: AvatarProps) {
-  const avatarUrl = avatarId
-    ? `https://sleepercdn.com/avatars/${avatarId}`
-    : `https://sleepercdn.com/images/v2/icons/player-default.webp`;
+  // Accepts either a bare account avatar id or a full URL. A manager's team
+  // picture is stored by Sleeper as an uploads URL rather than an id, so
+  // prefixing everything with the avatars path turned those into 404s.
+  const avatarUrl = !avatarId
+    ? `https://sleepercdn.com/images/v2/icons/player-default.webp`
+    : /^https?:\/\//.test(avatarId)
+      ? avatarId
+      : `https://sleepercdn.com/avatars/${avatarId}`;
 
   return (
     <div
