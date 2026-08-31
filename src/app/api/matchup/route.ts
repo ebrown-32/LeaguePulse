@@ -9,6 +9,7 @@ import {
   buildPlayerCard,
   type PlayerCard,
 } from '@/lib/playerStats';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,7 +105,7 @@ export async function GET(request: Request) {
         userId,
         teamName: u?.metadata?.team_name || u?.display_name || 'Unknown',
         manager: u?.display_name ?? '',
-        avatar: u?.avatar ?? '',
+        avatar: teamAvatar(u),
         starters: starterIds.map(toCard),
         bench: (r?.players ?? [])
           .filter((id: string) => id && !starterSet.has(id))

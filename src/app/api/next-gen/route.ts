@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds, generateComprehensiveLeagueHistory } from '@/lib/api';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -185,7 +186,7 @@ function processMatchupData(seasonAnalyses: any[]) {
           scoreA: a.points, scoreB: b.points,
           userIdA: userA, userIdB: userB,
           usernameA: uA?.display_name ?? '', usernameB: uB?.display_name ?? '',
-          avatarA: uA?.avatar ?? '', avatarB: uB?.avatar ?? '',
+          avatarA: teamAvatar(uA), avatarB: teamAvatar(uB),
         });
       });
     }

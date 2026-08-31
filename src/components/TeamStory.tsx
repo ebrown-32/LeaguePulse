@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { formatPoints, formatRecord } from '@/lib/utils';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 interface TeamStoryProps {
   user: {
@@ -79,7 +80,7 @@ export default function TeamStory({ user, seasonData, records }: TeamStoryProps)
         <Card className="bg-card border-border">
           <CardContent className="p-8">
             <div className="flex items-center space-x-6">
-              <Avatar avatarId={user.avatar} size={80} className="rounded-lg" />
+              <Avatar avatarId={teamAvatar(user)} size={80} className="rounded-lg" />
               <div className="flex-1">
                 <h1 className="text-3xl font-bold mb-2">{user.username}</h1>
                 <p className="text-xl text-gray-300 mb-4">

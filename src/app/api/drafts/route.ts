@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,7 @@ function buildSlots(rawDraft: any, rosters: any[], users: any[]): { slots: Draft
         rosterId: roster.roster_id,
         userId:   user?.user_id ?? '',
         teamName: user?.metadata?.team_name || user?.display_name || `Team ${i + 1}`,
-        avatar:   user?.avatar ?? '',
+        avatar: teamAvatar(user),
         picks:    [],
       });
     }
@@ -128,7 +129,7 @@ function buildSlots(rawDraft: any, rosters: any[], users: any[]): { slots: Draft
       rosterId: roster?.roster_id ?? 0,
       userId:   user?.user_id ?? '',
       teamName: user?.metadata?.team_name || user?.display_name || `Team ${slot}`,
-      avatar:   user?.avatar ?? '',
+      avatar: teamAvatar(user),
       picks:    [],
     });
   }
@@ -213,7 +214,7 @@ async function enrichDraft(
         rosterId:   p.roster_id,
         userId:     p.picked_by ?? '',
         teamName:   user?.metadata?.team_name || user?.display_name || slotObj?.teamName || 'Team',
-        avatar:     user?.avatar ?? slotObj?.avatar ?? '',
+        avatar:     teamAvatar(user) || slotObj?.avatar || '',
         playerId:   p.player_id ?? '',
         playerName: p.metadata
           ? `${p.metadata.first_name ?? ''} ${p.metadata.last_name ?? ''}`.trim()

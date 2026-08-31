@@ -4,6 +4,7 @@ import { isFantasyProsConfigured } from '@/lib/fantasypros';
 import { getLeagueRosters, getLeagueUsers } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import { getPlayersDirectory } from '@/lib/playerStats';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +66,7 @@ export async function GET() {
       const owner: Owner = {
         userId: roster.owner_id,
         teamName: u?.metadata?.team_name || u?.display_name || 'Unknown',
-        avatar: u?.avatar ?? '',
+        avatar: teamAvatar(u),
       };
       for (const pid of roster.players ?? []) {
         const p = players[pid];

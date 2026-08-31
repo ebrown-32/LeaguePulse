@@ -7,6 +7,7 @@ import {
   getSeasonTransactions,
 } from '@/lib/api';
 import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export interface Manager {
   userId: string;
@@ -99,7 +100,7 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
         managerMap.set(u.user_id, {
           userId:   u.user_id,
           username: u.display_name ?? u.username ?? 'Unknown',
-          avatar:   u.avatar ?? '',
+          avatar: teamAvatar(u),
           teamName: u.metadata?.team_name || u.display_name || 'Unknown',
         });
       }

@@ -44,6 +44,7 @@ import {
   formatRecord,
 } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 // ─── Profanity filter ────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
     const u2 = users.find((u: any) => u.user_id === r2?.owner_id);
     if (!r1 || !r2 || !u1 || !u2) return null;
     const p1 = t1.points ?? 0, p2 = t2.points ?? 0;
-    return { id: t1.matchup_id, team1: { userId: u1.user_id, name: censorTeamName(u1.metadata?.team_name || u1.display_name), avatar: u1.avatar, points: p1 }, team2: { userId: u2.user_id, name: censorTeamName(u2.metadata?.team_name || u2.display_name), avatar: u2.avatar, points: p2 }, isHighlight: p1 + p2 > 200 || (Math.abs(p1 - p2) < 10 && p1 + p2 > 0), totalPoints: p1 + p2 };
+    return { id: t1.matchup_id, team1: { userId: u1.user_id, name: censorTeamName(u1.metadata?.team_name || u1.display_name), avatar: teamAvatar(u1), points: p1 }, team2: { userId: u2.user_id, name: censorTeamName(u2.metadata?.team_name || u2.display_name), avatar: teamAvatar(u2), points: p2 }, isHighlight: p1 + p2 > 200 || (Math.abs(p1 - p2) < 10 && p1 + p2 > 0), totalPoints: p1 + p2 };
   }).filter(Boolean).sort((a: any, b: any) => { if (a.isHighlight !== b.isHighlight) return a.isHighlight ? -1 : 1; return b.totalPoints - a.totalPoints; }).slice(0, 6);
 }
 

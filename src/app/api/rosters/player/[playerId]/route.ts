@@ -4,11 +4,13 @@ import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
 import {
   getPlayersDirectory,
   getSeasonStats,
+  getSeasonProjections,
   resolveStatsSeason,
   buildPlayerCard,
   statLineFor,
   type PlayerCard,
 } from '@/lib/playerStats';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,12 +30,41 @@ export interface PlayerMove {
   waiverBid?: number;
 }
 
+/** Who the player is, beyond the scoreboard. */
+export interface PlayerProfile {
+  height:  number | null;
+  weight:  number | null;
+  college: string | null;
+  status:  string | null;
+  depthChartOrder:    number | null;
+  depthChartPosition: string | null;
+}
+
+/** What is expected of them next, all of it published by Sleeper. */
+export interface PlayerOutlook {
+  season:          string;
+  projectedPoints: number | null;
+  /** Redraft and dynasty startup ADP, PPR. Lower is more valuable. */
+  adp:             number | null;
+  dynastyAdp:      number | null;
+}
+
 export interface PlayerDetailResponse {
   player:      PlayerCard;
   statsSeason: string;
   statLine:    { label: string; value: string }[];
+  profile:     PlayerProfile;
+  outlook:     PlayerOutlook;
   moves:       PlayerMove[];
 }
+
+const numOrNull = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null;
+/** 999 is Sleeper's "unpriced", not a draft slot. */
+const pricedOrNull = (v: unknown): number | null => {
+  const n = numOrNull(v);
+  return n != null && n < 999 ? n : null;
+};
 
 export async function GET(
   request: Request,
@@ -61,9 +92,30 @@ export async function GET(
     const statsSeason = requested && /^\d{4}$/.test(requested)
       ? requested
       : await resolveStatsSeason(nflState?.season ?? String(new Date().getFullYear()));
-    const stats = await getSeasonStats(statsSeason);
+    const projectionSeason = nflState?.season ?? String(new Date().getFullYear());
+    const [stats, projections] = await Promise.all([
+      getSeasonStats(statsSeason),
+      getSeasonProjections(projectionSeason),
+    ]);
     const player = buildPlayerCard(playerId, players, stats);
     const statLine = statLineFor(player.position, stats[playerId] ?? {});
+
+    const raw = players[playerId] ?? {};
+    const pr  = projections[playerId] ?? {};
+    const profile = {
+      height:  numOrNull(raw.height) ?? (raw.height ? Number(raw.height) || null : null),
+      weight:  numOrNull(raw.weight) ?? (raw.weight ? Number(raw.weight) || null : null),
+      college: raw.college || null,
+      status:  raw.status || null,
+      depthChartOrder:    numOrNull(raw.depth_chart_order),
+      depthChartPosition: raw.depth_chart_position || null,
+    };
+    const outlook = {
+      season: projectionSeason,
+      projectedPoints: numOrNull(pr.pts_ppr),
+      adp: pricedOrNull(pr.adp_ppr),
+      dynastyAdp: pricedOrNull(pr.adp_dynasty_ppr),
+    };
 
     const currentNFLWeek = Math.max(1, nflState?.week ?? 1);
 
@@ -115,7 +167,7 @@ export async function GET(
             direction,
             teamName: u?.metadata?.team_name || u?.display_name || `Roster ${rosterId}`,
             userId,
-            avatar: u?.avatar ?? '',
+            avatar: teamAvatar(u),
             waiverBid: tx.settings?.waiver_bid ?? undefined,
           });
         }
@@ -125,7 +177,9 @@ export async function GET(
 
     const moves = perSeason.flat().sort((a, b) => b.created - a.created);
 
-    return NextResponse.json({ player, statsSeason, statLine, moves } satisfies PlayerDetailResponse);
+    return NextResponse.json({
+      player, statsSeason, statLine, profile, outlook, moves,
+    } satisfies PlayerDetailResponse);
   } catch (err) {
     console.error('[api/rosters/player]', err);
     return NextResponse.json({ error: 'Failed to load player' }, { status: 500 });

@@ -1,47 +1,82 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shirt } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import Avatar from '@/components/ui/Avatar';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
-import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { SeasonSelect } from '@/components/ui/SeasonSelect';
+import { LoadingPage } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { POSITION_STYLE } from './positions';
 import PlayerDetailModal from './PlayerDetailModal';
-import type { PlayerCard } from '@/lib/playerStats';
+import DynastyBreakdown from './DynastyBreakdown';
+import type { AnalysisPlayer, AnalysisResponse } from '@/app/api/rosters/analysis/route';
 
-interface RosterTeam {
-  rosterId: number;
-  userId: string;
-  teamName: string;
-  managerName: string;
-  avatar: string;
-  record: { wins: number; losses: number; ties: number };
-  starters: PlayerCard[];
-  bench: PlayerCard[];
+/**
+ * Rosters.
+ *
+ * Pick a team, see their players, tap one to go deep. That is the whole page.
+ *
+ * It has been two other things: eight stacked lists nobody could compare, and
+ * then a filter bench with axis pickers and league-wide scatter plots that
+ * answered questions most people were not asking. Both failed the same way, by
+ * making the reader assemble the view before they could read anything. The
+ * roster is the view.
+ *
+ * The dynasty breakdown sits underneath rather than beside, and only appears in
+ * a league Sleeper reports as dynasty, because in a redraft league none of it
+ * means anything.
+ */
+
+/** Starters first, then the bench, each in the league's own position order. */
+const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+function positionRank(p: AnalysisPlayer): number {
+  const i = POSITION_ORDER.indexOf(p.position);
+  return i === -1 ? POSITION_ORDER.length : i;
 }
 
-function PlayerRow({ player, onOpen, best }: { player: PlayerCard; onOpen: () => void; best: number }) {
+function feetInches(inches: number | null): string {
+  if (inches == null) return '';
+  return `${Math.floor(inches / 12)}'${inches % 12}`;
+}
+
+function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel }: {
+  player: AnalysisPlayer; onOpen: () => void; best: number;
+  /** False for a past season or a specific week, where there is nothing to
+   *  project and the only number worth showing is what actually happened. */
+  forwardLooking: boolean;
+  pointsLabel: string;
+}) {
   const style = POSITION_STYLE[player.position] ?? POSITION_STYLE.DEFAULT;
-  // Production bar is relative to the best scorer on this roster, so the
-  // shape of a team's depth is readable at a glance.
-  const pct = player.points != null && best > 0 ? Math.max(4, (player.points / best) * 100) : 0;
+  // The bar measures whichever number leads: the projection on a live roster,
+  // the points actually scored on a historical one.
+  const lead = forwardLooking ? player.projectedPoints : player.points;
+  const pct = lead != null && best > 0 ? Math.max(3, (lead / best) * 100) : 0;
+
+  const detail = [
+    player.nflTeam,
+    player.age != null ? `${player.age}yr` : null,
+    player.weight != null ? `${feetInches(player.height)}, ${player.weight}lb` : null,
+    player.depthChartOrder ? `depth ${player.depthChartOrder}` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
     <button
       onClick={onOpen}
-      className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/40"
+      className="group relative flex w-full items-center gap-3 overflow-hidden px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
     >
-      {/* production bar, sunk behind the content */}
       <span
-        className={cn('pointer-events-none absolute inset-y-0 left-0 opacity-[0.09] transition-opacity group-hover:opacity-[0.16]', style.bar)}
+        className={cn(
+          'pointer-events-none absolute inset-y-0 left-0 opacity-[0.07] transition-opacity group-hover:opacity-[0.14]',
+          style.bar,
+        )}
         style={{ width: `${pct}%` }}
       />
 
-      <span className={cn('relative flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-[10px] font-bold tracking-wider', style.badge)}>
+      <span className={cn(
+        'relative flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-[10px] font-bold tracking-wider',
+        style.badge,
+      )}>
         {player.position}
       </span>
 
@@ -56,183 +91,312 @@ function PlayerRow({ player, onOpen, best }: { player: PlayerCard; onOpen: () =>
             </span>
           )}
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-          {player.nflTeam}
-          {player.number && <> · #{player.number}</>}
-          {player.positionRank != null && <> · {player.position}{player.positionRank}</>}
-        </span>
+        <span className="block truncate text-[11px] text-muted-foreground">{detail}</span>
       </span>
 
       <span className="relative shrink-0 text-right">
-        <span className="block font-display text-base font-bold tabular-nums text-foreground">
-          {player.points != null ? player.points.toFixed(1) : ','}
+        <span className="block font-display text-sm font-bold tabular-nums text-foreground">
+          {lead != null ? lead.toFixed(forwardLooking ? 0 : 1) : '–'}
         </span>
-        <span className="block text-[10px] text-muted-foreground">
-          {player.pointsPerGame != null ? `${player.pointsPerGame.toFixed(1)}/gm` : 'no games'}
+        <span className="block text-[10px] tabular-nums text-muted-foreground">
+          {forwardLooking && player.points != null
+            ? `${player.points.toFixed(0)} ${pointsLabel}`
+            : pointsLabel}
         </span>
       </span>
     </button>
   );
 }
 
-function RosterSection({
-  title, players, best, onOpen,
-}: { title: string; players: PlayerCard[]; best: number; onOpen: (p: PlayerCard) => void }) {
-  if (!players.length) return null;
-  const total = players.reduce((s, p) => s + (p.points ?? 0), 0);
+/**
+ * Season and week, as one control.
+ *
+ * Seasons are a short fixed list, so they sit as a segmented row. Weeks are
+ * up to eighteen, so they scroll, with the current selection pulled into view
+ * whenever it changes: landing on week 14 with the strip parked at week 1
+ * leaves the reader with no idea where they are.
+ */
+function TimeMachine({
+  seasons, season, onSeason, weeks, week, onWeek, nowLabel,
+}: {
+  seasons: string[];
+  season: string;
+  onSeason: (s: string) => void;
+  weeks: number[];
+  week: number | null;
+  onWeek: (w: number | null) => void;
+  nowLabel: string;
+}) {
+  const strip = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = strip.current?.querySelector('[data-active="true"]');
+    el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [week, season]);
+
+  const chip = (active: boolean) => cn(
+    'relative shrink-0 rounded-lg px-3 text-[12px] font-bold tabular-nums transition-all',
+    'min-h-[34px] inline-flex items-center justify-center',
+    active
+      ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+  );
 
   return (
-    <div>
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          {title} <span className="text-muted-foreground/60">({players.length})</span>
-        </h2>
-        <span className="text-[11px] tabular-nums text-muted-foreground">
-          {total.toFixed(1)} pts
+    <section className="lp-glass overflow-hidden rounded-xl border">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+          Season
         </span>
+        <div className="no-scrollbar ml-auto flex gap-1 overflow-x-auto">
+          {[...seasons].sort((a, b) => Number(b) - Number(a)).map(s => (
+            <button key={s} onClick={() => onSeason(s)} aria-pressed={s === season}
+              className={chip(s === season)}>
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="space-y-2">
-        {players.map((p, i) => (
-          <motion.div
-            key={p.playerId}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, delay: Math.min(i, 12) * 0.02 }}
+
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+          Week
+        </span>
+        <div ref={strip} className="no-scrollbar flex gap-1 overflow-x-auto">
+          <button
+            onClick={() => onWeek(null)}
+            aria-pressed={week === null}
+            data-active={week === null}
+            className={cn(chip(week === null), 'px-3.5')}
           >
-            <PlayerRow player={p} best={best} onOpen={() => onOpen(p)} />
-          </motion.div>
-        ))}
+            {nowLabel}
+          </button>
+          {weeks.map(w => (
+            <button key={w} onClick={() => onWeek(w)} aria-pressed={week === w}
+              data-active={week === w} className={cn(chip(week === w), 'w-9 px-0')}>
+              {w}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function RostersView() {
-  const [teams, setTeams] = useState<RosterTeam[]>([]);
-  const [statsSeason, setStatsSeason] = useState('');
-  const [seasons, setSeasons] = useState<string[]>([]);
-  const [switching, setSwitching] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<AnalysisResponse | null>(null);
+  const [season, setSeason] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [openPlayer, setOpenPlayer] = useState<PlayerCard | null>(null);
+  const [teamId, setTeamId] = useState<number | null>(null);
+  const [openPlayer, setOpenPlayer] = useState<AnalysisPlayer | null>(null);
 
-  const load = useCallback((season?: string) => {
-    const params = season ? `?season=${season}` : '';
-    return fetch(`/api/rosters${params}`).then(r => r.json());
+  const load = useCallback((s: string, w: number | null) => {
+    setError(null);
+    const q = new URLSearchParams();
+    if (s) q.set('season', s);
+    if (w) q.set('week', String(w));
+    fetch(`/api/rosters/analysis${q.toString() ? `?${q}` : ''}`)
+      .then(r => r.json())
+      .then((d: AnalysisResponse & { error?: string }) => {
+        if (d.error) { setError(d.error); return; }
+        setData(d);
+        setSeason(prev => prev || d.rosterSeason);
+        setTeamId(prev => prev ?? d.teams[0]?.rosterId ?? null);
+      })
+      .catch(() => setError('Could not load rosters.'));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    load()
-      .then(d => {
-        if (cancelled) return;
-        if (d.error) { setError(d.error); return; }
-        setTeams(d.teams);
-        setSeasons(d.seasons ?? []);
-        setStatsSeason(d.statsSeason);
-        setSelected(prev => prev ?? d.teams[0]?.userId ?? null);
-      })
-      .catch(() => !cancelled && setError('Failed to load rosters'))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [load]);
+  useEffect(() => { load('', null); }, [load]);
 
-  // The roster itself never changes — only the production laid over it — so
-  // the selected manager always survives a season switch.
-  const changeSeason = useCallback((season: string) => {
-    setSwitching(true);
-    setStatsSeason(season);
-    load(season)
-      .then(d => {
-        if (d.error) return;
-        setTeams(d.teams);
-        setStatsSeason(d.statsSeason);
-      })
-      .catch(() => {})
-      .finally(() => setSwitching(false));
+  const onSeason = useCallback((s: string) => {
+    // A week number means something different in each season, so changing the
+    // season drops back to that season's final roster rather than carrying a
+    // week across.
+    setSeason(s); setData(null); load(s, null);
   }, [load]);
+  const onWeek = useCallback((w: number | null) => {
+    setData(null); load(season, w);
+  }, [load, season]);
 
-  const team = useMemo(() => teams.find(t => t.userId === selected) ?? null, [teams, selected]);
-  const best = useMemo(
-    () => (team ? Math.max(...[...team.starters, ...team.bench].map(p => p.points ?? 0), 0) : 0),
-    [team],
+  const team = data?.teams.find(t => t.rosterId === teamId) ?? null;
+
+  const squad = useMemo(
+    () => (data?.players ?? []).filter(p => p.rosterId === teamId),
+    [data, teamId],
   );
 
-  if (loading) return <LoadingPage />;
-  if (error)   return <ErrorMessage title="Error" message={error} />;
+  /** Squad size per team, so a chip says something beyond the record. */
+  const squadSize = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of data?.players ?? []) m.set(p.rosterId, (m.get(p.rosterId) ?? 0) + 1);
+    return m;
+  }, [data]);
+
+  const { starters, bench } = useMemo(() => {
+    // Within a position, order by whichever number is on screen. Sorting a
+    // historical roster by projections it does not carry left every group in
+    // arbitrary order.
+    const lead = (p: AnalysisPlayer) =>
+      (data?.isCurrent ? p.projectedPoints : p.points) ?? -1;
+    const order = (a: AnalysisPlayer, b: AnalysisPlayer) =>
+      positionRank(a) - positionRank(b) || lead(b) - lead(a);
+    return {
+      starters: squad.filter(p => p.starter).sort(order),
+      bench: squad.filter(p => !p.starter).sort(order),
+    };
+  }, [squad, data?.isCurrent]);
+
+  if (error) return <ErrorMessage title="Rosters" message={error} />;
+  if (!data || !team) return <LoadingPage />;
+
+  // Scale the bars against whichever number is being shown.
+  const best = Math.max(1, ...squad.map(p =>
+    (data.isCurrent ? p.projectedPoints : p.points) ?? 0));
+  const rec = team.record;
 
   return (
     <PageLayout
       title="Rosters"
-      subtitle={`Current rosters, showing ${statsSeason} production and full move history.`}
+      // Static. What is on screen is already stated by the controls below and
+      // in the note under the player list; restating it in the page heading
+      // meant the subtitle changed under the reader on every tap.
+      subtitle="Every team's players. Tap anyone for their profile and outlook."
     >
-      {/* Season picker */}
-      {seasons.length > 1 && (
-        <div className="mb-5 flex items-center gap-3">
-          <SeasonSelect
-            seasons={seasons}
-            selectedSeason={statsSeason}
-            onSeasonChange={changeSeason}
-            includeAllTime={false}
-          />
-          {switching && <LoadingSpinner className="h-4 w-4" />}
+      <div className="space-y-4">
+        {/* ── When ──
+            Two dropdowns for this was a poor trade: picking a week is
+            browsing, and browsing wants something you can flick along rather
+            than a native select sheet that hides every other option the
+            moment it opens. */}
+        <TimeMachine
+          seasons={data.seasons}
+          season={season}
+          onSeason={onSeason}
+          weeks={data.weeks}
+          week={data.week}
+          onWeek={onWeek}
+          nowLabel={data.isCurrentSeason ? 'Now' : 'Final'}
+        />
+        {/* ── Whose roster ──
+            The selected team lifts and gets a ring rather than just a tinted
+            border: this row is the page's main control, and on a phone it is
+            half scrolled off screen, so the active state has to survive being
+            glanced at sideways. */}
+        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1 sm:mx-0 sm:px-0">
+          {data.teams.map(t => {
+            const on = t.rosterId === teamId;
+            return (
+              <motion.button
+                key={t.rosterId}
+                onClick={() => setTeamId(t.rosterId)}
+                aria-pressed={on}
+                animate={{ scale: on ? 1 : 0.97 }}
+                whileTap={{ scale: 0.94 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                className={cn(
+                  'flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors',
+                  on
+                    ? 'border-primary/60 bg-primary/10 ring-1 ring-primary/40 shadow-sm shadow-primary/20'
+                    : 'border-border bg-card/40 hover:border-border/80 hover:bg-muted/40',
+                )}
+              >
+                <span className={cn(
+                  'relative shrink-0 rounded-full transition-all',
+                  on && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+                )}>
+                  <Avatar avatarId={t.avatar} size={on ? 30 : 26} />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className={cn(
+                    'block max-w-[8.5rem] truncate text-[12px] font-bold',
+                    on ? 'text-primary' : 'text-foreground',
+                  )}>
+                    {t.name}
+                  </span>
+                  <span className="block text-[10px] tabular-nums text-muted-foreground">
+                    {t.record.wins}-{t.record.losses}{t.record.ties ? `-${t.record.ties}` : ''}
+                    {' · '}{squadSize.get(t.rosterId) ?? 0} players
+                  </span>
+                </span>
+              </motion.button>
+            );
+          })}
         </div>
-      )}
 
-      {/* Team selector */}
-      <div className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
-        {teams.map(t => {
-          const isActive = t.userId === selected;
-          return (
-            <button
-              key={t.userId}
-              onClick={() => setSelected(t.userId)}
-              className={cn(
-                'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Avatar avatarId={t.avatar} size={22} className="rounded-full" />
-              {t.teamName}
-            </button>
-          );
-        })}
-      </div>
-
-      {team && (
-        <>
-          {/* Team header */}
-          <div className="mb-6 flex items-center gap-4 rounded-2xl border border-border bg-card p-5">
-            <Avatar avatarId={team.avatar} size={52} className="shrink-0 rounded-xl ring-2 ring-primary/30" />
+        {/* ── The roster ──────────────────────────────────────────────── */}
+        <section className="lp-glass overflow-hidden rounded-xl border">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            <Avatar avatarId={team.avatar} size={32} className="shrink-0" />
             <div className="min-w-0 flex-1">
-              <h2 className="truncate font-display text-xl font-bold text-foreground">{team.teamName}</h2>
-              <p className="text-xs text-muted-foreground">
-                {team.managerName}
-                {' · '}
-                {team.record.wins}-{team.record.losses}
-                {team.record.ties ? `-${team.record.ties}` : ''}
-                {' · '}
-                {team.starters.length + team.bench.length} players
+              <h2 className="truncate font-display text-base font-bold text-foreground">{team.name}</h2>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {team.manager} · {rec.wins}-{rec.losses}{rec.ties ? `-${rec.ties}` : ''} · {squad.length} players
               </p>
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <RosterSection title="Starters" players={team.starters} best={best} onOpen={setOpenPlayer} />
-            <RosterSection title="Bench"    players={team.bench}    best={best} onOpen={setOpenPlayer} />
-          </div>
-        </>
-      )}
+          {[
+            { label: 'Starters', list: starters },
+            { label: 'Bench', list: bench },
+          ].map(({ label, list }) => list.length > 0 && (
+            <div key={label}>
+              <p className="border-b border-border bg-muted/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                {label}
+              </p>
+              <div className="divide-y divide-border">
+                {list.map((p, i) => (
+                  <motion.div
+                    key={p.playerId}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2, delay: Math.min(i, 10) * 0.015 }}
+                  >
+                    <PlayerRow
+                      player={p}
+                      best={best}
+                      forwardLooking={data.isCurrent}
+                      pointsLabel={
+                        data.week ? `week ${data.week}`
+                          : data.isCurrent ? `${data.statsSeason} pts`
+                          : `${data.statsSeason} pts`
+                      }
+                      onOpen={() => setOpenPlayer(p)}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          ))}
 
-      <PlayerDetailModal
-        playerId={openPlayer?.playerId ?? null}
-        fallback={openPlayer}
-        season={statsSeason}
-        onClose={() => setOpenPlayer(null)}
-      />
+          <p className="border-t border-border px-4 py-2 text-[10px] leading-relaxed text-muted-foreground">
+            {data.week
+              ? `The squad exactly as it was in week ${data.week}, with that week's points. Sleeper freezes a roster each week, so this is what was actually fielded.`
+              : data.isCurrent
+                ? `Right hand number is the ${data.projectionSeason} projection, beneath it ${data.statsSeason} points.`
+                : `The roster at the end of ${data.rosterSeason}, with that season's points. Projections are not shown for a season already played.`}
+          </p>
+        </section>
+
+        {/* ── Dynasty, only where it applies ──────────────────────────
+            Current roster only. Dynasty worth is a claim about a roster
+            somebody still owns; pricing a 2024 snapshot at today's market
+            would be answering a question nobody asked. */}
+        {data.isDynasty && data.isCurrent && (
+          <DynastyBreakdown
+            squad={squad}
+            league={data.players}
+            teamName={team.name}
+          />
+        )}
+      </div>
+
+      {openPlayer && (
+        <PlayerDetailModal
+          playerId={openPlayer.playerId}
+          season={season}
+          onClose={() => setOpenPlayer(null)}
+        />
+      )}
     </PageLayout>
   );
 }

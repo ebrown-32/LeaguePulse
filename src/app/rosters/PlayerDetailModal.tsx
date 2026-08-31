@@ -24,11 +24,50 @@ interface PlayerMove {
   waiverBid?: number;
 }
 
+interface PlayerProfile {
+  height: number | null;
+  weight: number | null;
+  college: string | null;
+  status: string | null;
+  depthChartOrder: number | null;
+  depthChartPosition: string | null;
+}
+
+interface PlayerOutlook {
+  season: string;
+  projectedPoints: number | null;
+  adp: number | null;
+  dynastyAdp: number | null;
+}
+
 interface PlayerDetail {
   player: PlayerCard;
   statsSeason: string;
   statLine: { label: string; value: string }[];
+  profile?: PlayerProfile;
+  outlook?: PlayerOutlook;
   moves: PlayerMove[];
+}
+
+function feetInches(inches: number | null): string {
+  if (inches == null) return '–';
+  return `${Math.floor(inches / 12)}'${inches % 12}"`;
+}
+
+/**
+ * Where a player sits in the dynasty market, in words.
+ *
+ * The ADP number alone means nothing to anyone who does not draft startups for
+ * a living. The band does, and it is a plain reading of the number rather than
+ * a judgement layered on top of it.
+ */
+function dynastyTier(adp: number | null): string | null {
+  if (adp == null) return null;
+  if (adp <= 12) return 'First round startup pick';
+  if (adp <= 36) return 'Early startup pick';
+  if (adp <= 75) return 'Solid startup asset';
+  if (adp <= 150) return 'Mid startup asset';
+  return 'Late startup flier';
 }
 
 const MOVE_LABEL: Record<PlayerMove['type'], string> = {
@@ -125,11 +164,136 @@ export default function PlayerDetailModal({
               <LoadingBlock size={14} />
             ) : (
               <>
+                {/* ── Outlook ──
+                    First, and deliberately so. Everything else on this page is
+                    a record of what already happened; the reason to open a
+                    player in a dynasty league is what is expected of them
+                    next. */}
+                {detail?.outlook && (
+                  <div className="border-b border-border p-6">
+                    <div className="mb-4 flex items-baseline justify-between">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        Outlook
+                      </h3>
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                        {detail.outlook.season}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end gap-4">
+                      <div>
+                        <p className="font-display text-4xl font-bold leading-none tabular-nums text-foreground">
+                          {detail.outlook.projectedPoints != null
+                            ? detail.outlook.projectedPoints.toFixed(0)
+                            : '–'}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Projected PPR
+                        </p>
+                      </div>
+
+                      {/* Against last season, which is the whole argument for
+                          or against a player heading into a year. */}
+                      {detail.outlook.projectedPoints != null && p?.points != null && (() => {
+                        const diff = detail.outlook.projectedPoints - p.points;
+                        const up = diff >= 0;
+                        return (
+                          <div className="pb-1">
+                            <p className={cn(
+                              'font-display text-lg font-bold tabular-nums',
+                              Math.abs(diff) < 17
+                                ? 'text-muted-foreground'
+                                : up ? 'text-emerald-500' : 'text-rose-500',
+                            )}>
+                              {up ? '+' : ''}{diff.toFixed(0)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              vs {detail.statsSeason}
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-border bg-background/50 p-3">
+                        <p className="font-display text-lg font-bold tabular-nums text-foreground">
+                          {detail.outlook.dynastyAdp != null
+                            ? detail.outlook.dynastyAdp.toFixed(1) : '–'}
+                        </p>
+                        <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Dynasty ADP
+                        </p>
+                        {dynastyTier(detail.outlook.dynastyAdp) && (
+                          <p className="mt-1 text-[10px] leading-snug text-primary">
+                            {dynastyTier(detail.outlook.dynastyAdp)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-border bg-background/50 p-3">
+                        <p className="font-display text-lg font-bold tabular-nums text-foreground">
+                          {detail.outlook.adp != null ? detail.outlook.adp.toFixed(1) : '–'}
+                        </p>
+                        <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Redraft ADP
+                        </p>
+                        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                          This season only
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+                      Projections and draft positions are Sleeper&apos;s published
+                      figures.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Profile ──
+                    Skipped entirely when Sleeper holds none of it, which is
+                    the case for every team defense. Six rows of dashes is
+                    worse than no section. */}
+                {detail?.profile && Object.values(detail.profile).some(v => v != null) && (
+                  <div className="border-b border-border p-6">
+                    <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Profile
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                      {[
+                        { label: 'Height', value: feetInches(detail.profile.height) },
+                        { label: 'Weight', value: detail.profile.weight != null ? `${detail.profile.weight} lb` : '–' },
+                        {
+                          label: 'Depth chart',
+                          value: detail.profile.depthChartOrder != null
+                            ? `${detail.profile.depthChartPosition ?? p?.position ?? ''} ${detail.profile.depthChartOrder}`.trim()
+                            : '–',
+                        },
+                        { label: 'Status', value: detail.profile.status ?? '–' },
+                        { label: 'College', value: detail.profile.college ?? '–' },
+                        {
+                          label: 'Experience',
+                          value: p?.yearsExp != null
+                            ? (p.yearsExp === 0 ? 'Rookie' : `${p.yearsExp} yr`)
+                            : '–',
+                        },
+                      ].map(row => (
+                        <div key={row.label} className="flex items-baseline justify-between border-b border-border/50 pb-1.5">
+                          <span className="text-[11px] text-muted-foreground">{row.label}</span>
+                          <span className="truncate pl-2 text-[12px] font-semibold text-foreground">
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Season production */}
                 <div className="border-b border-border p-6">
                   <div className="mb-4 flex items-baseline justify-between">
                     <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Season Production
+                      What they actually did
                     </h3>
                     {detail && (
                       <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">

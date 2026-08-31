@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 /**
  * The standings table.
@@ -23,7 +24,11 @@ export interface StandingsUser {
   user_id: string;
   avatar: string;
   display_name: string;
-  metadata?: { team_name?: string };
+  metadata?: {
+    team_name?: string;
+    /** The manager's team picture for this league, a full uploads URL. */
+    avatar?: string | null;
+  };
 }
 
 /** An all-time row, as aggregated by generateComprehensiveLeagueHistory. */
@@ -126,7 +131,7 @@ export default function StandingsTable({
                   i === 0 ? 'text-amber-500' : 'text-muted-foreground')}>
                   {i + 1}
                 </span>
-                <Avatar avatarId={s.user.avatar} size={26} className="shrink-0 rounded" />
+                <Avatar avatarId={teamAvatar(s.user)} size={26} className="shrink-0 rounded" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="line-clamp-2 text-sm font-medium leading-tight text-foreground">
@@ -212,7 +217,7 @@ export default function StandingsTable({
                   isPlayoff ? 'text-primary' : isBubble ? 'text-primary/50' : 'text-muted-foreground')}>
                   {i + 1}
                 </span>
-                <Avatar avatarId={user.avatar} size={26} className="shrink-0 rounded" />
+                <Avatar avatarId={teamAvatar(user)} size={26} className="shrink-0 rounded" />
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

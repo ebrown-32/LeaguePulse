@@ -3,6 +3,7 @@ import { getLeagueInfo, getLeagueRosters, getLeagueUsers } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import { getPlayersDirectory, type PlayerCard } from '@/lib/playerStats';
 import { getSnapshot } from '@/lib/fantasyProsStore';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -202,7 +203,7 @@ export async function GET() {
         rosterId: r.roster_id,
         teamName: u?.metadata?.team_name || u?.display_name || 'Unknown',
         manager: u?.display_name ?? '',
-        avatar: u?.avatar ?? '',
+        avatar: teamAvatar(u),
         record: `${s.wins ?? 0}-${s.losses ?? 0}${s.ties ? `-${s.ties}` : ''}`,
         avgAge: aged.length ? Math.round((aged.reduce((x, y) => x + y, 0) / aged.length) * 10) / 10 : null,
 

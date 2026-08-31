@@ -10,6 +10,7 @@ import {
   getSeasonTransactions
 } from './api';
 import type { SleeperTransaction } from '@/types/sleeper';
+import { teamAvatar } from '@/lib/teamAvatar';
 
 // Enhanced types for better data accuracy
 export interface EnhancedHistoricalRecord {
@@ -263,7 +264,7 @@ async function processLeagueSeason(
       userStatsMap.set(user.user_id, {
         userId: user.user_id,
         username: user.display_name,
-        avatar: user.avatar,
+        avatar: teamAvatar(user),
         totalWins: 0,
         totalLosses: 0,
         totalTies: 0,
@@ -683,7 +684,7 @@ function generateWeeklyScoreRecords(
       week,
       userId: user.user_id,
       username: user.display_name,
-      avatar: user.avatar,
+      avatar: teamAvatar(user),
       value: score,
       description: `${user.display_name} scored ${score.toFixed(2)} points in Week ${week}${isPlayoff ? ' (Playoffs)' : ''}`,
       isPlayoff
@@ -701,7 +702,7 @@ function generateWeeklyScoreRecords(
         week,
         userId: user.user_id,
         username: user.display_name,
-        avatar: user.avatar,
+        avatar: teamAvatar(user),
         value: score,
         description: `${user.display_name} scored only ${score.toFixed(2)} points in Week ${week}${isPlayoff ? ' (Playoffs)' : ''}`,
         isPlayoff
