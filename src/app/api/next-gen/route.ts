@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllLinkedLeagueIds, generateComprehensiveLeagueHistory } from '@/lib/api';
+import { getAllLinkedLeagueIds, getLeagueUsers, generateComprehensiveLeagueHistory } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
 
 export const dynamic = 'force-dynamic';
@@ -298,17 +298,48 @@ export async function GET() {
       };
     });
 
-    // Resolve teamName from most recent season
-    for (const sa of [...seasonAnalyses].reverse()) {
-      const { users } = sa;
-      if (!users) continue;
-      users.forEach((u: any) => {
-        const team = teams.find(t => t.userId === u.user_id);
-        if (team && team.teamName === team.username) {
-          team.teamName = u.metadata?.team_name || u.display_name;
-        }
-      });
+    /**
+     * A manager is named by the team they run now, not the one they ran first.
+     *
+     * This walked the seasons and assigned a name only while `teamName` still
+     * equalled `username`, so the very first season it visited won and every
+     * later rename was ignored. Reversing the array put the oldest season
+     * first, so all-time rows were labelled with names three seasons stale:
+     * potatofarmer69 showed as Allison Burgers rather than The Tartarians.
+     *
+     * Sorted on the season itself rather than trusting the array's order, and
+     * assigning every time so the newest season is the one that sticks.
+     */
+    const byUserId = new Map(teams.map(t => [t.userId, t]));
+    const applyNames = (users: any[]) => {
+      for (const u of users) {
+        const team = byUserId.get(u.user_id);
+        if (!team) continue;
+        // An empty team_name means they never set one, which is not a rename;
+        // fall back rather than overwrite a real earlier name.
+        const name = u.metadata?.team_name?.trim() || u.display_name?.trim();
+        if (name) team.teamName = name;
+        if (u.display_name?.trim()) team.username = u.display_name.trim();
+      }
+    };
+
+    for (const sa of [...seasonAnalyses]
+      .filter(sa => sa?.users?.length)
+      .sort((a, b) => Number(a.season) - Number(b.season))) {
+      applyNames(sa.users as any[]);
     }
+
+    /**
+     * The season being played has the final say, and it is not in the history.
+     *
+     * `generateComprehensiveLeagueHistory` only covers seasons with completed
+     * matchups, so in a fresh season the newest names it knows are last
+     * year's. Three managers had renamed for the current season and all-time
+     * rows still carried names two seasons stale. The live league is read
+     * separately for that reason, and applied last.
+     */
+    const currentUsers = await getLeagueUsers(allLeagueIds[0]).catch(() => []);
+    applyNames(currentUsers as any[]);
 
     teams.sort((a, b) => b.winPct - a.winPct);
 
