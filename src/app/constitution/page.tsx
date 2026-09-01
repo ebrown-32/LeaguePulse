@@ -1,4 +1,4 @@
-import { Scroll } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import { getMarkdownSections, parseLeagueSettings } from '@/lib/constitution';
 import { getCurrentLeagueId } from '@/config/league';

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Database } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import EnhancedHistoryView from './EnhancedHistoryView';
 

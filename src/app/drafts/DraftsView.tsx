@@ -7,8 +7,7 @@ import { CalendarDays, Clock, Users, Layers, Trophy, Star, Zap } from 'lucide-re
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { cn } from '@/lib/utils';
-import type { EnrichedDraft, DraftPickEnriched, DraftTeamSlot, TradedFuturePick, DraftsResponse } from '@/app/api/drafts/route';
-
+import type { EnrichedDraft, DraftPickEnriched, DraftTeamSlot, DraftsResponse } from '@/app/api/drafts/route';
 // ── Position styling ──────────────────────────────────────────────────────────
 
 const POS_STYLE: Record<string, string> = {

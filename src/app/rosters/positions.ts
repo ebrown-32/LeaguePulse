@@ -15,8 +15,6 @@ export const POSITION_COLOR: Record<string, string> = {
   DEFAULT: '#94a3b8',
 };
 
-export const CHART_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
-
 /** Shared position colour language for the rosters page. */
 export const POSITION_STYLE: Record<string, { badge: string; glow: string; bar: string }> = {
   QB:      { badge: 'border-rose-500/30 bg-rose-500/10 text-rose-500',       glow: 'bg-rose-500/20',    bar: 'bg-rose-500' },

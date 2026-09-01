@@ -1,6 +1,5 @@
 import { PageLayout } from '@/components/layout/PageLayout';
 import ScheduleLabView from './ScheduleLabView';
-import { Shuffle } from 'lucide-react';
 
 export const metadata = { title: 'Schedule Lab | League Pulse' };
 

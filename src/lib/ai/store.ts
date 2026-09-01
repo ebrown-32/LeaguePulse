@@ -250,7 +250,8 @@ export async function addPost(post: FeedPost): Promise<void> {
   });
 }
 
-export async function deletePost(id: string): Promise<void> {
+/** @returns whether a post with that id was there to remove. */
+export async function deletePost(id: string): Promise<boolean> {
   const { client } = getRedis();
   if (client) {
     await migrateLegacyPosts(client);
@@ -260,12 +261,16 @@ export async function deletePost(id: string): Promise<void> {
     const member = raw.find(s => {
       try { return (JSON.parse(s) as FeedPost).id === id; } catch { return false; }
     });
-    if (member) await client.lrem(POSTS_LIST_KEY, 1, member);
-    return;
+    if (!member) return false;
+    await client.lrem(POSTS_LIST_KEY, 1, member);
+    return true;
   }
-  await serialised(async () => {
+  return serialised(async () => {
     const all = await readPosts();
-    await writeJson(POSTS_KEY, POSTS_FILE, all.filter(p => p.id !== id));
+    const next = all.filter(p => p.id !== id);
+    if (next.length === all.length) return false;
+    await writeJson(POSTS_KEY, POSTS_FILE, next);
+    return true;
   });
 }
 

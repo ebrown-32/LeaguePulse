@@ -8,11 +8,16 @@ import {
 } from '@/lib/ai/generate';
 import { resolveGameWindow } from '@/lib/ai/gameWindows';
 import { findLeagueEvent } from '@/lib/ai/leagueEvents';
+import { nextSubject } from '@/lib/ai/coverage';
 import { getNFLState } from '@/lib/api';
 import { addPost, getPersonalitiesForAdmin, type FeedPost } from '@/lib/ai/store';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+/** Formats written about one team, and so eligible for the coverage rotation.
+ *  Power rankings, predictions and the week preview cover everyone already. */
+const SUBJECT_KINDS = new Set<ContentKind>(['article', 'tweet']);
 
 function authorized(req: NextRequest): boolean {
   return req.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
@@ -140,7 +145,20 @@ export async function POST(request: NextRequest) {
     }
 
     const manualAngle = body.angle?.trim() || undefined;
-    const subject = body.subject?.trim() || event?.subject || undefined;
+
+    /**
+     * Who this piece is about.
+     *
+     * An explicit choice wins, then the event's own subject. Failing both, the
+     * team nobody has written about for longest, which is the same rotation
+     * the scheduler uses. Without this a hand published piece had no subject
+     * at all and the writer picked whoever the brief made loudest, so one team
+     * led eight of the twenty two most recent headlines and two led none.
+     */
+    const rotate = SUBJECT_KINDS.has(kind) && !event;
+    const subject = body.subject?.trim()
+      || event?.subject
+      || (rotate ? await nextSubject().catch(() => undefined) : undefined);
     /**
      * The angle is a lens, nothing more.
      *

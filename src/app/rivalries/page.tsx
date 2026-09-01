@@ -1,4 +1,4 @@
-import { Sword } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import RivalryView from './RivalryView';

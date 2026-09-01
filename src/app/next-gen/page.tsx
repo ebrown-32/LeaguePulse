@@ -1,4 +1,4 @@
-import { Activity } from 'lucide-react';
+
 import { getAdvancedTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';

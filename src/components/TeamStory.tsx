@@ -3,17 +3,11 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { 
-  TrophyIcon, 
+import {
+  TrophyIcon,
   StarIcon,
   FireIcon,
-  BoltIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  HeartIcon,
-  ClockIcon,
   ChartBarIcon,
-  FlagIcon,
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { formatPoints, formatRecord } from '@/lib/utils';

@@ -18,7 +18,6 @@ import {
   generateComprehensiveLeagueHistory,
 } from '@/lib/api';
 import {
-  Home as HomeIcon,
   Flame,
   CalendarDays,
   Swords,
@@ -40,7 +39,6 @@ import {
   getDefaultSeason,
   getDefaultValue,
   formatPoints,
-  calculateWinPercentage,
   formatRecord,
 } from '@/lib/utils';
 import { cn } from '@/lib/utils';

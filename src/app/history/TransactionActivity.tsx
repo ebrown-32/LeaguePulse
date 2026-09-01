@@ -3,8 +3,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  ScatterChart, Scatter, Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  ScatterChart,
+  Scatter,
 } from 'recharts';
 import Avatar from '@/components/ui/Avatar';
 import type { EnrichedTransaction } from '@/app/api/transactions/route';

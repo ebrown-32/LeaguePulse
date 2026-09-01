@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { Receipt } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingPage } from '@/components/ui/LoadingSpinner';
 import TransactionsView from './TransactionsView';
