@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeftRight, Gavel, UserPlus, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeftRight, Gavel, UserPlus, TrendingUp, TrendingDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';

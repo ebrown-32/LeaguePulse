@@ -1,4 +1,4 @@
-import { Swords } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import MatchupsView from './MatchupsView';
 

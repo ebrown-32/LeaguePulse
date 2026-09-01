@@ -11,7 +11,7 @@
 import { resolvePhase } from './seasonPhase';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { generateObject, generateText, streamText, streamObject, stepCountIs } from 'ai';
+import { generateObject, streamText, streamObject, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { buildChatTools } from './chatTools';
 import { checkTradeClaims, collectText } from './factCheck';
@@ -348,14 +348,36 @@ async function briefBlock(): Promise<string> {
  * than the same thing in different voices.
  */
 export const ANGLES = [
+  // Roster construction
   'their single best player, and whether one man can carry this roster',
   'the weakest spot in their starting lineup, and what it costs them',
+  'whether their starting lineup or their depth is doing the real work',
+  'the positional group they built around, and whether that was the right bet',
+  'their oldest core piece, and how much good football is left in him',
+  'the youngest player they are counting on, and whether that is faith or evidence',
+
+  // Performance and trend
+  'the gap between how good they look on paper and how good they actually are',
+  'whether their record is earned or the schedule has been kind',
+  'a player of theirs due to come back to earth, and why',
+  'a player of theirs about to be much better than his last season, and why',
+  'how they perform when the week goes badly rather than when it goes well',
+  'whether they are consistent or wildly streaky, and which is worse here',
+
+  // The league around them
+  'how they stack up against the team most likely to beat them',
+  'the head to head record that should worry them most',
+  'their route through the playoff race from here',
+  'the one rival whose roster is built to beat theirs specifically',
+
+  // The manager
+  'the manager behind the team and how they operate',
+  'what has to go right for them, and what happens if it does not',
+  'whether they are actually competing this season or quietly building for later',
+
+  // Assets, kept last so trades are one lens among many rather than the default
   'one specific trade they made, and whether it was smart',
   'their draft capital, and what it says about whether they are building or winning now',
-  'how they stack up against the team most likely to beat them',
-  'the manager behind the team and how they operate',
-  'the gap between how good they look on paper and how good they actually are',
-  'what has to go right for them, and what happens if it does not',
 ] as const;
 
 /** Deterministic pick, so a caller can spread angles across a batch. */
@@ -496,9 +518,25 @@ HOW TO WRITE THIS
   then take the position the evidence supports.
 - Be willing to be wrong in public. Commit to a call rather than hedging with
   "time will tell" or "only the games will decide".
+- MAKE A PREDICTION THAT CAN BE PROVED WRONG. Every piece needs at least one
+  claim with a subject and an outcome: who misses the playoffs, which player
+  finishes outside the top twelve at his position, who wins a specific matchup,
+  which manager regrets a move by December. "They have questions to answer" is
+  not a prediction. "They finish fifth and it is not close" is.
+- Say what would change your mind. A call you can defend is worth more than one
+  you hedge, and naming the thing that would falsify it is not hedging.
+- Disagree with the obvious read where the evidence supports it. If the whole
+  league thinks a manager is winning, the interesting piece is why they might
+  not be. Do not contradict the record, but do not simply restate consensus.
 - No both-sides mush. If two things are close, say which one you would bet on
   and why.
 - Keep the facts sacred. Sharp opinions, honest numbers.
+- THE TRANSACTION LOG IS NOT THE ONLY STORY. Trades are the loudest thing in
+  the brief, so they are where every writer lands unprompted and the feed ends
+  up reading as one long trade recap. Lineups, ageing cores, schedule luck,
+  head to head history, positional depth, who is quietly consistent and who is
+  one injury from collapse are all live subjects. Only write about a trade when
+  your angle is genuinely about a trade.
 - This league trades draft picks, and the transaction record lists them. Never
   judge a trade on the players alone: a deal that looks lopsided is usually
   balanced by picks, and a future first is a real asset. If you call a trade

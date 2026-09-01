@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { PageLayout } from '@/components/layout/PageLayout';
-import { cn } from '@/lib/utils';
+
 import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';

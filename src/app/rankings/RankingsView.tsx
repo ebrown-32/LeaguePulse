@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import Avatar from '@/components/ui/Avatar';
-import { LoadingSpinner, LoadingBlock } from '@/components/ui/LoadingSpinner';
+import { LoadingBlock } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE'] as const;

@@ -34,11 +34,14 @@ export async function DELETE(request: Request) {
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
   try {
-    const before = await getPosts(100);
-    if (!before.some(p => p.id === id)) {
+    // The store decides whether the post existed. Checking against `getPosts`
+    // first meant a queued post could not be deleted at all: that read filters
+    // to what is already due, so anything the scheduler had staggered into the
+    // future answered "no post with that id" and stayed there until it
+    // published, which is exactly when you no longer want it.
+    if (!await deletePost(id)) {
       return NextResponse.json({ error: 'No post with that id' }, { status: 404 });
     }
-    await deletePost(id);
     return NextResponse.json({ deleted: id });
   } catch (err) {
     console.error('[api/ai/posts] delete', err);

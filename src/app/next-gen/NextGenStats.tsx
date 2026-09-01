@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getAdvancedTeamMetrics } from '@/lib/api';
 import {
-  BarChart3,
   Heart,
   TrendingUp,
   Star,

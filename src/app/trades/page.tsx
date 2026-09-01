@@ -1,6 +1,5 @@
 import { PageLayout } from '@/components/layout/PageLayout';
 import TradeSwiper from './TradeSwiper';
-import { ArrowLeftRight } from 'lucide-react';
 
 export const metadata = { title: 'Trade Ideas | League Pulse' };
 

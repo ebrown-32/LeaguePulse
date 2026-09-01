@@ -1,4 +1,4 @@
-import { ClipboardList } from 'lucide-react';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import DraftsView from './DraftsView';
 

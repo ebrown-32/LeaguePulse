@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { X, TrendingUp, TrendingDown, Minus, Trophy, Sword, ArrowLeftRight } from 'lucide-react';
+import { X, Minus, Trophy, Sword, ArrowLeftRight } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import type { Manager, H2HEntry, GameRecord, TradeRecord, RivalriesResponse } from '@/app/api/rivalries/route';

@@ -3,12 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { 
-  getAllLeagueSeasons, 
-  getLeagueInfo, 
+import {
+  getAllLeagueSeasons,
+  getLeagueInfo,
   getAllLinkedLeagueIds,
-  generateComprehensiveHistoricalRecords,
-  generateComprehensiveLeagueHistory
+  generateComprehensiveLeagueHistory,
 } from '@/lib/api';
 import { 
   TrophyIcon, 
@@ -23,7 +22,7 @@ import { getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage } from '@/components/ui/LoadingSpinner';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
-import { getDefaultSeason, formatPoints, formatRecord } from '@/lib/utils';
+import { getDefaultSeason, formatPoints } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 interface HistoryViewProps {

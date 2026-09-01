@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingBlock } from '@/components/ui/LoadingSpinner';
-import { cn } from '@/lib/utils';
+
 import { MessageCircle } from 'lucide-react';
 import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import { FeedPostCard, AiBadge, type FeedPost } from '@/components/desk/FeedPostCard';

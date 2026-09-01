@@ -7,13 +7,12 @@ import {
 } from '@/lib/ai/generate';
 import { resolveGameWindow, isGameTime } from '@/lib/ai/gameWindows';
 import { buildLiveBrief } from '@/lib/ai/liveBrief';
-import { getLeagueRosters, getLeagueUsers, getNFLState } from '@/lib/api';
-import { getCurrentLeagueId } from '@/config/league';
+import { coverageOrder } from '@/lib/ai/coverage';
+import { getNFLState } from '@/lib/api';
 import {
   addPost,
   getPosts,
   getPersonalities,
-  getRecentSubjects,
   lastGeneratedAt,
   lastPublishAt,
   type FeedPost,
@@ -216,31 +215,13 @@ export async function GET(request: Request) {
   // loudest, which meant five straight pieces about the reigning champion.
   // Commissioning a specific team, least recently covered first, gets the whole
   // league written about instead.
-  let subjects: string[] = [];
-  try {
-    const leagueId = await getCurrentLeagueId();
-    const [rosters, users] = await Promise.all([
-      getLeagueRosters(leagueId), getLeagueUsers(leagueId),
-    ]);
-    const byId = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
-    const teams = rosters
-      .map((r: any) => {
-        const u = byId.get(r.owner_id);
-        return u?.metadata?.team_name || u?.display_name || '';
-      })
-      .filter(Boolean) as string[];
-
-    const recent = await getRecentSubjects();
-    // Rank by how long ago each team was last written about; never-covered
-    // teams sort first because indexOf returns -1 for them.
-    const lastSeen = (t: string) => {
-      const i = recent.indexOf(t);
-      return i === -1 ? Number.MAX_SAFE_INTEGER : recent.length - i;
-    };
-    subjects = [...teams].sort((a, b) => lastSeen(b) - lastSeen(a));
-  } catch (err) {
+  // Shared with the hand publish route, so the two cannot drift apart. It used
+  // to live only here, which is why pieces published from the panel had no
+  // rotation at all.
+  const subjects = await coverageOrder().catch(err => {
     console.error('[api/ai/cron] could not build subject rotation:', err);
-  }
+    return [] as string[];
+  });
 
   const people = (await getPersonalities()).filter(p => p.enabled);
   if (!people.length) return NextResponse.json({ skipped: 'no-enabled-personalities' });

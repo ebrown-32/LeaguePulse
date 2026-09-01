@@ -1,6 +1,5 @@
 import { PageLayout } from '@/components/layout/PageLayout';
 import TradeTreeView from './TradeTreeView';
-import { GitBranch } from 'lucide-react';
 
 export const metadata = { title: 'Trade Tree | League Pulse' };
 

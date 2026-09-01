@@ -10,7 +10,6 @@ import {
 } from 'framer-motion';
 import { X, Check, RefreshCw, Flame, TrendingUp, Filter } from 'lucide-react';
 import { type TradeProposal, type PlayerValue, type TeamInfo, POSITION_COLORS } from '@/lib/tradeEngine';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 const SWIPE_THRESHOLD = 90;
 const SWIPE_VELOCITY  = 400;
