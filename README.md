@@ -350,6 +350,15 @@ code from it is copied, vendored or linked.
 
 <br />
 
+### Built with Claude
+
+Much of this project was written with AI assisted development using
+[Claude](https://claude.com/claude-code). Claude also powers the features inside the
+app: the writers on The Feed and the chat assistant that answers questions about your
+league.
+
+<br />
+
 Built with [Next.js](https://nextjs.org/) · [Tailwind CSS](https://tailwindcss.com/) ·
 [Sleeper API](https://docs.sleeper.app/) · [Claude](https://www.anthropic.com/) ·
 [DiceBear](https://www.dicebear.com/)
