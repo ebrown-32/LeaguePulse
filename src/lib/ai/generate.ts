@@ -705,6 +705,111 @@ React in 1-3 sentences, in character, to this:
   return stripDashes(object);
 }
 
+export type ReplyStance = 'agree' | 'disagree';
+
+/**
+ * Replies are capped in code, not just asked for politely.
+ *
+ * The prompt says two sentences, three at the most. Told that, one writer
+ * still answered with a five sentence deconstruction that was longer than the
+ * post it was replying to and swallowed the whole thread. Trimming to the last
+ * complete sentence inside the cap keeps it readable rather than cutting off
+ * mid-word.
+ */
+const REPLY_MAX_CHARS = 320;
+
+function trimToSentence(text: string, max: number): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  // Only honour a sentence break that leaves most of the budget used, else a
+  // long opening sentence would collapse the reply to almost nothing.
+  if (stop > max * 0.5) return cut.slice(0, stop + 1).trim();
+  return `${cut.slice(0, cut.lastIndexOf(' ')).trimEnd()}...`;
+}
+
+/**
+ * A reply to somebody else's post.
+ *
+ * The difference from `writeComment` is that this one is talking TO a named
+ * person about something they actually said, rather than reacting to an event
+ * in the abstract. That is what makes a thread read like an argument between
+ * two people instead of two separate monologues that happen to be adjacent.
+ *
+ * The stance is assigned by the caller rather than left to the model. Given a
+ * free choice it agrees almost every time, which produces a comment section
+ * where everyone nods, and nobody reads a comment section for nodding.
+ */
+export async function writeReply(
+  p: Personality,
+  parent: { personaName: string; personaHandle: string; kind: string; content: any },
+  stance: ReplyStance,
+): Promise<Comment> {
+  // What they actually said, not a summary of it: a reply to a paraphrase
+  // ends up arguing with a point nobody made.
+  const said = [
+    parent.content?.headline,
+    parent.content?.standfirst,
+    parent.content?.text,
+    parent.content?.verdict,
+  ].filter(Boolean).join(' ').slice(0, 700);
+
+  const direction = stance === 'agree'
+    ? `You AGREE with them, but you are not a cheerleader. Add something they
+did not say: a second piece of evidence, a sharper version of their point, or
+the part they were too polite to spell out. "Well said" is not a reply.`
+    : `You DISAGREE with them. Say why, and be specific about which part is
+wrong. Attack the argument, never the person, and do not contradict anything
+in the league record: the disagreement has to be about interpretation, not
+about what happened. If you are going to be rude, be rude about the take.`;
+
+  const { object } = await generateObject({
+    model: claude(MODEL_FAST),
+    schema: CommentSchema,
+    schemaName: 'Reply',
+    schemaDescription: 'A short in-character reply to another writer',
+    system: systemFor(p),
+    prompt: `${await briefBlock()}
+
+${parent.personaName} (${parent.personaHandle}) just posted this:
+
+"${said}"
+
+Reply to them. ${direction}
+
+HOW TO REPLY
+- One or two sentences. Three at the absolute most.
+- Address them directly. Use their handle ${parent.personaHandle} or their name.
+- This is a comment under their post, so no headline, no sign-off, and no
+  restating their whole argument before you answer it.
+- Stay entirely in your own voice. You are not writing a column here, you are
+  answering somebody in public.
+- Everything factual you lean on has to be in the context above.
+- Hard limit: ${REPLY_MAX_CHARS} characters. Anything longer is a column, not a reply.`,
+  });
+  const trimmed = { ...object, text: trimToSentence(object.text, REPLY_MAX_CHARS) };
+
+  // Replies were the one format that skipped the transaction check, and they
+  // are the format most likely to fail it: arguing about a trade invites
+  // restating who got whom, and one reply had a manager giving away a player
+  // he had in fact received.
+  return publishable(stripDashes(trimmed), async correction => {
+    const retry = await generateObject({
+      model: claude(MODEL_FAST),
+      schema: CommentSchema,
+      schemaName: 'Reply',
+      schemaDescription: 'A short in-character reply to another writer',
+      system: systemFor(p),
+      prompt: `${await briefBlock()}\n\n${correction}\n\nReply again, same length limit.`,
+    });
+    return stripDashes({
+      ...retry.object,
+      text: trimToSentence(retry.object.text, REPLY_MAX_CHARS),
+    });
+  });
+}
+
 export interface TradeForGrading {
   season: string;
   week: number;

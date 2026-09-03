@@ -57,8 +57,28 @@ export default function DeskView({ leagueName }: { leagueName?: string | null } 
     return () => clearInterval(t);
   }, [load]);
 
-  const shown = useMemo(() => (posts ?? []).slice(0, shownCount), [posts, shownCount]);
-  const hasMore = (posts?.length ?? 0) > shownCount;
+  /**
+   * The timeline is top level posts only; replies hang off the post they
+   * answer. They are stored as ordinary posts so they inherit retention,
+   * deletion and likes, which means the split has to happen here.
+   */
+  const { roots, repliesByParent } = useMemo(() => {
+    const all = posts ?? [];
+    const byParent = new Map<string, FeedPost[]>();
+    for (const p of all) {
+      if (!p.replyTo) continue;
+      byParent.set(p.replyTo, [...(byParent.get(p.replyTo) ?? []), p]);
+    }
+    // Oldest first inside a thread, so an exchange reads in the order it
+    // happened rather than backwards.
+    for (const list of byParent.values()) {
+      list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+    return { roots: all.filter(p => !p.replyTo), repliesByParent: byParent };
+  }, [posts]);
+
+  const shown = useMemo(() => roots.slice(0, shownCount), [roots, shownCount]);
+  const hasMore = roots.length > shownCount;
 
   // Reveal the next page as the end of the list comes into view. The margin
   // starts the reveal before the sentinel is actually on screen, so the
@@ -106,6 +126,7 @@ export default function DeskView({ leagueName }: { leagueName?: string | null } 
                 onToggle={() => setOpenId(openId === p.id ? null : p.id)}
                 leagueName={leagueName}
                 realLikes={likes[p.id] ?? 0}
+                replies={repliesByParent.get(p.id)}
               />
             ))}
 

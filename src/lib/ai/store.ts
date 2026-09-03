@@ -35,6 +35,20 @@ export interface FeedPost {
   /** The team a piece was commissioned about, so coverage can be rotated
    *  around the league instead of piling onto whoever is most newsworthy. */
   subject?: string;
+
+  /**
+   * The post this one is replying to.
+   *
+   * A reply is stored as an ordinary post so it inherits retention, deletion,
+   * likes and the atomic append for free. The timeline shows only entries
+   * without a parent, and hangs the rest underneath the post they answer.
+   */
+  replyTo?: string;
+  /** Who is being answered, so a reply reads as addressed even out of context. */
+  replyToName?: string;
+  /** Whether this reply backs the parent up or takes it apart. Rendered as a
+   *  small tag so a thread's shape is readable before reading it. */
+  stance?: 'agree' | 'disagree';
 }
 
 /**

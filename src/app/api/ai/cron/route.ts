@@ -8,6 +8,7 @@ import {
 import { resolveGameWindow, isGameTime } from '@/lib/ai/gameWindows';
 import { buildLiveBrief } from '@/lib/ai/liveBrief';
 import { coverageOrder } from '@/lib/ai/coverage';
+import { addReply, replyTargets } from '@/lib/ai/threads';
 import { getNFLState } from '@/lib/api';
 import {
   addPost,
@@ -65,6 +66,10 @@ const TIME_BUDGET_MS = 40_000;
  * half of real football, which is long enough for the picture to change.
  */
 const LIVE_COOLDOWN_MS = num('AI_LIVE_COOLDOWN_MINUTES', 90) * 60 * 1000;
+
+/** Replies written per run. Short calls, so a few is cheap, but a comment
+ *  section that fills up in one go reads as manufactured rather than alive. */
+const REPLIES_PER_RUN = num('AI_REPLIES_PER_RUN', 3);
 
 /** Guard against a double-trigger writing two batches the same day. */
 const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 12) * 60 * 60 * 1000;
@@ -379,12 +384,42 @@ export async function GET(request: Request) {
     );
   }
 
+  /**
+   * Argue under the posts that are already up.
+   *
+   * Deliberately about the existing feed rather than the batch just written:
+   * most of that batch is staggered into the future, and a reply that lands
+   * before the post it answers reads as nonsense. These are short, cheap
+   * calls, so they run on whatever time is left rather than getting their own
+   * budget, and whatever does not fit is picked up by the next run.
+   */
+  const threaded: { on: string; by: string; stance: string }[] = [];
+  try {
+    const targets = await replyTargets();
+    const byParent = new Map<string, string[]>();
+    for (const p of await getPosts(100)) {
+      if (p.replyTo) byParent.set(p.replyTo, [...(byParent.get(p.replyTo) ?? []), p.personalityId]);
+    }
+
+    for (const { post } of targets.slice(0, REPLIES_PER_RUN)) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) break;
+      const reply = await addReply(people, post, byParent.get(post.id) ?? []);
+      if (reply) {
+        threaded.push({ on: post.personaName, by: reply.personaName, stance: reply.stance! });
+      }
+    }
+  } catch (err) {
+    // A thread failing is not a reason to report the batch as failed.
+    console.error('[api/ai/cron] replies failed:', err);
+  }
+
   return NextResponse.json({
     posted: written.length,
     requested: POSTS_PER_RUN,
     ...(deferred ? { deferred, note: 'Ran out of time; the rest roll into the next run.' } : {}),
     spreadHours: SPREAD_HOURS,
     written,
+    ...(threaded.length ? { replies: threaded } : {}),
     ...(failures.length ? { failures } : {}),
   });
 }

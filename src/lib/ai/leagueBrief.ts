@@ -83,6 +83,10 @@ export interface LeagueBrief {
   recentMatchups: BriefMatchup[];
   recentMoves: BriefMove[];
   moveTotals: { trade: number; waiver: number; free_agent: number };
+  /** Draft picks each team has acquired and given up in the window shown.
+   *  Precomputed because working it out from the trade lines is exactly the
+   *  arithmetic the writers get wrong. */
+  pickMovement: { teamName: string; acquired: string[]; gaveUp: string[] }[];
   history: {
     seasons: number;
     champions: { season: string; teamName: string }[];
@@ -181,7 +185,14 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
   }
 
   // ── Recent transactions (this season) ────────────────────────────────────
+  /** Kickoff for this season, as epoch ms. Sleeper publishes it directly. */
+  const seasonStart = nflState?.season_start_date
+    ? Date.parse(`${nflState.season_start_date}T00:00:00Z`)
+    : 0;
+
   const recentMoves: BriefMove[] = [];
+  /** Draft picks in and out per team, accumulated across every trade. */
+  const pickLedger = new Map<string, { acquired: string[]; gaveUp: string[] }>();
   try {
     const weeks = Math.max(1, currentWeek);
     const batches = await Promise.all(
@@ -242,6 +253,19 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
           const team = rosterName.get(rid) ?? `Roster ${rid}`;
           const got = [...forRoster(tx.adds, rid), ...picksFor(rid)];
           const gave = [...forRoster(tx.drops, rid), ...picksAwayFrom(rid)];
+
+          // Running total per team, so nobody has to add up pick movement by
+          // reading every trade line. A writer did exactly that and got it
+          // backwards, reporting a team that had accumulated eight picks as
+          // having "moved out a 2028 first and a 2027 first".
+          const ledger = pickLedger.get(team) ?? { acquired: [], gaveUp: [] };
+          for (const d of (tx.draft_picks ?? []) as any[]) {
+            const label = `${d.season} round ${d.round}`;
+            if (d.owner_id === rid) ledger.acquired.push(label);
+            if (d.previous_owner_id === rid) ledger.gaveUp.push(label);
+          }
+          pickLedger.set(team, ledger);
+
           const parts = [
             got.length ? `gets ${got.join(', ')}` : 'gets nothing',
             gave.length ? `gives up ${gave.join(', ')}` : 'gives up nothing',
@@ -265,12 +289,21 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       recentMoves.push({
         type: tx.type,
         season: league?.season ?? '',
-        // Sleeper reports offseason and preseason transactions with leg = 1,
-        // which read as "week 1" and had the writers describing moves made in
-        // August as in-season activity. Anything before real games counts as
-        // week 0, which renders as "offseason".
-        week: (league?.status === 'pre_draft' || league?.status === 'drafting'
-               || nflState?.season_type === 'pre')
+        /**
+         * Offseason or a real week, decided by when the move happened.
+         *
+         * Sleeper stamps every offseason and preseason transaction with
+         * leg = 1, so leg alone cannot tell them apart from week one. This
+         * used to read the league's current status instead, which worked only
+         * until the season started: the moment Sleeper flipped to regular
+         * week 1, every trade made back in August began reporting as week one
+         * activity and the writers described a summer of dealing as a frantic
+         * opening week.
+         *
+         * `season_start_date` is the actual kickoff, so anything created
+         * before it is the offseason however Sleeper legs it.
+         */
+        week: seasonStart && tx.created && tx.created < seasonStart
           ? 0
           : (tx.leg ?? 0),
         summary,
@@ -321,6 +354,10 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       ...recentMoves.filter(m => m.type !== 'trade').slice(0, 10),
     ],
     /** Totals across the whole window, not just the moves listed. */
+    pickMovement: [...pickLedger.entries()]
+      .map(([teamName, v]) => ({ teamName, ...v }))
+      .filter(p => p.acquired.length || p.gaveUp.length)
+      .sort((a, b) => (b.acquired.length + b.gaveUp.length) - (a.acquired.length + a.gaveUp.length)),
     moveTotals: {
       trade: recentMoves.filter(m => m.type === 'trade').length,
       waiver: recentMoves.filter(m => m.type === 'waiver').length,
@@ -462,6 +499,25 @@ export function renderBrief(b: LeagueBrief): string {
       lines.push('', 'MOVE COUNTS (exact, in the window shown above; quote these, never tally the lines yourself):');
       for (const [team, n] of [...tally.entries()].sort((a, b) => b[1] - a[1])) {
         lines.push(`  ${team}: ${n} ${n === 1 ? 'move' : 'moves'}`);
+      }
+    }
+
+    // Same reasoning as the move counts. A writer that worked pick movement
+    // out from the trade lines described a team holding eight acquired picks
+    // as having "moved out a 2028 first and a 2027 first".
+    if (b.pickMovement.length) {
+      lines.push(
+        '',
+        'DRAFT PICK MOVEMENT (exact, in the window shown above). Quote these. ' +
+        'Never work out from the trade lines who is accumulating or shedding picks:',
+      );
+      for (const p of b.pickMovement) {
+        const got = p.acquired.length ? p.acquired.join(', ') : 'none';
+        const lost = p.gaveUp.length ? p.gaveUp.join(', ') : 'none';
+        lines.push(
+          `  ${p.teamName}: acquired ${p.acquired.length} (${got}); ` +
+          `gave up ${p.gaveUp.length} (${lost})`,
+        );
       }
     }
   }

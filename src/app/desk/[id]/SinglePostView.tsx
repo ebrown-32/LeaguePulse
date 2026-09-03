@@ -12,10 +12,11 @@ import { FeedPostCard, type FeedPost } from '@/components/desk/FeedPostCard';
  * would be a strange greeting.
  */
 export default function SinglePostView({
-  post, realLikes, leagueName,
+  post, realLikes, replies, leagueName,
 }: {
   post: FeedPost;
   realLikes?: number;
+  replies?: FeedPost[];
   leagueName?: string | null;
 }) {
   const [open, setOpen] = useState(true);
@@ -25,6 +26,7 @@ export default function SinglePostView({
       open={open}
       onToggle={() => setOpen(o => !o)}
       realLikes={realLikes}
+      replies={replies}
       leagueName={leagueName}
     />
   );
