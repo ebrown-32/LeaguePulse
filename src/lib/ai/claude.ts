@@ -80,12 +80,38 @@ NON-NEGOTIABLE RULES:
  * sanitised before it is stored or rendered. Applied recursively because
  * generated content is a nested object, not a single string.
  */
+/**
+ * Citation markup from the research pass.
+ *
+ * A writer given web search sometimes wraps its evidence in the citation tags
+ * the tool result used, and those went straight into the published prose:
+ * `(cite index="1-4,1-5">Jaxon Smith-Njigba ...</cite>`. The reader wants the
+ * sentence, not the footnote apparatus, so the tags are removed and their
+ * contents kept. The stray opening bracket that usually precedes one goes too.
+ */
+function stripCitations(text: string): string {
+  return text
+    // Closing tags first. The opening pattern below allows a missing "<",
+    // because the leaked text arrives as `(cite index="1-4">`, and that same
+    // leniency makes it match the `cite>` inside `</cite>` and leave a stray
+    // `</` behind. Removing the closers up front avoids the overlap.
+    .replace(/<\s*\/\s*(?:antml:)?cite\s*>\)?/gi, '')
+    // Opening tags, with or without the leading bracket.
+    .replace(/\(?\s*<?\s*(?:antml:)?cite\b[^>]*>/gi, '')
+    // Bare [1-4] style markers left over from a citation.
+    .replace(/\[\s*\d+(?:[-,]\d+)*\s*\]/g, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ');
+}
+
 export function stripDashes<T>(value: T): T {
   if (typeof value === 'string') {
-    return value
+    return stripCitations(value)
       .replace(/\s*[\u2014\u2013]\s*/g, ', ')   // em/en dash between words
       .replace(/,\s*,/g, ',')
-      .replace(/\s+([,.!?])/g, '$1') as unknown as T;
+      .replace(/\s+([,.!?])/g, '$1')
+      .trim() as unknown as T;
   }
   if (Array.isArray(value)) return value.map(stripDashes) as unknown as T;
   if (value && typeof value === 'object') {

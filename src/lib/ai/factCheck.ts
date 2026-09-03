@@ -32,15 +32,35 @@ export interface TradeFact {
 // "just moved DJ Moore and Justin Jefferson for Ja'Marr Chase" named both
 // sides the wrong way round and matched no verb at all, so it was published
 // unjudged. "traded" bare is included for the same reason.
-const AWAY = /\b(ship(?:ped|s|ping)?(?: off| out)?|sent|deal(?:t|ed)?|traded(?: away)?|trades away|gave up|gives up|giving up|offload(?:ed)?|moved(?: on from)?|moves|flipped|flips|dumped|parted with|let go of|sold)\b/i;
+// "gave away" was missing while "gave up" was present, so a reply reading
+// "ebrown03 just gave away Justin Jefferson" matched no verb at all and went
+// unjudged, publishing a manager as having traded a player he had received.
+// The give/hand family is spelled out rather than left to guesswork.
+const AWAY = /\b(ship(?:ped|s|ping)?(?: off| out)?|sent|deal(?:t|ed)?|traded(?: away)?|trades away|(?:gave|gives|give|giving)(?: up| away)|hand(?:ed|s)?(?: over| off)?|offload(?:ed|s)?|moved(?: on from)?|moves|flipped|flips|dumped|dealt away|parted with|let go of|sold|traded off)\b/i;
 /** Verbs that assert a team took a player in. */
 const IN = /\b(acquir(?:ed|es)|land(?:ed|s)|grabb(?:ed|s)|pick(?:ed)? up|brought in|added|got back|received|traded for)\b/i;
 
-let cache: { at: number; facts: Map<string, TradeFact>; teams: string[] } | null = null;
+/**
+ * Every way a team can be named in copy.
+ *
+ * Writers refer to a side by its team name or by the manager's handle, more or
+ * less interchangeably: "Ass Kickers United traded him" and "ebrown03 traded
+ * him" are the same claim. The checker only knew team names, so a false claim
+ * written the second way sailed through. One did: a reply had ebrown03 giving
+ * away Justin Jefferson, a player that manager had in fact received.
+ */
+interface TeamAlias {
+  /** What to call them when reporting a problem. */
+  canonical: string;
+  /** Team name and manager handle, both lowercased. */
+  aliases: string[];
+}
+
+let cache: { at: number; facts: Map<string, TradeFact>; teams: TeamAlias[] } | null = null;
 const TTL_MS = 5 * 60 * 1000;
 
 /** Index every traded player by who received and who surrendered him. */
-export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>; teams: string[] }> {
+export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>; teams: TeamAlias[] }> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache;
 
   const leagueId = await getCurrentLeagueId();
@@ -54,9 +74,15 @@ export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>;
 
   const userById = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
   const teamOf = new Map<number, string>();
+  const aliasList: TeamAlias[] = [];
   for (const r of rosters as any[]) {
     const u = userById.get(r.owner_id);
-    teamOf.set(r.roster_id, u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`);
+    const teamName = u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`;
+    teamOf.set(r.roster_id, teamName);
+    const aliases = [teamName, u?.display_name]
+      .filter(Boolean)
+      .map((a: string) => a.trim().toLowerCase());
+    aliasList.push({ canonical: teamName, aliases: [...new Set(aliases)] });
   }
 
   const nameOf = (pid: string) => {
@@ -83,7 +109,7 @@ export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>;
     }
   }
 
-  cache = { at: Date.now(), facts, teams: [...teamOf.values()] };
+  cache = { at: Date.now(), facts, teams: aliasList };
   return cache;
 }
 
@@ -171,8 +197,13 @@ export async function checkTradeClaims(text: string): Promise<string[]> {
       const iPlayer = findPlayer(sentence, aliases.get(key) ?? [fact.player]);
       if (iPlayer === -1) continue;
 
-      for (const team of teams) {
-        const iTeam = lower.indexOf(team.toLowerCase());
+      for (const { canonical: team, aliases } of teams) {
+        // Earliest mention under any of this side's names. A writer may use
+        // the team name or the manager's handle and mean the same side.
+        const iTeam = aliases
+          .map(a => lower.indexOf(a))
+          .filter(i => i !== -1)
+          .reduce((min, i) => (min === -1 || i < min ? i : min), -1);
         // Only judge "<team> ... <verb> ... <player>". The reverse order reads
         // differently ("Warren, who ShitNecks value...") and is left alone.
         if (iTeam === -1 || iTeam > iPlayer) continue;

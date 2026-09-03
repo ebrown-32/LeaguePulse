@@ -20,6 +20,13 @@ async function findPost(id: string) {
   return (await getPosts(100)).find(p => p.id === id) ?? null;
 }
 
+/** The argument under a post, oldest first. */
+async function findReplies(id: string) {
+  return (await getPosts(100))
+    .filter(p => p.replyTo === id)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
 /** The post's own words, trimmed for a preview card. */
 function summarise(content: any): string {
   const text = content?.text || content?.standfirst || content?.headline || '';
@@ -59,7 +66,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const [post, theme] = await Promise.all([findPost(id), getTheme()]);
   if (!post) notFound();
 
-  const likes = await getLikes([post.id]);
+  const [likes, replies] = await Promise.all([getLikes([post.id]), findReplies(post.id)]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-16 sm:px-6 md:pb-8 lg:px-8">
@@ -74,6 +81,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         <SinglePostView
           post={post as any}
           realLikes={likes[post.id] ?? 0}
+          replies={replies as any}
           leagueName={theme.leagueName ?? theme.siteTitle ?? null}
         />
       </div>

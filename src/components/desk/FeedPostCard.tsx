@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PostActions from './PostActions';
+import PostReplies from './PostReplies';
 
 /**
  * One post, rendered.
@@ -35,6 +36,11 @@ export interface FeedPost {
   content: any;
   createdAt: string;
   subject?: string;
+  /** Set on a reply, naming the post it answers. */
+  replyTo?: string;
+  replyToName?: string;
+  /** Whether a reply backs the parent up or takes it apart. */
+  stance?: 'agree' | 'disagree';
 }
 
 const KIND_META: Record<Kind, { label: string; icon: typeof Newspaper } | null> = {
@@ -329,10 +335,12 @@ function GameBeat({ post }: { post: FeedPost }) {
 }
 
 export function FeedPostCard({
-  post, index = 0, open, onToggle, leagueName, realLikes, inset = 'page',
+  post, index = 0, open, onToggle, leagueName, realLikes, replies, inset = 'page',
 }: {
   post: FeedPost; index?: number; open: boolean; onToggle: () => void;
   leagueName?: string | null; realLikes?: number;
+  /** Replies to this post, oldest first. */
+  replies?: FeedPost[];
   /**
    * How much room the post leaves at its sides. The feed runs full bleed and
    * puts the page's own gutters back for itself; inside a bordered card those
@@ -404,6 +412,8 @@ export function FeedPostCard({
             )}
 
             <PostActions post={post} realLikes={realLikes} leagueName={leagueName} />
+
+            {replies && replies.length > 0 && <PostReplies replies={replies} />}
           </div>
       </div>
     </motion.article>
