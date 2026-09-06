@@ -290,9 +290,31 @@ export async function deletePost(id: string): Promise<boolean> {
 
 /** Generation time of the most recently written post, so a re-triggered cron
  *  does not produce a second batch on the same day. */
+/**
+ * Kinds the daily batch writes.
+ *
+ * Live game-day posts and replies are also written by the scheduler, but on
+ * their own cadences, so neither should count as "the batch already ran".
+ */
+const BATCH_KINDS = new Set<FeedPost['kind']>([
+  'article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview',
+]);
+
+/**
+ * When the daily batch last ran, so a re-trigger does not write two in a day.
+ *
+ * Counts only batch posts written by the scheduler. This used to be the newest
+ * post of any kind from any source, which meant a piece published by hand from
+ * the admin panel reset the guard: publish one post in the evening and the
+ * next morning's automatic run answered "already ran today" and wrote nothing.
+ * A kickoff post or a reply did the same. The feed went from daily to roughly
+ * every other day, and looked as though the scheduler had stopped.
+ */
 export async function lastGeneratedAt(): Promise<number> {
   const all = await readPosts();
-  return all.reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
+  return all
+    .filter(p => p.source === 'cron' && !p.replyTo && BATCH_KINDS.has(p.kind))
+    .reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
 }
 
 /** Latest scheduled publish time, so a new batch queues after the last one. */
