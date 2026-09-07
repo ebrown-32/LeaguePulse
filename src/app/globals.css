@@ -704,3 +704,215 @@ mark {
     .lp-glass { background-color: hsl(var(--card)); }
   }
 }
+
+/* ─────────────────────────────────────────────
+   CRAFT LAYER
+
+   The details that separate a considered interface from a generic one:
+   elevation that behaves like light, focus states somebody chose, a press
+   that answers the finger, and text that is set rather than merely rendered.
+
+   Everything here is deliberately cheap. Motion is transform and opacity
+   only, shadows are static per state rather than animated, and nothing new
+   uses backdrop-filter: blur on many stacked surfaces is how a page starts
+   dropping frames on a phone.
+───────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /*
+     * One easing curve for the whole product.
+     *
+     * Slightly overshooting on the way out is what makes an interface feel
+     * responsive rather than merely animated; `ease` alone reads as sluggish
+     * at these durations.
+     */
+    --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /*
+     * Elevation, as light rather than as a grey blur.
+     *
+     * Two shadows per level: a tight contact shadow that anchors the element
+     * to the surface, and a wider ambient one for depth. A single large blur
+     * is the thing that reads as a cheap drop shadow.
+     */
+    /*
+     * Shadow colour comes from `--foreground`, which every palette sets, so a
+     * warm theme casts a warm shadow and a cool one casts a cool shadow. A
+     * fixed blue-grey here looked correct on the default palette and subtly
+     * wrong on the other twenty one.
+     */
+    --elev-1:
+      0 1px 2px hsl(var(--foreground) / 0.06),
+      0 1px 1px hsl(var(--foreground) / 0.04);
+    --elev-2:
+      0 2px 4px hsl(var(--foreground) / 0.06),
+      0 4px 12px -2px hsl(var(--foreground) / 0.08);
+    --elev-3:
+      0 4px 8px hsl(var(--foreground) / 0.07),
+      0 12px 28px -6px hsl(var(--foreground) / 0.12);
+  }
+
+  /* Dark needs deeper, wider shadows: the same values over a dark ground are
+     invisible, which is why dark themes so often look flat. */
+  .dark {
+    --elev-1:
+      0 1px 2px hsl(0 0% 0% / 0.5),
+      inset 0 1px 0 hsl(var(--foreground) / 0.04);
+    --elev-2:
+      0 2px 6px hsl(0 0% 0% / 0.45),
+      0 8px 24px -6px hsl(0 0% 0% / 0.5),
+      inset 0 1px 0 hsl(var(--foreground) / 0.05);
+    --elev-3:
+      0 4px 10px hsl(0 0% 0% / 0.5),
+      0 20px 48px -12px hsl(0 0% 0% / 0.6),
+      inset 0 1px 0 hsl(var(--foreground) / 0.06);
+  }
+
+  /* Text that is set, not just rendered. Kerning and ligatures on, and
+     optical sizing so display type at 30px is not just body type scaled up. */
+  html {
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tight tracking on display sizes. Large type set at body tracking always
+     looks loose, and it is one of the clearest tells of an unconsidered UI. */
+  h1, h2 { letter-spacing: -0.022em; }
+  h3, h4 { letter-spacing: -0.014em; }
+
+  /* Branded selection. The browser default blue belongs to no product. */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
+  }
+
+  /*
+   * Focus that was designed.
+   *
+   * `:focus-visible` only, so a mouse click never draws a ring but a keyboard
+   * tab always does. The offset is what stops it reading as a border.
+   */
+  :focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.75);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+  /* The element opts out of the default ring only to draw its own. */
+  [data-focus-custom]:focus-visible { outline: none; }
+
+  /*
+   * Touch feedback.
+   *
+   * Mobile browsers paint a grey box over anything tappable. Removing it is
+   * only half the job: without a replacement the interface stops answering
+   * the finger entirely, which feels broken. Interactive elements get a real
+   * press instead.
+   */
+  a, button, [role='button'], input, select, textarea, label {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active {
+    transform: scale(0.985);
+  }
+  button, [role='button'] {
+    transition: transform 140ms var(--ease-out-soft);
+  }
+
+  /* Light mode deserves the same considered scrollbar the dark theme got. */
+  :root:not(.dark) ::-webkit-scrollbar { width: 5px; height: 5px; }
+  :root:not(.dark) ::-webkit-scrollbar-track { background: transparent; }
+  :root:not(.dark) ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 99px;
+  }
+  :root:not(.dark) ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.45);
+  }
+  html { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+
+  html[data-motion='reduced'] button:active,
+  html[data-motion='reduced'] [role='button']:active { transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    button, [role='button'] { transition: none; }
+    button:active, [role='button']:active { transform: none; }
+  }
+}
+
+@layer utilities {
+  /*
+   * The standard surface.
+   *
+   * Most cards on the site were a flat border and a fill, which is legible
+   * but weightless. This gives the same shape real elevation and a lit top
+   * edge, so a card sits ON the page rather than being cut out of it.
+   */
+  .lp-surface {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: var(--elev-1);
+    transition:
+      box-shadow 240ms var(--ease-out-soft),
+      border-color 240ms var(--ease-out-soft),
+      transform 240ms var(--ease-out-soft);
+  }
+
+  /* Raised, for the surfaces that should read as the primary object. */
+  .lp-surface-2 { box-shadow: var(--elev-2); }
+
+  /*
+   * Hover lift, for surfaces that are themselves a link or a button.
+   *
+   * One pixel. It is enough to register as physical and small enough not to
+   * shift the text under the reader's eye, and transform keeps it off the
+   * layout path entirely so nothing reflows.
+   */
+  .lp-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--elev-2);
+    border-color: hsl(var(--primary) / 0.35);
+  }
+  .lp-lift:active { transform: translateY(0); }
+
+  html[data-motion='reduced'] .lp-lift:hover { transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-surface, .lp-lift { transition: none; }
+    .lp-lift:hover { transform: none; }
+  }
+
+  /*
+   * A hairline that catches light along the top of a surface.
+   *
+   * Pure decoration, but it is most of what makes a dark interface look
+   * lit from above rather than painted flat.
+   */
+  .lp-edge { position: relative; }
+  .lp-edge::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      to right,
+      transparent,
+      hsl(var(--foreground) / 0.1) 18%,
+      hsl(var(--foreground) / 0.1) 82%,
+      transparent
+    );
+  }
+  .dark .lp-edge::before {
+    background: linear-gradient(
+      to right,
+      transparent,
+      hsl(var(--primary) / 0.22) 18%,
+      hsl(var(--primary) / 0.22) 82%,
+      transparent
+    );
+  }
+}
