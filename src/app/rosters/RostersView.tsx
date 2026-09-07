@@ -143,7 +143,7 @@ function TimeMachine({
   );
 
   return (
-    <section className="lp-glass overflow-hidden rounded-xl border">
+    <section className="lp-glass lp-edge overflow-hidden rounded-xl border">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
           Season
@@ -294,9 +294,9 @@ export default function RostersView() {
                 whileTap={{ scale: 0.94 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 28 }}
                 className={cn(
-                  'flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors',
+                  'flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-all',
                   on
-                    ? 'border-primary/60 bg-primary/10 ring-1 ring-primary/40 shadow-sm shadow-primary/20'
+                    ? 'border-primary/60 bg-primary/10 ring-1 ring-primary/40 shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.35)]'
                     : 'border-border bg-card/40 hover:border-border/80 hover:bg-muted/40',
                 )}
               >
@@ -324,7 +324,7 @@ export default function RostersView() {
         </div>
 
         {/* ── The roster ──────────────────────────────────────────────── */}
-        <section className="lp-glass overflow-hidden rounded-xl border">
+        <section className="lp-glass lp-edge overflow-hidden rounded-xl border">
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             <Avatar avatarId={team.avatar} size={32} className="shrink-0" />
             <div className="min-w-0 flex-1">

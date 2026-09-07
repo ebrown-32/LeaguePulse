@@ -105,7 +105,7 @@ export default function TrophyCase({
   if (!champions.length) return null;
 
   return (
-    <section className="lp-glass overflow-hidden rounded-xl border">
+    <section className="lp-glass lp-edge overflow-hidden rounded-xl border">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Trophy className="h-3.5 w-3.5 text-primary" />
         <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">

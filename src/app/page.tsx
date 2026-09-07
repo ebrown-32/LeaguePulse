@@ -189,16 +189,22 @@ function PulseStat({ label, value, sub, icon: Icon, href }: {
           {label}
         </span>
       </div>
-      <span className="mt-1.5 block font-display text-2xl font-bold tabular-nums leading-none text-foreground sm:text-3xl">
+      {/* Big figures want tighter tracking than the type designer set them
+          at: default spacing is tuned for a paragraph, and at 30px it leaves
+          numerals looking loose and unset. Tabular so a column of them lines
+          up on the decimal. */}
+      <span className="mt-1.5 block font-display text-[26px] font-bold tabular-nums leading-none tracking-[-0.03em] text-foreground sm:text-[32px]">
         {value}
       </span>
       {sub && <span className="mt-1 block text-[11px] text-muted-foreground">{sub}</span>}
     </>
   );
 
-  const cls = 'lp-glass rounded-xl border p-3.5 transition-colors sm:p-4';
+  const cls = 'lp-glass lp-edge rounded-xl border p-3.5 sm:p-4';
+  // Only the ones that go somewhere lift. A card that moves under the cursor
+  // and then does nothing when clicked is a promise the interface breaks.
   return href
-    ? <Link href={href} className={`${cls} hover:border-primary/40`}>{body}</Link>
+    ? <Link href={href} className={`${cls} lp-lift block`}>{body}</Link>
     : <div className={cls}>{body}</div>;
 }
 

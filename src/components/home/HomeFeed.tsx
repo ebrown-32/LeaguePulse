@@ -55,7 +55,7 @@ export default function HomeFeed() {
   if (posts && !posts.length) return null;
 
   return (
-    <section className="lp-glass overflow-hidden rounded-xl border">
+    <section className="lp-glass lp-edge overflow-hidden rounded-xl border">
       <Link
         href="/desk"
         className="flex items-center gap-2 border-b border-border px-4 py-3 transition-colors hover:bg-muted/30"

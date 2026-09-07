@@ -286,8 +286,13 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
               >
                 <Card className="overflow-hidden transition-shadow duration-300 hover:shadow-md">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    {/* `w-full`: CardHeader is itself a flex row, so without an
+                        explicit width this wrapper shrinks to its content and
+                        `justify-between` has no free space to distribute. The
+                        Details button then sits flush against the label on the
+                        left, overhanging the team name in the row beneath it. */}
+                    <div className="flex w-full items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
                         <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                           {isPlayoffWeek ? 'Playoff Match' : 'Matchup'}
                         </h3>

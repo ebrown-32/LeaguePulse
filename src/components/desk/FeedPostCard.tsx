@@ -356,7 +356,7 @@ export function FeedPostCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
-      className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
+      className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/25"
     >
       <div className={cn(
         'flex gap-3 py-4',
