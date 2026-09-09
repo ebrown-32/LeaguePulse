@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Menu,
   X,
+  FlaskConical,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
@@ -62,6 +63,7 @@ const MORE_NAV: NavItem[] = [
   // Re-add this entry once a tier without the row cap is available.
   { name: 'Player Rankings', href: '/rankings',  icon: ListOrdered  },
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
+  { name: 'Simulator',    href: '/simulator',    icon: FlaskConical },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
   // Weather is built and reachable at /weather, but unlinked for now.
@@ -100,6 +102,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'History',       href: '/history',      icon: Database       },
       { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
       { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
+      { name: 'Simulator',     href: '/simulator',    icon: FlaskConical   },
     ],
   },
   {
