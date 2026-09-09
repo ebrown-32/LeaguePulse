@@ -3,7 +3,7 @@ import { getCurrentLeagueId } from '@/config/league';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { optimalLineup, coachingEfficiency, type LineupPlayer } from './optimalLineup';
-import { simulatePlayoffOdds, type SimFixture, type SimTeam, type OddsResult } from './playoffOdds';
+import { currentSeasonOdds, type OddsResult } from '@/lib/sim/leagueOdds';
 
 /**
  * The weekly metrics report.
@@ -432,41 +432,18 @@ export async function buildWeeklyReportFor(
   const playoffTeams = Number((league as any)?.settings?.playoff_teams ?? 0);
   const playoffWeekStart = Number((league as any)?.settings?.playoff_week_start ?? 15);
 
-  // Fixtures still to be played, read from Sleeper's published schedule rather
-  // than assumed to be round robin. Only regular season weeks count: the
-  // playoff bracket is simulated separately from the seeds it produces.
-  const fixtures: SimFixture[] = [];
-  for (let week = throughWeek + 1; week < playoffWeekStart; week++) {
-    const raw = await getLeagueMatchups(leagueId, week).catch(() => [] as any[]);
-    if (!Array.isArray(raw)) continue;
-    const pairs = new Map<number, number[]>();
-    for (const m of raw) {
-      const id = Number(m.matchup_id);
-      if (!Number.isFinite(id)) continue;
-      if (!pairs.has(id)) pairs.set(id, []);
-      pairs.get(id)!.push(Number(m.roster_id));
-    }
-    for (const ids of pairs.values()) {
-      if (ids.length === 2) fixtures.push({ week, a: ids[0], b: ids[1] });
-    }
-  }
-
-  const simTeams: SimTeam[] = teams.map(t => ({
-    rosterId: t.rosterId, teamName: t.teamName,
-    wins: t.wins, losses: t.losses, ties: t.ties,
-    pointsFor: t.pointsFor,
-    mean: t.weeks.length ? t.pointsFor / t.weeks.length : 0,
-    sd: t.scoreSd,
-  }));
-
-  // Seeded on the season and week so the odds are stable until a game is
-  // played, rather than drifting every time someone reloads the page.
-  const odds = playoffTeams
-    ? simulatePlayoffOdds(simTeams, fixtures, playoffTeams, {
-        seed: Number(`${league?.season ?? 0}`.slice(-4)) * 100 + throughWeek,
-        medianMatch,
-      })
-    : null;
+  /**
+   * Playoff odds come from the shared simulator, not a second engine.
+   *
+   * Only for the live season: a completed one has results, not odds, and a
+   * "through week N" view of a past season would need the rosters as they were
+   * that week, which the odds model does not reconstruct.
+   */
+  const isLiveCurrentSeason =
+    weekOverride === undefined
+    && throughWeek > 0
+    && leagueId === (await getCurrentLeagueId().catch(() => ''));
+  const odds = isLiveCurrentSeason ? await currentSeasonOdds().catch(() => null) : null;
 
   return {
     medianMatch,

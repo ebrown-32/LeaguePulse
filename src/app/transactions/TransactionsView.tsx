@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { cn } from '@/lib/utils';
+import { TradeSides, PlayerRow } from '@/components/trade/TradeSides';
 import type { EnrichedTransaction, PlayerSummary, DraftPickSummary, TransactionsResponse } from '@/app/api/transactions/route';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -20,60 +21,15 @@ const TYPE_CONFIG = {
   free_agent: { label: 'Free Agent', Icon: UserPlus,       v: '--tx-fa'     },
 } as const;
 
-const POS_COLOR: Record<string, string> = {
-  QB:  'bg-amber-400/10 text-amber-400 border-amber-400/30',
-  RB:  'bg-emerald-400/10 text-emerald-400 border-emerald-400/30',
-  WR:  'bg-sky-400/10 text-sky-400 border-sky-400/30',
-  TE:  'bg-violet-400/10 text-violet-400 border-violet-400/30',
-  K:   'bg-slate-400/10 text-slate-400 border-slate-400/30',
-  DEF: 'bg-rose-400/10 text-rose-400 border-rose-400/30',
-};
 
 const TYPE_FILTERS = ['All', 'Trades', 'Waivers', 'Free Agents'] as const;
 type TypeFilter = typeof TYPE_FILTERS[number];
 const TYPE_MAP: Record<TypeFilter, string> = { All: '', Trades: 'trade', Waivers: 'waiver', 'Free Agents': 'free_agent' };
 
-// ── Micro-components ─────────────────────────────────────────────────────────
-
-function PosTag({ pos }: { pos: string }) {
-  return (
-    <span className={cn('inline-flex items-center rounded border px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide', POS_COLOR[pos] ?? 'bg-muted text-muted-foreground border-border')}>
-      {pos}
-    </span>
-  );
-}
-
-function PickTag({ pick }: { pick: DraftPickSummary }) {
-  return (
-    <span className="inline-flex items-center rounded border border-purple-400/30 bg-purple-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-purple-400">
-      &apos;{pick.season.slice(2)} R{pick.round} Pick
-    </span>
-  );
-}
-
-function PlayerRow({ player, variant }: { player: PlayerSummary; variant: 'add' | 'drop' | 'neutral' }) {
-  return (
-    <div className="flex items-center gap-2 py-0.5">
-      {variant === 'add'     && <TrendingUp   className="h-3 w-3 shrink-0 text-emerald-400" />}
-      {variant === 'drop'    && <TrendingDown  className="h-3 w-3 shrink-0 text-rose-400"   />}
-      {variant === 'neutral' && <div className="h-3 w-3 shrink-0" />}
-      <PosTag pos={player.position} />
-      <span className="text-sm font-medium text-foreground leading-none">{player.name}</span>
-      <span className="text-[10px] text-muted-foreground/60 font-medium">{player.nflTeam}</span>
-    </div>
-  );
-}
-
 // ── Trade card ───────────────────────────────────────────────────────────────
 
 function TradeCard({ tx }: { tx: EnrichedTransaction }) {
-  const [sideA, sideB] = tx.sides;
-  if (!sideA || !sideB) return null;
-
-  const aItems = [...sideA.adds, ...sideA.picksIn.map(() => null)];
-  const bItems = [...sideB.adds, ...sideB.picksIn.map(() => null)];
-  const empty  = aItems.length === 0 && bItems.length === 0;
-
+  if (tx.sides.length < 2) return null;
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="h-px" style={{ background: 'var(--tx-trade-grad)' }} />
@@ -92,58 +48,11 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
           {formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
         </span>
       </div>
-
-      <div className="grid grid-cols-2 divide-x divide-border/50">
-        {[sideA, sideB].map(side => (
-          <div key={side.rosterId} className="px-4 pb-4">
-            <TeamLink
-              userId={side.userId}
-              teamName={side.teamName}
-              avatar={side.avatar}
-              avatarSize={20}
-              className="mb-2"
-              textClassName="text-xs font-semibold text-foreground leading-tight line-clamp-1"
-            />
-            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">Gets</p>
-            <div className="space-y-0.5">
-              {side.adds.map(p => <PlayerRow key={p.id} player={p} variant="neutral" />)}
-              {side.picksIn.map((pk, i) => (
-                <div key={i} className="flex items-center gap-2 py-0.5">
-                  <div className="h-3 w-3 shrink-0" />
-                  <PickTag pick={pk} />
-                </div>
-              ))}
-              {side.adds.length === 0 && side.picksIn.length === 0 && (
-                <span className="text-xs text-muted-foreground/30 italic">-</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Extra sides (3-way trades) */}
-      {tx.sides.slice(2).map(side => (
-        <div key={side.rosterId} className="border-t border-border/40 px-4 py-3">
-          <div className="flex items-center gap-1 mb-1.5">
-            <TeamLink userId={side.userId} teamName={side.teamName} avatar={side.avatar} avatarSize={20} textClassName="text-xs font-semibold text-foreground" />
-            <span className="text-xs font-semibold text-foreground">also gets</span>
-          </div>
-          <div className="space-y-0.5">
-            {side.adds.map(p => <PlayerRow key={p.id} player={p} variant="neutral" />)}
-            {side.picksIn.map((pk, i) => (
-              <div key={i} className="flex items-center gap-2 py-0.5">
-                <div className="h-3 w-3 shrink-0" />
-                <PickTag pick={pk} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+      {/* Shared with the simulator's Alternate Timelines. */}
+      <TradeSides sides={tx.sides} />
     </div>
   );
 }
-
-// ── FA / Waiver card ─────────────────────────────────────────────────────────
 
 function ActivityCard({ tx }: { tx: EnrichedTransaction }) {
   const cfg  = TYPE_CONFIG[tx.type as keyof typeof TYPE_CONFIG] ?? TYPE_CONFIG.free_agent;

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, Info } from 'lucide-react';
+import Link from 'next/link';
+import { ExternalLink, Info, ArrowRight } from 'lucide-react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { SkeletonTable, SkeletonBars, Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';
@@ -201,13 +202,25 @@ export default function ReportView() {
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
                   Playoff odds
                 </h2>
-                <p className="text-[11px] text-muted-foreground">
-                  {report.odds.simulations.toLocaleString()} simulations
-                  {report.odds.remainingGames > 0
-                    ? `, ${report.odds.remainingGames} games left`
-                    : ', regular season complete'}
-                  {' '}&middot; top {report.playoffTeams} qualify
-                </p>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <p className="text-[11px] text-muted-foreground">
+                    {report.odds.simulations.toLocaleString()} simulations
+                    {report.odds.remainingGames > 0
+                      ? `, ${report.odds.remainingGames} games left`
+                      : ', regular season complete'}
+                    {' '}&middot; top {report.playoffTeams} qualify
+                  </p>
+                  {/* The report answers "where do I stand". Anything you want to
+                      DO with the odds lives in the simulator, which runs the
+                      same engine. */}
+                  <Link
+                    href="/simulator"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition-colors hover:underline"
+                  >
+                    Open the simulator
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
               </div>
 
               <div className="mt-3 space-y-2">
@@ -248,12 +261,11 @@ export default function ReportView() {
               </div>
 
               <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                The rest of the season played out {report.odds.simulations.toLocaleString()}{' '}times,
-                drawing each week from that team&apos;s own scoring average and spread, then resolving
-                the standings on record with points as the tiebreak. The full bar is the chance of
-                reaching the playoffs; the brighter section inside it
+                The rest of the season played out {report.odds.simulations.toLocaleString()}{' '}times.
+                The full bar is the chance of reaching the playoffs; the brighter section inside it
                 <span className="hidden sm:inline">, and the right-hand figure,</span> is the chance
-                of winning the whole thing.
+                of winning the whole thing. The simulator shows what these rest on and lets you
+                force results to test a scenario.
               </p>
             </section>
           )}
