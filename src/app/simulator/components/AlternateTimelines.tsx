@@ -14,7 +14,8 @@ import { motion } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow, fmtRecord } from './shared';
-import { ArrowRightLeft, Trophy, Info, ArrowUp, ArrowDown, Loader2, Filter, ChevronDown } from 'lucide-react';
+import { ArrowRightLeft, Trophy, Info, ArrowUp, ArrowDown, Filter, ChevronDown } from 'lucide-react';
+import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import { TradeSides } from '@/components/trade/TradeSides';
 import type { TransactionSide } from '@/app/api/transactions/route';
 
@@ -108,7 +109,7 @@ export default function AlternateTimelines() {
   if (trades === null) {
     return (
       <div className="flex items-center justify-center rounded-xl border border-border bg-card py-16">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <HoneycombLoader style={{ ['--honeycomb-size' as string]: '14px' }} />
       </div>
     );
   }
@@ -276,9 +277,9 @@ export default function AlternateTimelines() {
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center rounded-xl border border-border bg-card py-14">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-[13px] text-muted-foreground">Replaying the season</span>
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border bg-card py-14">
+          <HoneycombLoader style={{ ['--honeycomb-size' as string]: '14px' }} />
+          <span className="text-[13px] text-muted-foreground">Replaying the season</span>
         </div>
       )}
 
