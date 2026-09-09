@@ -22,8 +22,9 @@ import MatchupSim from './components/MatchupSim';
 import TankTracker from './components/TankTracker';
 import AlternateTimelines from './components/AlternateTimelines';
 import { Eyebrow } from './components/shared';
+import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import {
-  Loader2, LineChart, Swords, ListOrdered, GitBranch, AlertTriangle,
+  LineChart, Swords, ListOrdered, GitBranch, AlertTriangle,
   Trophy, SlidersHorizontal,
 } from 'lucide-react';
 
@@ -93,6 +94,27 @@ export default function SimulatorView() {
   );
   const { result, running } = useSeasonSim(request, runSeason);
 
+  /**
+   * The run indicator, held on screen a beat longer than the run itself.
+   *
+   * The engine finishes in under fifty milliseconds, so tying the mark straight
+   * to `running` made it flash for a frame or two and read as a glitch rather
+   * than as feedback. The tail is long enough for the pulse to travel the ring
+   * once, which takes about a second: the cells are staggered 0.1s apart and
+   * each ramps over a fifth of the 2.1s cycle, so a shorter window shows one
+   * hexagon blinking rather than the animation.
+   *
+   * Decoration only. The board updates the moment the result arrives, and the
+   * real elapsed time is printed right beside this, so a lingering mark cannot
+   * misrepresent how long the run took.
+   */
+  const [pulsing, setPulsing] = useState(false);
+  useEffect(() => {
+    if (running) { setPulsing(true); return; }
+    const t = setTimeout(() => setPulsing(false), 1200);
+    return () => clearTimeout(t);
+  }, [running]);
+
   // A second, permanently unpinned run, so every pinned number can be shown
   // against what it would have been. Without it a pinned board is just numbers;
   // with it you can see exactly what your scenario bought.
@@ -132,8 +154,11 @@ export default function SimulatorView() {
 
   if (!league || !meta) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-border bg-card py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center gap-5 rounded-xl border border-border bg-card py-24">
+        <HoneycombLoader style={{ ['--honeycomb-size' as string]: '18px' }} />
+        {/* Named, because the wait is real: this pulls three seasons of results
+            and a full schedule of weekly projections before the first run. */}
+        <p className="text-[12px] text-muted-foreground">Building the model</p>
       </div>
     );
   }
@@ -193,8 +218,29 @@ export default function SimulatorView() {
         </div>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          {running && <Loader2 className="h-3 w-3 animate-spin" />}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          {/*
+            Mounted always, revealed on demand.
+
+            The honeycomb's cells are transparent for the first fifth of a 2.1s
+            cycle and staggered up to 0.6s behind each other, so a freshly
+            mounted one shows literally nothing for its first 400ms and is not
+            fully lit for a second. Mounting it per run meant it was invisible
+            for the entire time it existed. Leaving it running and fading the
+            wrapper means whenever it appears it is already mid-pulse.
+
+            Fixed size so the row never shifts, and generous, because the cells
+            paint well outside the element's own box.
+          */}
+          <span
+            aria-hidden={!pulsing}
+            className={cn(
+              'flex h-8 w-8 shrink-0 items-center justify-center transition-opacity duration-200',
+              pulsing ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            <HoneycombLoader style={{ ['--honeycomb-size' as string]: '9px' }} />
+          </span>
           <span className="tabular-nums">
             {ITERATIONS.toLocaleString()} seasons
             {result && <span className="ml-1.5 text-muted-foreground/60">in {result.elapsedMs}ms</span>}
