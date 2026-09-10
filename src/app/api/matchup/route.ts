@@ -10,6 +10,9 @@ import {
   type PlayerCard,
 } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { type WeekPhase } from '@/lib/nflSchedule';
+import { type StarterLine, type MatchupForecast } from '@/lib/sim/matchupOdds';
+import { weekForecasts } from '@/lib/sim/weekForecasts';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +25,20 @@ export interface MatchupSide {
   bench: PlayerCard[];
 }
 
+/** Everything the prediction view needs, when the matchup is a real fixture. */
+export interface MatchupLive {
+  season: string;
+  week: number;
+  phase: WeekPhase;
+  forecast: MatchupForecast;
+  /** Starter-by-starter, side A then side B. */
+  lines: [StarterLine[], StarterLine[]];
+}
+
 export interface MatchupDetail {
   statsSeason: string;
+  /** Null when the two teams are not actually scheduled against each other. */
+  live: MatchupLive | null;
   sides: [MatchupSide, MatchupSide];
   h2h: {
     aWins: number;
@@ -77,6 +92,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const a = searchParams.get('a');
   const b = searchParams.get('b');
+  const weekParam = Number(searchParams.get('week') ?? 0);
   if (!a || !b) {
     return NextResponse.json({ error: 'Both a and b user ids are required' }, { status: 400 });
   }
@@ -122,8 +138,37 @@ export async function GET(request: Request) {
     const bWins = entry?.losses ?? 0;
     const { score, label } = rivalryScore(games, aWins, bWins);
 
+    // ── Live prediction ────────────────────────────────────────────────────
+    const season = String(nflState?.season ?? statsSeason);
+    const week = weekParam > 0 ? weekParam : Number(nflState?.week ?? 1);
+    // One shared builder for the whole week, then the fixture these two are in.
+    const all = await weekForecasts(leagueId, season, week, true).catch(() => null);
+    const fixture = all?.fixtures.find(f =>
+      (f.a.userId === a && f.b.userId === b) || (f.a.userId === b && f.b.userId === a));
+    const live: MatchupLive | null = fixture && all
+      ? {
+          season: all.season,
+          week: all.week,
+          phase: all.phase,
+          // Orient the forecast to the requested order, since the caller's `a`
+          // is not necessarily the fixture's first side.
+          ...(fixture.a.userId === a
+            ? { forecast: fixture.forecast, lines: fixture.lines! }
+            : {
+                forecast: {
+                  ...fixture.forecast,
+                  a: fixture.forecast.b,
+                  b: fixture.forecast.a,
+                  aWinProb: 1 - fixture.forecast.aWinProb,
+                },
+                lines: [fixture.lines![1], fixture.lines![0]] as [StarterLine[], StarterLine[]],
+              }),
+        }
+      : null;
+
     const detail: MatchupDetail = {
       statsSeason,
+      live,
       sides: [buildSide(a), buildSide(b)],
       h2h: {
         aWins,

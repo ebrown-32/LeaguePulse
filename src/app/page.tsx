@@ -24,7 +24,9 @@ import {
   Trophy,
   ArrowLeftRight,
   Receipt,
+  ChevronRight,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
 import LeagueCarousel from '@/components/home/LeagueCarousel';
@@ -230,8 +232,44 @@ export default function Home() {
   const [allTimeUserStats, setAllTimeUserStats] = useState<any>(null);
   const [paByUser, setPaByUser] = useState<Record<string, number>>({});
   const [openMatchup, setOpenMatchup] = useState<MatchupTarget | null>(null);
+  /**
+   * Live win odds for the week's fixtures, keyed by roster id.
+   *
+   * One request for the whole slate rather than one per card: the projections,
+   * game statuses and calibration behind it are fetched once regardless.
+   */
+  const [odds, setOdds] = useState<Map<string, { winProb: number; projectedFinal: number; startersLeft: number }>>(new Map());
 
   const effectiveWeek = nflState?.season_type === 'regular' ? nflState.week : 1;
+
+  // Odds arrive after the page, so nothing waits on them and the cards render
+  // immediately with scores alone.
+  useEffect(() => {
+    if (league?.status !== 'in_season') return;
+    let cancelled = false;
+    fetch('/api/matchups/odds')
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled || !d?.fixtures) return;
+        // Keyed by user, which is what the cards carry.
+        const next = new Map<string, { winProb: number; projectedFinal: number; startersLeft: number }>();
+        for (const f of d.fixtures) {
+          next.set(f.a.userId, {
+            winProb: f.forecast.aWinProb,
+            projectedFinal: f.forecast.a.projectedFinal,
+            startersLeft: f.forecast.a.startersLeft,
+          });
+          next.set(f.b.userId, {
+            winProb: 1 - f.forecast.aWinProb,
+            projectedFinal: f.forecast.b.projectedFinal,
+            startersLeft: f.forecast.b.startersLeft,
+          });
+        }
+        setOdds(next);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [league?.status, effectiveWeek]);
 
   // Counted across every season, so it arrives on its own rather than holding
   // up the rest of the dashboard.
@@ -485,12 +523,16 @@ export default function Home() {
                     const hasScores = p1 + p2 > 0;
                     const t1Winning = hasScores && p1 > p2;
                     const t2Winning = hasScores && p2 > p1;
+                    const o1 = odds.get(matchup.team1.userId);
+                    const o2 = odds.get(matchup.team2.userId);
+                    const anyLeft = (o1?.startersLeft ?? 0) + (o2?.startersLeft ?? 0) > 0;
                     return (
                       <button
                         key={matchup.id}
                         onClick={() => setOpenMatchup({
                           a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
                           b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
+                          week: effectiveWeek,
                         })}
                         className="relative w-full overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-primary/40"
                       >
@@ -510,19 +552,50 @@ export default function Home() {
                               {matchup.team1.name}
                             </span>
                           </span>
-                          <span className={cn(
-                            'font-display text-xl font-bold tabular-nums shrink-0',
-                            t1Winning ? 'text-primary' : 'text-muted-foreground',
-                          )}>
-                            {p1.toFixed(1)}
+                          <span className="shrink-0 text-right">
+                            <span className={cn(
+                              'block font-display text-xl font-bold tabular-nums',
+                              t1Winning ? 'text-primary' : 'text-muted-foreground',
+                            )}>
+                              {p1.toFixed(1)}
+                            </span>
+                            {o1 && (
+                              <span className={cn(
+                                'block text-[10px] font-semibold tabular-nums',
+                                (o1.winProb >= 0.5) ? 'text-primary' : 'text-muted-foreground/70',
+                              )}>
+                                {(o1.winProb * 100).toFixed(0)}%
+                              </span>
+                            )}
                           </span>
                         </div>
 
-                        {/* Divider */}
-                        <div className="flex items-center px-4">
-                          <div className="flex-1 h-px bg-border/60" />
-                          <span className="px-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">vs</span>
-                          <div className="flex-1 h-px bg-border/60" />
+                        {/* The odds split, which replaces the plain rule: the
+                            bar IS the divider, so the card gains information
+                            without gaining height. */}
+                        <div className="px-4">
+                          {o1 ? (
+                            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                              <motion.div
+                                className="h-full bg-primary"
+                                initial={{ width: '50%' }}
+                                animate={{ width: `${o1.winProb * 100}%` }}
+                                transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+                              />
+                              <motion.div
+                                className="h-full bg-foreground/20"
+                                initial={{ width: '50%' }}
+                                animate={{ width: `${(1 - o1.winProb) * 100}%` }}
+                                transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <div className="h-px flex-1 bg-border/60" />
+                              <span className="px-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">vs</span>
+                              <div className="h-px flex-1 bg-border/60" />
+                            </div>
+                          )}
                         </div>
 
                         {/* Team 2 */}
@@ -537,13 +610,37 @@ export default function Home() {
                               {matchup.team2.name}
                             </span>
                           </span>
-                          <span className={cn(
-                            'font-display text-xl font-bold tabular-nums shrink-0',
-                            t2Winning ? 'text-primary' : 'text-muted-foreground',
-                          )}>
-                            {p2.toFixed(1)}
+                          <span className="shrink-0 text-right">
+                            <span className={cn(
+                              'block font-display text-xl font-bold tabular-nums',
+                              t2Winning ? 'text-primary' : 'text-muted-foreground',
+                            )}>
+                              {p2.toFixed(1)}
+                            </span>
+                            {o2 && (
+                              <span className={cn(
+                                'block text-[10px] font-semibold tabular-nums',
+                                (o2.winProb >= 0.5) ? 'text-primary' : 'text-muted-foreground/70',
+                              )}>
+                                {(o2.winProb * 100).toFixed(0)}%
+                              </span>
+                            )}
                           </span>
                         </div>
+
+                        {o1 && (
+                          <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
+                            <span className="truncate text-[10px] text-muted-foreground">
+                              {anyLeft
+                                ? `win odds \u00b7 ${(o1.startersLeft ?? 0) + (o2?.startersLeft ?? 0)} starters left`
+                                : 'final'}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-primary">
+                              Details
+                              <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </div>
+                        )}
 
                         {matchup.isHighlight && (
                           <div className="absolute top-3 right-3">

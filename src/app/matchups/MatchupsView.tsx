@@ -6,12 +6,13 @@ import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/Mat
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
+import { weekPhase, type WeekPhase } from '@/lib/nflSchedule';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/Select';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
-import { getDefaultSeason } from '@/lib/utils';
+import { getDefaultSeason, cn } from '@/lib/utils';
 import type { SleeperMatchup } from '@/types/sleeper';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Flame, Trophy } from 'lucide-react';
@@ -35,6 +36,14 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [seasonRosters, setSeasonRosters] = useState<any[]>([]);
   const [loadingSeasonData, setLoadingSeasonData] = useState(false);
+  /**
+   * Whether the selected week is finished, live, or not started.
+   *
+   * Read from the NFL schedule. This used to be inferred from "has anybody
+   * scored", which stamps every card FINAL as soon as the Thursday night game
+   * ends while fifteen games are still to kick off.
+   */
+  const [phase, setPhase] = useState<WeekPhase>('upcoming');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -114,6 +123,9 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
         setSeasonRosters(seasonRostersData);
         setMatchups(matchupsData);
+        setPhase(await weekPhase(
+          selectedSeason, selectedWeek, selectedSeason === nflState?.season,
+        ).catch(() => 'upcoming' as WeekPhase));
       } catch (error) {
         console.error('Failed to fetch season data:', error);
         setSeasonRosters(rosters);
@@ -271,10 +283,15 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
             const team1Points = team1.points || 0;
             const team2Points = team2.points || 0;
-            const matchupComplete = team1.points !== null && team2.points !== null && (team1Points > 0 || team2Points > 0);
+            // Settled only when every NFL game in the week has finished.
+            const matchupComplete = phase === 'final';
+            const isLive = phase === 'live';
+            // "Winning" applies while live too, it just means leading.
             const team1Winning = team1Points > team2Points;
             const team2Winning = team2Points > team1Points;
             const isTie = matchupComplete && team1Points === team2Points;
+            // Colour the leader in both states; only the wording changes.
+            const showLeader = (matchupComplete || isLive) && (team1Winning || team2Winning);
             const totalPoints = team1Points + team2Points;
             const pointDifference = Math.abs(team1Points - team2Points);
             return (
@@ -297,8 +314,19 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                           {isPlayoffWeek ? 'Playoff Match' : 'Matchup'}
                         </h3>
                         {matchupComplete && (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                          <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                             Final
+                          </span>
+                        )}
+                        {isLive && (
+                          // A live pip, so a week in progress is never mistaken
+                          // for a settled one at a glance.
+                          <span className="inline-flex items-center gap-1.5 rounded bg-red-500/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-red-500">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                            </span>
+                            Live
                           </span>
                         )}
                       </div>
@@ -307,6 +335,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                         onClick={() => setOpenMatchup({
                           a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: teamAvatar(user1) },
                           b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: teamAvatar(user2) },
+                          week: selectedWeek,
                         })}
                         className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                       >
@@ -319,7 +348,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                     <div className="space-y-px">
                       {/* Team 1 */}
                       <Link href={`/team/${user1.user_id}`} className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
-                        matchupComplete && team1Winning
+                        showLeader && team1Winning
                           ? 'bg-primary/[0.04] border-l-4 border-primary'
                           : isTie && matchupComplete
                           ? 'bg-amber-500/[0.04] border-l-4 border-amber-500'
@@ -330,12 +359,12 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                             avatarId={teamAvatar(user1)}
                             size={40}
                             className={`md:w-11 md:h-11 rounded-lg ${
-                              matchupComplete && team1Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'
+                              showLeader && team1Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'
                             }`}
                           />
                           <div className="min-w-0 flex-1">
                             <p className={`font-semibold text-sm md:text-base truncate ${
-                              matchupComplete && team1Winning ? 'text-primary' : 'text-foreground'
+                              showLeader && team1Winning ? 'text-primary' : 'text-foreground'
                             }`}>
                               {user1.metadata?.team_name || user1.display_name}
                             </p>
@@ -348,7 +377,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                         </div>
                         <div className="text-right">
                           <div className={`font-display text-2xl md:text-3xl font-bold tabular-nums ${
-                            matchupComplete && team1Winning
+                            showLeader && team1Winning
                               ? 'text-primary'
                               : isTie && matchupComplete
                               ? 'text-amber-500'
@@ -356,8 +385,8 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                           }`}>
                             {team1Points?.toFixed(1) || '0.0'}
                           </div>
-                          {matchupComplete && team1Winning && (
-                            <div className="text-xs text-primary font-semibold">
+                          {showLeader && team1Winning && (
+                            <div className="text-xs font-semibold text-primary">
                               +{pointDifference.toFixed(1)}
                             </div>
                           )}
@@ -370,7 +399,12 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                           <div className="w-full border-t border-border" />
                         </div>
                         <div className="relative flex justify-center">
-                          <span className="bg-background px-3 text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">
+                          <span className={cn(
+                            'bg-background px-3 text-[11px] font-semibold uppercase tracking-widest',
+                            isLive ? 'text-red-500' : 'text-muted-foreground',
+                          )}>
+                            {/* The margin already sits on the leader's row, so
+                                the divider stays a divider. */}
                             {matchupComplete ? (isTie ? 'TIE' : 'FINAL') : 'VS'}
                           </span>
                         </div>
@@ -378,7 +412,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
                       {/* Team 2 */}
                       <Link href={`/team/${user2.user_id}`} className={`flex items-center justify-between p-4 md:p-5 transition-colors duration-200 ${
-                        matchupComplete && team2Winning
+                        showLeader && team2Winning
                           ? 'bg-primary/[0.04] border-l-4 border-primary'
                           : isTie && matchupComplete
                           ? 'bg-amber-500/[0.04] border-l-4 border-amber-500'
@@ -389,12 +423,12 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                             avatarId={teamAvatar(user2)}
                             size={40}
                             className={`md:w-11 md:h-11 rounded-lg ${
-                              matchupComplete && team2Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'
+                              showLeader && team2Winning ? 'ring-2 ring-primary' : 'ring-1 ring-border'
                             }`}
                           />
                           <div className="min-w-0 flex-1">
                             <p className={`font-semibold text-sm md:text-base truncate ${
-                              matchupComplete && team2Winning ? 'text-primary' : 'text-foreground'
+                              showLeader && team2Winning ? 'text-primary' : 'text-foreground'
                             }`}>
                               {user2.metadata?.team_name || user2.display_name}
                             </p>
@@ -407,7 +441,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                         </div>
                         <div className="text-right">
                           <div className={`font-display text-2xl md:text-3xl font-bold tabular-nums ${
-                            matchupComplete && team2Winning
+                            showLeader && team2Winning
                               ? 'text-primary'
                               : isTie && matchupComplete
                               ? 'text-amber-500'
@@ -415,7 +449,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                           }`}>
                             {team2Points?.toFixed(1) || '0.0'}
                           </div>
-                          {matchupComplete && team2Winning && (
+                          {showLeader && team2Winning && (
                             <div className="text-xs text-primary font-semibold">
                               +{pointDifference.toFixed(1)}
                             </div>

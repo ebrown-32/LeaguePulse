@@ -7,6 +7,10 @@
  * conclude, wrongly, that Sleeper published no weekly projections at all. It
  * does. This module uses the right endpoint.
  *
+ * Points are computed with the LEAGUE's scoring settings rather than read from
+ * Sleeper's `pts_ppr` field, so a half PPR, standard or superflex league gets
+ * numbers that mean something. See `lib/scoring`.
+ *
  * What they are worth knowing about them: the weekly numbers are largely a
  * distribution of a season-long outlook rather than a fresh matchup-by-matchup
  * model, so they should not be read as strong game-level predictions. What they
@@ -15,6 +19,8 @@
  * a team's ceiling, and it is the main thing these add over a season total
  * divided by the number of weeks.
  */
+
+import { scoreStatLine, type ScoringSettings } from '@/lib/scoring';
 
 const BASE = 'https://api.sleeper.com';
 
@@ -46,6 +52,12 @@ export async function weeklyProjections(
   season: string,
   week: number,
   positions: string[],
+  /**
+   * The league's own scoring settings. Without them we fall back to Sleeper's
+   * precomputed totals, which are only right for the format they were computed
+   * for. Passing these makes the projection correct for any league.
+   */
+  scoring?: ScoringSettings | null,
 ): Promise<Map<string, number>> {
   const qs = new URLSearchParams({ season_type: 'regular' });
   for (const p of positions) qs.append('position[]', p);
@@ -60,8 +72,9 @@ export async function weeklyProjections(
     const rows = await res.json();
     if (!Array.isArray(rows)) return out;
     for (const r of rows) {
-      const pts = r?.stats?.pts_ppr;
-      if (typeof pts === 'number' && r?.player_id) out.set(String(r.player_id), pts);
+      if (!r?.player_id) continue;
+      const pts = scoreStatLine(r?.stats, scoring);
+      if (typeof pts === 'number' && Number.isFinite(pts)) out.set(String(r.player_id), pts);
     }
   } catch {
     // A missing week degrades the model to its historical component rather
@@ -80,6 +93,7 @@ export async function weeklyProjectionsFor(
   season: string,
   weeks: number[],
   positions: string[],
+  scoring?: ScoringSettings | null,
   concurrency = 4,
 ): Promise<Map<number, Map<string, number>>> {
   const byWeek = new Map<number, Map<string, number>>();
@@ -90,7 +104,7 @@ export async function weeklyProjectionsFor(
       for (;;) {
         const wk = queue.shift();
         if (wk === undefined) return;
-        byWeek.set(wk, await weeklyProjections(season, wk, positions));
+        byWeek.set(wk, await weeklyProjections(season, wk, positions, scoring));
       }
     }),
   );

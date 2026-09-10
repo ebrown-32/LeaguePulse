@@ -8,6 +8,9 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { CloseIcon } from '@/components/icons/MediaIcons';
 import { cn } from '@/lib/utils';
 import type { PlayerCard } from '@/lib/playerStats';
+import MatchupForecastView from './MatchupForecastView';
+import type { StarterLine, MatchupForecast } from '@/lib/sim/matchupOdds';
+import type { WeekPhase } from '@/lib/nflSchedule';
 
 interface Side {
   userId: string;
@@ -20,6 +23,13 @@ interface Side {
 
 interface Detail {
   statsSeason: string;
+  live: {
+    season: string;
+    week: number;
+    phase: WeekPhase;
+    forecast: MatchupForecast;
+    lines: [StarterLine[], StarterLine[]];
+  } | null;
   sides: [Side, Side];
   h2h: {
     aWins: number; bWins: number; meetings: number; aPoints: number; bPoints: number;
@@ -32,9 +42,11 @@ interface Detail {
 export interface MatchupTarget {
   a: { userId: string; teamName: string; avatar: string };
   b: { userId: string; teamName: string; avatar: string };
+  /** The week being viewed, so the forecast matches the card you clicked. */
+  week?: number;
 }
 
-type Tab = 'h2h' | 'rosters';
+type Tab = 'forecast' | 'h2h' | 'rosters';
 
 function StarterList({ side, statsSeason }: { side: Side; statsSeason: string }) {
   return (
@@ -69,13 +81,15 @@ export default function MatchupDetailModal({
 }: { target: MatchupTarget | null; onClose: () => void }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<Tab>('h2h');
+  // The forecast leads: "who wins" is why the panel gets opened.
+  const [tab, setTab] = useState<Tab>('forecast');
 
   useEffect(() => {
     if (!target) { setDetail(null); return; }
     let cancelled = false;
-    setLoading(true); setDetail(null); setTab('h2h');
-    fetch(`/api/matchup?a=${target.a.userId}&b=${target.b.userId}`)
+    setLoading(true); setDetail(null); setTab('forecast');
+    const wk = target.week ? `&week=${target.week}` : '';
+    fetch(`/api/matchup?a=${target.a.userId}&b=${target.b.userId}${wk}`)
       .then(r => r.json())
       .then(d => { if (!cancelled && !d.error) setDetail(d); })
       .catch(() => {})
@@ -163,7 +177,7 @@ export default function MatchupDetailModal({
             ) : (
               <>
                 <div className="flex gap-1 border-b border-border px-5 sm:px-6">
-                  {(['h2h', 'rosters'] as Tab[]).map(t => (
+                  {((detail?.live ? ['forecast', 'h2h', 'rosters'] : ['h2h', 'rosters']) as Tab[]).map(t => (
                     <button
                       key={t}
                       onClick={() => setTab(t)}
@@ -174,12 +188,22 @@ export default function MatchupDetailModal({
                           : 'border-transparent text-muted-foreground hover:text-foreground',
                       )}
                     >
-                      {t === 'h2h' ? 'Previous Meetings' : 'Rosters'}
+                      {t === 'forecast' ? 'Forecast' : t === 'h2h' ? 'Previous Meetings' : 'Rosters'}
                     </button>
                   ))}
                 </div>
 
                 <div className="p-5 sm:p-6">
+                  {tab === 'forecast' && detail?.live && (
+                    <MatchupForecastView
+                      a={target.a} b={target.b}
+                      week={detail.live.week}
+                      phase={detail.live.phase}
+                      forecast={detail.live.forecast}
+                      lines={detail.live.lines}
+                    />
+                  )}
+
                   {tab === 'h2h' && (
                     detail.h2h.games.length ? (
                       <ul className="space-y-1.5">

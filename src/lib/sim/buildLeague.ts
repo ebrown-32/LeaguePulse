@@ -19,6 +19,7 @@ import {
   fitTeamStrength, poolResiduals, leagueBaseline, bestLineupTotal, type WeekScore,
 } from '@/lib/sim/strength';
 import type { SimLeague, SimTeam, SimGame, PlayedGame } from '@/lib/sim/types';
+import { seasonSchedule, phaseOf } from '@/lib/nflSchedule';
 
 export interface SimMeta {
   seasonsOfHistory: number;
@@ -57,6 +58,8 @@ interface SeasonRaw {
   playoffRoundType: number;
   hasMedianGames: boolean;
   rosterSlots: string[];
+  /** The league's own scoring settings, so projections are format correct. */
+  scoring: Record<string, number>;
   users: any[];
   rosters: any[];
   /** week -> matchup rows */
@@ -91,6 +94,7 @@ async function loadSeason(leagueId: string, isCurrent: boolean): Promise<SeasonR
     playoffRoundType: info.settings?.playoff_round_type ?? 0,
     hasMedianGames: !!info.settings?.league_average_match,
     rosterSlots: info.roster_positions || [],
+    scoring: info.scoring_settings || {},
     users, rosters, weeks,
   };
 }
@@ -118,9 +122,16 @@ async function firstRoundOwnership(
   return own;
 }
 
-/** A week counts as played once anybody in it has actually scored. */
-function weekWasPlayed(rows: any[]): boolean {
-  return rows.some(r => (r.points ?? 0) > 0);
+/**
+ * Whether a week's results are settled, from the NFL schedule.
+ *
+ * NOT "somebody scored". A Thursday night game ending gives one roster points
+ * while fifteen games are still to kick off, and treating that as a completed
+ * week dropped it from the remaining schedule and folded a two-player score
+ * into a team's season average as if it were a real result.
+ */
+function makeWeekIsFinal(finalWeeks: Set<number>) {
+  return (week: number) => finalWeeks.has(week);
 }
 
 export async function buildSimLeague(): Promise<BuildResult> {
@@ -140,6 +151,18 @@ export async function buildSimLeague(): Promise<BuildResult> {
     throw new Error('No league seasons could be loaded');
   }
 
+  // Which weeks are actually finished, per season, straight from the NFL
+  // schedule rather than inferred from whether anyone has points yet.
+  const finalWeeksBySeason = new Map<string, Set<number>>();
+  await Promise.all(seasons.map(async s => {
+    const schedule = await seasonSchedule(s.season, s.isCurrent);
+    const set = new Set<number>();
+    for (let w = 1; w <= s.regularSeasonWeeks; w++) {
+      if (phaseOf(schedule.filter(g => Number(g.week) === w)) === 'final') set.add(w);
+    }
+    finalWeeksBySeason.set(s.season, set);
+  }));
+
   // ── Real weekly scores, everywhere, keyed by manager ────────────────────────
   // Manager rather than roster id, because roster ids are per season and a
   // manager's history is the thing that actually carries forward.
@@ -150,8 +173,11 @@ export async function buildSimLeague(): Promise<BuildResult> {
   for (const s of seasons) {
     const userByRoster = new Map<number, string>(
       s.rosters.map(r => [r.roster_id as number, r.owner_id as string]));
-    for (const [, rows] of s.weeks) {
-      if (!weekWasPlayed(rows)) continue;
+    const isFinal = makeWeekIsFinal(finalWeeksBySeason.get(s.season) ?? new Set());
+    for (const [week, rows] of s.weeks) {
+      // Partial weeks contribute nothing: a score built from two starters is
+      // not a data point about how well a team scores.
+      if (!isFinal(week)) continue;
       for (const row of rows) {
         const uid = userByRoster.get(row.roster_id);
         const pts = row.points ?? 0;
@@ -172,6 +198,7 @@ export async function buildSimLeague(): Promise<BuildResult> {
   const played: PlayedGame[] = [];
   const remaining: SimGame[] = [];
   let weeksPlayed = 0;
+  const currentFinalWeeks = finalWeeksBySeason.get(current.season) ?? new Set<number>();
 
   for (let wk = 1; wk <= current.regularSeasonWeeks; wk++) {
     const rows = current.weeks.get(wk) ?? [];
@@ -181,7 +208,10 @@ export async function buildSimLeague(): Promise<BuildResult> {
       if (!groups.has(row.matchup_id)) groups.set(row.matchup_id, []);
       groups.get(row.matchup_id)!.push(row);
     }
-    const done = weekWasPlayed(rows);
+    // A week counts as played only once every NFL game in it has finished. A
+    // week in progress stays in `remaining`, so the simulator keeps simulating
+    // the games that have not actually been decided yet.
+    const done = currentFinalWeeks.has(wk);
     if (done) weeksPlayed = wk;
 
     for (const g of groups.values()) {
@@ -211,7 +241,8 @@ export async function buildSimLeague(): Promise<BuildResult> {
     directory = await getPlayersDirectory();
     const positionOf = (id: string) => (directory?.[id]?.position as string) ?? null;
     const positions = fantasyPositions(current.rosterSlots);
-    const projections = await weeklyProjectionsFor(current.season, remainingWeeks, positions);
+    const projections = await weeklyProjectionsFor(
+      current.season, remainingWeeks, positions, current.scoring);
 
     for (const wk of remainingWeeks) {
       const pts = projections.get(wk);
