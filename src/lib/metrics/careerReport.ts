@@ -2,6 +2,7 @@ import { getAllLinkedLeagueIds, getLeagueInfo, getLeagueMatchups, getLeagueRoste
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { optimalLineup, coachingEfficiency, type LineupPlayer } from './optimalLineup';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { seasonSchedule, phaseOf } from '@/lib/nflSchedule';
 
 /**
  * Career metrics: the weekly report's measures, run over every season the
@@ -140,11 +141,21 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
         getLeagueMatchups(leagueId, i + 1).catch(() => [] as any[])),
     );
 
+    // Finished weeks only, from the NFL schedule.
+    const seasonSched = await seasonSchedule(season, (league as any)?.status !== 'complete');
+    const seasonFinalWeeks = new Set<number>();
+    for (let w = 1; w <= Math.max(0, lastWeek); w++) {
+      if (phaseOf(seasonSched.filter(g => Number(g.week) === w)) === 'final') {
+        seasonFinalWeeks.add(w);
+      }
+    }
+
     for (let w = 0; w < weekly.length; w++) {
       const raw = weekly[w] as any[];
       if (!Array.isArray(raw) || !raw.length) continue;
-      // Unplayed weeks are all zeroes and would invent losses everywhere.
-      if (!raw.some(m => Number(m.points ?? 0) > 0)) continue;
+      // Only finished weeks. Unplayed ones are all zeroes and would invent
+      // losses; a week in progress is partial and would understate everyone.
+      if (!seasonFinalWeeks.has(w + 1)) continue;
       weeksCovered++;
       if (season && !seasons.includes(season)) seasons.push(season);
       const week = w + 1;

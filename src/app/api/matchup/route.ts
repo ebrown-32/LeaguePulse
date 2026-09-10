@@ -10,6 +10,12 @@ import {
   type PlayerCard,
 } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { getLeagueMatchups } from '@/lib/api';
+import { weeklyProjections, fantasyPositions } from '@/lib/sim/weeklyProjections';
+import { teamGameStatus, hasPlayed, weekPhase, type WeekPhase } from '@/lib/nflSchedule';
+import { forecastMatchup, type StarterLine, type MatchupForecast } from '@/lib/sim/matchupOdds';
+import { leagueCalibration } from '@/lib/sim/leagueCalibration';
+import { getLeagueInfo } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +28,20 @@ export interface MatchupSide {
   bench: PlayerCard[];
 }
 
+/** Everything the prediction view needs, when the matchup is a real fixture. */
+export interface MatchupLive {
+  season: string;
+  week: number;
+  phase: WeekPhase;
+  forecast: MatchupForecast;
+  /** Starter-by-starter, side A then side B. */
+  lines: [StarterLine[], StarterLine[]];
+}
+
 export interface MatchupDetail {
   statsSeason: string;
+  /** Null when the two teams are not actually scheduled against each other. */
+  live: MatchupLive | null;
   sides: [MatchupSide, MatchupSide];
   h2h: {
     aWins: number;
@@ -69,6 +87,83 @@ function rivalryScore(games: GameRecord[], aWins: number, bWins: number): { scor
   return { score, label };
 }
 
+/**
+ * The live half of the payload: who has played, who has not, and what that
+ * implies for the result.
+ *
+ * Returns null when these two teams are not scheduled against each other in the
+ * requested week, since a forecast for a game that is not being played would be
+ * a curiosity rather than information.
+ */
+async function buildLive(
+  leagueId: string,
+  season: string,
+  week: number,
+  aUserId: string,
+  bUserId: string,
+  rosters: any[],
+  players: Record<string, any>,
+): Promise<MatchupLive | null> {
+  const rosterOf = (userId: string) => rosters.find((r: any) => r.owner_id === userId);
+  const ra = rosterOf(aUserId), rb = rosterOf(bUserId);
+  if (!ra || !rb) return null;
+
+  const rows = await getLeagueMatchups(leagueId, week).catch(() => [] as any[]);
+  const rowOf = (rosterId: number) => rows.find((m: any) => m.roster_id === rosterId);
+  const ma = rowOf(ra.roster_id), mb = rowOf(rb.roster_id);
+  if (!ma || !mb) return null;
+  // Only forecast a fixture that exists.
+  if (ma.matchup_id == null || ma.matchup_id !== mb.matchup_id) return null;
+
+  // Scoring settings and roster slots come from the league itself, so a half
+  // PPR or superflex league gets projections that mean something.
+  const info: any = await getLeagueInfo(leagueId).catch(() => null);
+  const scoring = info?.scoring_settings ?? null;
+  const slots: string[] = info?.roster_positions ?? [];
+
+  const [proj, status, phase, calibration] = await Promise.all([
+    weeklyProjections(season, week, fantasyPositions(slots), scoring),
+    teamGameStatus(season, week),
+    weekPhase(season, week),
+    leagueCalibration(leagueId),
+  ]);
+
+  const lineFor = (m: any): StarterLine[] => {
+    const pts: Record<string, number> = m.players_points ?? {};
+    return (m.starters ?? [])
+      .filter((id: string) => id && id !== '0')
+      .map((id: string): StarterLine => {
+        const p = players?.[id];
+        const nflTeam: string | null = p?.team ?? null;
+        const gs = nflTeam ? status.get(nflTeam) : undefined;
+        // No game at all this week means a bye, which is a real and visible
+        // reason a lineup is short rather than an error.
+        const playerPhase = !nflTeam || gs === undefined
+          ? 'bye' as const
+          : hasPlayed(gs) ? 'played' as const : 'upcoming' as const;
+        const projected = proj.get(id) ?? null;
+        return {
+          playerId: id,
+          name: p?.full_name
+            || [p?.first_name, p?.last_name].filter(Boolean).join(' ')
+            || id,
+          position: p?.position ?? '--',
+          nflTeam,
+          projected,
+          actual: playerPhase === 'played' ? Number(pts[id] ?? 0) : null,
+          phase: playerPhase,
+        };
+      });
+  };
+
+  const la = lineFor(ma), lb = lineFor(mb);
+  return {
+    season, week, phase,
+    forecast: forecastMatchup(la, lb, calibration),
+    lines: [la, lb],
+  };
+}
+
 export async function GET(request: Request) {
   if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
@@ -77,6 +172,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const a = searchParams.get('a');
   const b = searchParams.get('b');
+  const weekParam = Number(searchParams.get('week') ?? 0);
   if (!a || !b) {
     return NextResponse.json({ error: 'Both a and b user ids are required' }, { status: 400 });
   }
@@ -122,8 +218,16 @@ export async function GET(request: Request) {
     const bWins = entry?.losses ?? 0;
     const { score, label } = rivalryScore(games, aWins, bWins);
 
+    // ── Live prediction ────────────────────────────────────────────────────
+    const season = String(nflState?.season ?? statsSeason);
+    const week = weekParam > 0 ? weekParam : Number(nflState?.week ?? 1);
+    const live = await buildLive(
+      leagueId, season, week, a, b, rosters, players,
+    ).catch(() => null);
+
     const detail: MatchupDetail = {
       statsSeason,
+      live,
       sides: [buildSide(a), buildSide(b)],
       h2h: {
         aWins,

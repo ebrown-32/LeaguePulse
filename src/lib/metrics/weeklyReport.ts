@@ -4,6 +4,7 @@ import { getAllLinkedLeagueIds } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { optimalLineup, coachingEfficiency, type LineupPlayer } from './optimalLineup';
 import { currentSeasonOdds, type OddsResult } from '@/lib/sim/leagueOdds';
+import { seasonSchedule, phaseOf } from '@/lib/nflSchedule';
 
 /**
  * The weekly metrics report.
@@ -141,13 +142,15 @@ function rankBy<T>(items: T[], value: (t: T) => number): Map<T, number> {
 export async function playedWeeks(leagueId: string): Promise<number[]> {
   const league: any = await getLeagueInfo(leagueId).catch(() => null);
   const last = Number(league?.settings?.playoff_week_start ?? 15) - 1;
-  const weeks = await Promise.all(
-    Array.from({ length: Math.max(0, last) }, async (_, i) => {
-      const raw = await getLeagueMatchups(leagueId, i + 1).catch(() => [] as any[]);
-      return Array.isArray(raw) && raw.some(m => Number(m.points ?? 0) > 0) ? i + 1 : 0;
-    }),
-  );
-  return weeks.filter(w => w > 0);
+  const season = String(league?.season ?? '');
+  // From the NFL schedule, not from whether anyone has points: a Thursday
+  // night game alone used to make the whole week look played.
+  const schedule = await seasonSchedule(season, league?.status !== 'complete');
+  const weeks: number[] = [];
+  for (let w = 1; w <= Math.max(0, last); w++) {
+    if (phaseOf(schedule.filter(g => Number(g.week) === w)) === 'final') weeks.push(w);
+  }
+  return weeks;
 }
 
 /**
@@ -234,6 +237,16 @@ export async function buildWeeklyReportFor(
       getLeagueMatchups(leagueId, i + 1).catch(() => [] as any[])),
   );
 
+  // Which weeks are actually finished. Everything below counts only these, so a
+  // week in progress never lands in an average, an all-play record or an
+  // efficiency figure.
+  const schedule = await seasonSchedule(
+    String((league as any)?.season ?? ''), (league as any)?.status !== 'complete');
+  const finalWeeks = new Set<number>();
+  for (let w = 1; w <= lastWeek; w++) {
+    if (phaseOf(schedule.filter(g => Number(g.week) === w)) === 'final') finalWeeks.add(w);
+  }
+
   const reports = new Map<number, TeamReport>();
   for (const [rosterId, m] of meta) {
     reports.set(rosterId, {
@@ -256,9 +269,10 @@ export async function buildWeeklyReportFor(
   for (let w = 0; w < weekly.length; w++) {
     const raw = weekly[w] as any[];
     if (!Array.isArray(raw) || !raw.length) continue;
-    // A scheduled but unplayed week is all zeroes; counting it would drag every
-    // average toward nothing and invent losses in the all-play record.
-    if (!raw.some(m => Number(m.points ?? 0) > 0)) continue;
+    // Only fully finished weeks. An unplayed week is all zeroes and would drag
+    // every average toward nothing; a week in progress is worse, because it
+    // looks like real data while being a handful of players deep.
+    if (!finalWeeks.has(w + 1)) continue;
     playedWeeks++;
     const week = w + 1;
 
