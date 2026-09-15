@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from './claude';
 import { buildLeagueBrief } from './leagueBrief';
 import { buildLiveBrief, buildUpcomingMatchups, type LiveBrief } from './liveBrief';
+import { checkGameStatusClaims } from './statusCheck';
 import type { Personality } from './personalities';
 
 function systemFor(p: Personality): string {
@@ -424,24 +425,50 @@ without naming the players.
  * this guarantee; a check can. One correction attempt, then the piece is
  * abandoned rather than published with a claim we have proven false.
  */
+/** Every factual check a draft must pass, run together. */
+async function factProblems(content: unknown): Promise<{ trade: string[]; status: string[] }> {
+  const text = collectText(content).join(' ');
+  const [trade, status] = await Promise.all([
+    checkTradeClaims(text).catch(() => [] as string[]),
+    // Game status: no calling an unfinished matchup final, no saying a player
+    // who has finished has not played.
+    checkGameStatusClaims(text).catch(() => [] as string[]),
+  ]);
+  return { trade, status };
+}
+
 async function publishable<T>(
   content: T,
   regenerate: (correction: string) => Promise<T>,
 ): Promise<T> {
-  const problems = await checkTradeClaims(collectText(content).join(' ')).catch(() => []);
-  if (!problems.length) return content;
+  const first = await factProblems(content);
+  if (!first.trade.length && !first.status.length) return content;
 
-  console.error('[generate] false trade claim, regenerating:', problems);
+  console.error('[generate] factual errors, regenerating:', first);
+  const parts: string[] = [];
+  if (first.trade.length) {
+    parts.push(
+      'Claims that contradict the transaction record:' +
+      `\n- ${first.trade.join('\n- ')}\n` +
+      'Re-read the trade lines in the league context. Each states who GETS and who ' +
+      'GIVES UP every asset.');
+  }
+  if (first.status.length) {
+    parts.push(
+      'Claims that contradict GAME STATUS:' +
+      `\n- ${first.status.join('\n- ')}\n` +
+      'Re-read GAME STATUS in the league context. Only FINAL matchups have a result, ' +
+      'and only players named as still to play have not played.');
+  }
   const corrected = await regenerate(
-    'Your previous draft contained claims that contradict the transaction record:' +
-    `\n- ${problems.join('\n- ')}\n` +
-    'Re-read the trade lines in the league context. Each states who GETS and who ' +
-    'GIVES UP every asset. Write it again without those errors.',
+    `Your previous draft contained errors.\n\n${parts.join('\n\n')}\n\n` +
+    'Write it again without those errors.',
   );
 
-  const still = await checkTradeClaims(collectText(corrected).join(' ')).catch(() => []);
-  if (still.length) {
-    throw new Error(`Trade claims still wrong after correction: ${still.join('; ')}`);
+  const still = await factProblems(corrected);
+  if (still.trade.length || still.status.length) {
+    throw new Error(
+      `Factual errors remain after correction: ${[...still.trade, ...still.status].join('; ')}`);
   }
   return corrected;
 }
@@ -686,23 +713,30 @@ export async function writeComment(
    *  record rather than a free text prompt, so the direction is stated. */
   isRecord = false,
 ): Promise<Comment> {
-  const { object } = await generateObject({
+  const basePrompt = isRecord
+    ? `${await briefBlock()}
+${eventBlock(subject)}
+React to that event in 1-3 sentences, in character.`
+    : `${await briefBlock()}
+
+React in 1-3 sentences, in character, to this:
+
+"${subject}"`;
+
+  const draft = async (extra = '') => (await generateObject({
     model: claude(MODEL_FAST),
     schema: CommentSchema,
     schemaName: 'Comment',
     schemaDescription: 'A short in-character reaction',
     system: systemFor(p),
-    prompt: isRecord
-      ? `${await briefBlock()}
-${eventBlock(subject)}
-React to that event in 1-3 sentences, in character.`
-      : `${await briefBlock()}
+    prompt: extra ? `${basePrompt}\n\n${extra}` : basePrompt,
+  })).object;
 
-React in 1-3 sentences, in character, to this:
-
-"${subject}"`,
-  });
-  return stripDashes(object);
+  // Comments skipped the fact check entirely, and they are short reactions
+  // written on demand, which is where "X beat Y" about a game still in
+  // progress was getting published.
+  return publishable(stripDashes(await draft()), async correction =>
+    stripDashes(await draft(correction)));
 }
 
 export type ReplyStance = 'agree' | 'disagree';
@@ -1039,7 +1073,17 @@ between these two managers. Name players.`;
       `Picked ${strayPick.pick} in ${strayPick.teamA} vs ${strayPick.teamB}, who is not in that game`,
     );
   }
-  return stripDashes(result);
+  // Previews also went out unchecked. They are forward looking, and the status
+  // check lets predictions through, but one written while the prior week is
+  // still being played can report that week as decided.
+  return publishable(stripDashes(result), async correction => stripDashes(await generateJson({
+    schema: MatchupPreviewSchema,
+    probe: 'headline',
+    model: MODEL_FAST,
+    maxOutputTokens: 16000,
+    system: systemFor(p),
+    prompt: `${prompt}\n\n${correction}`,
+  })));
 }
 
 /**
@@ -1092,5 +1136,26 @@ players and real point totals from the scoreboard above and nothing else.`;
   if (bad.length) {
     throw new Error(`Game post named teams not in this league: ${bad.join(', ')}`);
   }
-  return stripDashes(result);
+
+  // Live posts are where game status errors actually happen, since they are
+  // written while results are still arriving. One correction pass, then refuse.
+  const status = await checkGameStatusClaims(collectText(result).join(' ')).catch(() => []);
+  if (!status.length) return stripDashes(result);
+
+  console.error('[generate] live post got game status wrong, regenerating:', status);
+  const retry = await generateJson({
+    schema: GameBeatSchema,
+    probe: 'headline',
+    model: MODEL_FAST,
+    maxOutputTokens: 4000,
+    system: systemFor(p),
+    prompt: `${prompt}\n\nYOUR PREVIOUS DRAFT GOT GAME STATUS WRONG:\n- ${status.join('\n- ')}\n` +
+      'Only FINAL matchups have a result, and only players named as still to play ' +
+      'have not played. Write it again without those errors.',
+  });
+  const still = await checkGameStatusClaims(collectText(retry).join(' ')).catch(() => []);
+  if (still.length) {
+    throw new Error(`Live post still wrong about game status: ${still.join('; ')}`);
+  }
+  return stripDashes(retry);
 }

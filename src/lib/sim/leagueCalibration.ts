@@ -13,6 +13,7 @@
 
 import { getAllLinkedLeagueIds, getLeagueInfo, getLeagueRosters, getLeagueMatchups } from '@/lib/api';
 import { fitCalibration, DEFAULT_CALIBRATION, type Calibration } from './calibration';
+import { getRedis } from '@/lib/redisClient';
 
 interface Entry { value: Calibration; at: number }
 
@@ -20,17 +21,51 @@ const cache = new Map<string, Entry>();
 /** Six hours. A season completing mid-window costs one stale render. */
 const TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * Persisted fits last three days. The measured season is a completed one, so
+ * the numbers cannot change; the window only bounds how long a newly completed
+ * season waits to be picked up.
+ */
+const STORED_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const storeKey = (leagueId: string) => `lp_calib_v1:${leagueId}`;
+
 export async function leagueCalibration(leagueId: string): Promise<Calibration> {
   const hit = cache.get(leagueId);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
+  // Shared across server instances. The in-memory memo alone meant every cold
+  // serverless instance refit a season of projections before it could answer,
+  // which was 1.3 of the 2.5 seconds a matchup drilldown took to open.
+  const redis = getRedis().client;
+  if (redis) {
+    try {
+      const raw = await redis.get(storeKey(leagueId));
+      if (raw) {
+        const stored = JSON.parse(raw) as Entry;
+        if (stored?.value && Date.now() - stored.at < STORED_TTL_MS) {
+          cache.set(leagueId, stored);
+          return stored.value;
+        }
+      }
+    } catch { /* fall through to a fresh fit */ }
+  }
+
   let value = DEFAULT_CALIBRATION;
+  let fitted = false;
   try {
     value = await computeFor(leagueId);
+    fitted = true;
   } catch {
     // A failed fit is not a failed page. The defaults are serviceable.
   }
-  cache.set(leagueId, { value, at: Date.now() });
+  const entry = { value, at: Date.now() };
+  cache.set(leagueId, entry);
+  // Only persist a real fit. The defaults come back both for a league with no
+  // completed season (cheap to rediscover) and for a fit starved by dropped
+  // fetches, and pinning the second for three days would be a quiet regression.
+  if (redis && fitted && value.source === 'league') {
+    redis.set(storeKey(leagueId), JSON.stringify(entry)).catch(() => {});
+  }
   return value;
 }
 

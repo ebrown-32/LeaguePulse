@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
+import MatchupDetailModal, { prefetchMatchup, type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
@@ -15,7 +15,7 @@ import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { getDefaultSeason, cn } from '@/lib/utils';
 import type { SleeperMatchup } from '@/types/sleeper';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Flame, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { teamAvatar } from '@/lib/teamAvatar';
 
 interface MatchupsViewProps {
@@ -187,13 +187,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border bg-card p-4 md:p-5"
       >
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            {isPlayoffWeek ? (
-              <Trophy className="h-5 w-5 text-primary" />
-            ) : (
-              <Flame className="h-5 w-5 text-primary" />
-            )}
-          </div>
           <div>
             <h2 className="font-display text-lg font-bold text-foreground md:text-xl">{context.title}</h2>
             <p className="text-sm text-muted-foreground">{context.subtitle}</p>
@@ -257,7 +250,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
         <Card>
           <CardContent className="text-center py-16">
             <div className="text-muted-foreground">
-              <Flame className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <h3 className="text-lg font-medium mb-2">No Matchups Available</h3>
               <p className="text-sm">Hmmm, it must be the offseason. Week {selectedWeek} in Season {selectedSeason} coming soon...</p>
             </div>
@@ -294,6 +286,11 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             const showLeader = (matchupComplete || isLive) && (team1Winning || team2Winning);
             const totalPoints = team1Points + team2Points;
             const pointDifference = Math.abs(team1Points - team2Points);
+            const targetFor = (): MatchupTarget => ({
+              a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: teamAvatar(user1) },
+              b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: teamAvatar(user2) },
+              week: selectedWeek,
+            });
             return (
               <motion.div
                 key={team1.matchup_id}
@@ -332,11 +329,10 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                       </div>
 
                       <button
-                        onClick={() => setOpenMatchup({
-                          a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: teamAvatar(user1) },
-                          b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: teamAvatar(user2) },
-                          week: selectedWeek,
-                        })}
+                        // Loading starts on hover or touch, a beat before the tap.
+                        onPointerEnter={() => prefetchMatchup(targetFor())}
+                        onTouchStart={() => prefetchMatchup(targetFor())}
+                        onClick={() => setOpenMatchup(targetFor())}
                         className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                       >
                         Details

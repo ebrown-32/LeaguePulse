@@ -20,6 +20,7 @@ import {
   getAllLinkedLeagueIds,
   generateComprehensiveLeagueHistory,
 } from '@/lib/api';
+import { buildGameClock } from './gameClock';
 import { getCurrentLeagueId } from '@/config/league';
 import {
   getPlayersDirectory,
@@ -81,6 +82,13 @@ export interface LeagueBrief {
   statsSeason: string;
   teams: BriefTeam[];
   recentMatchups: BriefMatchup[];
+  /**
+   * Today's date and authoritative game status, rendered for the prompt.
+   *
+   * The recent scores above say nothing about whether a matchup is settled, so
+   * this is what tells a writer "final" from "Monday night still to play".
+   */
+  gameClock: string;
   recentMoves: BriefMove[];
   moveTotals: { trade: number; waiver: number; free_agent: number };
   /** Draft picks each team has acquired and given up in the window shown.
@@ -104,7 +112,15 @@ function fmtRecord(s: any): string {
 }
 
 export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
-  if (!force && cache && Date.now() - cache.ts < TTL_MS) return cache.brief;
+  if (!force && cache && Date.now() - cache.ts < TTL_MS) {
+    // The heavy brief is safe to reuse for a few minutes. The clock is not: a
+    // time label five minutes stale, or a game that went final in that window,
+    // is exactly the error this exists to prevent. It is cheap, so it is
+    // refreshed on every read and the text re-rendered around it.
+    cache.brief.gameClock = await buildGameClock().then(c => c.text).catch(() => cache!.brief.gameClock);
+    cache.brief.text = renderBrief(cache.brief);
+    return cache.brief;
+  }
 
   const leagueId = await getCurrentLeagueId();
   const [league, users, rosters, nflState, seasons] = await Promise.all([
@@ -345,6 +361,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     statsSeason,
     teams,
     recentMatchups: recentMatchups.slice(0, 8),
+    gameClock: '',
     // Trades first, then everything else. A flat slice was dropping every
     // trade: free agent churn outnumbers trades roughly five to one, so the
     // cap filled with waiver noise and the assistant reported "no trades this
@@ -366,6 +383,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     history,
     text: '',
   };
+  brief.gameClock = await buildGameClock().then(c => c.text).catch(() => '');
   brief.text = renderBrief(brief);
 
   cache = { brief, ts: Date.now() };
@@ -464,13 +482,20 @@ export function renderBrief(b: LeagueBrief): string {
     }
   }
 
-  if (b.recentMatchups.length) {
-    lines.push('', 'MOST RECENT SCORES:');
+  if (b.gameClock) {
+    // The authoritative version: each matchup marked FINAL or IN PROGRESS from
+    // the NFL schedule. The old unlabeled list presented a Monday-night
+    // matchup as a settled result, and writers reported it as one.
+    lines.push('', b.gameClock);
+  } else if (b.recentMatchups.length) {
+    // Fallback only when the schedule could not be read. Labelled as unverified
+    // so it cannot be mistaken for final results.
+    lines.push('', 'RECENT SCORES (game status unavailable, treat as possibly still in progress):');
     for (const m of b.recentMatchups) {
-      lines.push(`  Wk ${m.week}: ${m.home.teamName} ${m.home.points} — ${m.away.points} ${m.away.teamName} (margin ${m.margin})`);
+      lines.push(`  Wk ${m.week}: ${m.home.teamName} ${m.home.points} vs ${m.away.points} ${m.away.teamName}`);
     }
   } else {
-    lines.push('', 'MOST RECENT SCORES: none — no games have been played yet.');
+    lines.push('', 'MOST RECENT SCORES: none, no games have been played yet.');
   }
 
   if (b.recentMoves.length) {

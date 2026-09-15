@@ -2,18 +2,20 @@ import { getLeagueMatchups, getLeagueRosters, getLeagueUsers, getNFLState } from
 import { getCurrentLeagueId } from '@/config/league';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import type { SleeperMatchup } from '@/types/sleeper';
+import { teamGameStatus, hasPlayed } from '@/lib/nflSchedule';
 
 /**
  * A snapshot of the week currently being played.
  *
  * Everything here is read from Sleeper at call time, and nothing is inferred
- * that Sleeper does not actually say. In particular there is no notion of an
- * NFL game clock: Sleeper's matchup feed exposes fantasy points and nothing
- * about which real games have kicked off. So "are games underway" is answered
- * with evidence rather than a guess, by asking whether anyone has scored.
+ * that Sleeper does not actually say.
  *
- * That matters more than it sounds. A writer told "games are in progress" on a
- * bye-heavy Sunday morning will happily invent a fourth-quarter comeback.
+ * Which real games have finished comes from the NFL schedule (`lib/nflSchedule`),
+ * not from fantasy points. The matchup feed alone cannot tell "has not played
+ * yet" from "played and scored zero", and an earlier version guessed from
+ * points, which let a Monday night starter on zero read as a finished dud.
+ * What the schedule does NOT give is a game clock, so quarters, time remaining
+ * and drives are still unknowable and must never be invented.
  */
 
 export interface LiveTeam {
@@ -21,10 +23,16 @@ export interface LiveTeam {
   teamName: string;
   manager: string;
   points: number;
-  /** Starters with a non-zero score. */
+  /** Starters whose NFL game has finished. */
   played: number;
-  /** Starters still on zero, which before Monday night usually means yet to play. */
+  /**
+   * Starters whose NFL game has NOT finished, from the schedule. Replaces a
+   * count of starters on zero points, which conflated a Monday night player
+   * with one who simply had a bad day.
+   */
   yetToScore: number;
+  /** Names of those starters, so a writer can say who is still to come. */
+  stillToPlay: string[];
   /** The starters carrying the score, best first. */
   topScorers: { name: string; position: string; points: number }[];
 }
@@ -96,12 +104,18 @@ export async function buildLiveBriefFor(
 ): Promise<LiveBrief | null> {
   const nflState = { season, week } as { season: string; week: number };
 
-  const [raw, rosters, users, players] = await Promise.all([
+  const [raw, rosters, users, players, gameStatus] = await Promise.all([
     getLeagueMatchups(leagueId, week),
     getLeagueRosters(leagueId),
     getLeagueUsers(leagueId),
     getPlayersDirectory().catch(() => ({} as Record<string, any>)),
+    teamGameStatus(season, week).catch(() => new Map()),
   ]);
+  /** Has this player's real game finished? Unknown team counts as not played. */
+  const finished = (id: string) => {
+    const team = players[id]?.team;
+    return team ? hasPlayed(gameStatus.get(team)) : false;
+  };
 
   if (!Array.isArray(raw) || !raw.length) return null;
 
@@ -129,6 +143,7 @@ export async function buildLiveBriefFor(
           ?? id,
         position: players[id]?.position ?? '',
         points: Number(pts[id] ?? 0),
+        done: finished(id),
       }));
 
     return {
@@ -136,8 +151,9 @@ export async function buildLiveBriefFor(
       teamName: meta?.teamName ?? `Roster ${m.roster_id}`,
       manager: meta?.manager ?? 'Unknown',
       points: Number(m.points ?? 0),
-      played: scored.filter(s => s.points !== 0).length,
-      yetToScore: scored.filter(s => s.points === 0).length,
+      played: scored.filter(s => s.done).length,
+      yetToScore: scored.filter(s => !s.done).length,
+      stillToPlay: scored.filter(s => !s.done).map(s => s.name),
       topScorers: scored
         .filter(s => s.points !== 0)
         .sort((a, b) => b.points - a.points)
@@ -173,7 +189,7 @@ export async function buildLiveBriefFor(
   const lines: string[] = [
     `LIVE SCOREBOARD, week ${week} of ${nflState?.season ?? ''}:`,
     anyScoring
-      ? `  Scoring has started. ${plural(yetToScore, 'starter')} across the league still on zero.`
+      ? `  Scoring has started. ${plural(yetToScore, 'starter')} across the league have not played yet.`
       : '  NOTHING has been scored yet this week. No game has produced a fantasy point.',
     '',
   ];
@@ -193,18 +209,22 @@ export async function buildLiveBriefFor(
       const top = t.topScorers.length
         ? t.topScorers.map(s => `${s.name}${s.position ? ` (${s.position})` : ''} ${fmt(s.points)}`).join(', ')
         : 'nobody has scored';
-      lines.push(`      ${t.teamName}: ${top}. ${plural(t.yetToScore, 'starter')} yet to score.`);
+      const waiting = t.stillToPlay.length
+        ? `Still to play: ${t.stillToPlay.join(', ')}.`
+        : 'Every starter has played.';
+      lines.push(`      ${t.teamName}: ${top}. ${waiting}`);
     }
   }
 
   lines.push(
     '',
     'RULES FOR USING THIS SCOREBOARD:',
-    '  These are FANTASY points, already final for any player whose real game has ended.',
-    '  Sleeper does not report NFL game clocks, so you do not know what quarter any game',
-    '  is in. Never invent a score, a time remaining, a drive, or a real-world play.',
-    '  A starter on zero has either not played yet or was shut out; say "yet to score",',
-    '  never "injured", "benched" or anything else you cannot see here.',
+    '  These are FANTASY points. A player\'s points are final once their NFL game is.',
+    '  Players listed as still to play have NOT played: never credit or blame them for',
+    '  this week. A player not listed has finished, even if they scored zero.',
+    '  You know which games have finished but not the clock inside a live game, so',
+    '  never invent a quarter, time remaining, a drive, or a real-world play.',
+    '  See GAME STATUS for which matchups are FINAL. Only those have a result.',
   );
 
   return {

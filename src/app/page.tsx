@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { PageLayout } from '@/components/layout/PageLayout';
-import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
+import MatchupDetailModal, { prefetchMatchup, type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
 import {
   getLeagueInfo,
   getLeagueRosters,
@@ -526,14 +526,17 @@ export default function Home() {
                     const o1 = odds.get(matchup.team1.userId);
                     const o2 = odds.get(matchup.team2.userId);
                     const anyLeft = (o1?.startersLeft ?? 0) + (o2?.startersLeft ?? 0) > 0;
+                    const target: MatchupTarget = {
+                      a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
+                      b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
+                      week: effectiveWeek,
+                    };
                     return (
                       <button
                         key={matchup.id}
-                        onClick={() => setOpenMatchup({
-                          a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
-                          b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
-                          week: effectiveWeek,
-                        })}
+                        onPointerEnter={() => prefetchMatchup(target)}
+                        onTouchStart={() => prefetchMatchup(target)}
+                        onClick={() => setOpenMatchup(target)}
                         className="relative w-full overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-primary/40"
                       >
                         {matchup.isHighlight && (
@@ -642,11 +645,6 @@ export default function Home() {
                           </div>
                         )}
 
-                        {matchup.isHighlight && (
-                          <div className="absolute top-3 right-3">
-                            <Flame className="h-3.5 w-3.5 text-orange-500" />
-                          </div>
-                        )}
                       </button>
                     );
                   })}
