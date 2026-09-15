@@ -20,6 +20,7 @@ import { claude, MODEL_FAST, MODEL_SMART, GROUNDING_RULES, stripDashes } from '.
 import { buildLeagueBrief } from './leagueBrief';
 import { buildLiveBrief, buildUpcomingMatchups, type LiveBrief } from './liveBrief';
 import { checkGameStatusClaims } from './statusCheck';
+import { checkRecordClaims } from './recordCheck';
 import type { Personality } from './personalities';
 
 function systemFor(p: Personality): string {
@@ -426,15 +427,19 @@ without naming the players.
  * abandoned rather than published with a claim we have proven false.
  */
 /** Every factual check a draft must pass, run together. */
-async function factProblems(content: unknown): Promise<{ trade: string[]; status: string[] }> {
+async function factProblems(
+  content: unknown,
+): Promise<{ trade: string[]; status: string[]; record: string[] }> {
   const text = collectText(content).join(' ');
-  const [trade, status] = await Promise.all([
+  const [trade, status, record] = await Promise.all([
     checkTradeClaims(text).catch(() => [] as string[]),
     // Game status: no calling an unfinished matchup final, no saying a player
     // who has finished has not played.
     checkGameStatusClaims(text).catch(() => [] as string[]),
+    // Standings: no miscounting who is undefeated or winless.
+    checkRecordClaims(text).catch(() => [] as string[]),
   ]);
-  return { trade, status };
+  return { trade, status, record };
 }
 
 async function publishable<T>(
@@ -442,7 +447,7 @@ async function publishable<T>(
   regenerate: (correction: string) => Promise<T>,
 ): Promise<T> {
   const first = await factProblems(content);
-  if (!first.trade.length && !first.status.length) return content;
+  if (!first.trade.length && !first.status.length && !first.record.length) return content;
 
   console.error('[generate] factual errors, regenerating:', first);
   const parts: string[] = [];
@@ -460,15 +465,23 @@ async function publishable<T>(
       'Re-read GAME STATUS in the league context. Only FINAL matchups have a result, ' +
       'and only players named as still to play have not played.');
   }
+  if (first.record.length) {
+    parts.push(
+      'Claims that contradict the standings:' +
+      `\n- ${first.record.join('\n- ')}\n` +
+      'Re-read RECORD FACTS in the league context. Those lists are complete and the ' +
+      'counts are already done for you.');
+  }
   const corrected = await regenerate(
     `Your previous draft contained errors.\n\n${parts.join('\n\n')}\n\n` +
     'Write it again without those errors.',
   );
 
   const still = await factProblems(corrected);
-  if (still.trade.length || still.status.length) {
+  if (still.trade.length || still.status.length || still.record.length) {
     throw new Error(
-      `Factual errors remain after correction: ${[...still.trade, ...still.status].join('; ')}`);
+      `Factual errors remain after correction: ${
+        [...still.trade, ...still.status, ...still.record].join('; ')}`);
   }
   return corrected;
 }

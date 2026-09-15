@@ -35,6 +35,10 @@ export interface BriefTeam {
   teamName: string;
   manager: string;
   record: string;
+  /** The same record as numbers, so nothing downstream has to parse "2-0". */
+  wins: number;
+  losses: number;
+  ties: number;
   pointsFor: number;
   pointsAgainst: number;
   rank: number;
@@ -81,6 +85,23 @@ export interface LeagueBrief {
   regularSeasonWeeks: number;
   statsSeason: string;
   teams: BriefTeam[];
+  /**
+   * The counting the writers get wrong, done for them.
+   *
+   * A persona previewing week 2 wrote "four undefeated teams cannot all survive
+   * the weekend" when three were undefeated. Nothing in the brief was false: it
+   * listed eight records and left the tally to a model that had to hold the
+   * league's median format in mind while doing it, which is exactly the kind of
+   * arithmetic `pickMovement` already exists to take off their hands.
+   */
+  recordFacts: {
+    /** Teams with no losses and at least one game played. */
+    undefeated: string[];
+    /** Teams with no wins and at least one game played. */
+    winless: string[];
+    /** Games each team has played so far, median match included. */
+    gamesPlayed: number;
+  };
   recentMatchups: BriefMatchup[];
   /**
    * Today's date and authoritative game status, rendered for the prompt.
@@ -105,6 +126,23 @@ export interface LeagueBrief {
 }
 
 let cache: { brief: LeagueBrief; ts: number } | null = null;
+
+/**
+ * Who is actually undefeated and who is actually winless.
+ *
+ * Sleeper's roster settings already count median matches, so a 2-0 team one
+ * week into this league has won both its scheduled game and its game against
+ * the median. Reading the records rather than the schedule is what makes this
+ * right in a median league without knowing that the league is one.
+ */
+function recordFacts(teams: BriefTeam[]): LeagueBrief['recordFacts'] {
+  const played = (t: BriefTeam) => t.wins + t.losses + t.ties;
+  return {
+    undefeated: teams.filter(t => played(t) > 0 && t.losses === 0).map(t => t.teamName),
+    winless: teams.filter(t => played(t) > 0 && t.wins === 0).map(t => t.teamName),
+    gamesPlayed: Math.max(0, ...teams.map(played)),
+  };
+}
 
 function fmtRecord(s: any): string {
   const w = s?.wins ?? 0, l = s?.losses ?? 0, t = s?.ties ?? 0;
@@ -163,6 +201,9 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
       teamName: u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`,
       manager: u?.display_name ?? '',
       record: fmtRecord(r.settings),
+      wins: Number(r.settings?.wins ?? 0),
+      losses: Number(r.settings?.losses ?? 0),
+      ties: Number(r.settings?.ties ?? 0),
       pointsFor: Number((r.settings?.fpts ?? 0).toFixed(1)),
       pointsAgainst: Number((r.settings?.fpts_against ?? 0).toFixed(1)),
       rank: i + 1,
@@ -360,6 +401,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     regularSeasonWeeks: Math.max(0, playoffWeekStart - 1),
     statsSeason,
     teams,
+    recordFacts: recordFacts(teams),
     recentMatchups: recentMatchups.slice(0, 8),
     gameClock: '',
     // Trades first, then everything else. A flat slice was dropping every
@@ -470,6 +512,20 @@ export function renderBrief(b: LeagueBrief): string {
 
   lines.push('', 'PHASE:', `  ${phaseDescription(b)}`);
   lines.push(`Player production figures below are from the ${b.statsSeason} season (PPR).`);
+
+  // Counted here rather than left to the model, and stated as complete lists so
+  // there is nothing to infer. "Four undefeated teams" in a league with three
+  // was written off a table that was itself correct.
+  const rf = b.recordFacts;
+  if (rf.gamesPlayed > 0) {
+    const list = (names: string[]) => (names.length ? names.join(', ') : 'none');
+    lines.push('', 'RECORD FACTS (counted from the standings, use these numbers as written):',
+      `  Every team has played ${rf.gamesPlayed} game${rf.gamesPlayed === 1 ? '' : 's'}.`,
+      `  UNDEFEATED: ${rf.undefeated.length} team${rf.undefeated.length === 1 ? '' : 's'} — ${list(rf.undefeated)}.`,
+      `  WINLESS: ${rf.winless.length} team${rf.winless.length === 1 ? '' : 's'} — ${list(rf.winless)}.`,
+      '  These lists are complete. Never name a team as undefeated or winless that is',
+      '  not on them, and never state a different count.');
+  }
 
   lines.push('', 'STANDINGS:');
   for (const t of b.teams) {

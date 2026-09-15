@@ -317,6 +317,30 @@ export async function lastGeneratedAt(): Promise<number> {
     .reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
 }
 
+/**
+ * The substantial formats, as opposed to a short post.
+ *
+ * Each of these is a whole-league piece. One a day is a desk with a voice; two
+ * in an afternoon is the same material rewritten, which is what a second daily
+ * run would produce if it were left to lead the way the first one does.
+ */
+const LEAD_KINDS = new Set<FeedPost['kind']>([
+  'article', 'powerRankings', 'predictions', 'matchupPreview',
+]);
+
+/**
+ * When the desk last led with a substantial piece.
+ *
+ * Counts queued posts as well as visible ones, since a lead written an hour ago
+ * and held for its slot is still today's lead.
+ */
+export async function lastLeadAt(): Promise<number> {
+  const all = await readPosts();
+  return all
+    .filter(p => !p.replyTo && LEAD_KINDS.has(p.kind))
+    .reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
+}
+
 /** Latest scheduled publish time, so a new batch queues after the last one. */
 export async function lastPublishAt(): Promise<number> {
   const all = await readPosts();

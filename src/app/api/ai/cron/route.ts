@@ -15,6 +15,7 @@ import {
   getPosts,
   getPersonalities,
   lastGeneratedAt,
+  lastLeadAt,
   lastPublishAt,
   type FeedPost,
 } from '@/lib/ai/store';
@@ -24,13 +25,25 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Daily batch writer, built for Vercel's Hobby plan.
+ * Batch writer for the desk, run a few times a day.
  *
- * Hobby allows a single cron invocation per day, so posting one piece per run
- * would leave the feed nearly static. Instead this run generates a whole day's
- * worth in one go and staggers each post's publishAt across the following ~22
- * hours. The public feed hides anything not yet due, so readers still see the
- * desk trickle content out through the day.
+ * Each run generates a small batch and staggers each post's publishAt across
+ * the hours until the next run is due. The public feed hides anything not yet
+ * due, so readers see the desk trickle content out rather than dump it.
+ *
+ * ── Why several runs rather than one ─────────────────────────────────────────
+ *
+ * This used to write a whole day in one invocation and spread it over 22 hours.
+ * Doubling the volume that way is not possible: a serverless invocation is
+ * killed at `maxDuration`, and the run already stops starting new pieces at 40
+ * seconds, so the extra pieces would simply be deferred and never written. More
+ * output has to mean more runs.
+ *
+ * Vercel's Hobby plan allows two cron jobs firing once a day and both are
+ * spoken for, so the extra pokes come from GitHub Actions, the same way live
+ * game-day coverage already does. The endpoint is the authority regardless: the
+ * rerun guard below decides whether a poke does anything, so an over-generous
+ * schedule costs nothing.
  *
  * Every value is env-tunable, so cadence and spend change without a code edit.
  */
@@ -39,15 +52,20 @@ const num = (key: string, fallback: number) => {
   return Number.isFinite(v) && v >= 0 ? v : fallback;
 };
 
-/** Pieces written per daily run. */
-// Quality over quantity: two considered pieces a day beat a stream of thin
-// takes, and each researched piece takes real time to produce.
-const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_DAY', 2), 8);
-// AI_ARTICLES_PER_DAY is no longer read: each run leads with exactly one
+/** Pieces written per run. Two is what fits the time budget below. */
+// AI_ARTICLES_PER_DAY is no longer read: a run leads with at most one
 // substantial piece, rotating article -> power rankings -> predictions, and
-// fills the rest with short posts. AI_POSTS_PER_DAY still sets the batch size.
-/** Window the batch is spread across. */
-const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 22);
+// fills the rest with short posts.
+const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_RUN', num('AI_POSTS_PER_DAY', 2)), 8);
+/**
+ * Window one run's posts are spread across.
+ *
+ * Roughly the gap to the next run, so the batches abut rather than overlap. Six
+ * hours across runs at 9am and 5pm Eastern puts posts through the waking day
+ * and stops before the small hours; the old 22 was one batch covering
+ * everything, overnight included.
+ */
+const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 6);
 /**
  * Stop starting new pieces once the invocation is this old.
  *
@@ -71,8 +89,23 @@ const LIVE_COOLDOWN_MS = num('AI_LIVE_COOLDOWN_MINUTES', 90) * 60 * 1000;
  *  section that fills up in one go reads as manufactured rather than alive. */
 const REPLIES_PER_RUN = num('AI_REPLIES_PER_RUN', 3);
 
-/** Guard against a double-trigger writing two batches the same day. */
-const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 12) * 60 * 60 * 1000;
+/**
+ * Minimum gap between batches.
+ *
+ * Both a guard against a double-trigger and the thing that decides how many
+ * runs a day actually happen: pokes are scheduled generously and this rejects
+ * the ones that come too soon. Five hours admits two runs eight hours apart and
+ * nothing in between.
+ */
+const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 5) * 60 * 60 * 1000;
+
+/**
+ * How long a substantial piece holds the lead.
+ *
+ * Only the first run of a day writes one. Longer than a day would skip days
+ * when a run slips; shorter would let two land together.
+ */
+const LEAD_GAP_MS     = num('AI_LEAD_GAP_HOURS', 20) * 60 * 60 * 1000;
 
 function authorized(request: Request): boolean {
   // The admin panel's "Run scheduler" button. Without this the button works
@@ -209,8 +242,9 @@ export async function GET(request: Request) {
   const sinceGenerated = Date.now() - (await lastGeneratedAt());
   if (!force && sinceGenerated < RERUN_GUARD_MS) {
     return NextResponse.json({
-      skipped: 'already-ran-today',
+      skipped: 'too-soon-since-last-batch',
       hoursSinceLastBatch: Math.round(sinceGenerated / 3_600_000),
+      minimumGapHours: Math.round(RERUN_GUARD_MS / 3_600_000),
     });
   }
 
@@ -261,9 +295,15 @@ export async function GET(request: Request) {
   // Queue behind anything still pending so a re-run does not bunch up, but
   // when nothing is pending start immediately: offsetting the first post left
   // the feed reading "nothing filed yet" for an hour after every fresh run.
+  // With several runs a day a batch often starts while the tail of the last one
+  // is still queued, so the push is capped: uncapped, each run would begin
+  // where the previous ended and the queue would drift steadily further into
+  // the future until posts were landing a day late.
   const pendingUntil = await lastPublishAt();
   const hasBacklog = pendingUntil > Date.now();
-  const startAt = hasBacklog ? pendingUntil + 60_000 : Date.now();
+  const startAt = hasBacklog
+    ? Math.min(pendingUntil + 60_000, Date.now() + 90 * 60_000)
+    : Date.now();
   const times = scheduleTimes(POSTS_PER_RUN, startAt);
 
   type PlannedKind = 'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview';
@@ -290,6 +330,11 @@ export async function GET(request: Request) {
     k === 'predictions' ? predictWriters :
     k === 'matchupPreview' ? previewWriters : postWriters;
 
+  // One lead a day, not one a run. The cycle is keyed to the day, so without
+  // this every run on the same day would lead with the same format and file a
+  // second power ranking a few hours after the first.
+  const ledRecently = Date.now() - (await lastLeadAt()) < LEAD_GAP_MS;
+
   // Day of year, so the cycle advances even if a run is missed.
   const dayIndex = Math.floor(Date.now() / 86_400_000);
   let lead: PlannedKind | null = previewWeek && previewWriters.length ? 'matchupPreview' : null;
@@ -297,6 +342,7 @@ export async function GET(request: Request) {
     const candidate = LEAD_CYCLE[(dayIndex + i) % LEAD_CYCLE.length];
     if (poolFor(candidate).length) { lead = candidate; break; }
   }
+  if (ledRecently) lead = null;
 
   // Spread each persona around rather than letting one dominate the day.
   const rotation = [...people].sort(() => Math.random() - 0.5);
@@ -401,9 +447,14 @@ export async function GET(request: Request) {
       if (p.replyTo) byParent.set(p.replyTo, [...(byParent.get(p.replyTo) ?? []), p.personalityId]);
     }
 
-    for (const { post } of targets.slice(0, REPLIES_PER_RUN)) {
+    // Walked out over the following half hour rather than all at once, so a
+    // comment section fills the way one does when people are reading.
+    const chosen = targets.slice(0, REPLIES_PER_RUN);
+    for (let i = 0; i < chosen.length; i++) {
+      const { post } = chosen[i];
       if (Date.now() - startedAt > TIME_BUDGET_MS) break;
-      const reply = await addReply(people, post, byParent.get(post.id) ?? []);
+      const due = Date.now() + i * (8 + Math.random() * 7) * 60_000;
+      const reply = await addReply(people, post, byParent.get(post.id) ?? [], due);
       if (reply) {
         threaded.push({ on: post.personaName, by: reply.personaName, stance: reply.stance! });
       }
