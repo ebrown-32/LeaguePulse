@@ -10,7 +10,7 @@ import {
   type PlayerCard,
 } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
-import { type WeekPhase } from '@/lib/nflSchedule';
+import { weekPhase, type WeekPhase } from '@/lib/nflSchedule';
 import { type StarterLine, type MatchupForecast } from '@/lib/sim/matchupOdds';
 import { weekForecasts } from '@/lib/sim/weekForecasts';
 
@@ -84,6 +84,75 @@ function rivalryScore(games: GameRecord[], aWins: number, bWins: number): { scor
   return { score, label };
 }
 
+/** Rivalry history and both rosters, the slow half. */
+async function loadExtras(
+  leagueId: string, season: string, a: string, b: string,
+): Promise<Pick<MatchupDetail, 'statsSeason' | 'sides' | 'h2h'>> {
+  const [rivalries, rosters, users, statsSeason] = await Promise.all([
+    fetchRivalriesData(),
+    getLeagueRosters(leagueId),
+    getLeagueUsers(leagueId),
+    resolveStatsSeason(season),
+  ]);
+  const [players, stats] = await Promise.all([getPlayersDirectory(), getSeasonStats(statsSeason)]);
+  const userById = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
+
+  const buildSide = (userId: string): MatchupSide => {
+    const u = userById.get(userId);
+    const r = rosters.find((x: any) => x.owner_id === userId);
+    const starterIds = (r?.starters ?? []).filter((id: string) => id && id !== '0');
+    const starterSet = new Set<string>(starterIds);
+    const toCard = (id: string) => buildPlayerCard(id, players, stats);
+    return {
+      userId,
+      teamName: u?.metadata?.team_name || u?.display_name || 'Unknown',
+      manager: u?.display_name ?? '',
+      avatar: teamAvatar(u),
+      starters: starterIds.map(toCard),
+      bench: (r?.players ?? [])
+        .filter((id: string) => id && !starterSet.has(id))
+        .map(toCard)
+        .sort((x: PlayerCard, y: PlayerCard) => (y.points ?? -1) - (x.points ?? -1)),
+    };
+  };
+
+  // h2h is keyed by user id in both directions; the entry under [a][b] is
+  // written from a's perspective.
+  const entry = rivalries.h2h?.[a]?.[b];
+
+  // Only finished meetings count. The rivalry record is built from weeks where
+  // anyone scored, so a matchup still being played showed up as a past meeting
+  // with a winner and was counted in the series record.
+  const liveWeeks = new Set<string>();
+  const current = String(season);
+  const weeksInSeason = [...new Set((entry?.games ?? [])
+    .filter(g => String(g.season) === current).map(g => g.week))];
+  await Promise.all(weeksInSeason.map(async w => {
+    if ((await weekPhase(current, w).catch(() => 'upcoming')) !== 'final') liveWeeks.add(`${current}|${w}`);
+  }));
+  const games = (entry?.games ?? []).filter(g => !liveWeeks.has(`${g.season}|${g.week}`));
+  const aWins = games.filter(g => g.score > g.opponentScore).length;
+  const bWins = games.filter(g => g.score < g.opponentScore).length;
+  const { score, label } = rivalryScore(games, aWins, bWins);
+
+  return {
+    statsSeason,
+    sides: [buildSide(a), buildSide(b)],
+    h2h: {
+      aWins,
+      bWins,
+      meetings: games.length,
+      aPoints: Number(games.reduce((t, g) => t + g.score, 0).toFixed(1)),
+      bPoints: Number(games.reduce((t, g) => t + g.opponentScore, 0).toFixed(1)),
+      // Most recent first. Capped for display; the record reflects everything.
+      games: [...games].sort((x, y) =>
+        Number(y.season) - Number(x.season) || y.week - x.week).slice(0, 10),
+      rivalryScore: score,
+      rivalryLabel: label,
+    },
+  };
+}
+
 export async function GET(request: Request) {
   if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
@@ -97,95 +166,66 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Both a and b user ids are required' }, { status: 400 });
   }
 
+  /**
+   * Which half to return.
+   *
+   *   forecast  the live prediction only, which is what the drilldown opens on
+   *   extras    rivalry history and rosters, for the other two tabs
+   *   (absent)  both, for older callers
+   *
+   * Split because the halves cost very different amounts. The rivalry history
+   * reads every season the league has played, and making the default tab wait
+   * on it was a large part of why the panel felt slow to open.
+   */
+  const part = searchParams.get('part');
+  const wantForecast = part !== 'extras';
+  const wantExtras = part !== 'forecast';
+
   try {
-    const leagueId = await getCurrentLeagueId();
-    const [rivalries, rosters, users, nflState] = await Promise.all([
-      fetchRivalriesData(),
-      getLeagueRosters(leagueId),
-      getLeagueUsers(leagueId),
-      getNFLState(),
+    const [leagueId, nflState] = await Promise.all([getCurrentLeagueId(), getNFLState()]);
+    const season = String(nflState?.season ?? new Date().getFullYear());
+    const week = weekParam > 0 ? weekParam : Number(nflState?.week ?? 1);
+
+    // Everything below runs at once rather than one step after another.
+    const [forecastAll, extras] = await Promise.all([
+      wantForecast ? weekForecasts(leagueId, season, week, true).catch(() => null) : null,
+      wantExtras ? loadExtras(leagueId, season, a, b) : null,
     ]);
 
-    const statsSeason = await resolveStatsSeason(nflState?.season ?? String(new Date().getFullYear()));
-    const [players, stats] = await Promise.all([getPlayersDirectory(), getSeasonStats(statsSeason)]);
-
-    const userById = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
-
-    const buildSide = (userId: string): MatchupSide => {
-      const u = userById.get(userId);
-      const r = rosters.find((x: any) => x.owner_id === userId);
-      const starterIds = (r?.starters ?? []).filter((id: string) => id && id !== '0');
-      const starterSet = new Set<string>(starterIds);
-      const toCard = (id: string) => buildPlayerCard(id, players, stats);
-      return {
-        userId,
-        teamName: u?.metadata?.team_name || u?.display_name || 'Unknown',
-        manager: u?.display_name ?? '',
-        avatar: teamAvatar(u),
-        starters: starterIds.map(toCard),
-        bench: (r?.players ?? [])
-          .filter((id: string) => id && !starterSet.has(id))
-          .map(toCard)
-          .sort((x: PlayerCard, y: PlayerCard) => (y.points ?? -1) - (x.points ?? -1)),
-      };
-    };
-
-    // h2h is keyed by user id in both directions; the entry under [a][b] is
-    // written from a's perspective.
-    const entry = rivalries.h2h?.[a]?.[b];
-    const games = entry?.games ?? [];
-    const aWins = entry?.wins ?? 0;
-    const bWins = entry?.losses ?? 0;
-    const { score, label } = rivalryScore(games, aWins, bWins);
-
-    // ── Live prediction ────────────────────────────────────────────────────
-    const season = String(nflState?.season ?? statsSeason);
-    const week = weekParam > 0 ? weekParam : Number(nflState?.week ?? 1);
-    // One shared builder for the whole week, then the fixture these two are in.
-    const all = await weekForecasts(leagueId, season, week, true).catch(() => null);
-    const fixture = all?.fixtures.find(f =>
+    let live: MatchupLive | null = null;
+    const fixture = forecastAll?.fixtures.find(f =>
       (f.a.userId === a && f.b.userId === b) || (f.a.userId === b && f.b.userId === a));
-    const live: MatchupLive | null = fixture && all
-      ? {
-          season: all.season,
-          week: all.week,
-          phase: all.phase,
-          // Orient the forecast to the requested order, since the caller's `a`
-          // is not necessarily the fixture's first side.
-          ...(fixture.a.userId === a
-            ? { forecast: fixture.forecast, lines: fixture.lines! }
-            : {
-                forecast: {
-                  ...fixture.forecast,
-                  a: fixture.forecast.b,
-                  b: fixture.forecast.a,
-                  aWinProb: 1 - fixture.forecast.aWinProb,
-                },
-                lines: [fixture.lines![1], fixture.lines![0]] as [StarterLine[], StarterLine[]],
-              }),
-        }
-      : null;
+    if (fixture && forecastAll) {
+      live = {
+        season: forecastAll.season,
+        week: forecastAll.week,
+        phase: forecastAll.phase,
+        // Orient to the requested order, since the caller's `a` is not
+        // necessarily the fixture's first side.
+        ...(fixture.a.userId === a
+          ? { forecast: fixture.forecast, lines: fixture.lines! }
+          : {
+              forecast: {
+                ...fixture.forecast,
+                a: fixture.forecast.b,
+                b: fixture.forecast.a,
+                aWinProb: 1 - fixture.forecast.aWinProb,
+              },
+              lines: [fixture.lines![1], fixture.lines![0]] as [StarterLine[], StarterLine[]],
+            }),
+      };
+    }
 
-    const detail: MatchupDetail = {
-      statsSeason,
-      live,
-      sides: [buildSide(a), buildSide(b)],
-      h2h: {
-        aWins,
-        bWins,
-        meetings: games.length,
-        aPoints: Number((entry?.pointsFor ?? 0).toFixed(1)),
-        bPoints: Number((entry?.pointsAgainst ?? 0).toFixed(1)),
-        // Most recent meetings first. Capped for display; `meetings` and the
-        // record above still reflect the entire series.
-        games: [...games].sort((x, y) =>
-          Number(y.season) - Number(x.season) || y.week - x.week).slice(0, 10),
-        rivalryScore: score,
-        rivalryLabel: label,
-      },
+    const detail: Partial<MatchupDetail> = {
+      ...(wantForecast ? { live } : {}),
+      ...(extras ?? {}),
     };
-
-    return NextResponse.json(detail);
+    return NextResponse.json(detail, {
+      // The forecast moves as games finish; history does not.
+      headers: { 'Cache-Control': part === 'extras'
+        ? 'public, max-age=300, stale-while-revalidate=3600'
+        : 'public, max-age=30, stale-while-revalidate=120' },
+    });
   } catch (err) {
     console.error('[api/matchup]', err);
     return NextResponse.json({ error: 'Failed to load matchup' }, { status: 500 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { tool } from 'ai';
 import {
-  getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups,
+  getLeagueInfo, getLeagueRosters, getLeagueUsers,
   getNFLState, getAllLinkedLeagueIds, getSeasonTransactions, getLeagueWeeks,
   getAdvancedTeamMetrics, generateComprehensiveLeagueHistory,
 } from '@/lib/api';
@@ -11,6 +11,7 @@ import {
   getPlayersDirectory, getSeasonStats, resolveStatsSeason, buildPlayerCard,
 } from '@/lib/playerStats';
 import { getSnapshot } from '@/lib/fantasyProsStore';
+import { weekForecasts } from '@/lib/sim/weekForecasts';
 
 /**
  * Tools that let the assistant query the live Sleeper league on demand.
@@ -113,27 +114,63 @@ export async function buildChatTools() {
 
     getMatchups: tool({
       description:
-        'Matchups for a given week of the current season, with both teams and their scores. ' +
-        'Omit the week to get the current one.',
+        'Matchups for a given week of the current season: both teams, their scores, and ' +
+        'whether each matchup is FINAL, IN PROGRESS or NOT STARTED, from the NFL schedule. ' +
+        'Omit the week to get the current one. Only a FINAL matchup has a winner.',
       inputSchema: z.object({
         week: z.number().int().min(1).max(18).optional().describe('NFL week; defaults to current'),
       }),
       execute: async ({ week }) => {
-        const { leagueId, teams, nflState } = await leagueContext();
+        const { leagueId, nflState } = await leagueContext();
         const wk = week ?? Number(nflState?.week ?? 1);
-        const raw = await getLeagueMatchups(leagueId, wk);
-        const byRoster = new Map(teams.map(t => [t.rosterId, t]));
-        const pairs = new Map<number, any[]>();
-        for (const m of raw as any[]) {
-          if (!pairs.has(m.matchup_id)) pairs.set(m.matchup_id, []);
-          pairs.get(m.matchup_id)!.push(m);
-        }
+        const season = String(nflState?.season ?? '');
+
+        // Status comes with the data. This tool used to return bare points, so an
+        // assistant asked "who won this week" on a Monday evening would read an
+        // 11 point lead with Travis Kelce still to play as a result. It cannot
+        // make that mistake from what is returned now.
+        const data = await weekForecasts(leagueId, season, wk, true);
+        if (!data) return { week: wk, matchups: [] };
+
         return {
           week: wk,
-          matchups: [...pairs.values()].map(pair => pair.map(m => ({
-            team: byRoster.get(m.roster_id)?.teamName ?? `Roster ${m.roster_id}`,
-            points: m.points ?? 0,
-          }))),
+          weekStatus: data.phase,
+          instruction:
+            'Only matchups with status "final" have a result. For "in_progress", report ' +
+            'who leads and who is still to play; never say anyone won or lost. For ' +
+            '"not_started", there is no score at all.',
+          matchups: data.fixtures.map(f => {
+            const fc = f.forecast;
+            const [la, lb] = f.lines ?? [[], []];
+            const left = (lines: typeof la) => lines.filter(l => l.phase === 'upcoming').map(l => l.name);
+            const noPoints = fc.a.pointsSoFar === 0 && fc.b.pointsSoFar === 0;
+            const status = fc.settled
+              ? 'final'
+              : noPoints && fc.a.startersLeft + fc.b.startersLeft > 0 && la.every(l => l.phase !== 'played')
+                && lb.every(l => l.phase !== 'played')
+                ? 'not_started'
+                : 'in_progress';
+            return {
+              status,
+              teams: [
+                {
+                  team: f.a.teamName,
+                  points: fc.a.pointsSoFar,
+                  stillToPlay: left(la),
+                  ...(status === 'in_progress' ? { winChance: Math.round(fc.aWinProb * 100) } : {}),
+                },
+                {
+                  team: f.b.teamName,
+                  points: fc.b.pointsSoFar,
+                  stillToPlay: left(lb),
+                  ...(status === 'in_progress' ? { winChance: Math.round((1 - fc.aWinProb) * 100) } : {}),
+                },
+              ],
+              ...(status === 'final'
+                ? { winner: fc.aWinProb > 0.5 ? f.a.teamName : fc.aWinProb < 0.5 ? f.b.teamName : 'tie' }
+                : {}),
+            };
+          }),
         };
       },
     }),
