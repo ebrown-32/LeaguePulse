@@ -1,0 +1,48 @@
+name: Afternoon desk run
+
+# The second batch of the day.
+#
+# Vercel's Hobby plan allows two cron jobs and fires each once a day. Both are
+# already used, one of them for the morning batch at 13:00 UTC, so the extra
+# poke comes from here instead, the same way live game-day coverage does.
+#
+# The endpoint is the authority on whether anything gets written. It keeps a
+# minimum gap between batches, so a tick that arrives too soon after the morning
+# run returns "already-ran-today" and costs nothing. That makes this schedule
+# safe to be generous with, and means the morning run slipping does not silently
+# cost the day its second batch.
+#
+# Volume, per day, with both runs: four posts and six replies, each batch spread
+# across the hours until the next one.
+
+on:
+  schedule:
+    # 21:00 UTC, which is 5pm Eastern in season and 4pm from November. Eight
+    # hours after the Vercel cron, so both clear the gap the endpoint enforces.
+    - cron: '0 21 * * *'
+  # So you can trigger a batch by hand without waiting for tomorrow.
+  workflow_dispatch:
+
+jobs:
+  poke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the desk to file its afternoon batch
+        env:
+          # The same repository secrets live game-day coverage uses. SITE_URL is
+          # the deployment origin, e.g. https://league-pulse.vercel.app.
+          # CRON_SECRET must match the value set in Vercel.
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL and CRON_SECRET repository secrets are required."
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx still prints why before failing.
+          # --max-time generously above the function's own 60s ceiling.
+          curl --silent --show-error --fail-with-body \
+            --max-time 90 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/ai/cron"

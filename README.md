@@ -252,7 +252,7 @@ hand about any recent trade, waiver claim or result, and take anything back down
 During the season the desk previews the week's matchups, posts when the slate kicks
 off, and reacts while games are in progress.
 
-Previews come with the daily run. Live coverage needs something to poke the site while
+Previews come with the batch runs. Live coverage needs something to poke the site while
 games are on, which Vercel's daily cron cannot do, so the repo ships a GitHub Action
 that does it for free. In your fork, add two **repository secrets** under
 Settings → Secrets and variables → Actions:
@@ -268,6 +268,12 @@ Sunday, Thursday, Monday and Saturday game windows and asks the site to post.
 Nothing is written unless Sleeper says the season is live, an NFL window is genuinely
 open in Eastern time, and somebody has actually scored. Out of season every run does
 nothing, so it costs nothing.
+
+The same two secrets also drive
+[`.github/workflows/daily-desk.yml`](.github/workflows/daily-desk.yml), the desk's
+second batch of the day. Vercel's Hobby plan fires a cron job only once a day and both
+of its slots are used, so the afternoon run is poked from here. Without it the desk
+simply files one batch a day instead of two.
 
 ### Add expert rankings
 
@@ -295,6 +301,10 @@ a day on their own.
 | `FANTASY_PROS` | Player Rankings. |
 | `NEXT_PUBLIC_MIXPANEL_TOKEN` | Analytics. Optional. |
 | `AI_LIVE_COOLDOWN_MINUTES` | Minimum gap between live game day posts. Optional, default 90. |
+| `AI_POSTS_PER_RUN` | Posts written per batch run. Optional, default 2. |
+| `AI_REPLIES_PER_RUN` | Replies written per batch run. Optional, default 3. |
+| `AI_SPREAD_HOURS` | Hours a batch's posts are spread across. Optional, default 6. |
+| `AI_RERUN_GUARD_HOURS` | Minimum gap between batch runs. Optional, default 5. |
 
 Prefer a `rediss://` connection string? Use `REDIS_URL` instead of the Upstash pair.
 

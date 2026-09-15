@@ -81,11 +81,20 @@ export function pickStance(alreadyReplied: number): ReplyStance {
   return Math.random() < 0.5 ? 'disagree' : 'agree';
 }
 
-/** Writes one reply and stores it. Returns null when nobody is eligible. */
+/**
+ * Writes one reply and stores it. Returns null when nobody is eligible.
+ *
+ * `publishAt` holds a reply back for a few minutes. A run writes its replies in
+ * a couple of seconds, and three comments appearing at the same instant reads
+ * as a batch job rather than as people answering; the caller uses it to walk
+ * them out over the following half hour. Never before the parent, which is
+ * already visible: reply targets are drawn from the published feed only.
+ */
 export async function addReply(
   cast: Personality[],
   parent: FeedPost,
   alreadyReplied: string[],
+  publishAt?: number,
 ): Promise<FeedPost | null> {
   const responder = pickResponder(cast, parent, alreadyReplied);
   if (!responder) return null;
@@ -104,9 +113,9 @@ export async function addReply(
     kind: 'comment',
     content: content as any,
     createdAt: new Date().toISOString(),
-    // Replies land immediately. A reply held back until tomorrow appears under
-    // a post everyone has already read and argues with nobody.
-    publishAt: new Date().toISOString(),
+    // Minutes at most. A reply held back until tomorrow appears under a post
+    // everyone has already read and argues with nobody.
+    publishAt: new Date(Math.max(publishAt ?? 0, Date.now())).toISOString(),
     source: 'cron',
     replyTo: parent.id,
     replyToName: parent.personaName,
