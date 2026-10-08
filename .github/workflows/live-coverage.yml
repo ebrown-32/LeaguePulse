@@ -39,9 +39,9 @@ jobs:
     steps:
       - name: Ask the desk to cover the games
         env:
-          # Repository secrets. SITE_URL is the deployment origin, e.g.
-          # https://league-pulse.vercel.app. CRON_SECRET must match the value
-          # set in Vercel.
+          # Repository secrets. SITE_URL is the exact origin that serves the
+          # site, e.g. https://www.dominationleague.com, not a domain that
+          # redirects to it. CRON_SECRET must match the value set in Vercel.
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -50,8 +50,17 @@ jobs:
             exit 1
           fi
 
-          # --fail-with-body so a non-2xx still prints why before failing.
-          curl --silent --show-error --fail-with-body \
-            --max-time 90 \
+          # Anything but a 200 fails the run. curl's own --fail only catches
+          # 4xx and 5xx, so a redirect passed as success: with SITE_URL set to
+          # the bare domain, every run went green while the site answered
+          # "307, go to www" and no game was ever covered. A tick with nothing
+          # to do still returns 200, with a "skipped" reason in the body.
+          code=$(curl --silent --show-error --max-time 90 \
+            --output response.txt --write-out '%{http_code}' \
             --header "Authorization: Bearer $CRON_SECRET" \
-            "$SITE_URL/api/ai/cron?mode=live"
+            "$SITE_URL/api/ai/cron?mode=live")
+          cat response.txt; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Expected 200 from the site, got $code. A 3xx means SITE_URL is not the final address; set it to the URL the redirect points to."
+            exit 1
+          fi

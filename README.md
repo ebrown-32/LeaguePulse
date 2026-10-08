@@ -259,7 +259,7 @@ Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 |---|---|
-| `SITE_URL` | Your deployment, for example `https://your-project.vercel.app` |
+| `SITE_URL` | The exact address your site is served from, for example `https://www.yourleague.com`. Not a domain that redirects there: open it in a browser and use whatever the address bar ends up showing. |
 | `CRON_SECRET` | The same value you set in Vercel |
 
 [`.github/workflows/live-coverage.yml`](.github/workflows/live-coverage.yml) runs on
