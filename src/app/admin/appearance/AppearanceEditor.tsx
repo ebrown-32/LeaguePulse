@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIcon } from '@/components/icons';
 import type { ThemeConfig, FontPairKey, TxColors, PaletteKey, BackgroundStyle, MotionLevel } from '@/lib/themeConfig';
 import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME, palettes, buildThemeCss } from '@/lib/themeConfig';
 import { cn } from '@/lib/utils';

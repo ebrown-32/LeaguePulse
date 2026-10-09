@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, ChevronDown } from 'lucide-react';
+import { MessageCircle, ChevronDown } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import type { FeedPost } from './FeedPostCard';
 

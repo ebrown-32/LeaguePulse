@@ -17,7 +17,7 @@ import {
   ArrowTrendingDownIcon,
   StarIcon,
   HeartIcon,
-} from '@heroicons/react/24/outline';
+} from '@/components/icons';
 import { getCurrentLeagueId } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage } from '@/components/ui/LoadingSpinner';

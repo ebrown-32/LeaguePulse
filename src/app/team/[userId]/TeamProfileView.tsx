@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import type { TeamProfileResponse, SeasonEntry, RivalEntry } from '@/app/api/team/[userId]/route';

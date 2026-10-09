@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow, fmtRecord } from './shared';
-import { ArrowRightLeft, Trophy, Info, ArrowUp, ArrowDown, Filter, ChevronDown } from 'lucide-react';
+import { ArrowRightLeft, Trophy, Info, ArrowUp, ArrowDown, Filter, ChevronDown } from '@/components/icons';
 import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import { TradeSides } from '@/components/trade/TradeSides';
 import type { TransactionSide } from '@/app/api/transactions/route';

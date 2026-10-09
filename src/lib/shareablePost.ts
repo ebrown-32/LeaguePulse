@@ -70,6 +70,15 @@ function bodyFor(post: ShareablePost): string {
       return [c.headline, games.join('\n')].filter(Boolean).join('\n\n');
     }
 
+    case 'gameOfWeek': {
+      const m = c.matchup;
+      return [
+        c.headline,
+        m ? `Game of the Week ${m.week}: ${m.a.teamName} (${m.a.record}) v ${m.b.teamName} (${m.b.record})` : '',
+        clip(c.body ?? '', 240),
+      ].filter(Boolean).join('\n\n');
+    }
+
     case 'tradeGrade': {
       const sides = (c.sides ?? []).map((s: any) => `${s.grade}  ${s.teamName}`);
       return [c.verdict, sides.join('\n')].filter(Boolean).join('\n\n');

@@ -8,7 +8,7 @@ import {
   AnimatePresence,
   animate,
 } from 'framer-motion';
-import { X, Check, RefreshCw, Flame, TrendingUp, Filter } from 'lucide-react';
+import { X, Check, RefreshCw, Flame, TrendingUp, Filter } from '@/components/icons';
 import { type TradeProposal, type PlayerValue, type TeamInfo, POSITION_COLORS } from '@/lib/tradeEngine';
 
 const SWIPE_THRESHOLD = 90;

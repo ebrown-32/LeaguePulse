@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import {
   ArrowLeftRight, ChevronDown, TrendingUp, GitBranch, ArrowRight,
   Users, Layers, Activity,
-} from 'lucide-react';
+} from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import {
   Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog,
   Home, Wind, Droplets, Thermometer, AlertTriangle,
-} from 'lucide-react';
+} from '@/components/icons';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingBlock } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';

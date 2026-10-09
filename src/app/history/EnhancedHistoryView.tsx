@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Users,
   Activity,
-} from 'lucide-react';
+} from '@/components/icons';
 import dynamic from 'next/dynamic';
 import TransactionActivity from './TransactionActivity';
 import { getCurrentLeagueId } from '@/config/league';

@@ -17,7 +17,7 @@ import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow, RollingPct, OddsBar, BasisChip, fmtRecord } from './shared';
 import type { SimLeague, TeamOutcome } from '@/lib/sim/types';
-import { Trophy, ChevronRight } from 'lucide-react';
+import { Trophy, ChevronRight } from '@/components/icons';
 
 interface Props {
   league: SimLeague;

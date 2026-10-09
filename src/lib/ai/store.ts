@@ -22,7 +22,7 @@ export interface FeedPost {
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-      | 'matchupPreview' | 'kickoff' | 'liveTake';
+      | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek';
   content: any;
   /** When it was generated. */
   createdAt: string;
@@ -234,6 +234,32 @@ export async function getPosts(limit = 60): Promise<FeedPost[]> {
     .slice(0, limit);
 }
 
+/**
+ * Who is about to post: queued posts due within `withinMs`.
+ *
+ * Feeds the "typing" indicator. Only the byline and where it will land leave
+ * here, never the content, so a reader sees that a reply is coming without
+ * being able to read it early.
+ */
+export async function getImminent(withinMs: number): Promise<{
+  replyTo: string | null; personaName: string; personaAvatar?: string; personaAccent: string; dueAt: string;
+}[]> {
+  const all = await readPosts();
+  const now = Date.now();
+  return all
+    .filter(p => {
+      const t = new Date(p.publishAt ?? p.createdAt).getTime();
+      return t > now && t <= now + withinMs;
+    })
+    .map(p => ({
+      replyTo: p.replyTo ?? null,
+      personaName: p.personaName,
+      personaAvatar: p.personaAvatar,
+      personaAccent: p.personaAccent,
+      dueAt: p.publishAt,
+    }));
+}
+
 /** Posts written but not yet visible. Surfaced in the admin panel so the queue
  *  is not invisible. */
 export async function getQueuedCount(): Promise<number> {
@@ -297,7 +323,7 @@ export async function deletePost(id: string): Promise<boolean> {
  * their own cadences, so neither should count as "the batch already ran".
  */
 const BATCH_KINDS = new Set<FeedPost['kind']>([
-  'article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview',
+  'article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview', 'gameOfWeek',
 ]);
 
 /**
@@ -325,7 +351,7 @@ export async function lastGeneratedAt(): Promise<number> {
  * run would produce if it were left to lead the way the first one does.
  */
 const LEAD_KINDS = new Set<FeedPost['kind']>([
-  'article', 'powerRankings', 'predictions', 'matchupPreview',
+  'article', 'powerRankings', 'predictions', 'matchupPreview', 'gameOfWeek',
 ]);
 
 /**
@@ -339,6 +365,15 @@ export async function lastLeadAt(): Promise<number> {
   return all
     .filter(p => !p.replyTo && LEAD_KINDS.has(p.kind))
     .reduce((max, p) => Math.max(max, new Date(p.createdAt).getTime()), 0);
+}
+
+/** Whether the week's Game of the Week has been announced, queued posts included. */
+export async function gameOfWeekAnnounced(season: string, week: number): Promise<boolean> {
+  const all = await readPosts();
+  return all.some(p =>
+    p.kind === 'gameOfWeek'
+    && String(p.content?.matchup?.season) === String(season)
+    && Number(p.content?.matchup?.week) === week);
 }
 
 /** Latest scheduled publish time, so a new batch queues after the last one. */

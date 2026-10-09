@@ -41,7 +41,8 @@ import { DEFAULT_CALIBRATION, type Calibration } from './calibration';
 /** Floor, so a lineup with one player left never reads as a certainty. */
 const MIN_TEAM_SD = 1.5;
 
-export type PlayerPhase = 'played' | 'upcoming' | 'bye';
+/** `playing`: their NFL game is in progress, so some points are banked and some are still to come. */
+export type PlayerPhase = 'played' | 'playing' | 'upcoming' | 'bye';
 
 export interface StarterLine {
   playerId: string;
@@ -50,7 +51,7 @@ export interface StarterLine {
   nflTeam: string | null;
   /** Sleeper's weekly projection, before calibration. */
   projected: number | null;
-  /** Points already banked. Null when the player has not played. */
+  /** Points already banked, final or so far. Null when the player has not played. */
   actual: number | null;
   phase: PlayerPhase;
 }
@@ -104,11 +105,27 @@ export function forecastSide(starters: StarterLine[], c: Calibration): SideForec
     }
     // A player on a bye contributes nothing and carries no uncertainty: the
     // manager simply started an empty slot.
-    if (s.phase === 'bye' || s.projected === null) continue;
+    if (s.phase === 'bye' || (s.projected === null && s.phase !== 'playing')) continue;
+
+    if (s.phase === 'playing') {
+      // Points so far are fact. What is left is the projection less what is
+      // already banked, never below nothing: a back who has 18 on a 15 point
+      // projection is not expected to give any back. Sleeper gives no game
+      // clock, so the spread is taken as most of a full game's rather than
+      // guessed down to a quarter's.
+      const banked = s.actual ?? 0;
+      pointsSoFar += banked;
+      startersLeft++;
+      if (s.projected !== null) {
+        mean += Math.max(0, expectedPoints(s.projected, c) - banked);
+        variance += (playerSd(s.projected, c) * 0.7) ** 2;
+      }
+      continue;
+    }
 
     startersLeft++;
-    mean += expectedPoints(s.projected, c);
-    variance += playerSd(s.projected, c) ** 2;
+    mean += expectedPoints(s.projected!, c);
+    variance += playerSd(s.projected!, c) ** 2;
   }
 
   const sd = startersLeft > 0

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { deletePost, getPosts } from '@/lib/ai/store';
+import { deletePost, getImminent, getPosts } from '@/lib/ai/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,14 @@ function authorized(request: Request): boolean {
 export async function GET(request: Request) {
   const limit = Math.min(Number(new URL(request.url).searchParams.get('limit')) || 40, 100);
   try {
-    return NextResponse.json({ posts: await getPosts(limit) });
+    const [posts, typing] = await Promise.all([
+      getPosts(limit),
+      // A few minutes ahead: long enough that a reader polling every 45
+      // seconds catches it, short enough that "typing" is not a promise the
+      // feed keeps for half an hour.
+      getImminent(4 * 60_000).catch(() => []),
+    ]);
+    return NextResponse.json({ posts, typing });
   } catch (err) {
     console.error('[api/ai/posts]', err);
     return NextResponse.json({ error: 'Failed to load feed' }, { status: 500 });

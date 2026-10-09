@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow, RollingPct, TeamChips } from './shared';
-import { RotateCcw, CalendarDays, Users } from 'lucide-react';
+import { RotateCcw, CalendarDays, Users } from '@/components/icons';
 import type { SimLeague, MatchupSimResult, MatchupSimRequest, SimTeam } from '@/lib/sim/types';
 
 interface Props {

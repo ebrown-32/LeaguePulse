@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from '@/components/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CloseIcon } from '@/components/icons/MediaIcons';
 import { LoadingBlock } from '@/components/ui/LoadingSpinner';

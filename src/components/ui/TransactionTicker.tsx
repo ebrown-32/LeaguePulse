@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { X, ArrowLeftRight, Gavel, UserPlus, Ticket } from 'lucide-react';
+import { X, ArrowLeftRight, Gavel, UserPlus, Ticket } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import type { EnrichedTransaction } from '@/app/api/transactions/route';

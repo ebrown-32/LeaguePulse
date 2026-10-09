@@ -3,8 +3,10 @@ import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
 import {
   writeArticle, writeTweet, writePowerRankings, writePredictions,
-  writeMatchupPreview, writeGameBeat, angleAt,
+  writeMatchupPreview, writeGameBeat, writeGameOfWeek, angleAt,
 } from '@/lib/ai/generate';
+import { gameOfWeek, type GameOfWeek } from '@/lib/gameOfWeek';
+import { getCurrentLeagueId } from '@/config/league';
 import { resolveGameWindow, isGameTime } from '@/lib/ai/gameWindows';
 import { buildLiveBrief } from '@/lib/ai/liveBrief';
 import { coverageOrder } from '@/lib/ai/coverage';
@@ -17,6 +19,7 @@ import {
   lastGeneratedAt,
   lastLeadAt,
   lastPublishAt,
+  gameOfWeekAnnounced,
   type FeedPost,
 } from '@/lib/ai/store';
 import type { Personality } from '@/lib/ai/personalities';
@@ -52,20 +55,39 @@ const num = (key: string, fallback: number) => {
   return Number.isFinite(v) && v >= 0 ? v : fallback;
 };
 
-/** Pieces written per run. Two is what fits the time budget below. */
+/**
+ * Pieces written per run. Two is what fits the time budget below.
+ *
+ * ── The day, with the defaults ───────────────────────────────────────────────
+ *
+ * Pokes arrive hourly and the rerun guard admits one roughly every three
+ * hours, so a day is about five runs: 9am, noon, 3pm, 6pm and 9pm Eastern. Each
+ * writes two posts, one up at once and one later in its window, and three
+ * replies walked out across the same window. Around ten posts and fifteen
+ * replies a day, never more than an hour or so between new activity, and
+ * nothing between 11pm and 8am.
+ */
 // AI_ARTICLES_PER_DAY is no longer read: a run leads with at most one
 // substantial piece, rotating article -> power rankings -> predictions, and
 // fills the rest with short posts.
 const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_RUN', num('AI_POSTS_PER_DAY', 2)), 8);
 /**
- * Window one run's posts are spread across.
+ * Window one run's posts and replies are spread across.
  *
- * Roughly the gap to the next run, so the batches abut rather than overlap. Six
- * hours across runs at 9am and 5pm Eastern puts posts through the waking day
- * and stops before the small hours; the old 22 was one batch covering
- * everything, overnight included.
+ * The gap to the next run, so batches abut rather than overlap. Never past
+ * the start of quiet hours: see `clampToWaking`.
  */
-const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 6);
+const SPREAD_HOURS    = num('AI_SPREAD_HOURS', 3);
+
+/**
+ * Hours, Eastern, when no batch is written and nothing is scheduled to appear.
+ *
+ * GitHub delays scheduled pokes by hours under load, so the schedule alone
+ * cannot keep the desk quiet overnight; a 9pm poke landing at 2am would
+ * otherwise post into an empty room and push the morning's news down the feed.
+ */
+const QUIET_FROM_ET   = num('AI_QUIET_FROM_HOUR_ET', 23);
+const QUIET_UNTIL_ET  = num('AI_QUIET_UNTIL_HOUR_ET', 8);
 /**
  * Stop starting new pieces once the invocation is this old.
  *
@@ -85,19 +107,20 @@ const TIME_BUDGET_MS = 40_000;
  */
 const LIVE_COOLDOWN_MS = num('AI_LIVE_COOLDOWN_MINUTES', 90) * 60 * 1000;
 
-/** Replies written per run. Short calls, so a few is cheap, but a comment
- *  section that fills up in one go reads as manufactured rather than alive. */
+/** Replies written per run. Short calls, so a few is cheap; they are walked out
+ *  across the run's window, so a comment section fills the way one does when
+ *  people are actually reading. */
 const REPLIES_PER_RUN = num('AI_REPLIES_PER_RUN', 3);
 
 /**
  * Minimum gap between batches.
  *
  * Both a guard against a double-trigger and the thing that decides how many
- * runs a day actually happen: pokes are scheduled generously and this rejects
- * the ones that come too soon. Five hours admits two runs eight hours apart and
- * nothing in between.
+ * runs a day actually happen: pokes arrive hourly and this rejects the ones
+ * that come too soon. Two and a half hours admits the poke three hours after
+ * the last run, since the run itself takes seconds past its poke.
  */
-const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 5) * 60 * 60 * 1000;
+const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 2.5) * 60 * 60 * 1000;
 
 /**
  * How long a substantial piece holds the lead.
@@ -125,6 +148,43 @@ function authorized(request: Request): boolean {
  *  entry is exact so a fresh batch always has something readable right away;
  *  everything after it is jittered inside its slot so spacing never looks
  *  mechanical. */
+/** The hour of day in Eastern time, DST included. */
+function easternHour(at: number): number {
+  return Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23',
+  }).format(at));
+}
+
+function isQuiet(at: number): boolean {
+  const h = easternHour(at);
+  return QUIET_FROM_ET > QUIET_UNTIL_ET
+    ? h >= QUIET_FROM_ET || h < QUIET_UNTIL_ET
+    : h >= QUIET_FROM_ET && h < QUIET_UNTIL_ET;
+}
+
+/**
+ * Pull a time back out of quiet hours.
+ *
+ * A 9pm run spreads its second post up to three hours on, which would land it
+ * after midnight. Anything that would fall in quiet hours is moved to just
+ * before they start, keeping its order, rather than held until morning, where
+ * it would sit under the morning run as stale news.
+ */
+function clampToWaking(times: number[]): number[] {
+  const out: number[] = [];
+  times.forEach((t, i) => {
+    if (isQuiet(t)) {
+      // Step back to the last waking minutes before quiet hours began, then
+      // leave room for whatever else in the batch is landing there too.
+      let back = t;
+      while (isQuiet(back) && t - back < 12 * 3600e3) back -= 5 * 60e3;
+      t = back - (times.length - 1 - i) * 6 * 60e3;
+    }
+    out.push(Math.max(t, (out[i - 1] ?? -Infinity) + 60e3));
+  });
+  return out;
+}
+
 function scheduleTimes(count: number, startAt: number): number[] {
   const window = SPREAD_HOURS * 60 * 60 * 1000;
   const slot = window / count;
@@ -247,6 +307,9 @@ export async function GET(request: Request) {
       minimumGapHours: Math.round(RERUN_GUARD_MS / 3_600_000),
     });
   }
+  if (!force && isQuiet(Date.now())) {
+    return NextResponse.json({ skipped: 'quiet-hours', easternHour: easternHour(Date.now()) });
+  }
 
   // Who the next column is about.
   //
@@ -304,9 +367,10 @@ export async function GET(request: Request) {
   const startAt = hasBacklog
     ? Math.min(pendingUntil + 60_000, Date.now() + 90 * 60_000)
     : Date.now();
-  const times = scheduleTimes(POSTS_PER_RUN, startAt);
+  const times = clampToWaking(scheduleTimes(POSTS_PER_RUN, startAt));
 
-  type PlannedKind = 'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview';
+  type PlannedKind =
+    'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview' | 'gameOfWeek';
   const plan: { kind: PlannedKind; persona: Personality }[] = [];
 
   /**
@@ -328,7 +392,10 @@ export async function GET(request: Request) {
     k === 'article' ? articleWriters :
     k === 'powerRankings' ? rankWriters :
     k === 'predictions' ? predictWriters :
-    k === 'matchupPreview' ? previewWriters : postWriters;
+    // Anyone trusted with a week preview can announce the featured game; it
+    // is the same kind of piece, and a separate permission would need every
+    // saved persona migrated before the feature did anything.
+    k === 'matchupPreview' || k === 'gameOfWeek' ? previewWriters : postWriters;
 
   // One lead a day, not one a run. The cycle is keyed to the day, so without
   // this every run on the same day would lead with the same format and file a
@@ -337,7 +404,23 @@ export async function GET(request: Request) {
 
   // Day of year, so the cycle advances even if a run is missed.
   const dayIndex = Math.floor(Date.now() / 86_400_000);
-  let lead: PlannedKind | null = previewWeek && previewWriters.length ? 'matchupPreview' : null;
+  /**
+   * Midweek, the week's Game of the Week is announced first, then the full
+   * preview follows on the next day's lead. Announcing it after the preview
+   * would be featuring a game everyone has already read about.
+   */
+  let gotw: GameOfWeek | null = null;
+  if (previewWeek && previewWriters.length) {
+    const state = await getNFLState().catch(() => null);
+    const season = String(state?.season ?? '');
+    if (season && !(await gameOfWeekAnnounced(season, previewWeek))) {
+      gotw = await gameOfWeek(await getCurrentLeagueId(), season, previewWeek, previewWeek)
+        .catch(err => { console.error('[api/ai/cron] game of the week:', err); return null; });
+    }
+  }
+  let lead: PlannedKind | null =
+    gotw ? 'gameOfWeek' :
+    previewWeek && previewWriters.length ? 'matchupPreview' : null;
   for (let i = 0; !lead && i < LEAD_CYCLE.length; i++) {
     const candidate = LEAD_CYCLE[(dayIndex + i) % LEAD_CYCLE.length];
     if (poolFor(candidate).length) { lead = candidate; break; }
@@ -391,6 +474,7 @@ export async function GET(request: Request) {
         kind === 'powerRankings'  ? await writePowerRankings(persona) :
         kind === 'predictions'    ? await writePredictions(persona) :
         kind === 'matchupPreview' ? await writeMatchupPreview(persona, previewWeek) :
+        kind === 'gameOfWeek'     ? await writeGameOfWeek(persona, gotw!) :
                                     await writeTweet(persona, subject, angle);
       // Times are claimed by successful posts only. Indexing by loop position
       // meant a failed item burned slot 0, the one that publishes immediately,
@@ -447,13 +531,17 @@ export async function GET(request: Request) {
       if (p.replyTo) byParent.set(p.replyTo, [...(byParent.get(p.replyTo) ?? []), p.personalityId]);
     }
 
-    // Walked out over the following half hour rather than all at once, so a
+    // Walked out across the run's window rather than all at once, so a
     // comment section fills the way one does when people are reading.
     const chosen = targets.slice(0, REPLIES_PER_RUN);
     for (let i = 0; i < chosen.length; i++) {
       const { post } = chosen[i];
       if (Date.now() - startedAt > TIME_BUDGET_MS) break;
-      const due = Date.now() + i * (8 + Math.random() * 7) * 60_000;
+      // The first lands within the half hour, the rest across the run's
+      // window, so there is something new between one run and the next.
+      const window = SPREAD_HOURS * 3600e3;
+      const due = clampToWaking([Date.now() + (10 + Math.random() * 15) * 60e3
+        + i * (window * 0.8 / Math.max(chosen.length, 1)) * (0.75 + Math.random() * 0.5)])[0];
       const reply = await addReply(people, post, byParent.get(post.id) ?? [], due);
       if (reply) {
         threaded.push({ on: post.personaName, by: reply.personaName, stance: reply.stance! });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, ChevronRight, BookOpen, Zap } from 'lucide-react';
+import { Search, X, ChevronRight, BookOpen, Zap } from '@/components/icons';
 import type { ConstitutionMeta, ConstitutionSection, LeagueSettings } from '@/lib/constitution';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

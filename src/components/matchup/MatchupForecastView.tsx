@@ -302,6 +302,9 @@ function shortName(p: StarterLine): string {
 function value(p: StarterLine | undefined): number {
   if (!p) return -1;
   if (p.phase === 'played') return p.actual ?? 0;
+  // Mid-game, the better of what is banked and what was projected: a player
+  // three points into his game is not worth three.
+  if (p.phase === 'playing') return Math.max(p.actual ?? 0, p.projected ?? 0);
   if (p.phase === 'bye') return -1;
   return p.projected ?? -1;
 }
@@ -349,14 +352,15 @@ function Cell({ p, better, align }: { p?: StarterLine; better: boolean; align: '
   const right = align === 'right';
   if (!p) return <div className="px-3 py-2" />;
   const played = p.phase === 'played';
+  const playing = p.phase === 'playing';
   const bye = p.phase === 'bye';
-  const pts = played ? (p.actual ?? 0) : p.projected;
+  const pts = played || playing ? (p.actual ?? 0) : p.projected;
   return (
     <div className={cn('flex min-w-0 items-center gap-2 px-3 py-2', right && 'flex-row-reverse text-right',
       better && 'bg-primary/[0.05]')}>
       <div className="min-w-0 flex-1">
         <p className={cn('truncate text-[12px] leading-tight',
-          played ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+          played || playing ? 'font-medium text-foreground' : 'text-muted-foreground')}>
           <span className="sm:hidden">{shortName(p)}</span>
           <span className="hidden sm:inline">{p.name}</span>
         </p>
@@ -366,9 +370,17 @@ function Cell({ p, better, align }: { p?: StarterLine; better: boolean; align: '
       </div>
       <span className={cn('flex shrink-0 items-center gap-1 text-[13px] tabular-nums',
         right && 'flex-row-reverse',
-        played ? 'font-bold text-foreground' : 'font-medium text-muted-foreground')}>
-        <span className={cn('h-1.5 w-1.5 rounded-full',
-          played ? 'bg-foreground' : 'border border-muted-foreground')} />
+        played || playing ? 'font-bold text-foreground' : 'font-medium text-muted-foreground')}>
+        {/* Filled: final. Pulsing red: playing now. Hollow: still to come. */}
+        {playing ? (
+          <span className="relative flex h-1.5 w-1.5" aria-label="playing now">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-70" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+          </span>
+        ) : (
+          <span className={cn('h-1.5 w-1.5 rounded-full',
+            played ? 'bg-foreground' : 'border border-muted-foreground')} />
+        )}
         {bye ? '--' : pts != null ? pts.toFixed(1) : '--'}
       </span>
     </div>

@@ -415,7 +415,7 @@ export async function getAggregatedUserStats(leagueIds: string[], currentWeek: n
           if (!weekMatchups) continue;
 
           const userMatchup = weekMatchups.find(m => m.roster_id === roster.roster_id);
-          if (userMatchup && typeof userMatchup.points === 'number') {
+          if (userMatchup && typeof userMatchup.points === 'number' && userMatchup.points > 0) {
             seasonScores.push(userMatchup.points);
           }
         }
@@ -427,7 +427,9 @@ export async function getAggregatedUserStats(leagueIds: string[], currentWeek: n
         
         // Update total points from roster settings (more reliable than summing matchups)
         userStats.totalPoints += (roster.settings.fpts || 0) + (roster.settings.fpts_decimal || 0) / 100;
-        userStats.totalGames += (roster.settings.wins || 0) + (roster.settings.losses || 0) + (roster.settings.ties || 0);
+        // Weeks actually played, not games: in a median league each week is two
+        // games, and dividing points by games halved every average.
+        userStats.totalGames += seasonScores.length;
 
         // Determine playoff participation using league settings and roster rankings
         const playoffTeams = league.settings.playoff_teams || 6;
@@ -482,8 +484,7 @@ export async function getAggregatedUserStats(leagueIds: string[], currentWeek: n
     championships: user.championships,
     playoffAppearances: user.playoffAppearances,
     winPercentage: calculateWinPercentage(user.totalWins, user.totalLosses, user.totalTies),
-    // Note: PPG is calculated using total points divided by total games (including median games)
-    // This gives the true average points per game, not halved for median games
+    // Per week played. See where totalGames is counted.
     averagePointsPerGame: user.totalGames > 0 ? user.totalPoints / user.totalGames : 0,
     seasonsPlayed: user.seasons.size,
     weeklyScores: Object.fromEntries(user.weeklyScores),
@@ -2227,6 +2228,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
             playoffAppearances: 0,
             winPercentage: 0,
             averagePointsPerGame: 0,
+            weeksPlayed: 0,
             seasonsPlayed: 0,
             highestScore: 0,
             lowestScore: Infinity,
@@ -2244,6 +2246,7 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
         allTimeUser.totalLosses += stats.losses;
         allTimeUser.totalTies += stats.ties;
         allTimeUser.totalPoints += stats.pointsFor;
+        allTimeUser.weeksPlayed += stats.weeklyScores.filter((s: number) => s > 0).length;
         allTimeUser.seasonsPlayed++;
         allTimeUser.highestScore = Math.max(allTimeUser.highestScore, stats.highestScore);
         allTimeUser.lowestScore = Math.min(allTimeUser.lowestScore, stats.lowestScore);
@@ -2266,9 +2269,10 @@ export async function generateComprehensiveLeagueHistory(leagueIds: string[]): P
   Object.values(userAllTimeStats).forEach(user => {
     const totalGames = user.totalWins + user.totalLosses + user.totalTies;
     user.winPercentage = totalGames > 0 ? (user.totalWins + user.totalTies * 0.5) / totalGames * 100 : 0;
-    // Note: PPG is calculated using total points divided by total games (including median games)
-    // This gives the true average points per game, not halved for median games
-    user.averagePointsPerGame = totalGames > 0 ? user.totalPoints / totalGames : 0;
+    // Per WEEK, not per game. In a median league every week is two games, one
+    // against the opponent and one against the median, so dividing points by
+    // games counted every week's score twice and halved the average.
+    user.averagePointsPerGame = user.weeksPlayed > 0 ? user.totalPoints / user.weeksPlayed : 0;
     user.lowestScore = user.lowestScore === Infinity ? 0 : user.lowestScore;
     user.bestFinish = user.bestFinish === Infinity ? 0 : user.bestFinish;
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw } from 'lucide-react';
+import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw } from '@/components/icons';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';

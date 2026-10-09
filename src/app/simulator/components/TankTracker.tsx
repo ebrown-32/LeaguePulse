@@ -21,7 +21,7 @@ import { useState } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow } from './shared';
-import { ArrowRightLeft, User } from 'lucide-react';
+import { ArrowRightLeft, User } from '@/components/icons';
 import type { SimLeague, TeamOutcome } from '@/lib/sim/types';
 
 interface Props {

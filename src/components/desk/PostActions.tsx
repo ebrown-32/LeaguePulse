@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Heart, Repeat2 } from 'lucide-react';
+import { Heart, Repeat2 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { compactCount, engagementFor } from '@/lib/ai/engagement';
 import SharePost from './SharePost';
@@ -84,9 +84,10 @@ export default function PostActions({
         )}
       >
         <Heart
+          weight={liked ? 'fill' : 'bold'}
           className={cn(
             'h-3.5 w-3.5 shrink-0 transition-transform',
-            liked && 'fill-current scale-110',
+            liked && 'scale-110',
           )}
         />
         <span className="tabular-nums">{compactCount(likes)}</span>

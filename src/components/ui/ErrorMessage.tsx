@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from '@/components/icons';
 import { Card, CardContent } from './Card';
 
 interface ErrorMessageProps {

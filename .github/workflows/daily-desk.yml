@@ -1,37 +1,45 @@
-name: Afternoon desk run
+name: Desk runs
 
-# The second batch of the day.
+# Pokes the AI desk through the day so the feed keeps moving.
 #
 # Vercel's Hobby plan allows two cron jobs and fires each once a day. Both are
-# already used, one of them for the morning batch at 13:00 UTC, so the extra
-# poke comes from here instead, the same way live game-day coverage does.
+# already used, one of them for the 9am batch, so every other run is poked from
+# here instead, the same way live game-day coverage is.
 #
-# The endpoint is the authority on whether anything gets written. It keeps a
-# minimum gap between batches, so a tick that arrives too soon after the morning
-# run returns "already-ran-today" and costs nothing. That makes this schedule
-# safe to be generous with, and means the morning run slipping does not silently
-# cost the day its second batch.
+# The endpoint is the authority on whether anything gets written, not this
+# schedule. It writes a batch only when the last one is at least two and a half
+# hours old and it is not quiet hours (11pm to 8am Eastern), so these hourly
+# pokes produce a run roughly every three hours: about 9am, noon, 3pm, 6pm and
+# 9pm Eastern. A poke that comes too soon returns "skipped" and costs nothing.
 #
-# Volume, per day, with both runs: four posts and six replies, each batch spread
-# across the hours until the next one.
+# Hourly rather than every three hours on purpose. GitHub delays scheduled runs
+# under load, by three to four and a half hours at worst so far, and a sparse
+# schedule loses whole runs to that. With a poke every hour, a late one is
+# simply covered by the next.
+#
+# Volume per day with the defaults: around ten posts and fifteen replies, each
+# batch spread across the hours until the next one.
 
 on:
   schedule:
-    # 21:00 UTC, which is 5pm Eastern in season and 4pm from November. Eight
-    # hours after the Vercel cron, so both clear the gap the endpoint enforces.
-    - cron: '0 21 * * *'
-  # So you can trigger a batch by hand without waiting for tomorrow.
+    # Hourly at :17, 12:17 to 03:17 UTC, which covers 8am to 11pm Eastern in
+    # both daylight and standard time. The odd minute avoids the top-of-hour
+    # rush, which is where most of GitHub's delay comes from.
+    - cron: '17 12-23 * * *'
+    - cron: '17 0-3 * * *'
+  # So you can trigger a batch by hand.
   workflow_dispatch:
 
 jobs:
   poke:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask the desk to file its afternoon batch
+      - name: Ask the desk for a batch
         env:
           # The same repository secrets live game-day coverage uses. SITE_URL is
-          # the deployment origin, e.g. https://league-pulse.vercel.app.
-          # CRON_SECRET must match the value set in Vercel.
+          # the exact origin that serves the site, e.g.
+          # https://www.dominationleague.com, not a domain that redirects to
+          # it. CRON_SECRET must match the value set in Vercel.
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -40,9 +48,17 @@ jobs:
             exit 1
           fi
 
-          # --fail-with-body so a non-2xx still prints why before failing.
+          # Anything but a 200 fails the run. curl's own --fail only catches
+          # 4xx and 5xx, so a redirect passed as success: with SITE_URL set to
+          # the bare domain, every run for three weeks went green while the
+          # site answered "307, go to www" and nothing was ever written.
           # --max-time generously above the function's own 60s ceiling.
-          curl --silent --show-error --fail-with-body \
-            --max-time 90 \
+          code=$(curl --silent --show-error --max-time 90 \
+            --output response.txt --write-out '%{http_code}' \
             --header "Authorization: Bearer $CRON_SECRET" \
-            "$SITE_URL/api/ai/cron"
+            "$SITE_URL/api/ai/cron")
+          cat response.txt; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Expected 200 from the site, got $code. A 3xx means SITE_URL is not the final address; set it to the URL the redirect points to."
+            exit 1
+          fi

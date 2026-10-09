@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Sofa, Flame, ChevronDown, ExternalLink } from 'lucide-react';
+import { Trophy, Sofa, Flame, ChevronDown, ExternalLink } from '@/components/icons';
 import { SkeletonCards, SkeletonTable, Skeleton } from '@/components/ui/Skeleton';
 import Avatar from '@/components/ui/Avatar';
 import Hint from '@/components/ui/Hint';

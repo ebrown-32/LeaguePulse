@@ -13,7 +13,7 @@ import type { Personality } from './personalities';
 
 /** Formats worth arguing under. A live score post is stale within the hour and
  *  a reply to it lands after the moment has passed. */
-const REPLYABLE = new Set(['article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview']);
+const REPLYABLE = new Set(['article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview', 'gameOfWeek']);
 
 /** How many replies one post is allowed to collect, ever. */
 const MAX_PER_POST = 4;
@@ -84,11 +84,11 @@ export function pickStance(alreadyReplied: number): ReplyStance {
 /**
  * Writes one reply and stores it. Returns null when nobody is eligible.
  *
- * `publishAt` holds a reply back for a few minutes. A run writes its replies in
- * a couple of seconds, and three comments appearing at the same instant reads
- * as a batch job rather than as people answering; the caller uses it to walk
- * them out over the following half hour. Never before the parent, which is
- * already visible: reply targets are drawn from the published feed only.
+ * `publishAt` holds a reply back. A run writes its replies in a couple of
+ * seconds, and three comments appearing at the same instant reads as a batch
+ * job rather than as people answering; the caller walks them out across the
+ * hours until its next run. Never before the parent, which is already visible:
+ * reply targets are drawn from the published feed only.
  */
 export async function addReply(
   cast: Personality[],
@@ -113,8 +113,8 @@ export async function addReply(
     kind: 'comment',
     content: content as any,
     createdAt: new Date().toISOString(),
-    // Minutes at most. A reply held back until tomorrow appears under a post
-    // everyone has already read and argues with nobody.
+    // Hours at most, never overnight. A reply held back until tomorrow appears
+    // under a post everyone has already read and argues with nobody.
     publishAt: new Date(Math.max(publishAt ?? 0, Date.now())).toISOString(),
     source: 'cron',
     replyTo: parent.id,

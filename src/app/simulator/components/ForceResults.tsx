@@ -15,7 +15,7 @@ import { motion } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { Eyebrow } from './shared';
-import { RotateCcw, MousePointerClick } from 'lucide-react';
+import { RotateCcw, MousePointerClick } from '@/components/icons';
 import type { SimLeague, Pin } from '@/lib/sim/types';
 
 interface Props {

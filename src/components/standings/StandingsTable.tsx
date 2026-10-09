@@ -43,6 +43,11 @@ export interface AllTimeRow {
   totalPointsAgainst?: number;
   winPercentage: number;
   championships: number;
+  /**
+   * Weeks played. Not wins plus losses: in a median league each week is two
+   * games, so averaging over games halves every team's points per week.
+   */
+  weeksPlayed?: number;
 }
 
 interface Props {
@@ -110,11 +115,12 @@ export default function StandingsTable({
             const hasPlayed = games > 0;
             // All-time rows span seasons of different lengths, so the points
             // columns show a per-game average rather than a career total.
-            const avgPF = games > 0 ? s.totalPoints / games : 0;
+            const weeks = s.weeksPlayed ?? 0;
+            const avgPF = weeks > 0 ? s.totalPoints / weeks : 0;
             // Undefined rather than zero when the caller has no figure, so the
             // column shows a dash instead of a confident 0.00 or a NaN.
-            const avgPA = games > 0 && Number.isFinite(Number(s.totalPointsAgainst))
-              ? Number(s.totalPointsAgainst) / games
+            const avgPA = weeks > 0 && Number.isFinite(Number(s.totalPointsAgainst))
+              ? Number(s.totalPointsAgainst) / weeks
               : null;
             return (
               <Link

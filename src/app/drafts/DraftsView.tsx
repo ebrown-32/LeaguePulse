@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import { CalendarDays, Clock, Users, Layers, Trophy, Star, Zap } from 'lucide-react';
+import { CalendarDays, Clock, Users, Layers, Trophy, Star, Zap } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { cn } from '@/lib/utils';

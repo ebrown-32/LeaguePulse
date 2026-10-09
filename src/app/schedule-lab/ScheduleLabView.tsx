@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ArrowRightLeft } from 'lucide-react';
+import { ChevronDown, ArrowRightLeft } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';

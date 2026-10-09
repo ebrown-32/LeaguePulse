@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { useGLTF, Environment, ContactShadows, OrbitControls } from '@react-three/drei';
 import { Box3, Vector3 } from 'three';
-import { Maximize2, X } from 'lucide-react';
+import { Maximize2, X } from '@/components/icons';
 
 function RingModel({ path }: { path: string }) {
   const { scene } = useGLTF(path);

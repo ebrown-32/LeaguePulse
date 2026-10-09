@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
-import { Trophy } from 'lucide-react';
+import { Trophy } from '@/components/icons';
 
 interface PlayoffBracketProps {
   matchups: {

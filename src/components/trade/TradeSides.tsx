@@ -10,7 +10,7 @@
  * subject is what happens when you send them back.
  */
 
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown } from '@/components/icons';
 import TeamLink from '@/components/ui/TeamLink';
 import { cn } from '@/lib/utils';
 import type {

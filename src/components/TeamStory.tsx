@@ -8,7 +8,7 @@ import {
   StarIcon,
   FireIcon,
   ChartBarIcon,
-} from '@heroicons/react/24/outline';
+} from '@/components/icons';
 import { motion } from 'framer-motion';
 import { formatPoints, formatRecord } from '@/lib/utils';
 import { teamAvatar } from '@/lib/teamAvatar';

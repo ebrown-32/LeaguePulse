@@ -22,7 +22,7 @@
 
 import { getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { weekGames, phaseOf, teamGameStatus, hasPlayed, type WeekPhase } from '@/lib/nflSchedule';
+import { weekGames, phaseOf, teamGameStatus, hasPlayed, isPlaying, type WeekPhase } from '@/lib/nflSchedule';
 import { getLeagueRosters } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { weekForecasts, type FixtureForecast } from '@/lib/sim/weekForecasts';
@@ -36,9 +36,12 @@ export interface ClockFixture {
   pointsA: number;
   pointsB: number;
   settled: boolean;
-  /** Starters on each side whose games have not finished, by name. */
+  /** Starters on each side whose games have not kicked off, by name. */
   stillToPlayA: string[];
   stillToPlayB: string[];
+  /** Starters on each side whose games are being played right now. */
+  playingA: string[];
+  playingB: string[];
   /** Team ahead, or null when level. */
   leader: string | null;
   margin: number;
@@ -61,8 +64,8 @@ export interface GameClock {
   phase: WeekPhase;
   nflFinal: number;
   nflTotal: number;
-  /** NFL games in the week that have not finished. */
-  nflRemaining: { away: string; home: string; day: string }[];
+  /** NFL games in the week that have not finished, the ones under way marked live. */
+  nflRemaining: { away: string; home: string; day: string; live: boolean }[];
   fixtures: ClockFixture[];
   /**
    * Every ROSTERED player, starter or bench, whose NFL game this week has
@@ -74,8 +77,14 @@ export interface GameClock {
    * could not see him. Players on a bye are in neither list.
    */
   playedNames: string[];
-  /** Every rostered player whose NFL game this week has not finished. */
+  /** Every rostered player whose NFL game this week has not kicked off. */
   stillToPlayNames: string[];
+  /**
+   * Every rostered player whose game is under way. Neither played nor still to
+   * play: lumping them in with "still to play" told the writers a player had not
+   * taken the field while he was on it.
+   */
+  playingNames: string[];
   /** Rendered for a prompt. */
   text: string;
 }
@@ -103,6 +112,7 @@ function dayLabel(isoDate: string): string {
 function toClockFixture(f: FixtureForecast): ClockFixture {
   const [la, lb] = f.lines ?? [[], []];
   const left = (lines: typeof la) => lines.filter(l => l.phase === 'upcoming').map(l => l.name);
+  const playing = (lines: typeof la) => lines.filter(l => l.phase === 'playing').map(l => l.name);
   const pa = f.forecast.a.pointsSoFar, pb = f.forecast.b.pointsSoFar;
   const margin = Math.abs(pa - pb);
   const leaderIsA = pa > pb;
@@ -114,6 +124,8 @@ function toClockFixture(f: FixtureForecast): ClockFixture {
     settled: f.forecast.settled,
     stillToPlayA: left(la),
     stillToPlayB: left(lb),
+    playingA: playing(la),
+    playingB: playing(lb),
     leader: margin > 0.001 ? (leaderIsA ? f.a.teamName : f.b.teamName) : null,
     margin,
     leaderWinProb: margin > 0.001
@@ -177,7 +189,7 @@ async function computeClock(now: Date): Promise<GameClock> {
   const empty: GameClock = {
     dateLabel: date, weekday, timeLabel: time, season, week: currentWeek,
     phase: 'upcoming', nflFinal: 0, nflTotal: 0, nflRemaining: [], fixtures: [],
-    playedNames: [], stillToPlayNames: [],
+    playedNames: [], stillToPlayNames: [], playingNames: [],
     text: '',
   };
 
@@ -208,10 +220,11 @@ async function computeClock(now: Date): Promise<GameClock> {
     nflTotal: games.length,
     nflRemaining: games
       .filter(g => g.status !== 'complete' && g.status !== 'canceled')
-      .map(g => ({ away: g.away, home: g.home, day: dayLabel(g.date) })),
+      .map(g => ({ away: g.away, home: g.home, day: dayLabel(g.date), live: g.status === 'in_game' })),
     fixtures: (forecasts?.fixtures ?? []).map(toClockFixture),
     playedNames: [],
     stillToPlayNames: [],
+    playingNames: [],
   };
   // Game status for everyone on a roster, not just this week's starters.
   try {
@@ -233,7 +246,7 @@ async function computeClock(now: Date): Promise<GameClock> {
         const name = p?.full_name
           || [p?.first_name, p?.last_name].filter(Boolean).join(' ');
         if (!name) continue;
-        (hasPlayed(gs) ? clock.playedNames : clock.stillToPlayNames).push(name);
+        (hasPlayed(gs) ? clock.playedNames : isPlaying(gs) ? clock.playingNames : clock.stillToPlayNames).push(name);
       }
     }
   } catch {
@@ -259,10 +272,11 @@ function renderClock(c: GameClock, inSeason: boolean): string {
   } else if (c.phase === 'upcoming') {
     lines.push('  No NFL game this week has been played yet. There are NO results and NO scores.');
   } else {
-    lines.push(
-      `  ${c.nflFinal} of ${c.nflTotal} NFL games are final. THE WEEK IS NOT OVER.`,
-      `  Still to play: ${c.nflRemaining.map(g => `${g.away} @ ${g.home} (${g.day})`).join('; ')}.`,
-    );
+    const now = c.nflRemaining.filter(g => g.live);
+    const later = c.nflRemaining.filter(g => !g.live);
+    lines.push(`  ${c.nflFinal} of ${c.nflTotal} NFL games are final. THE WEEK IS NOT OVER.`);
+    if (now.length) lines.push(`  BEING PLAYED RIGHT NOW: ${now.map(g => `${g.away} @ ${g.home}`).join('; ')}.`);
+    if (later.length) lines.push(`  Still to kick off: ${later.map(g => `${g.away} @ ${g.home} (${g.day})`).join('; ')}.`);
   }
 
   if (c.fixtures.length) {
@@ -275,6 +289,8 @@ function renderClock(c: GameClock, inSeason: boolean): string {
           : `  FINAL: ${score}. Tied.`);
       } else {
         const waiting = [
+          x.playingA.length ? `${x.teamA} playing now: ${x.playingA.join(', ')}` : '',
+          x.playingB.length ? `${x.teamB} playing now: ${x.playingB.join(', ')}` : '',
           x.stillToPlayA.length ? `${x.teamA} still to play: ${x.stillToPlayA.join(', ')}` : '',
           x.stillToPlayB.length ? `${x.teamB} still to play: ${x.stillToPlayB.join(', ')}` : '',
         ].filter(Boolean).join('. ');
@@ -299,6 +315,8 @@ function renderClock(c: GameClock, inSeason: boolean): string {
     '  balance. Either way it is not over until it is marked FINAL.',
     '  Players listed as still to play have not played. Never credit or blame them',
     '  for this week, and never invent a stat line for them.',
+    '  Players listed as playing now are mid-game: their points so far are partial',
+    '  and will change. Never describe them as finished, or as not having played.',
     '  You may write about games in progress, but always as in progress.',
   );
   return lines.join('\n');

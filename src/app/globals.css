@@ -916,3 +916,148 @@ mark {
     );
   }
 }
+
+/* ─────────────────────────────────────────────
+   COMPONENT KIT
+
+   Shared pieces from components/ui/kit.tsx. Colour always comes from the
+   theme tokens, so every palette the admin can pick gets the same treatment
+   in its own colours rather than one palette's colours on all of them.
+───────────────────────────────────────────── */
+@layer utilities {
+  /*
+   * An icon set in a small tinted tile.
+   *
+   * A bare 12px icon in grey reads as decoration; set on a tile of its own
+   * colour it reads as a label. The inner highlight is what keeps the tile
+   * from looking like a flat sticker.
+   */
+  .lp-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: hsl(var(--primary));
+    background:
+      linear-gradient(180deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.08));
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--primary) / 0.18),
+      inset 0 1px 0 hsl(var(--foreground) / 0.06);
+  }
+  .lp-chip-muted {
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted) / 0.8);
+    box-shadow: inset 0 0 0 1px hsl(var(--border));
+  }
+  .lp-chip-live {
+    color: rgb(239 68 68);
+    background: linear-gradient(180deg, rgb(239 68 68 / 0.16), rgb(239 68 68 / 0.07));
+    box-shadow: inset 0 0 0 1px rgb(239 68 68 / 0.22);
+  }
+
+  /*
+   * The featured surface: a border that is a slow sweep of the theme colour.
+   *
+   * Drawn as a masked gradient on a pseudo element, so the card keeps its own
+   * background and the border costs one composited layer. The sweep is 9
+   * seconds a turn, slow enough to read as light moving rather than as a
+   * loading indicator, and it stops for anyone who asked for less motion.
+   */
+  .lp-spotlight { position: relative; isolation: isolate; }
+  .lp-spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from var(--lp-spot-angle, 0deg),
+      hsl(var(--primary) / 0.9),
+      hsl(var(--primary) / 0.12) 25%,
+      hsl(var(--primary) / 0.05) 50%,
+      hsl(var(--primary) / 0.12) 75%,
+      hsl(var(--primary) / 0.9)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: lp-spot 9s linear infinite;
+    z-index: 1;
+  }
+  /* A wash of the theme colour from the top corner, behind the content. */
+  .lp-spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(120% 80% at 0% 0%, hsl(var(--primary) / 0.12), transparent 55%),
+      radial-gradient(90% 70% at 100% 100%, hsl(var(--primary) / 0.07), transparent 60%);
+    pointer-events: none;
+    z-index: -1;
+  }
+  @keyframes lp-spot { to { --lp-spot-angle: 360deg; } }
+  html[data-motion='reduced'] .lp-spotlight::before { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .lp-spotlight::before { animation: none; } }
+
+  /*
+   * A sheen that crosses a surface once on hover.
+   *
+   * Transform only, on a pseudo element, so it never touches layout. Used on
+   * the stat tiles, where it says "this goes somewhere" without the tile
+   * itself having to move much.
+   */
+  .lp-sheen { position: relative; overflow: hidden; }
+  .lp-sheen::after {
+    content: '';
+    position: absolute;
+    inset: -50% auto -50% -60%;
+    width: 40%;
+    transform: translateX(0) rotate(14deg);
+    background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .lp-sheen:hover::after {
+    opacity: 1;
+    transform: translateX(420%) rotate(14deg);
+    transition: transform 900ms var(--ease-out-soft), opacity 200ms;
+  }
+  html[data-motion='reduced'] .lp-sheen:hover::after { opacity: 0; }
+
+  /* The arrival of something new: a brief glow that settles. */
+  .lp-arrive { animation: lp-arrive 1.6s var(--ease-out-soft) both; }
+  @keyframes lp-arrive {
+    0%   { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.0); background-color: hsl(var(--primary) / 0.10); }
+    40%  { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.10); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.0); background-color: transparent; }
+  }
+  html[data-motion='reduced'] .lp-arrive { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .lp-arrive { animation: none; } }
+
+  /* Three dots for "someone is writing". */
+  .lp-typing span {
+    display: inline-block;
+    width: 4px; height: 4px; margin: 0 1px;
+    border-radius: 99px;
+    background: currentColor;
+    animation: lp-typing 1.2s infinite ease-in-out both;
+  }
+  .lp-typing span:nth-child(2) { animation-delay: 0.15s; }
+  .lp-typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes lp-typing {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40%           { opacity: 1;    transform: translateY(-2px); }
+  }
+}
+
+/* Registered so the spotlight's conic gradient can animate its angle. Kept
+   outside any layer: @property is global and Tailwind's layers are not the
+   place for it. */
+@property --lp-spot-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}

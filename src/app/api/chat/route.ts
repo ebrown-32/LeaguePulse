@@ -2,7 +2,7 @@ import { streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { claude, MODEL_FAST, isAIConfigured, GROUNDING_RULES } from '@/lib/ai/claude';
 import { buildLeagueBrief } from '@/lib/ai/leagueBrief';
-import { getRedis } from '@/lib/redisClient';
+import { rateLimit, clientIp } from '@/lib/ai/rateLimit';
 import { getAssistant } from '@/lib/ai/store';
 import { buildChatTools } from '@/lib/ai/chatTools';
 import { resolvePhase } from '@/lib/ai/seasonPhase';
@@ -36,55 +36,13 @@ const MAX_BODY_BYTES = 64 * 1024;
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
-/** In-memory fallback when Redis is not configured (local dev). */
-const memoryHits = new Map<string, { count: number; resetAt: number }>();
-
-async function rateLimit(ip: string): Promise<{ ok: boolean; remaining: number }> {
-  const key = `lp_chat_rl_${ip}`;
-  const now = Date.now();
-  const { client } = getRedis();
-
-  if (!client) {
-    const hit = memoryHits.get(key);
-    if (!hit || now > hit.resetAt) {
-      memoryHits.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
-      return { ok: true, remaining: RATE_LIMIT - 1 };
-    }
-    hit.count += 1;
-    return { ok: hit.count <= RATE_LIMIT, remaining: Math.max(RATE_LIMIT - hit.count, 0) };
-  }
-
-  try {
-    const raw = await client.get(key);
-    const hit = raw ? (JSON.parse(raw) as { count: number; resetAt: number }) : null;
-    if (!hit || now > hit.resetAt) {
-      await client.set(key, JSON.stringify({ count: 1, resetAt: now + RATE_WINDOW_MS }));
-      return { ok: true, remaining: RATE_LIMIT - 1 };
-    }
-    hit.count += 1;
-    await client.set(key, JSON.stringify(hit));
-    return { ok: hit.count <= RATE_LIMIT, remaining: Math.max(RATE_LIMIT - hit.count, 0) };
-  } catch {
-    // Never let a rate-limiter outage take the feature down.
-    return { ok: true, remaining: RATE_LIMIT };
-  }
-}
-
-function clientIp(request: Request): string {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown'
-  );
-}
-
 export async function POST(request: Request) {
   if (!isAIConfigured()) {
     return Response.json({ error: 'AI is not configured' }, { status: 503 });
   }
 
   const ip = clientIp(request);
-  const { ok, remaining } = await rateLimit(ip);
+  const { ok, remaining } = await rateLimit('lp_chat_rl_', ip, RATE_LIMIT, RATE_WINDOW_MS);
   if (!ok) {
     return Response.json(
       { error: 'Rate limit reached. Try again later.' },
