@@ -83,8 +83,15 @@ export async function checkGameStatusClaims(text: string): Promise<string[]> {
   const stillToPlay = new Set(clock.stillToPlayNames.map(n => n.toLowerCase()));
 
   for (const s of sentences(text)) {
-    // 1. A finished player described as not having played.
+    // 1. A player who has taken the field described as not having played.
     if (NOT_PLAYED.test(s)) {
+      for (const name of clock.playingNames) {
+        if (mentions(s, name)) {
+          problems.add(
+            `${name} is PLAYING RIGHT NOW, but the draft says they have not played. ` +
+            'Describe their points as partial and still moving.');
+        }
+      }
       for (const name of clock.playedNames) {
         // A name on both lists cannot happen, but never flag a player who is
         // genuinely still to play.

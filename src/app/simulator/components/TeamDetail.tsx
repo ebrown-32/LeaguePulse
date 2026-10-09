@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { Eyebrow, RollingPct, BasisChip, TeamChips, fmtRecord } from './shared';
 import SeasonCone from './SeasonCone';
 import Beeswarm from './Beeswarm';
-import { Trophy, Target } from 'lucide-react';
+import { Trophy, Target } from '@/components/icons';
 import type { SimLeague, TeamOutcome } from '@/lib/sim/types';
 
 interface Props {

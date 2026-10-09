@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Share2, Check, Copy } from 'lucide-react';
+import { Share2, Check, Copy } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { shareText, shareTitle, type ShareablePost } from '@/lib/shareablePost';
 

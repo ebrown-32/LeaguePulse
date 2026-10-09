@@ -26,7 +26,7 @@ import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import {
   LineChart, Swords, ListOrdered, GitBranch, AlertTriangle,
   Trophy, SlidersHorizontal,
-} from 'lucide-react';
+} from '@/components/icons';
 
 const ITERATIONS = 10000;
 const SEED = 20260908;

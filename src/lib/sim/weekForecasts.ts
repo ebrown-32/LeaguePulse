@@ -12,7 +12,7 @@ import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups } fr
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { weeklyProjections, fantasyPositions } from './weeklyProjections';
-import { teamGameStatus, hasPlayed, weekPhase, type WeekPhase } from '@/lib/nflSchedule';
+import { teamGameStatus, hasPlayed, isPlaying, weekPhase, type WeekPhase } from '@/lib/nflSchedule';
 import { forecastMatchup, type StarterLine, type MatchupForecast } from './matchupOdds';
 import { leagueCalibration } from './leagueCalibration';
 
@@ -91,7 +91,7 @@ export async function weekForecasts(
         // short rather than a data problem.
         const playerPhase = !nflTeam || gs === undefined
           ? 'bye' as const
-          : hasPlayed(gs) ? 'played' as const : 'upcoming' as const;
+          : hasPlayed(gs) ? 'played' as const : isPlaying(gs) ? 'playing' as const : 'upcoming' as const;
         return {
           playerId: id,
           name: p?.full_name
@@ -100,7 +100,7 @@ export async function weekForecasts(
           position: p?.position ?? '--',
           nflTeam,
           projected: proj.get(id) ?? null,
-          actual: playerPhase === 'played' ? Number(pts[id] ?? 0) : null,
+          actual: playerPhase === 'played' || playerPhase === 'playing' ? Number(pts[id] ?? 0) : null,
           phase: playerPhase,
         };
       });

@@ -22,6 +22,7 @@ import { buildLiveBrief, buildUpcomingMatchups, type LiveBrief } from './liveBri
 import { checkGameStatusClaims } from './statusCheck';
 import { checkRecordClaims } from './recordCheck';
 import type { Personality } from './personalities';
+import type { GameOfWeek } from '@/lib/gameOfWeek';
 
 function systemFor(p: Personality): string {
   // Fans are league members, not analysts. Handing them the same expertise
@@ -286,6 +287,29 @@ const MatchupPreviewSchema = z.object({
   })).min(1),
   upsetAlert: z.string().describe('The one result that would surprise the league most'),
 });
+
+/** The desk announcing the week's featured fixture. */
+const GameOfWeekPostSchema = z.object({
+  headline: z.string(),
+  body: z.string().describe('Two short paragraphs selling the game. Hype, with evidence'),
+  watchFor: z.array(z.string().describe('One line: a player or storyline that will decide it'))
+    .min(2).max(3),
+  lean: z.string().describe('Exact name of the team you lean towards'),
+});
+
+export type GameOfWeekPost = z.infer<typeof GameOfWeekPostSchema> & {
+  /** The pick itself, attached after writing, so the card can draw the
+   *  face-off and open the matchup without a second request. Never written
+   *  by the model. */
+  matchup: {
+    season: string;
+    week: number;
+    matchupId: number;
+    a: { userId: string; teamName: string; avatar: string; record: string };
+    b: { userId: string; teamName: string; avatar: string; record: string };
+    reasons: { kind: string; text: string }[];
+  };
+};
 
 /**
  * Live game-day copy: the slate starting, and the slate in progress.
@@ -1097,6 +1121,73 @@ between these two managers. Name players.`;
     system: systemFor(p),
     prompt: `${prompt}\n\n${correction}`,
   })));
+}
+
+/**
+ * The announcement of the week's Game of the Week.
+ *
+ * The choice is made by `lib/gameOfWeek`, never by the writer: the desk is told
+ * which game it is and why, and its job is to sell it. Left to choose, a
+ * persona would pick whichever team the brief makes loudest, which is the same
+ * failure the coverage rotation exists to prevent.
+ */
+export async function writeGameOfWeek(
+  p: Personality, pick: GameOfWeek,
+): Promise<GameOfWeekPost> {
+  const side = (t: GameOfWeek['a']) =>
+    `${t.teamName}: ${t.record}, ${t.rank ? `${ordinalOf(t.rank)} in the standings, ` : ''}` +
+    `${t.pointsFor} points scored this season, projected ${t.projected} this week. ` +
+    `Key starters: ${t.keyPlayers.map(k => `${k.name} (${k.position}, projected ${k.projected})`).join('; ') || 'none listed'}.`;
+  const fav = pick.aWinProb >= 0.5 ? pick.a.teamName : pick.b.teamName;
+
+  const prompt = `${await briefBlock()}
+
+GAME OF THE WEEK, WEEK ${pick.week} (already chosen; do not choose another):
+  ${side(pick.a)}
+  ${side(pick.b)}
+  Pre-game forecast: ${fav} ${Math.round(Math.max(pick.aWinProb, 1 - pick.aWinProb) * 100)}% to win.
+  Why it was chosen:
+${pick.reasons.map(r => `  - ${r.text}`).join('\n')}
+
+Announce ${pick.a.teamName} vs ${pick.b.teamName} as this week's Game of the Week.
+Sell it: why this is the one to watch, using the reasons and the numbers above.
+Name players from the key starters. Then say which way you lean and why, in
+your own voice. It is a preview: nothing in this game has happened yet.`;
+
+  const write = (extra = '') => generateJson({
+    schema: GameOfWeekPostSchema,
+    probe: 'headline',
+    model: MODEL_FAST,
+    maxOutputTokens: 4000,
+    system: systemFor(p),
+    prompt: extra ? `${prompt}\n\n${extra}` : prompt,
+  }).then(r => stripDashes(r));
+
+  const draft = await write();
+  const valid = (r: z.infer<typeof GameOfWeekPostSchema>) =>
+    r.lean === pick.a.teamName || r.lean === pick.b.teamName;
+  const checked = await publishable(draft, async correction => write(correction));
+  const final = valid(checked)
+    ? checked
+    : await write(`"lean" must be exactly "${pick.a.teamName}" or "${pick.b.teamName}".`);
+  if (!valid(final)) {
+    throw new Error(`Game of the Week leaned to ${final.lean}, who is not in the game`);
+  }
+
+  const brief = (t: GameOfWeek['a']) =>
+    ({ userId: t.userId, teamName: t.teamName, avatar: t.avatar, record: t.record });
+  return {
+    ...final,
+    matchup: {
+      season: pick.season, week: pick.week, matchupId: pick.matchupId,
+      a: brief(pick.a), b: brief(pick.b), reasons: pick.reasons,
+    },
+  };
+}
+
+function ordinalOf(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 /**

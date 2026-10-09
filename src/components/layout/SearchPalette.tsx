@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, CornerDownLeft, X } from 'lucide-react';
+import { Search, CornerDownLeft, X } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 /**

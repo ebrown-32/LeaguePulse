@@ -23,7 +23,8 @@ import {
   Menu,
   X,
   FlaskConical,
-} from 'lucide-react';
+  BarChart3,
+} from '@/components/icons';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ const MORE_NAV: NavItem[] = [
   { name: 'Player Rankings', href: '/rankings',  icon: ListOrdered  },
   { name: 'Schedule Lab', href: '/schedule-lab', icon: Shuffle      },
   { name: 'Simulator',    href: '/simulator',    icon: FlaskConical },
+  { name: 'Analytics',    href: '/analytics',    icon: BarChart3 },
   { name: 'Transactions', href: '/transactions', icon: Receipt      },
   { name: 'Drafts',       href: '/drafts',       icon: ClipboardList },
   // Weather is built and reachable at /weather, but unlinked for now.
@@ -103,6 +105,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
       { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
       { name: 'Simulator',     href: '/simulator',    icon: FlaskConical   },
+      { name: 'Analytics',     href: '/analytics',    icon: BarChart3      },
     ],
   },
   {
@@ -339,7 +342,9 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                                     : 'text-foreground hover:bg-muted/60',
                                 )}
                               >
-                                <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span className={cn('lp-chip h-7 w-7 rounded-lg [&>svg]:h-4 [&>svg]:w-4', !isActive && 'lp-chip-muted')}>
+                                  <item.icon />
+                                </span>
                                 {item.name}
                               </Link>
                             );
@@ -460,13 +465,8 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                                   : 'text-foreground hover:bg-accent',
                               )}
                             >
-                              <span className={cn(
-                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
-                                isActive
-                                  ? 'border-primary/30 bg-primary/10 text-primary'
-                                  : 'border-border text-muted-foreground',
-                              )}>
-                                <item.icon className="h-4 w-4" />
+                              <span className={cn('lp-chip h-8 w-8 rounded-lg [&>svg]:h-4 [&>svg]:w-4', !isActive && 'lp-chip-muted')}>
+                                <item.icon />
                               </span>
                               {/* Sentence case, not the uppercase widely
                                   tracked style of the old list. At this size

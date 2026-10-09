@@ -1,10 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users, Swords, Radio,
-} from 'lucide-react';
+  TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users, Swords, Radio, CrownIcon,
+  ArrowRight, Ticket, Zap, Sword, type Icon,
+} from '@/components/icons';
 import { cn } from '@/lib/utils';
+import TeamAvatar from '@/components/ui/Avatar';
+import { IconChip } from '@/components/ui/kit';
+import MatchupDetailModal, { type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
+import { useNow, visibleAt, ago, type Typing } from '@/lib/useLiveFeed';
+import { TypingRow } from '@/components/home/HomeFeed';
 import PostActions from './PostActions';
 import PostReplies from './PostReplies';
 
@@ -18,7 +25,7 @@ import PostReplies from './PostReplies';
  */
 type Kind =
   | 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-  | 'matchupPreview' | 'kickoff' | 'liveTake';
+  | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek';
 
 /** Written while the games are on, and rendered inline so it reads as news
  *  breaking rather than as a document to open. */
@@ -35,6 +42,8 @@ export interface FeedPost {
   kind: Kind;
   content: any;
   createdAt: string;
+  /** When it became visible. Times and ambient numbers count from this. */
+  publishAt?: string;
   subject?: string;
   /** Set on a reply, naming the post it answers. */
   replyTo?: string;
@@ -43,7 +52,7 @@ export interface FeedPost {
   stance?: 'agree' | 'disagree';
 }
 
-const KIND_META: Record<Kind, { label: string; icon: typeof Newspaper } | null> = {
+const KIND_META: Record<Kind, { label: string; icon: Icon } | null> = {
   tweet: null,
   comment: null,
   article: { label: 'Column', icon: Newspaper },
@@ -53,13 +62,100 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Newspaper } | null> 
   matchupPreview: { label: 'Week Preview', icon: Swords },
   kickoff: { label: 'Kickoff', icon: Radio },
   liveTake: { label: 'Live', icon: Radio },
+  gameOfWeek: { label: 'Game of the Week', icon: CrownIcon },
 };
 
-function timeAgo(iso: string) {
-  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.round(mins / 60);
-  return hrs < 24 ? `${hrs}h` : `${Math.round(hrs / 24)}d`;
+const SIGNAL_ICON: Record<string, Icon> = {
+  records: Trophy, playoffs: Ticket, points: Zap, rivalry: Sword, closeness: Scale,
+};
+
+/**
+ * The Game of the Week announcement.
+ *
+ * Inline rather than collapsed: it is the desk pointing at one game, and the
+ * point is lost if the game is behind a "read more". The face-off is drawn
+ * from the pick attached to the post, never from the prose, so the card shows
+ * exactly the game the page features even if the writing is loose about it.
+ */
+function GameOfWeekPost({ post }: { post: FeedPost }) {
+  const c = post.content;
+  const m = c.matchup;
+  const [open, setOpen] = useState<MatchupTarget | null>(null);
+  if (!m) return null;
+  const target: MatchupTarget = {
+    a: { userId: m.a.userId, teamName: m.a.teamName, avatar: m.a.avatar },
+    b: { userId: m.b.userId, teamName: m.b.teamName, avatar: m.b.avatar },
+    week: m.week,
+  };
+  const team = (t: any, right?: boolean) => (
+    <div className={cn('flex min-w-0 items-center gap-2.5', right && 'flex-row-reverse text-right')}>
+      <span className={cn('shrink-0 rounded-xl p-[2px]',
+        c.lean === t.teamName ? 'bg-gradient-to-br from-primary to-primary/30' : 'bg-border')}>
+        <TeamAvatar avatarId={t.avatar} size={38} className="rounded-[10px]" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13.5px] font-bold leading-tight text-foreground">{t.teamName}</span>
+        <span className="block text-[11px] tabular-nums text-muted-foreground">{t.record}</span>
+      </span>
+    </div>
+  );
+  return (
+    <div className="mt-2">
+      {c.headline && (
+        <p className="font-display text-[16px] font-bold leading-snug text-foreground">{c.headline}</p>
+      )}
+      <div className="lp-spotlight mt-3 rounded-2xl bg-card/60">
+        <div className="relative z-[2] p-3.5">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            {team(m.a)}
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">vs</span>
+            {team(m.b, true)}
+          </div>
+          {Array.isArray(m.reasons) && m.reasons.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {m.reasons.map((r: any) => (
+                <li key={r.text} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 py-0.5 pl-0.5 pr-2.5 text-[11.5px] text-foreground">
+                  <IconChip icon={SIGNAL_ICON[r.kind] ?? Zap} size="xs" className="rounded-full" />
+                  {r.text}
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={() => setOpen(target)}
+            className="group mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-primary"
+          >
+            Open the matchup
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
+      </div>
+      {c.body && (
+        <div className="mt-3 space-y-2.5 text-[15px] leading-relaxed text-foreground">
+          {String(c.body).split(/\n{2,}/).map((para: string, i: number) => <p key={i}>{para}</p>)}
+        </div>
+      )}
+      {Array.isArray(c.watchFor) && c.watchFor.length > 0 && (
+        <div className="mt-3 rounded-xl border border-border bg-muted/20 p-3">
+          <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">What decides it</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {c.watchFor.map((w: string, i: number) => (
+              <li key={i} className="flex gap-2 text-[13.5px] leading-relaxed text-foreground/90">
+                <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-primary" />
+                {w}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {c.lean && (
+        <p className="mt-2.5 text-[13px] text-muted-foreground">
+          Leaning <span className="font-semibold text-foreground">{c.lean}</span>
+        </p>
+      )}
+      <MatchupDetailModal target={open} onClose={() => setOpen(null)} />
+    </div>
+  );
 }
 
 /**
@@ -90,7 +186,7 @@ function Avatar({ post }: { post: FeedPost }) {
   return (
     <span className={cn(
       'relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full',
-      'border border-border bg-card text-[11px] font-bold',
+      'bg-card text-[11px] font-bold ring-1 ring-border ring-offset-2 ring-offset-background',
       post.personaAccent,
     )}>
       {initials}
@@ -335,12 +431,16 @@ function GameBeat({ post }: { post: FeedPost }) {
 }
 
 export function FeedPostCard({
-  post, index = 0, open, onToggle, leagueName, realLikes, replies, inset = 'page',
+  post, index = 0, open, onToggle, leagueName, realLikes, replies, inset = 'page', fresh, typing,
 }: {
   post: FeedPost; index?: number; open: boolean; onToggle: () => void;
   leagueName?: string | null; realLikes?: number;
   /** Replies to this post, oldest first. */
   replies?: FeedPost[];
+  /** Arrived while the page was open; glows once as it lands. */
+  fresh?: boolean;
+  /** Replies to this post due in the next few minutes. */
+  typing?: Typing[];
   /**
    * How much room the post leaves at its sides. The feed runs full bleed and
    * puts the page's own gutters back for itself; inside a bordered card those
@@ -349,14 +449,19 @@ export function FeedPostCard({
    */
   inset?: 'page' | 'card';
 }) {
+  const now = useNow();
   const isLive = LIVE_KINDS.has(post.kind);
-  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive;
+  const isGotw = post.kind === 'gameOfWeek';
+  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw;
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
-      className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/25"
+      className={cn(
+        'border-b border-border/70 transition-colors last:border-0 hover:bg-muted/25',
+        fresh && 'lp-arrive',
+      )}
     >
       <div className={cn(
         'flex gap-3 py-4',
@@ -373,7 +478,7 @@ export function FeedPostCard({
                 {post.personaName}
               </span>
               <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted-foreground">
-                {timeAgo(post.createdAt)}
+                {ago(visibleAt(post), now)}
               </span>
             </div>
 
@@ -387,7 +492,7 @@ export function FeedPostCard({
               {(() => {
                 const meta = KIND_META[post.kind];
                 return meta ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-1 pr-2 text-[10.5px] font-semibold text-primary">
                     <meta.icon className="h-3 w-3" />
                     {meta.label}
                   </span>
@@ -403,6 +508,8 @@ export function FeedPostCard({
 
             {isLive && <GameBeat post={post} />}
 
+            {isGotw && <GameOfWeekPost post={post} />}
+
             {isLong && <LongForm post={post} open={open} onToggle={onToggle} />}
 
             {post.subject && (
@@ -414,6 +521,10 @@ export function FeedPostCard({
             <PostActions post={post} realLikes={realLikes} leagueName={leagueName} />
 
             {replies && replies.length > 0 && <PostReplies replies={replies} />}
+
+            <AnimatePresence initial={false}>
+              {typing?.[0] && <TypingRow key="typing" t={typing[0]} compact />}
+            </AnimatePresence>
           </div>
       </div>
     </motion.article>

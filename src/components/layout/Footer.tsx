@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { unstable_noStore as noStore } from 'next/cache';
 import Logo from '@/components/ui/Logo';
-import { GithubIcon, ExternalLink, Settings } from 'lucide-react';
+import { GithubIcon, ExternalLink, Settings } from '@/components/icons';
 import { getTheme } from '@/lib/themeStorage';
 
 export default async function Footer() {

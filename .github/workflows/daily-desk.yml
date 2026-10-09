@@ -1,37 +1,40 @@
-name: Afternoon desk run
+name: Desk runs
 
-# The second batch of the day.
+# Pokes the AI desk through the day so the feed keeps moving.
 #
 # Vercel's Hobby plan allows two cron jobs and fires each once a day. Both are
-# already used, one of them for the morning batch at 13:00 UTC, so the extra
-# poke comes from here instead, the same way live game-day coverage does.
+# already used, one of them for the 9am batch, so every other run is poked from
+# here instead, the same way live game-day coverage is.
 #
-# The endpoint is the authority on whether anything gets written. It keeps a
-# minimum gap between batches, so a tick that arrives too soon after the morning
-# run returns "too-soon-since-last-batch" and costs nothing. That makes this schedule
-# safe to be generous with, and means the morning run slipping does not silently
-# cost the day its second batch.
+# The endpoint is the authority on whether anything gets written, not this
+# schedule. It writes a batch only when the last one is at least two and a half
+# hours old and it is not quiet hours (11pm to 8am Eastern), so these hourly
+# pokes produce a run roughly every three hours: about 9am, noon, 3pm, 6pm and
+# 9pm Eastern. A poke that comes too soon returns "skipped" and costs nothing.
 #
-# Volume, per day, with both runs: four posts and six replies, each batch spread
-# across the hours until the next one.
+# Hourly rather than every three hours on purpose. GitHub delays scheduled runs
+# under load, by three to four and a half hours at worst so far, and a sparse
+# schedule loses whole runs to that. With a poke every hour, a late one is
+# simply covered by the next.
+#
+# Volume per day with the defaults: around ten posts and fifteen replies, each
+# batch spread across the hours until the next one.
 
 on:
   schedule:
-    # Asks for 19:17 UTC, expecting to run around 5 to 7pm Eastern. GitHub
-    # delays scheduled runs under load, and in practice this one landed three
-    # to four and a half hours late when it asked for 21:00. The odd minute
-    # avoids the top-of-hour rush, which is where most of that delay comes
-    # from. Still more than five hours after the 13:00 Vercel cron, so it clears
-    # the gap the endpoint enforces.
-    - cron: '17 19 * * *'
-  # So you can trigger a batch by hand without waiting for tomorrow.
+    # Hourly at :17, 12:17 to 03:17 UTC, which covers 8am to 11pm Eastern in
+    # both daylight and standard time. The odd minute avoids the top-of-hour
+    # rush, which is where most of GitHub's delay comes from.
+    - cron: '17 12-23 * * *'
+    - cron: '17 0-3 * * *'
+  # So you can trigger a batch by hand.
   workflow_dispatch:
 
 jobs:
   poke:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask the desk to file its afternoon batch
+      - name: Ask the desk for a batch
         env:
           # The same repository secrets live game-day coverage uses. SITE_URL is
           # the exact origin that serves the site, e.g.

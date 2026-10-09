@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchRivalriesData, type GameRecord } from '@/lib/rivalries';
+import { fetchRivalriesData, finishedSeries, type GameRecord } from '@/lib/rivalries';
 import { getLeagueRosters, getLeagueUsers, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
 import {
@@ -54,36 +54,6 @@ export interface MatchupDetail {
   };
 }
 
-/**
- * Rivalry intensity from the actual series, not vibes.
- *
- * Four signals, each normalised to 0-1: how often they have met, how evenly
- * split it is, how close the games were, and whether any of it happened in the
- * playoffs. A 6-6 series of nail-biters scores far higher than a lopsided
- * 10-2, which is what "rivalry" should mean.
- */
-function rivalryScore(games: GameRecord[], aWins: number, bWins: number): { score: number; label: string } {
-  const total = games.length;
-  if (!total) return { score: 0, label: 'No history' };
-
-  const volume  = Math.min(total / 12, 1);
-  const winPct  = aWins / Math.max(aWins + bWins, 1);
-  const balance = 1 - Math.abs(winPct - 0.5) * 2;
-
-  const avgMargin = games.reduce((s, g) => s + Math.abs(g.score - g.opponentScore), 0) / total;
-  const closeness = 1 - Math.min(avgMargin / 40, 1);
-
-  const playoffs = Math.min(games.filter(g => g.isPlayoff).length / 3, 1);
-
-  const score = Math.round(100 * (0.30 * volume + 0.30 * balance + 0.25 * closeness + 0.15 * playoffs));
-  const label =
-    score >= 75 ? 'Blood feud' :
-    score >= 55 ? 'Real rivalry' :
-    score >= 35 ? 'Warming up' :
-    total >= 2  ? 'Occasional' : 'First meeting';
-  return { score, label };
-}
-
 /** Rivalry history and both rosters, the slow half. */
 async function loadExtras(
   leagueId: string, season: string, a: string, b: string,
@@ -116,24 +86,10 @@ async function loadExtras(
     };
   };
 
-  // h2h is keyed by user id in both directions; the entry under [a][b] is
-  // written from a's perspective.
-  const entry = rivalries.h2h?.[a]?.[b];
-
-  // Only finished meetings count. The rivalry record is built from weeks where
-  // anyone scored, so a matchup still being played showed up as a past meeting
-  // with a winner and was counted in the series record.
-  const liveWeeks = new Set<string>();
-  const current = String(season);
-  const weeksInSeason = [...new Set((entry?.games ?? [])
-    .filter(g => String(g.season) === current).map(g => g.week))];
-  await Promise.all(weeksInSeason.map(async w => {
-    if ((await weekPhase(current, w).catch(() => 'upcoming')) !== 'final') liveWeeks.add(`${current}|${w}`);
-  }));
-  const games = (entry?.games ?? []).filter(g => !liveWeeks.has(`${g.season}|${g.week}`));
-  const aWins = games.filter(g => g.score > g.opponentScore).length;
-  const bWins = games.filter(g => g.score < g.opponentScore).length;
-  const { score, label } = rivalryScore(games, aWins, bWins);
+  // h2h is keyed by user id in both directions; the series is read from a's
+  // perspective, finished meetings only.
+  const { games, aWins, bWins, rivalryScore: score, rivalryLabel: label } =
+    await finishedSeries(rivalries, a, b, season, weekPhase);
 
   return {
     statsSeason,

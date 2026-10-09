@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
-import { X, ArrowUp, Sparkles, Maximize2, Minimize2, GripHorizontal, Eraser } from 'lucide-react';
+import { X, ArrowUp, Sparkles, Maximize2, Minimize2, GripHorizontal, Eraser } from '@/components/icons';
 import { Streamdown } from 'streamdown';
 import { cn } from '@/lib/utils';
 

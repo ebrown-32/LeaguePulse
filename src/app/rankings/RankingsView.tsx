@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@/components/icons';
 import { PageLayout } from '@/components/layout/PageLayout';
 import Avatar from '@/components/ui/Avatar';
 import { LoadingBlock } from '@/components/ui/LoadingSpinner';

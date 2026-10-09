@@ -75,13 +75,19 @@ export async function weekGames(
 /**
  * Where a week stands.
  *
+ * Live from the first kickoff, not the first final whistle. Counting only
+ * finished games left every Thursday night reading "upcoming" for the three
+ * hours the game was actually being played, so scores sat hidden behind a
+ * preview while points were going on the board.
+ *
  * A week with no schedule data returns 'upcoming' rather than guessing, which
  * keeps a fetch failure from silently marking a live week final.
  */
 export function phaseOf(games: ScheduleGame[]): WeekPhase {
   if (games.length === 0) return 'upcoming';
   const done = games.filter(g => g.status === 'complete' || g.status === 'canceled').length;
-  if (done === 0) return 'upcoming';
+  const started = done + games.filter(g => g.status === 'in_game').length;
+  if (started === 0) return 'upcoming';
   return done === games.length ? 'final' : 'live';
 }
 
@@ -110,6 +116,11 @@ export async function teamGameStatus(
     if (g.away) out.set(g.away, g.status);
   }
   return out;
+}
+
+/** Is this team's game being played right now? */
+export function isPlaying(status: GameStatus | undefined): boolean {
+  return status === 'in_game';
 }
 
 /** Convenience: has this specific team's game finished? */

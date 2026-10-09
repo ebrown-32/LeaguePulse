@@ -50,6 +50,7 @@ function rng(seed: number): () => number {
 const REACH: Record<string, number> = {
   powerRankings: 1.6,
   predictions: 1.5,
+  gameOfWeek: 1.4,
   article: 1.3,
   matchupPreview: 1.2,
   tradeGrade: 1.1,
@@ -72,14 +73,17 @@ export interface Engagement {
 }
 
 export function engagementFor(
-  post: { id: string; kind: string; createdAt: string },
+  post: { id: string; kind: string; createdAt: string; publishAt?: string },
   now: number = Date.now(),
 ): Engagement {
   const seed = hash(post.id);
   const next = rng(seed);
   const reach = REACH[post.kind] ?? 1;
 
-  const hoursOld = Math.max(0, (now - new Date(post.createdAt).getTime()) / 3_600_000);
+  // From when readers could first see it. Counting from when it was written
+  // gave a post held four hours for its slot four hours of likes the moment
+  // it appeared, so every new post looked like it had been up all morning.
+  const hoursOld = Math.max(0, (now - new Date(post.publishAt ?? post.createdAt).getTime()) / 3_600_000);
   const grown = maturity(hoursOld);
 
   // Ceiling for this particular post, then how far along it is.

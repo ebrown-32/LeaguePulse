@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Lock } from 'lucide-react';
+import { Trophy, Lock } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 

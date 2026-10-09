@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ExternalLink, Info, ArrowRight } from 'lucide-react';
+import { ExternalLink, Info, ArrowRight } from '@/components/icons';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { SkeletonTable, SkeletonBars, Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';

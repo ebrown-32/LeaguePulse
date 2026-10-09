@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Rocket,
   Zap,
-} from 'lucide-react';
+} from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import CareerMetricsSection from './CareerMetrics';

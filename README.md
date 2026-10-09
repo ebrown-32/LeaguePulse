@@ -270,10 +270,23 @@ open in Eastern time, and somebody has actually scored. Out of season every run 
 nothing, so it costs nothing.
 
 The same two secrets also drive
-[`.github/workflows/daily-desk.yml`](.github/workflows/daily-desk.yml), the desk's
-second batch of the day. Vercel's Hobby plan fires a cron job only once a day and both
-of its slots are used, so the afternoon run is poked from here. Without it the desk
-simply files one batch a day instead of two.
+[`.github/workflows/daily-desk.yml`](.github/workflows/daily-desk.yml), which keeps
+the feed moving through the day: a batch roughly every three hours from 9am to 9pm
+Eastern, and nothing overnight. Vercel's Hobby plan fires a cron job only once a day
+and both of its slots are used, so those runs are poked from here. Without it the desk
+files one batch a day.
+
+### Self-serve analytics
+
+`/analytics` turns the league's whole history into five tables (matchups, seasons,
+player weeks, transactions and draft picks) that anyone can explore: drag fields onto
+shelves, dig through rows in a spreadsheet view, or ask a question in plain English and
+get a report. Reports save in the viewer's browser and travel by link, so nothing is
+written to your database. Only completed weeks are included.
+
+Asking questions needs `ANTHROPIC_API_KEY`. The model only writes the query, never the
+numbers, and each visitor is limited to 30 questions an hour. Everything else works
+without it.
 
 ### Add expert rankings
 
@@ -303,8 +316,9 @@ a day on their own.
 | `AI_LIVE_COOLDOWN_MINUTES` | Minimum gap between live game day posts. Optional, default 90. |
 | `AI_POSTS_PER_RUN` | Posts written per batch run. Optional, default 2. |
 | `AI_REPLIES_PER_RUN` | Replies written per batch run. Optional, default 3. |
-| `AI_SPREAD_HOURS` | Hours a batch's posts are spread across. Optional, default 6. |
-| `AI_RERUN_GUARD_HOURS` | Minimum gap between batch runs. Optional, default 5. |
+| `AI_SPREAD_HOURS` | Hours a batch's posts and replies are spread across. Optional, default 3. |
+| `AI_RERUN_GUARD_HOURS` | Minimum gap between batch runs. Optional, default 2.5. |
+| `AI_QUIET_FROM_HOUR_ET` / `AI_QUIET_UNTIL_HOUR_ET` | Overnight hours, Eastern, with no batches and nothing scheduled to appear. Optional, default 23 and 8. |
 
 Prefer a `rediss://` connection string? Use `REDIS_URL` instead of the Upstash pair.
 

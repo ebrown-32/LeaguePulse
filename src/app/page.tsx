@@ -7,6 +7,8 @@ import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import { PageLayout } from '@/components/layout/PageLayout';
 import MatchupDetailModal, { prefetchMatchup, type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
+import GameOfWeekCard from '@/components/matchup/GameOfWeekCard';
+import { StatTile, SectionHeader, StatusPill, WinBar } from '@/components/ui/kit';
 import {
   getLeagueInfo,
   getLeagueRosters,
@@ -25,7 +27,8 @@ import {
   ArrowLeftRight,
   Receipt,
   ChevronRight,
-} from 'lucide-react';
+  ListOrdered,
+} from '@/components/icons';
 import { motion } from 'framer-motion';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
@@ -167,48 +170,6 @@ function getHighlightMatchups(matchups: any[], rosters: any[], users: any[]): an
 }
 
 // ─── Stat card component ─────────────────────────────────────────────────────
-
-/** One metric in the thin "league at a glance" strip. */
-/**
- * One headline number.
- *
- * These were four bare figures crammed into a bordered strip inside the hero,
- * where they read as an afterthought. As cards they carry their own weight and
- * there is room to say what each one means.
- */
-function PulseStat({ label, value, sub, icon: Icon, href }: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  href?: string;
-}) {
-  const body = (
-    <>
-      <div className="flex items-center gap-1.5">
-        <Icon className="h-3 w-3 text-primary" />
-        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-          {label}
-        </span>
-      </div>
-      {/* Big figures want tighter tracking than the type designer set them
-          at: default spacing is tuned for a paragraph, and at 30px it leaves
-          numerals looking loose and unset. Tabular so a column of them lines
-          up on the decimal. */}
-      <span className="mt-1.5 block font-display text-[26px] font-bold tabular-nums leading-none tracking-[-0.03em] text-foreground sm:text-[32px]">
-        {value}
-      </span>
-      {sub && <span className="mt-1 block text-[11px] text-muted-foreground">{sub}</span>}
-    </>
-  );
-
-  const cls = 'lp-glass lp-edge rounded-xl border p-3.5 sm:p-4';
-  // Only the ones that go somewhere lift. A card that moves under the cursor
-  // and then does nothing when clicked is a promise the interface breaks.
-  return href
-    ? <Link href={href} className={`${cls} lp-lift block`}>{body}</Link>
-    : <div className={cls}>{body}</div>;
-}
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -436,49 +397,57 @@ export default function Home() {
         {/* ── The league at a glance ── */}
         {historyData && historyData.totalSeasons > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <PulseStat
+            <StatTile
               icon={CalendarDays}
               label="Seasons"
-              value={String(historyData.totalSeasons)}
+              value={historyData.totalSeasons}
               sub={seasons.length ? `since ${[...seasons].sort()[0]}` : undefined}
               href="/history"
             />
-            <PulseStat
+            <StatTile
               icon={Swords}
               label="Games"
-              value={historyData.totalGames.toLocaleString()}
+              value={historyData.totalGames}
               sub="all time"
               href="/matchups"
             />
-            <PulseStat
+            <StatTile
               icon={Flame}
               label="Best score"
-              value={formatPoints(historyData.highestScore)}
+              value={Number(historyData.highestScore) || 0}
+              decimals={2}
               sub="single week"
               href="/history"
             />
-            <PulseStat
+            <StatTile
               icon={Trophy}
               label="Champions"
-              value={String(historyData.uniqueChampionsCount)}
+              value={historyData.uniqueChampionsCount}
               sub={`${historyData.champions.length} title${historyData.champions.length === 1 ? '' : 's'}`}
               href="/history"
             />
-            <PulseStat
+            <StatTile
               icon={ArrowLeftRight}
               label="Trades"
-              value={totals ? totals.totals.trade.toLocaleString() : '...'}
+              value={totals ? totals.totals.trade : '...'}
               sub={totals ? `${totals.bySeason[0]?.trades ?? 0} this season` : undefined}
               href="/transactions"
             />
-            <PulseStat
+            <StatTile
               icon={Receipt}
               label="Moves"
-              value={totals ? totals.totals.total.toLocaleString() : '...'}
+              value={totals ? totals.totals.total : '...'}
               sub={totals ? `${totals.totals.waiver.toLocaleString()} on waivers` : undefined}
               href="/transactions"
             />
           </div>
+        )}
+
+        {/* ── Game of the Week ──
+            High on the page in season: it is the one game the whole league is
+            being pointed at, and it changes every week. */}
+        {league.status === 'in_season' && nflState?.season_type === 'regular' && (
+          <GameOfWeekCard onOpen={setOpenMatchup} />
         )}
 
         {/* ── The feed ──
@@ -507,158 +476,78 @@ export default function Home() {
 
         {/* ── This Week&apos;s Battles ── */}
         {league.status === 'in_season' && currentWeekMatchups.length > 0 && (
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle>This Week&apos;s Battles</CardTitle>
-                <span className="rounded border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Week {effectiveWeek}
-                </span>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any) => {
-                    const p1 = matchup.team1.points ?? 0;
-                    const p2 = matchup.team2.points ?? 0;
-                    const hasScores = p1 + p2 > 0;
-                    const t1Winning = hasScores && p1 > p2;
-                    const t2Winning = hasScores && p2 > p1;
-                    const o1 = odds.get(matchup.team1.userId);
-                    const o2 = odds.get(matchup.team2.userId);
-                    const anyLeft = (o1?.startersLeft ?? 0) + (o2?.startersLeft ?? 0) > 0;
-                    const target: MatchupTarget = {
-                      a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
-                      b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
-                      week: effectiveWeek,
-                    };
-                    return (
-                      <button
-                        key={matchup.id}
-                        onPointerEnter={() => prefetchMatchup(target)}
-                        onTouchStart={() => prefetchMatchup(target)}
-                        onClick={() => setOpenMatchup(target)}
-                        className="relative w-full overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-primary/40"
-                      >
-                        {matchup.isHighlight && (
-                          <div className="absolute inset-x-0 top-0 h-px bg-primary/50" />
-                        )}
-
-                        {/* Team 1 */}
-                        <div className={cn(
-                          'flex items-center gap-3 px-4 py-3.5',
-                          t1Winning && 'bg-primary/[0.04]',
-                        )}>
-                          <span className="flex min-w-0 flex-1 items-center gap-2">
-                            <Avatar avatarId={matchup.team1.avatar} size={30} className="shrink-0 rounded-lg" />
-                            <span className={cn('min-w-0 truncate text-sm font-medium leading-tight',
-                              t1Winning ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                              {matchup.team1.name}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-right">
-                            <span className={cn(
-                              'block font-display text-xl font-bold tabular-nums',
-                              t1Winning ? 'text-primary' : 'text-muted-foreground',
-                            )}>
-                              {p1.toFixed(1)}
-                            </span>
-                            {o1 && (
-                              <span className={cn(
-                                'block text-[10px] font-semibold tabular-nums',
-                                (o1.winProb >= 0.5) ? 'text-primary' : 'text-muted-foreground/70',
-                              )}>
-                                {(o1.winProb * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </span>
-                        </div>
-
-                        {/* The odds split, which replaces the plain rule: the
-                            bar IS the divider, so the card gains information
-                            without gaining height. */}
-                        <div className="px-4">
-                          {o1 ? (
-                            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                              <motion.div
-                                className="h-full bg-primary"
-                                initial={{ width: '50%' }}
-                                animate={{ width: `${o1.winProb * 100}%` }}
-                                transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-                              />
-                              <motion.div
-                                className="h-full bg-foreground/20"
-                                initial={{ width: '50%' }}
-                                animate={{ width: `${(1 - o1.winProb) * 100}%` }}
-                                transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center">
-                              <div className="h-px flex-1 bg-border/60" />
-                              <span className="px-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">vs</span>
-                              <div className="h-px flex-1 bg-border/60" />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Team 2 */}
-                        <div className={cn(
-                          'flex items-center gap-3 px-4 py-3.5',
-                          t2Winning && 'bg-primary/[0.04]',
-                        )}>
-                          <span className="flex min-w-0 flex-1 items-center gap-2">
-                            <Avatar avatarId={matchup.team2.avatar} size={30} className="shrink-0 rounded-lg" />
-                            <span className={cn('min-w-0 truncate text-sm font-medium leading-tight',
-                              t2Winning ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                              {matchup.team2.name}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-right">
-                            <span className={cn(
-                              'block font-display text-xl font-bold tabular-nums',
-                              t2Winning ? 'text-primary' : 'text-muted-foreground',
-                            )}>
-                              {p2.toFixed(1)}
-                            </span>
-                            {o2 && (
-                              <span className={cn(
-                                'block text-[10px] font-semibold tabular-nums',
-                                (o2.winProb >= 0.5) ? 'text-primary' : 'text-muted-foreground/70',
-                              )}>
-                                {(o2.winProb * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </span>
-                        </div>
-
-                        {o1 && (
-                          <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
-                            <span className="truncate text-[10px] text-muted-foreground">
-                              {anyLeft
-                                ? `win odds \u00b7 ${(o1.startersLeft ?? 0) + (o2?.startersLeft ?? 0)} starters left`
-                                : 'final'}
-                            </span>
-                            <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-primary">
-                              Details
-                              <ChevronRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        )}
-
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <section className="lp-surface rounded-2xl p-4 sm:p-5">
+            <SectionHeader icon={Swords} title="This Week&apos;s Battles" meta={`Week ${effectiveWeek}`} href="/matchups" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any, idx: number) => {
+                const p1 = matchup.team1.points ?? 0;
+                const p2 = matchup.team2.points ?? 0;
+                const hasScores = p1 + p2 > 0;
+                const o1 = odds.get(matchup.team1.userId);
+                const o2 = odds.get(matchup.team2.userId);
+                const left = (o1?.startersLeft ?? 0) + (o2?.startersLeft ?? 0);
+                // Before a ball is kicked the score is 0.0 to 0.0, which says
+                // nothing; the projection is the number worth showing.
+                const status = !hasScores ? 'upcoming' : left > 0 ? 'live' : 'final';
+                const shown1 = status === 'upcoming' ? (o1?.projectedFinal ?? null) : p1;
+                const shown2 = status === 'upcoming' ? (o2?.projectedFinal ?? null) : p2;
+                const lead1 = o1 ? o1.winProb >= 0.5 : p1 > p2;
+                const target: MatchupTarget = {
+                  a: { userId: matchup.team1.userId, teamName: matchup.team1.name, avatar: matchup.team1.avatar },
+                  b: { userId: matchup.team2.userId, teamName: matchup.team2.name, avatar: matchup.team2.avatar },
+                  week: effectiveWeek,
+                };
+                const row = (team: any, shown: number | null, o: typeof o1, lead: boolean) => (
+                  <div className="flex items-center gap-2.5">
+                    <Avatar avatarId={team.avatar} size={32} className={cn('shrink-0 rounded-[10px]', !lead && 'opacity-80')} />
+                    <span className={cn('min-w-0 flex-1 truncate text-[13px] leading-tight',
+                      lead ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground')}>
+                      {team.name}
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className={cn('block font-display text-lg font-bold leading-none tabular-nums',
+                        lead ? 'text-foreground' : 'text-muted-foreground/80')}>
+                        {shown == null ? '--' : shown.toFixed(1)}
+                      </span>
+                      {o && (
+                        <span className={cn('mt-0.5 block text-[10px] font-semibold tabular-nums',
+                          lead ? 'text-primary' : 'text-muted-foreground/70')}>
+                          {(o.winProb * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+                return (
+                  <motion.button
+                    key={matchup.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05, duration: 0.35 }}
+                    onPointerEnter={() => prefetchMatchup(target)}
+                    onTouchStart={() => prefetchMatchup(target)}
+                    onClick={() => setOpenMatchup(target)}
+                    className="group lp-sheen flex w-full flex-col gap-3 rounded-xl border border-border bg-background/60 p-3.5 text-left transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-[var(--elev-2)]"
+                  >
+                    <div className="flex items-center justify-between">
+                      <StatusPill status={status} label={status === 'upcoming' ? 'Projected' : status === 'live' ? `Live · ${left} left` : undefined} />
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </div>
+                    {row(matchup.team1, shown1, o1, lead1)}
+                    {o1 ? <WinBar p={o1.winProb} /> : <div className="h-px bg-border/70" />}
+                    {row(matchup.team2, shown2, o2, !lead1)}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* ── Standings ── */}
         <div>
           <Card>
             <CardHeader>
-              <CardTitle>Standings</CardTitle>
+              <SectionHeader icon={ListOrdered} title="Standings" />
               <SeasonSelect
                 seasons={seasons}
                 selectedSeason={selectedSeason}

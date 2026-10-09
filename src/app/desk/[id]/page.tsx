@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from '@/components/icons';
 import { getPosts, getLikes } from '@/lib/ai/store';
 import { getTheme } from '@/lib/themeStorage';
 import SinglePostView from './SinglePostView';
