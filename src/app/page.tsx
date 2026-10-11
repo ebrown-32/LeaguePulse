@@ -28,6 +28,7 @@ import {
   Receipt,
   ChevronRight,
   ListOrdered,
+  Radio,
 } from '@/components/icons';
 import { motion } from 'framer-motion';
 import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
@@ -477,7 +478,17 @@ export default function Home() {
         {/* ── This Week&apos;s Battles ── */}
         {league.status === 'in_season' && currentWeekMatchups.length > 0 && (
           <section className="lp-surface rounded-2xl p-4 sm:p-5">
-            <SectionHeader icon={Swords} title="This Week&apos;s Battles" meta={`Week ${effectiveWeek}`} href="/matchups" />
+            <SectionHeader icon={Swords} title="This Week&apos;s Battles" meta={`Week ${effectiveWeek}`}
+              action={
+                <span className="flex shrink-0 items-center gap-3">
+                  {/* The way in on a Sunday: which games to have on, and
+                      where your players are. */}
+                  <Link href="/live" className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15">
+                    <Radio className="h-3 w-3" /> Game Day
+                  </Link>
+                  <Link href="/matchups" className="text-[11px] font-semibold text-primary">Open</Link>
+                </span>
+              } />
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {getHighlightMatchups(currentWeekMatchups, seasonRosters, users).map((matchup: any, idx: number) => {
                 const p1 = matchup.team1.points ?? 0;
