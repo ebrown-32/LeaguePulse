@@ -92,6 +92,25 @@ export function playerSd(projection: number, c: Calibration): number {
   return c.sdBase + c.sdSlope * Math.max(0, projection);
 }
 
+/**
+ * One starter's final score as a distribution: mean and spread.
+ *
+ * The same assumptions as `forecastSide`, per player, for callers that need
+ * to vary one player or one game's worth of players at a time. Null for a
+ * player who will score nothing (a bye, or no projection and not playing).
+ */
+export function finalDistribution(s: StarterLine, c: Calibration): { mean: number; sd: number } | null {
+  if (s.phase === 'played') return { mean: s.actual ?? 0, sd: 0 };
+  if (s.phase === 'bye') return null;
+  if (s.phase === 'playing') {
+    const banked = s.actual ?? 0;
+    if (s.projected === null) return { mean: banked, sd: 0 };
+    return { mean: banked + Math.max(0, expectedPoints(s.projected, c) - banked), sd: playerSd(s.projected, c) * 0.7 };
+  }
+  if (s.projected === null) return null;
+  return { mean: expectedPoints(s.projected, c), sd: playerSd(s.projected, c) };
+}
+
 export function forecastSide(starters: StarterLine[], c: Calibration): SideForecast {
   let pointsSoFar = 0;
   let mean = 0;

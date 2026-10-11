@@ -59,6 +59,28 @@ export async function weeklyProjections(
    */
   scoring?: ScoringSettings | null,
 ): Promise<Map<string, number>> {
+  // The parsed result is a few kilobytes of numbers, so it is memoised here.
+  // The fetch cache cannot hold the raw response (it is over Next's 2MB
+  // limit), which meant every request re-downloaded and re-parsed several
+  // megabytes, and Game Day polls every twenty seconds.
+  const memoKey = `${season}|${week}|${positions.join(',')}|${scoring ? JSON.stringify(scoring) : ''}`;
+  const hit = projectionMemo.get(memoKey);
+  if (hit && Date.now() - hit.at < PROJECTION_TTL_MS) return hit.value;
+  const pending = fetchWeek(season, week, positions, scoring);
+  projectionMemo.set(memoKey, { at: Date.now(), value: pending });
+  const value = await pending;
+  // An empty week is usually a failed fetch; do not pin it for half an hour.
+  if (!value.size) projectionMemo.delete(memoKey);
+  return value;
+}
+
+/** Projections move at most a few times a day and freeze at kickoff. */
+const PROJECTION_TTL_MS = 30 * 60 * 1000;
+const projectionMemo = new Map<string, { at: number; value: Promise<Map<string, number>> }>();
+
+async function fetchWeek(
+  season: string, week: number, positions: string[], scoring?: ScoringSettings | null,
+): Promise<Map<string, number>> {
   const qs = new URLSearchParams({ season_type: 'regular' });
   for (const p of positions) qs.append('position[]', p);
 
@@ -66,7 +88,7 @@ export async function weeklyProjections(
   try {
     const res = await fetch(`${BASE}/projections/nfl/${season}/${week}?${qs}`, {
       // Projections move at most daily, and a stale hour costs nothing here.
-      next: { revalidate: 21600 },
+      cache: 'no-store',
     });
     if (!res.ok) return out;
     const rows = await res.json();

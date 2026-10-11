@@ -24,6 +24,7 @@ import {
   X,
   FlaskConical,
   BarChart3,
+  Radio,
 } from '@/components/icons';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
@@ -54,6 +55,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const MORE_NAV: NavItem[] = [
   { name: 'Home',         href: '/',             icon: LayoutDashboard },
+  { name: 'Game Day',     href: '/live',         icon: Radio        },
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
   { name: 'Standings',    href: '/standings',    icon: ListOrdered  },
@@ -89,6 +91,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'This week',
     items: [
       { name: 'Home',      href: '/',          icon: LayoutDashboard },
+      { name: 'Game Day',  href: '/live',      icon: Radio           },
       { name: 'Matchups',  href: '/matchups',  icon: Swords          },
       { name: 'Standings', href: '/standings', icon: ListOrdered     },
       // The report is about the week just played, so it belongs with the
