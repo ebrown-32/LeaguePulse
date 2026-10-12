@@ -17,7 +17,8 @@ export type RedisBackend = 'upstash-rest' | 'tcp' | 'none';
 
 export interface RedisLike {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
+  /** With ttlSeconds, the key expires on its own after that long. */
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
   del(key: string): Promise<void>;
   /**
    * List operations, for collections that are appended to concurrently.
@@ -48,8 +49,10 @@ export interface RedisResolution {
 }
 
 function restConfig(): { url: string; token: string } | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  // The KV_ names are what Upstash sets when installed from the Vercel
+  // Marketplace; the UPSTASH_ names are what its own console hands out.
+  const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL)?.trim();
+  const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN)?.trim();
   if (!url || !token) return null;
   return { url, token };
 }
@@ -61,13 +64,68 @@ function tcpUrl(): string | null {
 }
 
 let cached: RedisResolution | null = null;
+let scoped: RedisResolution | null = null;
+
+/**
+ * Keys every league shares, never prefixed.
+ *
+ * The platform's own records (which league lives where), and data that is the
+ * same whichever league asks: player id links, expert rankings, and caches
+ * already keyed by league id. Everything else belongs to one league.
+ */
+const SHARED_PREFIXES = [
+  'lp_tenant', 'lp_slug_hold', 'lp_storage_probe',
+  'lp_espn_xwalk', 'lp_fp_snapshot', 'lp_calib_v', 'lp_gotw_v',
+];
+
+/**
+ * Prefix a key with its league, in hosted mode.
+ *
+ * This is the one place leagues are kept apart in storage, so no caller can
+ * forget to: a league's posts, cast, theme, likes and settings all land under
+ * `t:<slug>:`. A shared key returns before the league is looked up at all,
+ * which is also what stops the registry lookup recursing into itself.
+ */
+async function scopeKey(key: string): Promise<string> {
+  if (SHARED_PREFIXES.some(p => key.startsWith(p))) return key;
+  const { currentTenant } = await import('@/lib/tenant/context');
+  const t = await currentTenant();
+  return t ? `t:${t.slug}:${key}` : key;
+}
+
+function scopeClient(c: RedisLike): RedisLike {
+  return {
+    get: async k => c.get(await scopeKey(k)),
+    set: async (k, v, ttl) => c.set(await scopeKey(k), v, ttl),
+    del: async k => c.del(await scopeKey(k)),
+    lpush: async (k, v) => c.lpush(await scopeKey(k), v),
+    ltrim: async (k, s, e) => c.ltrim(await scopeKey(k), s, e),
+    lrange: async (k, s, e) => c.lrange(await scopeKey(k), s, e),
+    lrem: async (k, n, v) => c.lrem(await scopeKey(k), n, v),
+    llen: async k => c.llen(await scopeKey(k)),
+    incrby: async (k, by) => c.incrby(await scopeKey(k), by),
+    mget: async keys => c.mget(await Promise.all(keys.map(scopeKey))),
+  };
+}
+
+/**
+ * The active client. Self-hosted, exactly the client below. Hosted, the same
+ * client with every key scoped to the request's league.
+ */
+export function getRedis(): RedisResolution {
+  if (process.env.LP_HOSTED !== '1') return resolveRedis();
+  if (scoped) return scoped;
+  const raw = resolveRedis();
+  scoped = raw.client ? { ...raw, client: scopeClient(raw.client) } : raw;
+  return scoped;
+}
 
 /**
  * Resolve the active client. Cached per process: the REST client is a plain
  * HTTPS wrapper with nothing to keep alive, and the TCP client is connected
  * lazily on first use.
  */
-export function getRedis(): RedisResolution {
+function resolveRedis(): RedisResolution {
   if (cached) return cached;
 
   const rest = restConfig();
@@ -82,7 +140,7 @@ export function getRedis(): RedisResolution {
         backend: 'upstash-rest',
         client: {
           get: (k) => c.get(k) as Promise<string | null>,
-          set: async (k, v) => { await c.set(k, v); },
+          set: async (k, v, ttl) => { await (ttl ? c.set(k, v, { ex: ttl }) : c.set(k, v)); },
           del: async (k) => { await c.del(k); },
           lpush: (k, v) => c.lpush(k, v) as Promise<number>,
           ltrim: async (k, s, e) => { await c.ltrim(k, s, e); },
@@ -117,7 +175,7 @@ export function getRedis(): RedisResolution {
         backend: 'tcp',
         client: {
           get: async (k) => { await ready(); return c.get(k); },
-          set: async (k, v) => { await ready(); await c.set(k, v); },
+          set: async (k, v, ttl) => { await ready(); await (ttl ? c.set(k, v, { EX: ttl }) : c.set(k, v)); },
           del: async (k) => { await ready(); await c.del(k); },
           lpush: async (k, v) => { await ready(); return c.lPush(k, v); },
           ltrim: async (k, s, e) => { await ready(); await c.lTrim(k, s, e); },
@@ -152,6 +210,7 @@ export function getRedis(): RedisResolution {
 /** Tests only: forget the memoised client so env changes take effect. */
 export function resetRedis(): void {
   cached = null;
+  scoped = null;
 }
 
 /** True when some Redis transport is configured, regardless of whether it works. */

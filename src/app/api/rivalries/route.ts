@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchRivalriesData } from '@/lib/rivalries';
-import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { leagueConfigured } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export type {
 } from '@/lib/rivalries';
 
 export async function GET() {
-  if (!INITIAL_LEAGUE_ID) {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
 

@@ -1,13 +1,14 @@
 import { getLeagueRosters, getLeagueUsers, getSeasonTransactions, getLeagueWeeks } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import { getPlayersDirectory } from '@/lib/playerStats';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 /**
  * Verifies generated copy against the real transaction record.
  *
  * The writers are given a brief that states every trade in both directions and
  * are told explicitly not to invert it. They invert it anyway: one post had
- * ShitNecks "shipping Jaylen Warren" in a trade where ShitNecks RECEIVED him.
+ * Bench Mob "shipping Jaylen Warren" in a trade where Bench Mob RECEIVED him.
  * Prompt rules have not been enough, and no additional data source fixes this,
  * because the data was already correct and unambiguous. The only reliable
  * remedy is to check the claim after the fact and refuse to publish a
@@ -33,7 +34,7 @@ export interface TradeFact {
 // sides the wrong way round and matched no verb at all, so it was published
 // unjudged. "traded" bare is included for the same reason.
 // "gave away" was missing while "gave up" was present, so a reply reading
-// "ebrown03 just gave away Justin Jefferson" matched no verb at all and went
+// "gridirongreg just gave away Justin Jefferson" matched no verb at all and went
 // unjudged, publishing a manager as having traded a player he had received.
 // The give/hand family is spelled out rather than left to guesswork.
 const AWAY = /\b(ship(?:ped|s|ping)?(?: off| out)?|sent|deal(?:t|ed)?|traded(?: away)?|trades away|(?:gave|gives|give|giving)(?: up| away)|hand(?:ed|s)?(?: over| off)?|offload(?:ed|s)?|moved(?: on from)?|moves|flipped|flips|dumped|dealt away|parted with|let go of|sold|traded off)\b/i;
@@ -44,9 +45,9 @@ const IN = /\b(acquir(?:ed|es)|land(?:ed|s)|grabb(?:ed|s)|pick(?:ed)? up|brought
  * Every way a team can be named in copy.
  *
  * Writers refer to a side by its team name or by the manager's handle, more or
- * less interchangeably: "Ass Kickers United traded him" and "ebrown03 traded
+ * less interchangeably: "Gridiron Ghosts traded him" and "gridirongreg traded
  * him" are the same claim. The checker only knew team names, so a false claim
- * written the second way sailed through. One did: a reply had ebrown03 giving
+ * written the second way sailed through. One did: a reply had a manager giving
  * away Justin Jefferson, a player that manager had in fact received.
  */
 interface TeamAlias {
@@ -56,11 +57,13 @@ interface TeamAlias {
   aliases: string[];
 }
 
-let cache: { at: number; facts: Map<string, TradeFact>; teams: TeamAlias[] } | null = null;
+/** One per league: trade facts are league records. */
+const caches = perLeague<{ at: number; facts: Map<string, TradeFact>; teams: TeamAlias[] }>();
 const TTL_MS = 5 * 60 * 1000;
 
 /** Index every traded player by who received and who surrendered him. */
 export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>; teams: TeamAlias[] }> {
+  const cache = await caches.get();
   if (cache && Date.now() - cache.at < TTL_MS) return cache;
 
   const leagueId = await getCurrentLeagueId();
@@ -109,8 +112,9 @@ export async function loadTradeFacts(): Promise<{ facts: Map<string, TradeFact>;
     }
   }
 
-  cache = { at: Date.now(), facts, teams: aliasList };
-  return cache;
+  const fresh = { at: Date.now(), facts, teams: aliasList };
+  await caches.set(fresh);
+  return fresh;
 }
 
 /** Last name, with the common suffixes dropped. */
@@ -205,7 +209,7 @@ export async function checkTradeClaims(text: string): Promise<string[]> {
           .filter(i => i !== -1)
           .reduce((min, i) => (min === -1 || i < min ? i : min), -1);
         // Only judge "<team> ... <verb> ... <player>". The reverse order reads
-        // differently ("Warren, who ShitNecks value...") and is left alone.
+        // differently ("Warren, who Bench Mob value...") and is left alone.
         if (iTeam === -1 || iTeam > iPlayer) continue;
 
         // The verb NEAREST the player decides the direction. Taking any verb in

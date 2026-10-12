@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { ChevronLeft } from '@/components/icons';
+import { ChevronLeft, Trophy } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import type { TeamProfileResponse, SeasonEntry, RivalEntry } from '@/app/api/team/[userId]/route';
@@ -271,7 +271,13 @@ export default function TeamProfileView({ userId }: { userId: string }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {data.rings.map(ring => (
               <div key={ring.season} className="rounded-xl border border-border bg-card p-2">
-                <ChampionRing modelPath={ring.modelPath} height={140} />
+                {ring.modelPath ? (
+                  <ChampionRing modelPath={ring.modelPath} height={140} />
+                ) : (
+                  <div className="flex h-[140px] items-center justify-center">
+                    <Trophy className="h-10 w-10 text-primary" />
+                  </div>
+                )}
                 <p className="mt-1 text-center text-xs font-semibold text-foreground">{ring.season} Champion</p>
               </div>
             ))}

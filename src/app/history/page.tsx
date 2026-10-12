@@ -1,25 +1,11 @@
-import fs from 'fs';
-import path from 'path';
-
 import { PageLayout } from '@/components/layout/PageLayout';
 import EnhancedHistoryView from './EnhancedHistoryView';
+import { ringSeasons as getRingSeasons } from '@/lib/ringModels';
 
 export const dynamic = 'force-dynamic';
 
-function getRingSeasons(): string[] {
-  try {
-    const dir = path.join(process.cwd(), 'public', 'models', 'rings');
-    return fs.readdirSync(dir)
-      .map(f => f.match(/^ring-(\d{4})\.glb$/)?.[1])
-      .filter((s): s is string => !!s)
-      .sort();
-  } catch {
-    return [];
-  }
-}
-
-export default function HistoryPage() {
-  const ringSeasons = getRingSeasons();
+export default async function HistoryPage() {
+  const ringSeasons = await getRingSeasons();
   return (
     <PageLayout
       title="League History"

@@ -20,6 +20,7 @@ import {
 } from '@/lib/sim/strength';
 import type { SimLeague, SimTeam, SimGame, PlayedGame } from '@/lib/sim/types';
 import { seasonSchedule, phaseOf } from '@/lib/nflSchedule';
+import { configuredRootLeagueId } from '@/config/league';
 
 export interface SimMeta {
   seasonsOfHistory: number;
@@ -135,9 +136,9 @@ function makeWeekIsFinal(finalWeeks: Set<number>) {
 }
 
 export async function buildSimLeague(): Promise<BuildResult> {
-  const currentLeagueId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const currentLeagueId = await configuredRootLeagueId();
   if (!currentLeagueId) {
-    throw new Error('NEXT_PUBLIC_LEAGUE_ID is not set');
+    throw new Error('No league configured');
   }
 
   const linked = await getAllLinkedLeagueIds(currentLeagueId);

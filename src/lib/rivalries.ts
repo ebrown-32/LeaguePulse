@@ -6,7 +6,7 @@ import {
   getLeagueMatchups,
   getSeasonTransactions,
 } from '@/lib/api';
-import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { configuredRootLeagueId } from '@/config/league';
 import { teamAvatar } from '@/lib/teamAvatar';
 
 export interface Manager {
@@ -62,7 +62,7 @@ function emptyEntry(): H2HEntry {
 }
 
 export async function fetchRivalriesData(): Promise<RivalriesResponse> {
-  const allLeagueIds = await getAllLinkedLeagueIds(INITIAL_LEAGUE_ID!);
+  const allLeagueIds = await getAllLinkedLeagueIds((await configuredRootLeagueId())!);
 
   const managerMap = new Map<string, Manager>();
   const h2h: Record<string, Record<string, H2HEntry>> = {};

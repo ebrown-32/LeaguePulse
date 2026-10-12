@@ -37,30 +37,45 @@ jobs:
   poke:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask the desk to cover the games
+      - name: Poke each site
         env:
-          # Repository secrets. SITE_URL is the exact origin that serves the
-          # site, e.g. https://www.dominationleague.com, not a domain that
-          # redirects to it. CRON_SECRET must match the value set in Vercel.
+          # Repository secrets. SITE_URL is the exact origin that serves your
+          # own league, e.g. https://www.yourleague.com, not a domain that
+          # redirects to it. CRON_SECRET must match that Vercel project's.
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # Optional: the hosted product, a separate Vercel project. Its bare
+          # domain, e.g. https://leaguepulse.io, which fans out to every live
+          # league. Leave both unset if you only run your own league.
+          HOSTED_SITE_URL: ${{ secrets.HOSTED_SITE_URL }}
+          HOSTED_CRON_SECRET: ${{ secrets.HOSTED_CRON_SECRET }}
         run: |
-          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "SITE_URL and CRON_SECRET repository secrets are required."
-            exit 1
-          fi
-
           # Anything but a 200 fails the run. curl's own --fail only catches
-          # 4xx and 5xx, so a redirect passed as success: with SITE_URL set to
-          # the bare domain, every run went green while the site answered
-          # "307, go to www" and no game was ever covered. A tick with nothing
-          # to do still returns 200, with a "skipped" reason in the body.
-          code=$(curl --silent --show-error --max-time 90 \
-            --output response.txt --write-out '%{http_code}' \
-            --header "Authorization: Bearer $CRON_SECRET" \
-            "$SITE_URL/api/ai/cron?mode=live")
-          cat response.txt; echo
-          if [ "$code" != "200" ]; then
-            echo "::error::Expected 200 from the site, got $code. A 3xx means SITE_URL is not the final address; set it to the URL the redirect points to."
+          # 4xx and 5xx, so a redirect once passed as success: with SITE_URL
+          # set to the bare domain, every run went green for weeks while the
+          # site answered "307, go to www" and nothing was ever written.
+          # --max-time generously above the function's own 60s ceiling.
+          poke() {
+            code=$(curl --silent --show-error --max-time 90 \
+              --output response.txt --write-out '%{http_code}' \
+              --header "Authorization: Bearer $2" \
+              "$1/api/ai/cron?mode=live")
+            echo "== $1 -> $code"; cat response.txt; echo
+            if [ "$code" != "200" ]; then
+              echo "::error::Expected 200 from $1, got $code. A 3xx means the URL is not the final address; set it to the URL the redirect points to."
+              return 1
+            fi
+          }
+
+          failed=0; ran=0
+          if [ -n "$SITE_URL" ] && [ -n "$CRON_SECRET" ]; then
+            ran=1; poke "$SITE_URL" "$CRON_SECRET" || failed=1
+          fi
+          if [ -n "$HOSTED_SITE_URL" ] && [ -n "$HOSTED_CRON_SECRET" ]; then
+            ran=1; poke "$HOSTED_SITE_URL" "$HOSTED_CRON_SECRET" || failed=1
+          fi
+          if [ "$ran" = 0 ]; then
+            echo "::error::Set SITE_URL and CRON_SECRET, or HOSTED_SITE_URL and HOSTED_CRON_SECRET, as repository secrets."
             exit 1
           fi
+          exit $failed

@@ -4,12 +4,12 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import RivalryView from './RivalryView';
 import { fetchRivalriesData } from '@/lib/rivalries';
 import type { RivalriesResponse } from '@/app/api/rivalries/route';
-import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { leagueConfigured } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RivalriesPage() {
-  if (!INITIAL_LEAGUE_ID) {
+  if (!(await leagueConfigured())) {
     return (
       <ErrorMessage
         title="Failed to Load Rivalries"

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds, getLeagueInfo, getLeagueTransactions } from '@/lib/api';
-import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { leagueConfigured, configuredRootLeagueId } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -14,11 +14,11 @@ export const maxDuration = 60;
  * season's transaction log never changes.
  */
 export async function GET() {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
   try {
-    const leagueIds = await getAllLinkedLeagueIds(INITIAL_LEAGUE_ID);
+    const leagueIds = await getAllLinkedLeagueIds((await configuredRootLeagueId())!);
     const totals = { trade: 0, waiver: 0, free_agent: 0, total: 0 };
     const bySeason: { season: string; trades: number; total: number }[] = [];
 

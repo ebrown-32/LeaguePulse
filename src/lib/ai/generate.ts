@@ -701,8 +701,8 @@ directly and stay in second person: "you", "your". Use a manager's handle when
 you name one. Third person is a last resort for when there is genuinely nobody
 to address, not the default.
 
-Wrong: "AshKashh69 has made 15 moves and it is starting to look desperate."
-Right: "@AshKashh69 fifteen moves. FIFTEEN. blink twice if you need help."
+Wrong: "waiverwally has made 15 moves and it is starting to look desperate."
+Right: "@waiverwally fifteen moves. FIFTEEN. blink twice if you need help."
 ` : ''}
 ${subject
   ? `THIS POST IS ABOUT ${subject.toUpperCase()}. Name them. Do not write about the

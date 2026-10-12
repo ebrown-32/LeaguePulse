@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  if (!isAIConfigured()) {
+  if (!(await isAIConfigured())) {
     return NextResponse.json(
       { error: 'AI is not configured', setup: 'Add ANTHROPIC_API_KEY to .env.local and restart.' },
       { status: 503 },

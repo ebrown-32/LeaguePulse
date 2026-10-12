@@ -73,7 +73,7 @@ function describeSchema(): string {
 }
 
 export async function POST(request: Request) {
-  if (!isAIConfigured()) {
+  if (!(await isAIConfigured())) {
     return NextResponse.json({ error: 'AI is not configured' }, { status: 503 });
   }
   const { ok } = await rateLimit('lp_analytics_rl_', clientIp(request), RATE_LIMIT, RATE_WINDOW_MS);

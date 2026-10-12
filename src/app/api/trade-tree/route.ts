@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { configuredRootLeagueId } from '@/config/league';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +12,8 @@ const BASE = 'https://api.sleeper.app/v1';
 let playersCache: { data: Record<string, any>; ts: number } | null = null;
 const PLAYERS_TTL_MS = 86_400_000; // 24 h
 
-let responseCache: { data: TradeTreeResponse; ts: number } | null = null;
+/** One per league: see lib/tenant/perLeague. */
+const responseCaches = perLeague<{ data: TradeTreeResponse; ts: number }>();
 const RESPONSE_TTL_MS = 900_000; // 15 min, this route aggregates a lot of Sleeper calls
 
 /**
@@ -466,9 +469,10 @@ function computeOutcome(
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET() {
-  const initialId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const initialId = await configuredRootLeagueId();
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
+  const responseCache = await responseCaches.get();
   if (responseCache && Date.now() - responseCache.ts < RESPONSE_TTL_MS) {
     return NextResponse.json(responseCache.data);
   }
@@ -639,7 +643,7 @@ export async function GET() {
     const seasonList = [...new Set(trades.map(t => t.season))].sort((a, b) => Number(b) - Number(a));
 
     const payload: TradeTreeResponse = { trades, seasons: seasonList };
-    responseCache = { data: payload, ts: Date.now() };
+    await responseCaches.set({ data: payload, ts: Date.now() });
     return NextResponse.json(payload);
   } catch (err) {
     console.error('[api/trade-tree]', err);

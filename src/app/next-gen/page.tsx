@@ -1,6 +1,6 @@
 
 import { getAdvancedTeamMetrics, getAllLeagueSeasons } from '@/lib/api';
-import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { PageLayout } from '@/components/layout/PageLayout';
 import NextGenStats from './NextGenStats';
@@ -8,7 +8,7 @@ import NextGenStats from './NextGenStats';
 export const dynamic = 'force-dynamic';
 
 export default async function NextGenStatsPage() {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return (
       <ErrorMessage
         title="Configuration Required"

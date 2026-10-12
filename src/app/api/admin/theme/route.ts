@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTheme, saveTheme, resetTheme } from '@/lib/themeStorage';
+import { isAdminRequest } from '@/lib/tenant/admin';
 // Note: themeStorage is server-only (Node.js Redis / fs). This file is an API route so it's fine.
 
-function isAuthorized(req: NextRequest): boolean {
-  const password = req.headers.get('x-admin-password');
-  const expected = process.env.ADMIN_PASSWORD || 'admin123';
-  return password === expected;
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  return isAdminRequest(req);
 }
 
 export async function GET() {
@@ -19,7 +18,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -34,7 +33,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

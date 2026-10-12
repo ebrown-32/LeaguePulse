@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { watchGuide } from '@/lib/live/watchGuide';
 import { playFeed } from '@/lib/live/playFeed';
@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
   try {

@@ -350,8 +350,14 @@ Pull requests welcome.
 
 ## License
 
-Free for personal, non-commercial use. You may not resell or sublicense this project
-without permission.
+League Pulse is free software, licensed under the
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+In short: you can use, change and run it for any purpose, including commercially. If
+you run a modified version as a service other people use over a network, you must
+offer those users the source code of your version under the same licence. Running an
+unmodified copy for your own league asks nothing of you beyond keeping the licence
+notice. The full terms are in [LICENSE](LICENSE).
 
 <br />
 
@@ -369,8 +375,8 @@ PDF report and supports Yahoo, ESPN, CBS, Sleeper and Fleaflicker. If you want t
 complete report with charts and per team pages, use it directly.
 
 League Pulse implements those metric *definitions* independently in TypeScript against
-the Sleeper API. That project is licensed **GPL-3.0** and League Pulse is not, so no
-code from it is copied, vendored or linked.
+the Sleeper API. No code from that project (licensed **GPL-3.0**) is copied, vendored or
+linked.
 
 <br />
 

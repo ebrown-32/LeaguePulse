@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds, getLeagueUsers, getLeagueRosters, getNFLState } from '@/lib/api';
-import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import {
   getPlayersDirectory,
   getSeasonStats,
@@ -72,7 +72,7 @@ export async function GET(
 ) {
   const { playerId } = await params;
 
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
 

@@ -31,7 +31,7 @@ import {
   Radio,
 } from '@/components/icons';
 import { motion } from 'framer-motion';
-import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import TransactionTicker from '@/components/ui/TransactionTicker';
 import LeagueCarousel from '@/components/home/LeagueCarousel';
 import HomeFeed from '@/components/home/HomeFeed';
@@ -244,7 +244,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+      if (!(await leagueConfigured())) {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;

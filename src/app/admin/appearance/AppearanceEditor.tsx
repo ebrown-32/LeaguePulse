@@ -7,6 +7,7 @@ import { CheckIcon, ArrowPathIcon, LockClosedIcon, EyeIcon, ExclamationCircleIco
 import type { ThemeConfig, FontPairKey, TxColors, PaletteKey, BackgroundStyle, MotionLevel } from '@/lib/themeConfig';
 import { accentPresets, fontPairs, txColorPresets, DEFAULT_THEME, palettes, buildThemeCss } from '@/lib/themeConfig';
 import { cn } from '@/lib/utils';
+import LogoUpload from '@/components/admin/LogoUpload';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
@@ -925,19 +926,13 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     Logo
                   </label>
-                  <input
-                    type="text"
-                    value={theme.logoUrl ?? ''}
-                    onChange={e => setTheme(t => ({ ...t, logoUrl: e.target.value || null }))}
-                    placeholder="/dominationleague.png"
-                    className="
-                      w-full rounded-md border border-border bg-background px-3 py-2
-                      text-sm text-foreground placeholder:text-muted-foreground
-                      focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
-                    "
+                  <LogoUpload
+                    password={password}
+                    logoUrl={theme.logoUrl ?? null}
+                    onChange={url => setTheme(t => ({ ...t, logoUrl: url }))}
                   />
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Place your image in the <code className="font-mono">public/</code> folder and enter its path, e.g. <code className="font-mono">/dominationleague.png</code>
+                    PNG, JPEG, WebP or SVG. Saved as soon as it uploads. Transparent backgrounds look best.
                   </p>
                   {theme.logoUrl && (
                     <div className="mt-2 flex items-center gap-2">

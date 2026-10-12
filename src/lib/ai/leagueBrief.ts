@@ -27,6 +27,7 @@ import {
   getSeasonStats,
   resolveStatsSeason,
 } from '@/lib/playerStats';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 const BASE = 'https://api.sleeper.app/v1';
 const TTL_MS = 5 * 60 * 1000;
@@ -125,7 +126,8 @@ export interface LeagueBrief {
   text: string;
 }
 
-let cache: { brief: LeagueBrief; ts: number } | null = null;
+/** One per league: the brief is everything the AI knows about one league. */
+const caches = perLeague<{ brief: LeagueBrief; ts: number }>();
 
 /**
  * Who is actually undefeated and who is actually winless.
@@ -150,6 +152,7 @@ function fmtRecord(s: any): string {
 }
 
 export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
+  const cache = await caches.get();
   if (!force && cache && Date.now() - cache.ts < TTL_MS) {
     // The heavy brief is safe to reuse for a few minutes. The clock is not: a
     // time label five minutes stale, or a game that went final in that window,
@@ -428,7 +431,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
   brief.gameClock = await buildGameClock().then(c => c.text).catch(() => '');
   brief.text = renderBrief(brief);
 
-  cache = { brief, ts: Date.now() };
+  await caches.set({ brief, ts: Date.now() });
   return brief;
 }
 
@@ -473,7 +476,7 @@ export function renderBrief(b: LeagueBrief): string {
   const lines: string[] = [];
   lines.push(`LEAGUE: ${b.leagueName}, ${b.season} season.`);
   // Writers kept treating a manager and their team as two different people,
-  // producing lines like "AshKashh69 made 15 moves and Just Jaxson Off made 15
+  // producing lines like "waiverwally made 15 moves and Bench Mob made 15
   // moves" about a single roster.
   lines.push(
     '',

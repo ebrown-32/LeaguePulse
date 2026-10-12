@@ -15,6 +15,7 @@ import { getPlayersDirectory } from '@/lib/playerStats';
 import { runReplay, type ReplayWeek } from '@/lib/sim/replay';
 import { lastPlayoffWeek } from '@/lib/sim/playoffs';
 import type { TransactionSide, PlayerSummary } from '@/app/api/transactions/route';
+import { configuredRootLeagueId } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -186,9 +187,9 @@ function summariseImpact(out: ReturnType<typeof runReplay>): TradeImpact {
 }
 
 export async function GET(req: NextRequest) {
-  const currentLeagueId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const currentLeagueId = await configuredRootLeagueId();
   if (!currentLeagueId) {
-    return NextResponse.json({ error: 'NEXT_PUBLIC_LEAGUE_ID is not set' }, { status: 500 });
+    return NextResponse.json({ error: 'No league configured' }, { status: 500 });
   }
   const wanted = req.nextUrl.searchParams.get('transactionId');
 

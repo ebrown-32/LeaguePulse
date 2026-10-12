@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
 import { weekPhase, type WeekPhase } from '@/lib/nflSchedule';
-import { INITIAL_LEAGUE_ID, getCurrentLeagueId } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/Select';
@@ -81,7 +81,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+      if (!(await leagueConfigured())) {
         setError('Please set your Sleeper league ID in the .env.local file.');
         setLoading(false);
         return;
