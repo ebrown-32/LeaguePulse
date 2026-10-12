@@ -122,8 +122,9 @@ export async function testAnthropicKey(key: string): Promise<Check> {
  * AI desk silently stops working.
  */
 async function checkRedis(): Promise<Check> {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  // KV_REST_API_* are the names a Vercel Marketplace install sets.
+  const restUrl = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL)?.trim();
+  const restToken = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN)?.trim();
   const tcp = process.env.REDIS_URL?.trim();
 
   // Half-configured REST is the easy mistake: Upstash shows both values and it

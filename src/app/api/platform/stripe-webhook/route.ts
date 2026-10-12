@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/platform/stripe';
 import { getTenant, saveTenant, type Tenant, type TenantStatus } from '@/lib/platform/tenants';
+import { PLANS } from '@/lib/platform/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,13 @@ const STATUS: Record<string, TenantStatus> = {
   trialing: 'trialing', active: 'active', past_due: 'past_due', unpaid: 'past_due',
   canceled: 'canceled', incomplete_expired: 'canceled', paused: 'canceled',
 };
+
+function planOf(sub: Stripe.Subscription): Tenant['plan'] | null {
+  const price = sub.items?.data?.[0]?.price?.id;
+  if (price && price === PLANS.pro.stripeMonthly) return 'monthly';
+  if (price && price === PLANS.pro.stripeSeason) return 'season';
+  return null;
+}
 
 export async function POST(req: Request) {
   const s = stripe();
@@ -65,6 +73,8 @@ export async function POST(req: Request) {
           ...t,
           status: event.type === 'customer.subscription.deleted' ? 'canceled' : STATUS[sub.status] ?? t.status,
           stripeSubscriptionId: sub.id,
+          // A plan switch made in the billing portal arrives here.
+          plan: planOf(sub) ?? t.plan,
         });
       }
     }

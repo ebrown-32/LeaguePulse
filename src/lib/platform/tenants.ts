@@ -36,7 +36,7 @@ const HOLD_MS = 30 * 60 * 1000;
 
 function redis() {
   const r = getRedis().client;
-  if (!r) throw new Error('The hosted product needs Redis (UPSTASH_REDIS_REST_URL and token).');
+  if (!r) throw new Error('The hosted product needs Redis (UPSTASH_REDIS_REST_URL and token, or KV_REST_API_URL and token from a Vercel Marketplace install).');
   return r;
 }
 

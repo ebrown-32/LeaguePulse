@@ -7,6 +7,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';
+import BillingCard from '@/components/admin/BillingCard';
 
 /**
  * The single admin panel.
@@ -84,6 +85,17 @@ export default function AdminShell() {
           >
             {busy ? 'Signing in…' : 'Unlock'}
           </button>
+          {/* Set only on the hosted product, where the operator can issue a
+              recovery link. Self-hosted, the password is ADMIN_PASSWORD. */}
+          {process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL && (
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Forgot it? Email{' '}
+              <a className="text-primary" href={`mailto:${process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL}?subject=Admin%20password%20reset`}>
+                {process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL}
+              </a>{' '}
+              from the address you signed up with.
+            </p>
+          )}
         </div>
       </PageLayout>
     );
@@ -108,6 +120,7 @@ export default function AdminShell() {
           from behind another tab. */}
       {tab === 'appearance' && <AppearanceEditor adminPassword={password} />}
       {tab === 'ai' && <AIDeskAdmin adminPassword={password} />}
+      <BillingCard password={password} />
     </PageLayout>
   );
 }

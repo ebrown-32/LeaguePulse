@@ -78,6 +78,8 @@ Locally, `http://<slug>.localhost:3000` works in Chrome with no setup.
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
 | `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 12, 49, 14) |
+| `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
+| `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |
 
 Do **not** set `NEXT_PUBLIC_LEAGUE_ID` or `ANTHROPIC_API_KEY` on the hosted
 project. Public variables are baked into the build, and a platform Anthropic key
@@ -86,19 +88,57 @@ is never used for leagues anyway.
 ## Billing
 
 1. In Stripe, create a product **League Pass** with a monthly price and a
-   season price (a yearly recurring price is simplest).
+   season price (a yearly recurring price is simplest). Their ids go in
+   `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_SEASON`.
 2. Add a webhook endpoint at `https://yourdomain.com/api/platform/stripe-webhook`
    for `checkout.session.completed`, `customer.subscription.updated` and
-   `customer.subscription.deleted`.
-3. Point the GitHub Actions `SITE_URL` secret for this project at
-   `https://yourdomain.com` so the scheduler pokes reach the fan-out.
+   `customer.subscription.deleted`. Its signing secret is `STRIPE_WEBHOOK_SECRET`.
+3. **Turn on the customer portal** (Settings, Billing, Customer portal) and
+   save it once: allow updating the payment method, cancelling, viewing
+   invoices and, if you like, switching between the two League Pass prices.
+   League admins reach it from "Manage billing" on their admin page. Until it
+   is saved, that button returns an error.
+4. Do all of this in **test mode** first and run a full sign-up with card
+   `4242 4242 4242 4242`. Then repeat steps 1 to 3 in live mode and swap the
+   four Stripe variables for the live ones.
+
+## The scheduler
+
+Both GitHub workflows poke your own league (`SITE_URL`, `CRON_SECRET`) and, if
+set, the hosted product (`HOSTED_SITE_URL`, `HOSTED_CRON_SECRET`). Add the
+latter two as repository secrets: `HOSTED_SITE_URL` is the bare domain,
+`https://yourdomain.com`, and `HOSTED_CRON_SECRET` is the hosted project's
+`CRON_SECRET`. Scheduled workflows only run from the default branch, so the
+workflow changes take effect once they are on `main`.
+
+One poke fans out one run per live league that has an AI key, each called on
+the real domain in its own invocation.
+
+## Operating it
+
+Operator endpoints take `Authorization: Bearer $LP_OPERATOR_SECRET`.
+
+```sh
+# Every league, newest first, with status and plan
+curl https://yourdomain.com/api/platform/operator/leagues -H "Authorization: Bearer $LP_OPERATOR_SECRET"
+
+# A one-time admin recovery link (valid 24 hours) for a locked-out owner.
+# Check the request comes from the league's Stripe customer email first.
+curl -X POST https://yourdomain.com/api/platform/recover \
+  -H "Authorization: Bearer $LP_OPERATOR_SECRET" -d '{"slug":"theirleague"}'
+```
+
+Terms of Service and the Privacy Policy are at `/legal/terms` and
+`/legal/privacy`, linked from the landing page footer and the checkout step.
+They are a reasonable starting point written from what the code actually
+stores, not legal advice; have them read by someone qualified, and add your
+legal entity and governing law, before charging real customers.
 
 ## Still to build
 
-- **Billing self-service**: a link from a league's admin to the Stripe customer
-  portal, to update a card or cancel. Until then, cancellations go through you.
-- **Admin password reset**, and inviting a second admin such as the commissioner.
+- **Self-service password reset** by email (today the operator issues a
+  recovery link), and inviting a second admin such as the commissioner.
 - **Purging a cancelled league's data** after a grace period (the registry entry
   can be removed with `deleteTenant`; its `t:<slug>:` keys are left).
 - **Custom domains** per league, such as moving your own league onto the platform.
-- **A platform admin view**: leagues, statuses, trials ending.
+- **A platform admin page** (today: the operator leagues endpoint).

@@ -544,6 +544,8 @@ function Footer() {
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
           <a href={PLATFORM.github} className="hover:text-foreground">GitHub</a>
           {PLATFORM.supportEmail && <a href={`mailto:${PLATFORM.supportEmail}`} className="hover:text-foreground">Support</a>}
+          <Link href="/legal/terms" className="hover:text-foreground">Terms</Link>
+          <Link href="/legal/privacy" className="hover:text-foreground">Privacy</Link>
         </div>
         <p>Not affiliated with Sleeper. Uses Sleeper&apos;s public API.</p>
       </div>

@@ -201,6 +201,10 @@ export default function Onboarding() {
                 <p className="mt-2 text-center text-[12px] text-muted-foreground">
                   No card needed for the trial. If you don&apos;t add one, it simply ends.
                 </p>
+                <p className="mt-1 text-center text-[11.5px] text-muted-foreground">
+                  By continuing you agree to the <a href="/legal/terms" target="_blank" className="underline hover:text-foreground">Terms</a> and{' '}
+                  <a href="/legal/privacy" target="_blank" className="underline hover:text-foreground">Privacy Policy</a>.
+                </p>
                 {startError && (
                   <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[13px]">
                     <p className="font-semibold text-amber-300">{startError.msg}</p>

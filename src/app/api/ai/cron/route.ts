@@ -299,20 +299,37 @@ async function runLiveCoverage(force: boolean) {
 async function fanOut(request: Request): Promise<Response> {
   const { listTenants, isLive } = await import('@/lib/platform/tenants');
   const url = new URL(request.url);
+  // Vercel's own cron calls the deployment's vercel.app address, which can sit
+  // behind deployment protection. Each league is called on the real domain
+  // instead (locally, on whatever address this request came in on).
+  const root = process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN?.trim();
+  if (root && !/localhost|127\.0\.0\.1/.test(url.hostname)) {
+    url.protocol = 'https:'; url.host = root; url.port = '';
+  }
   const tenants = (await listTenants()).filter(isLive);
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET is required on the hosted product' }, { status: 500 });
 
+  // Each league's run can take up to its own sixty seconds, and this
+  // invocation has the same limit, so it stops waiting well before then. A
+  // league still running is reported as "started": its request has already
+  // reached the platform and finishes in its own invocation regardless.
+  const WAIT_MS = 45_000;
   const results = await Promise.all(tenants.map(async t => {
     const target = new URL(url);
     target.searchParams.set('tenant', t.slug);
-    try {
-      const res = await fetch(target, { headers: { authorization: `Bearer ${secret}` }, cache: 'no-store' });
-      const body = await res.json().catch(() => ({}));
-      return { league: t.slug, status: res.status, ...body };
-    } catch (err) {
-      return { league: t.slug, error: err instanceof Error ? err.message : String(err) };
-    }
+    const run = (async () => {
+      try {
+        const res = await fetch(target, { headers: { authorization: `Bearer ${secret}` }, cache: 'no-store' });
+        const body = await res.json().catch(() => ({}));
+        return { league: t.slug, status: res.status, ...body };
+      } catch (err) {
+        return { league: t.slug, error: err instanceof Error ? err.message : String(err) };
+      }
+    })();
+    const waited = new Promise<{ league: string; started: true }>(resolve =>
+      setTimeout(() => resolve({ league: t.slug, started: true }), WAIT_MS));
+    return Promise.race([run, waited]);
   }));
   return NextResponse.json({ leagues: results.length, results });
 }

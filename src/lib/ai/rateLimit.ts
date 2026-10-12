@@ -7,6 +7,7 @@
  * copy for analytics is how one of them ends up quietly unguarded.
  */
 
+import { createHash } from 'node:crypto';
 import { getRedis } from '@/lib/redisClient';
 
 /** In-memory fallback when Redis is not configured (local dev). */
@@ -15,7 +16,10 @@ const memoryHits = new Map<string, { count: number; resetAt: number }>();
 export async function rateLimit(
   bucket: string, ip: string, limit: number, windowMs: number,
 ): Promise<{ ok: boolean; remaining: number }> {
-  const key = `${bucket}${ip}`;
+  // A one-way hash of the address, not the address itself, so stored keys
+  // say nothing about who visited. Each key expires when its window closes.
+  const key = `${bucket}${createHash('sha256').update(`lp-rl:${ip}`).digest('base64url').slice(0, 22)}`;
+  const ttl = Math.ceil(windowMs / 1000) + 60;
   const now = Date.now();
   const { client } = getRedis();
 
@@ -33,11 +37,11 @@ export async function rateLimit(
     const raw = await client.get(key);
     const hit = raw ? (JSON.parse(raw) as { count: number; resetAt: number }) : null;
     if (!hit || now > hit.resetAt) {
-      await client.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }));
+      await client.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }), ttl);
       return { ok: true, remaining: limit - 1 };
     }
     hit.count += 1;
-    await client.set(key, JSON.stringify(hit));
+    await client.set(key, JSON.stringify(hit), Math.max(60, Math.ceil((hit.resetAt - now) / 1000) + 60));
     return { ok: hit.count <= limit, remaining: Math.max(limit - hit.count, 0) };
   } catch {
     // Never let a rate-limiter outage take the feature down.

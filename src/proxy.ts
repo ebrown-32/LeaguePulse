@@ -14,7 +14,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PLATFORM_PREFIXES = ['/landing', '/start'];
+const PLATFORM_PREFIXES = ['/landing', '/start', '/legal'];
 const hosted = process.env.LP_HOSTED === '1';
 const rootDomain = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.app').toLowerCase();
 
