@@ -4,51 +4,70 @@
  * The product's front page.
  *
  * Every team, writer and number on this page is invented sample data, drawn
- * as live UI rather than screenshots. Screenshots of a real league would put
- * real people's names and handles on a public marketing page; mock UI also
- * stays sharp at any size and can move.
+ * as live UI rather than screenshots: screenshots of a real league would put
+ * real people's names on a public page, and live UI stays sharp and can move.
+ * Every feature shown is one the product has.
+ *
+ * Design: paper, ink, turf green and one signal orange; Archivo, slightly
+ * condensed, for display and numbers; a small icon set drawn for the product
+ * (marks.tsx). Sections read like a matchday programme: numbered chapters,
+ * each built around the screen it describes.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion, useReducedMotion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import {
-  ArrowRight, Check, ChevronDown, GithubIcon, Radio, Sparkles, BarChart3, Trophy, Megaphone,
-  CrownIcon, FlaskConical, Database, Zap, Target, Activity,
-} from '@/components/icons';
 import { PLATFORM, PLANS } from '@/lib/platform/config';
+import { productDisplay } from './fonts';
+import {
+  Logomark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
+  PennantMark, FindMark, AddressMark, ChatMark, Tick, Route,
+} from './marks';
+import WinChance from './landing/WinChance';
+import { DeskFeed, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
 
-// ── Sample data ──────────────────────────────────────────────────────────────
-
-const TEAM_A = { name: 'Gridiron Ghosts', record: '6-2', color: 'from-sky-400 to-indigo-500', initials: 'GG' };
-const TEAM_B = { name: 'Fourth & Long Shots', record: '5-3', color: 'from-amber-400 to-rose-500', initials: 'FL' };
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 18 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const } },
+const ease = [0.22, 1, 0.36, 1] as const;
+const rise = {
+  hidden: { opacity: 0, y: 22 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease } },
 };
 
-function Monogram({ t, size = 40 }: { t: { initials: string; color: string }; size?: number }) {
-  return (
-    <span className={cn('flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br font-display font-bold text-white shadow-lg', t.color)}
-      style={{ width: size, height: size, fontSize: size * 0.34 }}>
-      {t.initials}
-    </span>
-  );
+/** Kept for the sign-up pages, which show the same mark. */
+export function PulseMark({ className }: { className?: string }) {
+  return <Logomark className={className} />;
 }
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Landing() {
   return (
-    <div className="lp-brand min-h-screen overflow-x-hidden font-body">
+    <div className={cn('lp-brand min-h-screen overflow-x-hidden font-body', productDisplay.variable)}>
       <Nav />
       <Hero />
-      <Proof />
-      <Features />
-      <Steps />
+      <Contents />
+      <Chapter id="desk" n="01" mark={DeskMark} eyebrow="The Desk"
+        title={<>Beat writers who actually <span className="lp-brand-text">watch your league.</span></>}
+        body="A cast of AI writers and loud fans post all week: power rankings, matchup previews, trade grades, live reactions on Sunday. They argue in the replies. Every claim is checked against your real standings, trades and game status before it posts."
+        points={['Posts through the day, quiet overnight', 'You choose the cast and their voices', 'Runs on your own Anthropic key']}
+        visual={<DeskFeed />} />
+      <GameDayBand />
+      <Chapter id="gotw" n="03" mark={GameBallMark} eyebrow="Game of the Week" flip
+        title="The game everyone should be watching, picked on purpose."
+        body="Each week the desk crowns the most entertaining matchup on the slate, scored on five things: whether both teams are winning, playoff stakes, points, rivalry history and how close the forecast is. Then they announce it, and the card shows the live score once it starts."
+        points={['Scored the same way every week', 'Rivalry history from every season you have played', 'Announced midweek by the desk']}
+        visual={<GotwSignals />} />
+      <Chapter id="analytics" n="04" mark={SheetMark} eyebrow="Analytics"
+        title="Ask your league a question. Get a chart back."
+        body="Type a question in plain English, or drag fields into a chart, or scroll the rows like a spreadsheet. Matchups, seasons, player weeks, trades and drafts, back to your first season. Save reports and share them by link."
+        points={['Plain-English questions, answered as charts', 'Drag-and-drop builder and a full data grid', 'Every season, already loaded']}
+        visual={<AskAnalytics />} />
+      <Chapter id="simulator" n="05" mark={BranchMark} eyebrow="Simulator" flip
+        title="Ten thousand seasons before Sunday."
+        body="Playoff odds from simulating the rest of the season ten thousand times, fitted to how your league actually scores. Then the what-ifs: alternate schedules, and the trades that really changed who won."
+        points={['Odds fitted to your league, not a generic one', 'Schedule luck and trade trees', 'Live win chances on every matchup']}
+        visual={<PlayoffSim />} />
+      <AlsoInside />
+      <Setup />
       <Pricing />
       <OpenSource />
       <Faq />
@@ -58,44 +77,40 @@ export default function Landing() {
   );
 }
 
+// ── Nav ──────────────────────────────────────────────────────────────────────
+
+function Wordmark() {
+  return (
+    <Link href="/" className="flex items-center gap-2.5">
+      <Logomark size={30} />
+      <span className="lp-display text-[19px] font-extrabold tracking-[-0.03em]">{PLATFORM.name}</span>
+    </Link>
+  );
+}
+
 function Nav() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 12);
+    const on = () => setScrolled(window.scrollY > 8);
     on(); window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
   }, []);
   return (
-    <header className={cn('fixed inset-x-0 top-0 z-50 transition-all',
-      scrolled ? 'border-b border-border/60 bg-background/75 backdrop-blur-xl' : 'bg-transparent')}
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <Link href="/landing" className="flex items-center gap-2">
-          <PulseMark />
-          <span className="font-display text-[17px] font-bold tracking-tight">{PLATFORM.name}</span>
-        </Link>
-        <nav className="hidden items-center gap-7 text-[13.5px] text-muted-foreground md:flex">
-          <a href="#features" className="hover:text-foreground">Features</a>
+    <header className={cn('fixed inset-x-0 top-0 z-50 transition-[background,border-color] duration-300',
+      scrolled ? 'border-b border-border bg-background/85 backdrop-blur-md' : 'border-b border-transparent')}>
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-5">
+        <Wordmark />
+        <nav className="hidden items-center gap-7 text-[13.5px] font-medium text-muted-foreground md:flex">
+          <a href="#desk" className="hover:text-foreground">Features</a>
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
-          <a href="#open-source" className="hover:text-foreground">Open source</a>
           <a href="#faq" className="hover:text-foreground">FAQ</a>
+          <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="hover:text-foreground">Open source</a>
         </nav>
-        <Link href="/start" className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground shadow-[0_0_24px_hsl(151_82%_50%/0.35)] transition hover:brightness-110">
-          Get started <ArrowRight className="h-3.5 w-3.5" />
+        <Link href="/start" className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[13px] font-semibold text-background transition hover:bg-foreground/85">
+          Get started <Route size={14} />
         </Link>
       </div>
     </header>
-  );
-}
-
-/** The mark: a heartbeat line, because the product is a league's pulse. */
-function PulseMark({ className }: { className?: string }) {
-  return (
-    <span className={cn('flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary/15 ring-1 ring-primary/40', className)}>
-      <svg viewBox="0 0 24 24" className="h-5 w-5 text-primary" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12h4l2.5-6 4 12 3-8 1.5 2H22" />
-      </svg>
-    </span>
   );
 }
 
@@ -106,280 +121,208 @@ function Hero() {
   const [q, setQ] = useState('');
   return (
     <section className="relative pt-28 sm:pt-36">
-      <div className="lp-brand-hero-bg pointer-events-none absolute inset-0 -z-0" />
-      {/* grid-cols-1 and min-w-0: an implicit grid column sizes to its widest
-          content, which pushed the hero past a phone's right edge. */}
-      <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-14 px-5 pb-20 lg:grid-cols-[1.05fr_1fr]">
-        <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
-          <motion.p variants={fadeUp} className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-            </span>
-            For every Sleeper league
+      <div className="lp-brand-hero-bg pointer-events-none absolute inset-x-0 top-0 h-[640px]" />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
+        <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
+          <motion.p variants={rise} className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            For Sleeper fantasy football leagues
           </motion.p>
-          <motion.h1 variants={fadeUp} className="mt-5 font-display text-[44px] font-bold leading-[1.02] tracking-[-0.035em] sm:text-[64px]">
-            Give your league<br />a <span className="lp-brand-text">pulse.</span>
+          <motion.h1 variants={rise}
+            className="lp-display mt-4 max-w-4xl text-[46px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[76px] lg:text-[88px]">
+            Your league finally gets a <span className="lp-brand-text">press box.</span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="mt-5 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
-            A home for your fantasy league. AI beat writers who trash talk your actual roster,
-            live win odds, a Sunday guide to which games to have on, and every stat since your
-            first draft. Ready in a minute, from your Sleeper league.
-          </motion.p>
-          <motion.form variants={fadeUp}
-            onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
-            className="mt-8 flex max-w-lg flex-col gap-2 rounded-2xl border border-border bg-card/80 p-2 shadow-2xl backdrop-blur sm:flex-row">
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Your Sleeper username or league ID"
-              className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
-            <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
-              Find my league <ArrowRight className="h-4 w-4" />
-            </button>
-          </motion.form>
-          <motion.p variants={fadeUp} className="mt-3 text-[12.5px] text-muted-foreground">
-            {PLANS.pro.trialDays}-day free trial. No card to look around. Cancel any time.
-          </motion.p>
         </motion.div>
-        <HeroVisual />
+
+        <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
+          <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } }}>
+            <motion.p variants={rise} className="max-w-md text-[17px] leading-relaxed text-muted-foreground">
+              {PLATFORM.name} turns your Sleeper league into its own site. AI writers who cover your actual teams,
+              live chances to win, a guide to which games to have on, and every stat back to your first draft.
+            </motion.p>
+            <motion.form variants={rise}
+              onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
+              className="mt-8 flex max-w-md flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sleeper username or league ID" aria-label="Sleeper username or league ID"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
+              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
+                Find my league <Route size={15} />
+              </button>
+            </motion.form>
+            <motion.p variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
+              {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.
+            </motion.p>
+          </motion.div>
+
+          <motion.div className="min-w-0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
+            <WinChance />
+            <p className="mt-3 text-[11.5px] text-muted-foreground">Live chance to win across a Sunday. Sample league; hover the chart.</p>
+          </motion.div>
+        </div>
       </div>
     </section>
   );
 }
 
-/** A matchup card whose odds tick, a feed post, and a live field. */
-function HeroVisual() {
-  const reduce = useReducedMotion();
-  const [p, setP] = useState(0.58);
-  const [ball, setBall] = useState(38);
-  useEffect(() => {
-    if (reduce) return;
-    const t = setInterval(() => {
-      setP(x => Math.min(0.86, Math.max(0.32, x + (Math.random() - 0.45) * 0.07)));
-      setBall(b => (b >= 92 ? 30 : b + 4 + Math.random() * 10));
-    }, 1800);
-    return () => clearInterval(t);
-  }, [reduce]);
-  const a = 112.4 + (p - 0.58) * 60, b = 104.9 - (p - 0.58) * 40;
+// ── Contents ─────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="relative mx-auto w-full min-w-0 max-w-md lg:max-w-none">
-      <motion.div initial={{ opacity: 0, y: 30, rotate: -1.5 }} animate={{ opacity: 1, y: 0, rotate: -1.5 }}
-        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-        className="relative rounded-3xl border border-border bg-card p-5 shadow-[0_40px_120px_-30px_hsl(151_82%_50%/0.35)]">
-        <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-            <CrownIcon className="h-3.5 w-3.5" /> Game of the Week
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> Live
-          </span>
-        </div>
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Monogram t={TEAM_A} />
-            <div className="min-w-0"><p className="truncate text-[13px] font-bold">{TEAM_A.name}</p><p className="text-[11px] text-muted-foreground">{TEAM_A.record}</p></div>
-          </div>
-          <span className="text-[10px] font-bold text-muted-foreground">VS</span>
-          <div className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right">
-            <Monogram t={TEAM_B} />
-            <div className="min-w-0"><p className="truncate text-[13px] font-bold">{TEAM_B.name}</p><p className="text-[11px] text-muted-foreground">{TEAM_B.record}</p></div>
-          </div>
-        </div>
-        <div className="mt-4 flex items-end justify-between">
-          <div><p className="font-display text-[34px] font-bold leading-none tabular-nums">{a.toFixed(1)}</p><p className="mt-1 text-[11px] font-semibold text-primary tabular-nums">{Math.round(p * 100)}% to win</p></div>
-          <div className="text-right"><p className="font-display text-[26px] font-bold leading-none text-muted-foreground tabular-nums">{b.toFixed(1)}</p><p className="mt-1 text-[11px] text-muted-foreground tabular-nums">{Math.round((1 - p) * 100)}%</p></div>
-        </div>
-        <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-foreground/10">
-          <motion.div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/70 to-primary" animate={{ width: `${p * 100}%` }} transition={{ type: 'spring', stiffness: 60, damping: 16 }} />
-        </div>
-        {/* Field */}
-        <div className="mt-5">
-          <div className="flex justify-between text-[10.5px] font-semibold text-muted-foreground"><span>KC ball · your WR</span><span>2nd &amp; 6</span></div>
-          <div className="relative mt-1.5 h-7 overflow-hidden rounded-md bg-emerald-500/[0.12] ring-1 ring-inset ring-emerald-500/20">
-            <div className="absolute inset-y-0 right-0 w-[6%] bg-primary/25" />
-            <div className="absolute inset-y-0 right-[6%] w-[17.6%] bg-red-500/10" />
-            {Array.from({ length: 9 }, (_, i) => <div key={i} className="absolute inset-y-0 w-px bg-foreground/10" style={{ left: `${6 + (i + 1) * 8.8}%` }} />)}
-            <motion.div className="absolute top-1/2 h-3.5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-amber-600 ring-2 ring-card" animate={{ left: `${6 + Math.min(ball, 94) * 0.88}%` }} transition={{ type: 'spring', stiffness: 70, damping: 15 }} />
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Feed post */}
-      <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.5 }}
-        className="relative -mt-6 ml-auto w-[88%] rotate-[1.5deg] rounded-2xl border border-border bg-card/95 p-4 shadow-2xl backdrop-blur">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[11px] font-bold text-white">DC</span>
-          <div className="min-w-0 flex-1"><p className="text-[13px] font-bold">Dana Cole <span className="font-normal text-muted-foreground">@thecolecall</span></p></div>
-          <span className="text-[11px] text-muted-foreground">2m</span>
-        </div>
-        <p className="mt-2 text-[13.5px] leading-relaxed">
-          Fourth &amp; Long Shots traded away their RB1 for &ldquo;depth&rdquo; and are now starting a fullback. Bold. Wrong, but bold.
-        </p>
-        <div className="mt-2 flex items-center gap-4 text-[11.5px] text-muted-foreground"><span>♥ 24</span><span>3 replies</span>
-          <span className="ml-auto inline-flex items-center gap-1 text-primary"><span className="flex gap-0.5"><span className="h-1 w-1 animate-bounce rounded-full bg-primary" /><span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:120ms]" /><span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:240ms]" /></span> replying</span>
-        </div>
-      </motion.div>
-      <p className="mt-4 text-center text-[11px] text-muted-foreground/70">Sample league. Yours will be full of your own teams.</p>
-    </div>
-  );
-}
-
-function Proof() {
+function Contents() {
   const items = [
-    ['Any Sleeper league', 'Paste a username or a league ID'],
-    ['Every season', 'Linked back to your first draft'],
-    ['Live on Sundays', 'Scores, odds and plays as they happen'],
-    ['Open source', 'Read every line, or run it yourself'],
+    { n: '01', t: 'The Desk', m: DeskMark, href: '#desk' },
+    { n: '02', t: 'Game Day', m: GameDayMark, href: '#gameday' },
+    { n: '03', t: 'Game of the Week', m: GameBallMark, href: '#gotw' },
+    { n: '04', t: 'Analytics', m: SheetMark, href: '#analytics' },
+    { n: '05', t: 'Simulator', m: BranchMark, href: '#simulator' },
+    { n: '06', t: 'History & more', m: RingMark, href: '#more' },
   ];
   return (
-    <section className="border-y border-border/60 bg-card/30">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-5 py-8 md:grid-cols-4">
-        {items.map(([t, s]) => (
-          <div key={t}><p className="font-display text-[15px] font-bold">{t}</p><p className="mt-0.5 text-[12.5px] text-muted-foreground">{s}</p></div>
+    <section className="border-y border-border bg-card">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-6">
+        {items.map((it, i) => (
+          <a key={it.n} href={it.href}
+            className={cn('group flex items-center gap-3 border-border py-5 pr-3 transition-colors hover:text-primary',
+              i % 2 === 1 && 'pl-4 sm:pl-0', 'sm:[&:not(:nth-child(3n+1))]:pl-4 lg:[&:not(:first-child)]:border-l lg:[&:not(:first-child)]:pl-4')}>
+            <it.m size={26} className="shrink-0 transition-transform group-hover:-translate-y-0.5" />
+            <span className="min-w-0">
+              <span className="block text-[10.5px] font-semibold tabular-nums text-muted-foreground">{it.n}</span>
+              <span className="lp-display block truncate text-[14.5px] font-bold">{it.t}</span>
+            </span>
+          </a>
         ))}
       </div>
     </section>
   );
 }
 
-// ── Features ─────────────────────────────────────────────────────────────────
+// ── Chapters ─────────────────────────────────────────────────────────────────
 
-function Section({ id, eyebrow, title, sub, children }: { id?: string; eyebrow: string; title: ReactNode; sub?: string; children: ReactNode }) {
+function ChapterHead({ n, mark: M, eyebrow }: { n: string; mark: typeof DeskMark; eyebrow: string }) {
   return (
-    <section id={id} className="scroll-mt-20 py-24">
-      <div className="mx-auto max-w-6xl px-5">
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} variants={fadeUp} className="max-w-2xl">
-          <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>
-          <h2 className="mt-3 font-display text-[34px] font-bold leading-[1.08] tracking-[-0.03em] sm:text-[44px]">{title}</h2>
-          {sub && <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">{sub}</p>}
-        </motion.div>
-        <div className="mt-12">{children}</div>
-      </div>
-    </section>
+    <div className="flex items-center gap-3">
+      <span className="lp-num text-[15px] font-extrabold text-primary">{n}</span>
+      <span className="h-px w-8 bg-border" />
+      <M size={24} />
+      <span className="text-[12.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{eyebrow}</span>
+    </div>
   );
 }
 
-function FeatureCard({ icon: I, title, body, visual, wide }: {
-  icon: typeof Sparkles; title: string; body: string; visual?: ReactNode; wide?: boolean;
+function Points({ items }: { items: string[] }) {
+  return (
+    <ul className="mt-7 space-y-2.5">
+      {items.map(p => (
+        <li key={p} className="flex gap-2.5 text-[14.5px]"><Tick className="mt-0.5 shrink-0" />{p}</li>
+      ))}
+    </ul>
+  );
+}
+
+function Chapter({ id, n, mark, eyebrow, title, body, points, visual, flip }: {
+  id: string; n: string; mark: typeof DeskMark; eyebrow: string; title: ReactNode; body: string;
+  points: string[]; visual: ReactNode; flip?: boolean;
 }) {
   return (
-    <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }} variants={fadeUp}
-      className={cn('group relative overflow-hidden rounded-3xl border border-border bg-card p-6 transition-colors hover:border-primary/40', wide && 'md:col-span-2')}>
-      <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-primary/10 opacity-0 blur-3xl transition-opacity group-hover:opacity-100" />
-      <span className="lp-chip h-10 w-10 rounded-xl [&>svg]:h-5 [&>svg]:w-5"><I /></span>
-      <h3 className="mt-4 font-display text-[20px] font-bold tracking-tight">{title}</h3>
-      <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">{body}</p>
-      {visual && <div className="mt-5">{visual}</div>}
-    </motion.div>
-  );
-}
-
-function Features() {
-  return (
-    <Section id="features" eyebrow="What you get" title={<>Everything your group chat argues about, <span className="lp-brand-text">in one place.</span></>}
-      sub="Built on your league's real Sleeper history: every matchup, trade, waiver claim and draft pick, across every season you have played.">
-      <div className="grid gap-4 md:grid-cols-3">
-        <FeatureCard wide icon={Megaphone} title="An AI media desk that knows your league"
-          body="A cast of beat writers and loud fans post takes, power rankings, previews and live reactions all week, and argue in the replies. Every claim is checked against your real standings, trades and game status before it posts."
-          visual={<FeedVisual />} />
-        <FeatureCard icon={Radio} title="Game Day"
-          body="Which NFL games to have on, ranked by how much each one swings your matchup, with the channel, the ball on a live field, and every play your players make."
-          visual={<GameDayVisual />} />
-        <FeatureCard icon={Target} title="Live win odds"
-          body="A calibrated forecast on every matchup, fitted to your league's own scoring, updating as players take the field." />
-        <FeatureCard icon={CrownIcon} title="Game of the Week"
-          body="The most entertaining matchup on the slate, picked from records, rivalries and playoff stakes, then announced by the desk." />
-        <FeatureCard icon={BarChart3} title="Analytics anyone can use"
-          body="Ask a question in plain English, drag fields into a chart, or dig through the rows in a spreadsheet. Save reports and share them by link." />
-        <FeatureCard wide icon={FlaskConical} title="Simulator and what-ifs"
-          body="Ten thousand simulated seasons for playoff odds, alternate schedules, and the trades that actually changed who won."
-          visual={<OddsVisual />} />
-        <FeatureCard icon={Database} title="Your whole history"
-          body="Records, rivalries, champions and trophy cases, linked back through every season you have played on Sleeper." />
-        <FeatureCard icon={Activity} title="Weekly report"
-          body="A recap of the week just played: best and worst lineups, the luckiest win, the points left on the bench." />
-        <FeatureCard wide icon={Sparkles} title="Make it yours"
-          body="Your league's name, logo and colours, light and dark, on its own web address. Installs on phones like an app." />
+    <section id={id} className="scroll-mt-16 py-20 sm:py-28">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 sm:px-5 lg:grid-cols-2 lg:gap-16">
+        <motion.div className={cn('min-w-0', flip && 'lg:order-2')} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }}
+          variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
+          <motion.div variants={rise}><ChapterHead n={n} mark={mark} eyebrow={eyebrow} /></motion.div>
+          <motion.h2 variants={rise} className="lp-display mt-6 text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">{title}</motion.h2>
+          <motion.p variants={rise} className="mt-5 max-w-lg text-[16px] leading-relaxed text-muted-foreground">{body}</motion.p>
+          <motion.div variants={rise}><Points items={points} /></motion.div>
+        </motion.div>
+        <motion.div className={cn('min-w-0', flip && 'lg:order-1')} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }} transition={{ duration: 0.8, ease }}>
+          {visual}
+        </motion.div>
       </div>
-    </Section>
+    </section>
   );
 }
 
-function FeedVisual() {
-  const posts = [
-    { who: 'Dana Cole', tag: 'Power Rankings', text: 'Gridiron Ghosts at No. 1 and I will not be taking questions.', c: 'from-fuchsia-500 to-violet-600' },
-    { who: 'Big Mike', tag: 'Fan', text: 'Ranking a 6-2 team first is not analysis, Dana, it is reading.', c: 'from-orange-400 to-red-500' },
-  ];
+/** Game Day, on a dark band: it is the Sunday night part of the product. */
+function GameDayBand() {
   return (
-    <div className="space-y-2">
-      {posts.map((p, i) => (
-        <div key={p.who} className={cn('flex gap-3 rounded-2xl border border-border bg-background/60 p-3', i === 1 && 'ml-8')}>
-          <span className={cn('h-8 w-8 shrink-0 rounded-full bg-gradient-to-br', p.c)} />
-          <div className="min-w-0 text-[13px]">
-            <p className="font-bold">{p.who} <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary">{p.tag}</span></p>
-            <p className="mt-0.5 text-muted-foreground">{p.text}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function GameDayVisual() {
-  const games = [['MIN @ NO', 'FOX', '±28%', 0.95], ['DEN @ LAC', 'CBS', '±21%', 0.72], ['BUF @ LAR', 'ESPN', '±17%', 0.58]] as const;
-  return (
-    <div className="space-y-2">
-      {games.map(([g, tv, s, w]) => (
-        <div key={g} className="flex items-center gap-3 rounded-xl border border-border bg-background/60 px-3 py-2 text-[12.5px]">
-          <span className="font-bold">{g}</span>
-          <span className="rounded bg-muted px-1.5 py-px text-[10px] font-semibold">{tv}</span>
-          <span className="ml-auto font-display font-bold tabular-nums">{s}</span>
-          <span className="h-1 w-12 overflow-hidden rounded-full bg-foreground/10"><span className="block h-full rounded-full bg-primary" style={{ width: `${w * 100}%` }} /></span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function OddsVisual() {
-  const teams = [['Gridiron Ghosts', 0.94], ['Fourth & Long Shots', 0.71], ['The Waiver Wire', 0.48], ['Bench Mob', 0.22], ['Punt Intended', 0.09]] as const;
-  return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {teams.map(([t, p], i) => (
-        <div key={t} className="flex items-center gap-3 text-[12.5px]">
-          <span className="w-36 truncate">{t}</span>
-          <span className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/10">
-            <motion.span className="block h-full rounded-full bg-gradient-to-r from-primary/60 to-primary"
-              initial={{ width: 0 }} whileInView={{ width: `${p * 100}%` }} viewport={{ once: true }} transition={{ duration: 1, delay: i * 0.08 }} />
-          </span>
-          <span className="w-9 text-right font-semibold tabular-nums">{Math.round(p * 100)}%</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── How it works ─────────────────────────────────────────────────────────────
-
-function Steps() {
-  const steps = [
-    { icon: Zap, t: 'Find your league', b: 'Type your Sleeper username. We list your leagues; pick one. Nobody has to give us a password.' },
-    { icon: Target, t: 'Pick an address', b: `Choose where it lives, like yourleague.${PLATFORM.rootDomain}. History back to your first season loads on its own.` },
-    { icon: Trophy, t: 'Drop the link in the chat', b: 'Your league-mates just open it. No accounts, no app store. The desk starts posting the same day.' },
-  ];
-  return (
-    <Section eyebrow="Set up in a minute" title="Three steps. No spreadsheets.">
-      <div className="grid gap-4 md:grid-cols-3">
-        {steps.map((s, i) => (
-          <motion.div key={s.t} initial="hidden" whileInView="show" viewport={{ once: true }} variants={fadeUp}
-            className="relative rounded-3xl border border-border bg-card p-6">
-            <span className="font-display text-[56px] font-bold leading-none text-foreground/[0.06]">{i + 1}</span>
-            <span className="lp-chip absolute right-6 top-6 h-10 w-10 rounded-xl [&>svg]:h-5 [&>svg]:w-5"><s.icon /></span>
-            <h3 className="mt-2 font-display text-[19px] font-bold">{s.t}</h3>
-            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">{s.b}</p>
+    <section id="gameday" className="lp-ink scroll-mt-16 py-20 sm:py-28">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 sm:px-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16">
+        <motion.div className="min-w-0" initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }}
+          variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
+          <motion.div variants={rise} style={{ ['--mark-accent' as string]: 'hsl(var(--primary))' }}>
+            <ChapterHead n="02" mark={GameDayMark} eyebrow="Game Day" />
           </motion.div>
-        ))}
+          <motion.h2 variants={rise} className="lp-display mt-6 text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">
+            Which game to have on, and where your guys are.
+          </motion.h2>
+          <motion.p variants={rise} className="mt-5 max-w-lg text-[16px] leading-relaxed text-muted-foreground">
+            On Sundays every NFL game is ranked by how much it can swing your matchup, with the channel it is on.
+            Each one shows the ball on a live field, which of your players are out there, and every play they make.
+          </motion.p>
+          <motion.div variants={rise}>
+            <Points items={['Ranked by swing to your matchup', 'Live field position and down and distance', 'Your players’ plays, scored as they happen']} />
+          </motion.div>
+        </motion.div>
+        <div className="min-w-0"><GameDayBoard /></div>
       </div>
-    </Section>
+    </section>
+  );
+}
+
+function AlsoInside() {
+  const items = [
+    { m: RingMark, t: 'Your whole history', b: 'Champions, records, rivalries and trophy cases, linked back through every season on Sleeper.' },
+    { m: PlayMark, t: 'The weekly report', b: 'Best and worst lineups, the luckiest win and the points left on the bench, every week.' },
+    { m: PennantMark, t: 'Your colors, your address', b: 'Your league’s name, logo and colors on its own web address. Installs on phones like an app.' },
+  ];
+  return (
+    <section id="more" className="scroll-mt-16 border-t border-border py-20 sm:py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5">
+        <ChapterHead n="06" mark={RingMark} eyebrow="Also inside" />
+        <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 md:grid-cols-3">
+          {items.map((it, i) => (
+            <motion.div key={it.t} initial="hidden" whileInView="show" viewport={{ once: true }} variants={rise}
+              transition={{ delay: i * 0.08 }}>
+              <it.m size={34} />
+              <h3 className="lp-display mt-4 text-[22px] font-bold tracking-[-0.02em]">{it.t}</h3>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">{it.b}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Setup ────────────────────────────────────────────────────────────────────
+
+function Setup() {
+  const steps = [
+    { down: '1st & 10', m: FindMark, t: 'Find your league', b: 'Type your Sleeper username and pick the league. Nobody gives us a password.' },
+    { down: '2nd & 4', m: AddressMark, t: 'Pick its address', b: `Something like yourleague.${PLATFORM.rootDomain}. Every past season loads on its own.` },
+    { down: 'Touchdown', m: ChatMark, t: 'Drop the link in the chat', b: 'League-mates just open it. No accounts, no app store. The desk starts posting the same day.' },
+  ];
+  return (
+    <section className="bg-card py-20 sm:py-28">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5">
+        <h2 className="lp-display max-w-2xl text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Set up in three plays.</h2>
+        <div className="relative mt-12 grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-6">
+          {/* The drive: a dashed route under the three steps. */}
+          <svg className="pointer-events-none absolute left-0 right-0 top-[22px] hidden h-4 w-full md:block" preserveAspectRatio="none" viewBox="0 0 100 4" aria-hidden>
+            <motion.path d="M2 2H98" stroke="hsl(var(--border))" strokeWidth="0.4" strokeDasharray="1.2 1.2" fill="none"
+              initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.4, ease }} />
+          </svg>
+          {steps.map((s, i) => (
+            <motion.div key={s.t} className="relative" initial="hidden" whileInView="show" viewport={{ once: true }} variants={rise} transition={{ delay: i * 0.12 }}>
+              <span className={cn('relative inline-flex h-11 items-center gap-2 rounded-full border px-4 text-[12.5px] font-bold',
+                i === 2 ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background')}>
+                {s.down}
+              </span>
+              <s.m size={30} className="mt-6" />
+              <h3 className="lp-display mt-3 text-[21px] font-bold tracking-[-0.02em]">{s.t}</h3>
+              <p className="mt-2 max-w-xs text-[14.5px] leading-relaxed text-muted-foreground">{s.b}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -390,95 +333,94 @@ function Pricing() {
   const pro = PLANS.pro;
   const includes = [
     'Your league on its own web address',
-    'The AI media desk, on your own Anthropic key',
-    'Live win odds and Game Day',
+    'The AI desk, on your own Anthropic key',
+    'Live win chances and Game Day',
     'Game of the Week, weekly reports, simulator',
-    'Self-serve analytics with AI questions',
+    'Analytics with plain-English questions',
     'Every past season, imported',
-    'Your name, logo and colours',
+    'Your name, logo and colors',
   ];
   return (
-    <Section id="pricing" eyebrow="Pricing" title="One price for the whole league."
-      sub="One person subscribes and everyone in the league gets it. Split across a twelve-team league, it is about a dollar each a month.">
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-3xl border border-border bg-card p-7">
-          <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{PLANS.free.name}</p>
-          <p className="mt-3 font-display text-[44px] font-bold leading-none">Free</p>
-          <p className="mt-3 text-[14px] text-muted-foreground">{PLANS.free.blurb}</p>
-          <ul className="mt-6 space-y-2.5 text-[14px]">
-            {['Every feature, forever', 'Your own Vercel and Redis', 'Bring your own Anthropic key for the AI', 'Community support'].map(x => (
-              <li key={x} className="flex gap-2.5"><Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />{x}</li>
-            ))}
-          </ul>
-          <a href={PLATFORM.github} target="_blank" rel="noreferrer"
-            className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-[14px] font-semibold hover:bg-muted">
-            <GithubIcon className="h-4 w-4" /> View on GitHub
-          </a>
+    <section id="pricing" className="scroll-mt-16 py-20 sm:py-28">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5">
+        <div className="max-w-2xl">
+          <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">One price for the whole league.</h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
+            One person subscribes and everyone gets it. Split across a twelve-team league, it is about a dollar each a month.
+          </p>
         </div>
-
-        <div className="lp-spotlight relative rounded-3xl bg-card p-7 shadow-[0_30px_100px_-40px_hsl(151_82%_50%/0.5)]">
-          <div className="relative z-[2]">
-            <div className="flex items-center justify-between">
-              <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-primary">{pro.name}</p>
-              <div className="flex rounded-full border border-border bg-background/60 p-0.5 text-[12px] font-semibold">
+        <div className="mt-12 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="rounded-[22px] bg-foreground p-7 text-background sm:p-9">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="lp-display text-[20px] font-bold">{pro.name}</p>
+              <div className="flex rounded-full bg-background/10 p-0.5 text-[12.5px] font-semibold">
                 {(['season', 'monthly'] as const).map(c => (
-                  <button key={c} onClick={() => setCycle(c)}
-                    className={cn('relative rounded-full px-3 py-1', cycle === c ? 'text-primary-foreground' : 'text-muted-foreground')}>
-                    {cycle === c && <motion.span layoutId="cycle" className="absolute inset-0 rounded-full bg-primary" transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }} />}
+                  <button key={c} onClick={() => setCycle(c)} className={cn('relative rounded-full px-3.5 py-1.5', cycle === c ? 'text-foreground' : 'text-background/70')}>
+                    {cycle === c && <motion.span layoutId="cycle" className="absolute inset-0 rounded-full bg-background" transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }} />}
                     <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
                   </button>
                 ))}
               </div>
             </div>
-            <div className="mt-3 flex items-baseline gap-2">
+            <div className="mt-6 flex items-baseline gap-3">
               <AnimatePresence mode="wait">
-                <motion.p key={cycle} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                  className="font-display text-[56px] font-bold leading-none tracking-[-0.03em]">
-                  ${cycle === 'season' ? pro.season : pro.monthly}
-                </motion.p>
+                <motion.p key={cycle} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+                  className="lp-num text-[72px] font-extrabold leading-none">${cycle === 'season' ? pro.season : pro.monthly}</motion.p>
               </AnimatePresence>
-              <span className="text-[15px] text-muted-foreground">{cycle === 'season' ? 'per league, per season' : 'per league, per month'}</span>
+              <span className="text-[14.5px] text-background/70">{cycle === 'season' ? 'per league, per season' : 'per league, per month'}</span>
             </div>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              {cycle === 'season'
-                ? `One payment for the whole season, about $${(pro.season / 5).toFixed(0)} a month over five months.`
-                : 'Cancel whenever. Most leagues pause it in the offseason.'}
+            <p className="mt-2 text-[13.5px] text-background/70">
+              {cycle === 'season' ? `One payment, about $${(pro.season / 5).toFixed(0)} a month over a five-month season.` : 'Cancel any time. Most leagues pause it in the offseason.'}
             </p>
-            <ul className="mt-6 grid gap-2.5 text-[14px] sm:grid-cols-2">
-              {includes.map(x => <li key={x} className="flex gap-2.5"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{x}</li>)}
+            <ul className="mt-7 grid grid-cols-1 gap-2.5 text-[14.5px] sm:grid-cols-2">
+              {includes.map(x => (
+                <li key={x} className="flex gap-2.5">
+                  <Tick className="mt-0.5 shrink-0" style={{ ['--primary' as string]: '154 62% 52%' }} />{x}
+                </li>
+              ))}
             </ul>
             <Link href={`/start?plan=${cycle}`}
-              className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-[15px] font-semibold text-primary-foreground transition hover:brightness-110">
-              Start your {pro.trialDays}-day free trial <ArrowRight className="h-4 w-4" />
+              className="mt-9 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-background px-4 py-3.5 text-[15px] font-semibold text-foreground transition hover:bg-background/90">
+              Start your {pro.trialDays}-day free trial <Route size={16} />
             </Link>
           </div>
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-function OpenSource() {
-  return (
-    <section id="open-source" className="scroll-mt-20 py-10">
-      <div className="mx-auto max-w-6xl px-5">
-        <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-card to-background p-8 sm:p-12">
-          <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-          <div className="relative grid items-center gap-8 md:grid-cols-[1fr_auto]">
-            <div>
-              <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-primary">Open source</p>
-              <h2 className="mt-3 font-display text-[30px] font-bold leading-tight tracking-[-0.03em] sm:text-[38px]">Built in the open.</h2>
-              <p className="mt-3 max-w-xl text-[15.5px] leading-relaxed text-muted-foreground">
-                Every line of {PLATFORM.name} is public. Read how the odds are calculated, see exactly what the AI is told,
-                or run your own copy for free. The hosted version is the same code, run for you.
-              </p>
-            </div>
+          <div className="flex flex-col rounded-[22px] border border-border bg-card p-7 sm:p-9">
+            <p className="lp-display text-[20px] font-bold">{PLANS.free.name}</p>
+            <p className="lp-num mt-6 text-[72px] font-extrabold leading-none">$0</p>
+            <p className="mt-2 text-[13.5px] text-muted-foreground">{PLANS.free.blurb}</p>
+            <ul className="mt-7 space-y-2.5 text-[14.5px]">
+              {['Every feature, forever', 'Your own Vercel and Redis', 'Your own Anthropic key for the AI', 'Community support'].map(x => (
+                <li key={x} className="flex gap-2.5"><Tick className="mt-0.5 shrink-0" />{x}</li>
+              ))}
+            </ul>
             <a href={PLATFORM.github} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-background/60 px-5 py-3 text-[14px] font-semibold hover:border-primary/50">
-              <GithubIcon className="h-5 w-5" /> Star on GitHub
+              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3.5 pt-3.5 text-[14.5px] font-semibold transition hover:bg-muted [margin-top:2.25rem]">
+              Get the code <Route size={16} />
             </a>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Open source, FAQ, close ─────────────────────────────────────────────────
+
+function OpenSource() {
+  return (
+    <section className="border-y border-border bg-card py-16">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-8 px-4 sm:px-5 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div>
+          <h2 className="lp-display text-[28px] font-extrabold tracking-[-0.03em] sm:text-[34px]">Built in the open.</h2>
+          <p className="mt-3 max-w-2xl text-[15.5px] leading-relaxed text-muted-foreground">
+            Every line of {PLATFORM.name} is public under the AGPL. Read how the odds are calculated, see exactly what the AI is told,
+            or run your own copy free. The hosted version is the same code, run for you.
+          </p>
+        </div>
+        <a href={PLATFORM.github} target="_blank" rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-foreground px-5 py-2.5 text-[14px] font-semibold transition hover:bg-foreground hover:text-background">
+          Read the source <Route size={15} />
+        </a>
       </div>
     </section>
   );
@@ -488,47 +430,57 @@ function Faq() {
   const qs = [
     ['Is this made by Sleeper?', `No. ${PLATFORM.name} is independent and reads the public data Sleeper publishes for every league. It never asks for your Sleeper password and cannot change anything in your league.`],
     ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
-    ['Does it work for dynasty, keeper and redraft?', 'Yes. Any Sleeper league, any scoring, median games included. Dynasty leagues get every season linked together.'],
-    ['Who can change the settings?', 'Whoever sets it up is the admin. Admins choose the name, colours and logo, the cast of AI writers, and what gets posted.'],
-    ['How does the AI get paid for?', 'Your league plugs in its own Anthropic API key and pays Anthropic directly for what it uses, typically $5 to $10 a month for a league. You can set a monthly spending cap in your Anthropic account, and everything that is not AI works without a key at all.'],
-    ['Is the AI going to make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails is rewritten or dropped.'],
-    ['What happens in the offseason?', 'Your site stays up with all its history. On the monthly plan you can pause and pick back up before the draft.'],
+    ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper league, any scoring, median games included. Dynasty leagues get every season linked together.'],
+    ['How does the AI get paid for?', 'Your league adds its own Anthropic API key and pays Anthropic directly for what it uses. You can cap monthly spend in your Anthropic account, and everything that is not AI works without a key.'],
+    ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
+    ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
+    ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],
   ];
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <Section id="faq" eyebrow="Questions" title="Good questions.">
-      <div className="mx-auto max-w-3xl divide-y divide-border rounded-3xl border border-border bg-card">
-        {qs.map(([q, a], i) => (
-          <div key={q}>
-            <button onClick={() => setOpen(open === i ? null : i)} className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
-              <span className="font-display text-[16.5px] font-bold">{q}</span>
-              <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open === i && 'rotate-180 text-primary')} />
-            </button>
-            <AnimatePresence initial={false}>
-              {open === i && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <p className="px-6 pb-5 text-[14.5px] leading-relaxed text-muted-foreground">{a}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        ))}
+    <section id="faq" className="scroll-mt-16 py-20 sm:py-28">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Questions, answered.</h2>
+        <div className="border-t border-border">
+          {qs.map(([q, a], i) => (
+            <div key={q} className="border-b border-border">
+              <button onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}
+                className="flex w-full items-center justify-between gap-4 py-5 text-left">
+                <span className="lp-display text-[18px] font-bold tracking-[-0.01em]">{q}</span>
+                <span className={cn('relative h-3.5 w-3.5 shrink-0 transition-transform duration-300', open === i && 'rotate-45')} aria-hidden>
+                  <span className="absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 bg-foreground" />
+                  <span className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-foreground" />
+                </span>
+              </button>
+              <AnimatePresence initial={false}>
+                {open === i && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease }} className="overflow-hidden">
+                    <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-muted-foreground">{a}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }
 
 function FinalCta() {
   return (
-    <section className="py-24">
-      <div className="mx-auto max-w-4xl px-5 text-center">
-        <PulseMark className="mx-auto h-12 w-12 rounded-2xl [&>svg]:h-7 [&>svg]:w-7" />
-        <h2 className="mt-6 font-display text-[38px] font-bold leading-tight tracking-[-0.03em] sm:text-[52px]">
-          Your league already has the stories.<br /><span className="lp-brand-text">Give them a home.</span>
+    <section className="lp-ink py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5">
+        <h2 className="lp-display max-w-4xl text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[72px]">
+          Your league already has the stories. <span className="text-primary">Give them a home.</span>
         </h2>
-        <Link href="/start" className="mt-9 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground shadow-[0_0_40px_hsl(151_82%_50%/0.35)] transition hover:brightness-110">
-          Find my league <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="mt-10 flex flex-wrap items-center gap-4">
+          <Link href="/start" className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-[15px] font-semibold text-primary-foreground transition hover:brightness-110">
+            Find my league <Route size={16} />
+          </Link>
+          <span className="text-[13.5px] text-muted-foreground">{PLANS.pro.trialDays} days free. Set up in a minute.</span>
+        </div>
       </div>
     </section>
   );
@@ -536,22 +488,19 @@ function FinalCta() {
 
 function Footer() {
   return (
-    <footer className="border-t border-border/60">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-10 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2"><PulseMark className="h-7 w-7" /><span className="font-display font-bold text-foreground">{PLATFORM.name}</span></div>
+    <footer className="border-t border-border">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 text-[13px] text-muted-foreground sm:px-5 md:flex-row md:items-center md:justify-between">
+        <Wordmark />
         <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <a href="#features" className="hover:text-foreground">Features</a>
+          <a href="#desk" className="hover:text-foreground">Features</a>
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
           <a href={PLATFORM.github} className="hover:text-foreground">GitHub</a>
           {PLATFORM.supportEmail && <a href={`mailto:${PLATFORM.supportEmail}`} className="hover:text-foreground">Support</a>}
           <Link href="/legal/terms" className="hover:text-foreground">Terms</Link>
           <Link href="/legal/privacy" className="hover:text-foreground">Privacy</Link>
         </div>
-        <p>Not affiliated with Sleeper. Uses Sleeper&apos;s public API.</p>
+        <p>Not affiliated with Sleeper or the NFL.</p>
       </div>
     </footer>
   );
 }
-
-// The sign-up flow uses the same mark.
-export { PulseMark };

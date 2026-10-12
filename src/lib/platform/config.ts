@@ -27,7 +27,7 @@ export const PLATFORM = {
   name: (process.env.NEXT_PUBLIC_LP_PRODUCT_NAME || 'LeaguePulse').trim(),
   hosted: env('LP_HOSTED') === '1',
   /** e.g. "leaguepulse.app". Leagues live at <slug>.<rootDomain>. */
-  rootDomain: (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN || 'leaguepulse.app').trim(),
+  rootDomain: (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN || 'leaguepulse.io').trim(),
   github: (process.env.NEXT_PUBLIC_LP_GITHUB_URL || 'https://github.com/ebrown-32/LeaguePulse').trim(),
   /** A live league to show prospects. Optional. */
   demoUrl: (process.env.NEXT_PUBLIC_LP_DEMO_URL || '').trim(),
@@ -65,7 +65,7 @@ export const PLANS = {
 /** Subdomains a league may not take. */
 export const RESERVED_SLUGS = new Set([
   'www', 'app', 'api', 'admin', 'dashboard', 'start', 'signup', 'login', 'billing', 'help',
-  'support', 'docs', 'blog', 'status', 'mail', 'static', 'assets', 'cdn', 'demo', 'leaguepulse',
+  'support', 'operator', 'docs', 'blog', 'status', 'mail', 'static', 'assets', 'cdn', 'demo', 'leaguepulse',
 ]);
 
 /** Lowercase letters, numbers and single hyphens, 3 to 32 characters. */

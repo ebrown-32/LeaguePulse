@@ -39,7 +39,7 @@ export default function RecoverAdmin({ token, siteUrl }: { token: string; siteUr
           Save <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>
-      {error && <p className="mt-2 text-[12.5px] text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-[12.5px] text-red-600">{error}</p>}
     </form>
   );
 }
