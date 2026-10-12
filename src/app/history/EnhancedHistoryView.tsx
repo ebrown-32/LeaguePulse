@@ -163,9 +163,13 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
 
   const uniqueChampions = new Set(championRecords.map(r => r.userId)).size;
 
+  // Rings still to be won: only this season and later. A ring for an earlier
+  // season with no champion was never played for (the league did not exist
+  // yet, or that season is missing), so it is not "to be determined".
   const claimedSeasons = new Set(championRecords.map(r => r.season));
+  const currentSeason = parseInt(leagueMetadata.currentSeason ?? '', 10);
   const futureRingSeasons = [...RING_SEASONS]
-    .filter(s => !claimedSeasons.has(s))
+    .filter(s => !claimedSeasons.has(s) && Number.isFinite(currentSeason) && parseInt(s, 10) >= currentSeason)
     .sort((a, b) => parseInt(a) - parseInt(b));
 
   const activeCategory = RECORD_CATEGORIES.find(c => c.type === activeRecord) ?? RECORD_CATEGORIES[0];

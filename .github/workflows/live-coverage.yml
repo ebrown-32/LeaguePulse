@@ -40,7 +40,7 @@ jobs:
       - name: Ask the desk to cover the games
         env:
           # Repository secrets. SITE_URL is the exact origin that serves the
-          # site, e.g. https://www.dominationleague.com, not a domain that
+          # site, e.g. https://www.yourleague.com, not a domain that
           # redirects to it. CRON_SECRET must match the value set in Vercel.
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

@@ -9,6 +9,7 @@ import type { Personality, ContentKind } from '@/lib/ai/personalities';
 import { AVATAR_STYLES, DEFAULT_AVATAR_STYLE, personaAvatarUrl } from '@/lib/ai/avatar';
 import { fileToAvatarDataUri } from '@/lib/ai/avatarClient';
 import { MAX_AVATAR_BYTES } from '@/lib/ai/avatarUpload';
+import AIKeyCard from '@/components/admin/AIKeyCard';
 
 const ALL_KINDS: ContentKind[] = [
   'article', 'powerRankings', 'predictions', 'tweet', 'comment', 'tradeGrade',
@@ -495,12 +496,9 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
 
   return (
     <>
-      {configured === false && (
-        <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-muted-foreground">
-          <span className="font-semibold text-amber-500">AI is not configured. </span>
-          Add <code className="font-mono text-foreground">ANTHROPIC_API_KEY</code> to <code className="font-mono text-foreground">.env.local</code>.
-        </div>
-      )}
+      {/* Self-hosted: whether the env key is set. Hosted: where the league
+          adds its own key, and pays for its own AI. */}
+      <AIKeyCard password={password} onChange={setConfigured} />
 
       {/* Setup collapses out of the way. It is configured once and then rarely
           touched, unlike the cast below it. */}

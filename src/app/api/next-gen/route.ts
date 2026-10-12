@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds, getLeagueUsers, generateComprehensiveLeagueHistory } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { configuredRootLeagueId } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -235,7 +236,7 @@ function processMatchupData(seasonAnalyses: any[]) {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET() {
-  const initialId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const initialId = await configuredRootLeagueId();
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
   try {
@@ -305,7 +306,7 @@ export async function GET() {
      * equalled `username`, so the very first season it visited won and every
      * later rename was ignored. Reversing the array put the oldest season
      * first, so all-time rows were labelled with names three seasons stale:
-     * potatofarmer69 showed as Allison Burgers rather than The Tartarians.
+     * a manager showed under a name they had dropped two seasons earlier.
      *
      * Sorted on the season itself rather than trusting the array's order, and
      * assigning every time so the newest season is the one that sticks.

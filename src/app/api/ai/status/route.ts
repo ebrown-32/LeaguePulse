@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     brief,
     storage: await storageHealth(),
     queued: await getQueuedCount(),
-    configured: isAIConfigured(),
+    configured: await isAIConfigured(),
     provider: 'anthropic',
     models: { fast: MODEL_FAST, smart: MODEL_SMART },
     personalities: DEFAULT_PERSONALITIES.map(p => ({

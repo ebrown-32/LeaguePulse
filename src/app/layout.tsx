@@ -1,5 +1,6 @@
 import './globals.css';
 import { unstable_noStore as noStore } from 'next/cache';
+import { headers } from 'next/headers';
 import { Space_Grotesk, DM_Sans } from 'next/font/google';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -42,6 +43,14 @@ const bodyFont = DM_Sans({
  */
 export async function generateMetadata(): Promise<Metadata> {
   noStore();
+  // The product's own pages carry the product's name, not a league's.
+  if ((await headers()).get('x-lp-surface') === 'platform') {
+    return {
+      title: 'LeaguePulse: a home for your Sleeper league',
+      description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper league.',
+      icons: { icon: '/favicon.ico' },
+    };
+  }
   const theme = await getTheme().catch(() => DEFAULT_THEME);
 
   const title = theme.siteTitle?.trim() || theme.leagueName?.trim() || 'League Pulse';
@@ -69,6 +78,45 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // from admin-saved theme storage, so this must never be served from a
   // cached render or an admin save appears to "not apply" until redeploy.
   noStore();
+  /**
+   * The product's marketing site and sign-up render bare: no league navbar,
+   * footer, chat button or splash screen, and none of the league's saved
+   * theme. Those pages are about the product, and on the hosted bare domain
+   * there is no league to theme them with.
+   */
+  if ((await headers()).get('x-lp-surface') === 'platform') {
+    return (
+      <html lang="en" className="dark" suppressHydrationWarning>
+        <body className={`${displayFont.variable} ${bodyFont.variable} min-h-screen antialiased`}>
+          {children}
+        </body>
+      </html>
+    );
+  }
+
+  // Hosted: which league this address is, and whether it is live. An address
+  // with no league, or whose subscription has ended, gets a plain page rather
+  // than a league site with nothing to load.
+  let tenantLeague: string | null = null;
+  if (process.env.LP_HOSTED === '1') {
+    const tenant = await (await import('@/lib/tenant/context')).currentTenant();
+    const { isLive } = await import('@/lib/platform/tenants');
+    if (!tenant || !isLive(tenant)) {
+      const { default: LeagueUnavailable } = await import('@/components/platform/LeagueUnavailable');
+      return (
+        <html lang="en" className="dark" suppressHydrationWarning>
+          <body className={`${displayFont.variable} ${bodyFont.variable} min-h-screen antialiased`}>
+            <LeagueUnavailable reason={tenant ? 'ended' : 'missing'} name={tenant?.leagueName} />
+          </body>
+        </html>
+      );
+    }
+    // Tell the browser which league this page is, so client code that calls
+    // getCurrentLeagueId() asks Sleeper about the right league. A league id is
+    // public, so nothing secret is exposed.
+    tenantLeague = tenant.leagueId;
+  }
+
   const theme = await getTheme();
 
   return (
@@ -79,6 +127,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           min-h-screen bg-background text-foreground antialiased
         `}
       >
+        {tenantLeague && (
+          <script dangerouslySetInnerHTML={{ __html: `window.__LP_LEAGUE__=${JSON.stringify(tenantLeague)};` }} />
+        )}
         <FeedbackProvider
           sound={theme.sound === 'on'}
           haptics={theme.haptics !== 'off'}

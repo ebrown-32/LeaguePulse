@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildLeagueEvents } from '@/lib/ai/leagueEvents';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function authorized(req: NextRequest): boolean {
-  return req.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
+async function authorized(req: NextRequest): Promise<boolean> {
+  return isAdminRequest(req);
 }
 
 /**
@@ -16,7 +17,7 @@ function authorized(req: NextRequest): boolean {
  * would mean an unauthenticated visitor could warm the league brief.
  */
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) {
+  if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {

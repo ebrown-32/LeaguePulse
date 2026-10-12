@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAssistant, saveAssistant } from '@/lib/ai/store';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,7 @@ export async function GET() {
 
 /** Admin write. */
 export async function POST(request: Request) {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && request.headers.get('x-admin-password') !== admin) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {

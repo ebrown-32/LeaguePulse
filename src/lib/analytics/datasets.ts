@@ -57,7 +57,7 @@ async function build(rootLeagueId: string): Promise<Tables> {
     currentUsers.map((u: any) => [u.user_id, u.metadata?.team_name || u.display_name]));
   /**
    * People are their user id, shown under today's name. Display names change:
-   * one manager here was "Ashkaash69" in 2024 and "AshKashh69" after, and
+   * a manager can be "gridirongreg" one season and "GridironGreg" the next, and
    * keying by the name of the season split their history into two people.
    */
   const managerNow = new Map<string, string>(currentUsers.map((u: any) => [u.user_id, u.display_name]));

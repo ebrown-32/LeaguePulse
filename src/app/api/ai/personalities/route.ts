@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPersonalities, getPersonalitiesForAdmin, savePersonalities } from '@/lib/ai/store';
 import { avatarProblem } from '@/lib/ai/avatarUpload';
 import type { Personality } from '@/lib/ai/personalities';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 
-function authorized(req: NextRequest): boolean {
-  return req.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
+async function authorized(req: NextRequest): Promise<boolean> {
+  return isAdminRequest(req);
 }
 
 /**
@@ -14,14 +15,14 @@ function authorized(req: NextRequest): boolean {
  * delete can be undone from the panel rather than only by clearing storage.
  */
 export async function GET(req: NextRequest) {
-  const forAdmin = authorized(req);
+  const forAdmin = (await authorized(req));
   return NextResponse.json({
     personalities: forAdmin ? await getPersonalitiesForAdmin() : await getPersonalities(),
   });
 }
 
 export async function PUT(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await authorized(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { personalities } = await req.json() as { personalities: Personality[] };
     if (!Array.isArray(personalities)) {

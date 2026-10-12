@@ -1061,3 +1061,49 @@ mark {
   initial-value: 0deg;
   inherits: false;
 }
+
+/* ─────────────────────────────────────────────
+   PRODUCT BRAND
+
+   The marketing site and sign-up. Its own palette rather than a league's:
+   these pages sell the product to people who have no league here yet. The
+   shared components read the same tokens, so the kit works here unchanged.
+───────────────────────────────────────────── */
+.lp-brand {
+  --background: 228 42% 4%;
+  --foreground: 216 33% 96%;
+  --card: 227 34% 7.5%;
+  --card-foreground: 216 33% 96%;
+  --popover: 227 34% 8%;
+  --popover-foreground: 216 33% 96%;
+  --muted: 227 26% 12%;
+  --muted-foreground: 220 14% 68%;
+  --accent: 227 26% 13%;
+  --accent-foreground: 216 33% 96%;
+  --border: 226 24% 15%;
+  --input: 226 24% 15%;
+  --primary: 151 82% 50%;
+  --primary-foreground: 228 45% 6%;
+  --ring: 151 82% 50%;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* A field of light behind the hero: two soft glows and a fine grid that
+   fades out, so the top of the page has depth without an image. */
+.lp-brand-hero-bg {
+  background:
+    radial-gradient(60% 50% at 75% 20%, hsl(151 82% 50% / 0.16), transparent 70%),
+    radial-gradient(50% 45% at 10% 10%, hsl(212 90% 60% / 0.14), transparent 70%),
+    linear-gradient(hsl(216 33% 96% / 0.04) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, hsl(216 33% 96% / 0.04) 1px, transparent 1px) 0 0 / 44px 44px;
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+
+.lp-brand-text {
+  background: linear-gradient(100deg, hsl(151 82% 58%), hsl(176 80% 56%) 45%, hsl(212 95% 68%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

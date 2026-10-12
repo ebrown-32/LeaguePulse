@@ -37,7 +37,7 @@ const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(request: Request) {
-  if (!isAIConfigured()) {
+  if (!(await isAIConfigured())) {
     return Response.json({ error: 'AI is not configured' }, { status: 503 });
   }
 

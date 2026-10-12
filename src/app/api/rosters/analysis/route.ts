@@ -3,7 +3,7 @@ import {
   getLeagueRosters, getLeagueUsers, getNFLState, getAllLeagueSeasons, getLeagueInfo,
   getLeagueMatchups, getAllLinkedLeagueIds,
 } from '@/lib/api';
-import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import {
   getPlayersDirectory, getSeasonStats, getSeasonProjections, resolveStatsSeason,
 } from '@/lib/playerStats';
@@ -112,7 +112,7 @@ const priced = (v: unknown): number | null => {
 };
 
 export async function GET(request: Request) {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
 

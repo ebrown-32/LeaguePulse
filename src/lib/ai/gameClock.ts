@@ -26,6 +26,7 @@ import { weekGames, phaseOf, teamGameStatus, hasPlayed, isPlaying, type WeekPhas
 import { getLeagueRosters } from '@/lib/api';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { weekForecasts, type FixtureForecast } from '@/lib/sim/weekForecasts';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 /** NFL time. Kickoffs, "tonight" and "yesterday" all mean Eastern. */
 const TZ = 'America/New_York';
@@ -155,10 +156,12 @@ function outlook(p: number): string {
  * enough that a finished game or the time label are never meaningfully stale,
  * and large enough that a burst of generations does not redo the work.
  */
-let memo: { clock: GameClock; at: number } | null = null;
+/** One per league: each league's clock describes its own matchups. */
+const memos = perLeague<{ clock: GameClock; at: number }>();
 const CLOCK_TTL_MS = 60 * 1000;
 
 export async function buildGameClock(now = new Date()): Promise<GameClock> {
+  const memo = await memos.get();
   if (memo && now.getTime() - memo.at < CLOCK_TTL_MS) {
     // Keep the date and time current even when the game data is reused.
     const t = easternNow(now);
@@ -168,7 +171,7 @@ export async function buildGameClock(now = new Date()): Promise<GameClock> {
     return refreshed;
   }
   const clock = await computeClock(now);
-  memo = { clock, at: now.getTime() };
+  await memos.set({ clock, at: now.getTime() });
   return clock;
 }
 

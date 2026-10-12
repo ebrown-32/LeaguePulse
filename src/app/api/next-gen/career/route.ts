@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildCareerReport } from '@/lib/metrics/careerReport';
-import { INITIAL_LEAGUE_ID } from '@/config/league';
+import { leagueConfigured, configuredRootLeagueId } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -14,11 +14,11 @@ export const maxDuration = 60;
  * sits below the fold. Cached hard, since a completed season never changes.
  */
 export async function GET() {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
   try {
-    const report = await buildCareerReport(INITIAL_LEAGUE_ID);
+    const report = await buildCareerReport((await configuredRootLeagueId())!);
     return NextResponse.json(
       { report },
       { headers: { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=86400' } },

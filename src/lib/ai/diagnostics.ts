@@ -36,11 +36,21 @@ function fingerprint(value: string): string {
   return `${value.slice(0, 4)}…${value.slice(-2)} (${value.length} chars)`;
 }
 
-function checkAnthropicKey(): Check {
-  const key = process.env.ANTHROPIC_API_KEY?.trim();
+const hostedMode = () => process.env.LP_HOSTED === '1';
+
+/** The key this league uses: its own on the hosted product, the env one self-hosted. */
+async function currentKey(): Promise<string | null> {
+  const { anthropicKey } = await import('./claude');
+  return anthropicKey();
+}
+
+async function checkAnthropicKey(): Promise<Check> {
+  const key = await currentKey();
   if (!key) {
-    return bad('anthropic_key', 'Anthropic API key', 'ANTHROPIC_API_KEY is not set',
-      'Add ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.');
+    return hostedMode()
+      ? bad('anthropic_key', 'Anthropic API key', 'This league has no key yet', 'Add one under Admin, AI Desk.')
+      : bad('anthropic_key', 'Anthropic API key', 'ANTHROPIC_API_KEY is not set',
+        'Add ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.');
   }
   if (!key.startsWith('sk-ant-')) {
     return warn('anthropic_key', 'Anthropic API key',
@@ -52,11 +62,19 @@ function checkAnthropicKey(): Check {
 
 /** The only way to know a key works and has credit is to spend a token on it. */
 async function checkAnthropicLive(): Promise<Check> {
-  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  const key = await currentKey();
   if (!key) {
     return bad('anthropic_live', 'Anthropic connection', 'Skipped, no API key set',
-      'Set ANTHROPIC_API_KEY first.');
+      hostedMode() ? 'Add a key under Admin, AI Desk first.' : 'Set ANTHROPIC_API_KEY first.');
   }
+  return testAnthropicKey(key);
+}
+
+/**
+ * Spend one token proving a key works and has credit. Shared with the hosted
+ * product's "save your key" form, so a typo is caught before it is stored.
+ */
+export async function testAnthropicKey(key: string): Promise<Check> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -186,6 +204,9 @@ function checkCronSecret(): Check {
 }
 
 function checkAdminPassword(): Check {
+  // Hosted leagues have their own admin password; reaching this panel at all
+  // means it is set and was just used.
+  if (hostedMode()) return ok('admin_password', 'Admin password', 'Set for this league');
   const pw = process.env.ADMIN_PASSWORD?.trim();
   if (!pw) {
     return warn('admin_password', 'Admin password', 'ADMIN_PASSWORD is not set',
@@ -253,7 +274,7 @@ export async function runDiagnostics(opts: { live: boolean }): Promise<{
   summary: { pass: number; warn: number; fail: number };
 }> {
   const checks: Check[] = [
-    checkAnthropicKey(),
+    await checkAnthropicKey(),
     ...(opts.live ? [await checkAnthropicLive()] : []),
     await checkRedis(),
     checkCronSecret(),

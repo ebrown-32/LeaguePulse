@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { configuredRootLeagueId } from '@/config/league';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 export const dynamic = 'force-dynamic';
 
 const BASE = 'https://api.sleeper.app/v1';
 
-let responseCache: { data: ScheduleLabResponse; ts: number } | null = null;
+/** One per league: see lib/tenant/perLeague. */
+const responseCaches = perLeague<{ data: ScheduleLabResponse; ts: number }>();
 const RESPONSE_TTL_MS = 900_000; // 15 min
 
 /** Transient Sleeper failures shouldn't silently zero out a season's schedule data. */
@@ -324,9 +327,10 @@ async function loadSeason(leagueId: string): Promise<SeasonScheduleData | null> 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET() {
-  const initialId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const initialId = await configuredRootLeagueId();
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
+  const responseCache = await responseCaches.get();
   if (responseCache && Date.now() - responseCache.ts < RESPONSE_TTL_MS) {
     return NextResponse.json(responseCache.data);
   }
@@ -341,7 +345,7 @@ export async function GET() {
     for (const s of seasons) bySeason[s.season] = s;
 
     const payload: ScheduleLabResponse = { seasons: seasons.map(s => s.season), bySeason };
-    responseCache = { data: payload, ts: Date.now() };
+    await responseCaches.set({ data: payload, ts: Date.now() });
     return NextResponse.json(payload);
   } catch (err) {
     console.error('[api/schedule-lab]', err);

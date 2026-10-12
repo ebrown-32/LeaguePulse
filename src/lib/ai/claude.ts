@@ -17,23 +17,61 @@ export const MODEL_SMART = 'claude-sonnet-5';
 
 export class AINotConfiguredError extends Error {
   constructor() {
-    super('ANTHROPIC_API_KEY is not set — add it to .env.local to enable AI personalities.');
+    super(process.env.LP_HOSTED === '1'
+      ? 'This league has no Anthropic API key yet. An admin can add one under Admin, AI Desk.'
+      : 'ANTHROPIC_API_KEY is not set — add it to .env.local to enable AI personalities.');
     this.name = 'AINotConfiguredError';
   }
 }
 
-export function isAIConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+const hosted = () => process.env.LP_HOSTED === '1';
+
+/**
+ * The Anthropic key for the current request.
+ *
+ * Self-hosted: ANTHROPIC_API_KEY, as always. Hosted: the league's own key, so
+ * each league pays for its own AI. There is deliberately no fallback from a
+ * league's missing key to a platform key: that would quietly bill one
+ * account for every league's usage.
+ */
+export async function anthropicKey(): Promise<string | null> {
+  if (!hosted()) return process.env.ANTHROPIC_API_KEY?.trim() || null;
+  const { tenantAnthropicKey } = await import('@/lib/tenant/secrets');
+  return tenantAnthropicKey();
+}
+
+/** Whether AI can run for this request. Async: on the hosted product it is per league. */
+export async function isAIConfigured(): Promise<boolean> {
+  return Boolean(await anthropicKey());
 }
 
 let client: ReturnType<typeof createAnthropic> | null = null;
+let hostedClient: ReturnType<typeof createAnthropic> | null = null;
 
 /**
  * Returns a configured model. Throws AINotConfiguredError rather than letting
  * the SDK fail deep inside a request with an opaque provider error — callers
  * turn this into a clean 503 with setup instructions.
+ *
+ * Hosted, the key is resolved per request inside the client's fetch, which is
+ * what lets this stay synchronous for its many callers while still sending
+ * each league's own key. The placeholder key below is never sent: the header
+ * is overwritten on every request.
  */
 export function claude(model: string = MODEL_SMART) {
+  if (hosted()) {
+    hostedClient ??= createAnthropic({
+      apiKey: 'resolved-per-request',
+      fetch: async (input, init) => {
+        const key = await anthropicKey();
+        if (!key) throw new AINotConfiguredError();
+        const headers = new Headers(init?.headers);
+        headers.set('x-api-key', key);
+        return fetch(input, { ...init, headers });
+      },
+    });
+    return hostedClient(model);
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new AINotConfiguredError();
   client ??= createAnthropic({ apiKey });

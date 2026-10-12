@@ -12,6 +12,7 @@ import {
 import { getSnapshot, saveSnapshot, type EcrSnapshot } from '@/lib/fantasyProsStore';
 import { getLeagueInfo, getNFLState } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,15 +42,15 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function authorized(request: Request): boolean {
+async function authorized(request: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET;
   // Vercel attaches this header to scheduled invocations automatically.
   if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true;
   // Admin can trigger a refresh by hand from the back office.
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && request.headers.get('x-admin-password') === admin) return true;
-  // With neither configured we are running locally.
-  return !secret && !admin;
+  if (await isAdminRequest(request)) return true;
+  // With neither configured we are running locally. Never on the hosted
+  // product, where an unset secret must not mean "open".
+  return process.env.LP_HOSTED !== '1' && !secret && !process.env.ADMIN_PASSWORD;
 }
 
 /** PPR/half/standard changes the board materially, so read it off the league. */
@@ -61,7 +62,7 @@ function scoringOf(league: any): 'PPR' | 'HALF' | 'STD' {
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isFantasyProsConfigured()) {

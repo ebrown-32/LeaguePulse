@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentLeagueId, INITIAL_LEAGUE_ID } from '@/config/league';
+import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
 import { analyticsTables } from '@/lib/analytics/datasets';
 import { datasetById } from '@/lib/analytics/schema';
 
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  if (!INITIAL_LEAGUE_ID || INITIAL_LEAGUE_ID === 'YOUR_LEAGUE_ID') {
+  if (!(await leagueConfigured())) {
     return NextResponse.json({ error: 'No league configured' }, { status: 400 });
   }
   const id = req.nextUrl.searchParams.get('dataset') ?? '';

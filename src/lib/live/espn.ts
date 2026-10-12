@@ -120,9 +120,10 @@ export async function espnScoreboard(): Promise<LiveGame[]> {
     };
     const away = team('away'), home = team('home');
     const s = c.situation ?? null;
-    const possession = s?.possession
-      ? (s.possession === home.id ? home.abbr : s.possession === away.id ? away.abbr : null)
-      : null;
+    // ESPN leaves `possession` empty for a moment between plays, kickoffs
+    // especially; the team on the last play is the right answer then.
+    const pid = String(s?.possession ?? s?.lastPlay?.team?.id ?? '');
+    const possession = pid ? (pid === home.id ? home.abbr : pid === away.id ? away.abbr : null) : null;
     const state: GameState = st.type?.state === 'in' ? 'in' : st.type?.state === 'post' ? 'post' : 'pre';
     return {
       id: String(e.id),

@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
+import { ringSeasons, ringModelPath } from '@/lib/ringModels';
 import {
   getAllLinkedLeagueIds, getLeagueUsers, getLeagueRosters, getAdvancedTeamMetrics,
 } from '@/lib/api';
-import { getCurrentLeagueId } from '@/config/league';
+import { getCurrentLeagueId, configuredRootLeagueId } from '@/config/league';
 import { generateEnhancedLeagueHistory, type EnhancedLeagueHistory, type EnhancedHistoricalRecord } from '@/lib/enhancedHistoryApi';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { perLeague } from '@/lib/tenant/perLeague';
 
 export const dynamic = 'force-dynamic';
 
 // The full league computation is user-independent and expensive (many Sleeper
 // calls across every linked season), compute it once and serve every manager's
 // profile from the cache instead of redoing it per request.
-let historyCache: { history: EnhancedLeagueHistory; advanced: Awaited<ReturnType<typeof getAdvancedTeamMetrics>>; identities: Map<string, IdentityInfo>; ts: number } | null = null;
+type Shared = { history: EnhancedLeagueHistory; advanced: Awaited<ReturnType<typeof getAdvancedTeamMetrics>>; identities: Map<string, IdentityInfo>; ts: number };
+/** One per league: see lib/tenant/perLeague. */
+const historyCaches = perLeague<Shared>();
 const CACHE_TTL_MS = 900_000; // 15 min
 
 interface IdentityInfo {
@@ -21,7 +25,8 @@ interface IdentityInfo {
 }
 
 async function loadShared() {
-  if (historyCache && Date.now() - historyCache.ts < CACHE_TTL_MS) return historyCache;
+  const hit = await historyCaches.get();
+  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return hit;
 
   const leagueId = await getCurrentLeagueId();
   const [history, advanced, allLeagueIds] = await Promise.all([
@@ -49,8 +54,9 @@ async function loadShared() {
     }
   }
 
-  historyCache = { history, advanced, identities, ts: Date.now() };
-  return historyCache;
+  const shared: Shared = { history, advanced, identities, ts: Date.now() };
+  await historyCaches.set(shared);
+  return shared;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -115,7 +121,8 @@ export interface TeamProfileResponse {
     totalTrades: number;
   };
 
-  rings: { season: string; modelPath: string }[];
+  /** Every title won; modelPath is null when that season has no ring model. */
+  rings: { season: string; modelPath: string | null }[];
 
   advanced: AdvancedProfile | null;
 
@@ -135,7 +142,7 @@ export interface TeamProfileResponse {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
-  const initialId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const initialId = await configuredRootLeagueId();
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
   try {
@@ -179,9 +186,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
       };
     });
 
+    const withModels = new Set(await ringSeasons());
     const rings = seasons.filter(s => s.championship).map(s => ({
       season: s.season,
-      modelPath: `/models/rings/ring-${s.season}.glb`,
+      modelPath: withModels.has(s.season) ? ringModelPath(s.season) : null,
     }));
 
     const runnerUps = myRecords.filter(r => r.type === 'runnerUp').length;

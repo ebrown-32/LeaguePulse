@@ -11,6 +11,7 @@ import { findLeagueEvent } from '@/lib/ai/leagueEvents';
 import { nextSubject } from '@/lib/ai/coverage';
 import { getNFLState } from '@/lib/api';
 import { addPost, getPersonalitiesForAdmin, type FeedPost } from '@/lib/ai/store';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -19,8 +20,8 @@ export const maxDuration = 60;
  *  Power rankings, predictions and the week preview cover everyone already. */
 const SUBJECT_KINDS = new Set<ContentKind>(['article', 'tweet']);
 
-function authorized(req: NextRequest): boolean {
-  return req.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
+async function authorized(req: NextRequest): Promise<boolean> {
+  return isAdminRequest(req);
 }
 
 interface GenerateBody {
@@ -79,10 +80,10 @@ function describe(kind: ContentKind, content: any): string {
 
 /** Admin-only: visitors read the feed, they never generate into it. */
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) {
+  if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (!isAIConfigured()) {
+  if (!(await isAIConfigured())) {
     return NextResponse.json(
       { error: 'AI is not configured', setup: 'Add ANTHROPIC_API_KEY to .env.local and restart.' },
       { status: 503 },

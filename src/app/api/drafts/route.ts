@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { configuredRootLeagueId } from '@/config/league';
 
 export const dynamic = 'force-dynamic';
 
@@ -259,7 +260,7 @@ async function enrichDraft(
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET() {
-  const initialId = process.env.NEXT_PUBLIC_LEAGUE_ID;
+  const initialId = await configuredRootLeagueId();
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
   try {

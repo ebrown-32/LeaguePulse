@@ -23,6 +23,7 @@ import {
   type FeedPost,
 } from '@/lib/ai/store';
 import type { Personality } from '@/lib/ai/personalities';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -130,17 +131,18 @@ const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 2.5) * 60 * 60 * 1000;
  */
 const LEAD_GAP_MS     = num('AI_LEAD_GAP_HOURS', 20) * 60 * 60 * 1000;
 
-function authorized(request: Request): boolean {
+async function authorized(request: Request): Promise<boolean> {
   // The admin panel's "Run scheduler" button. Without this the button works
   // locally, where CRON_SECRET is usually unset, and starts returning 401 the
   // moment the secret is set in production, which is exactly when the panel is
   // most needed. Vercel Cron cannot send this header; an admin cannot send the
   // Bearer one. Both callers are legitimate, so both are accepted.
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (adminPassword && request.headers.get('x-admin-password') === adminPassword) return true;
+  if (await isAdminRequest(request)) return true;
 
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true; // unset locally so the admin panel can trigger it
+  // Unset locally so the admin panel can trigger it. Never open on the hosted
+  // product: there it would let anyone spend any league's AI key.
+  if (!secret) return process.env.LP_HOSTED !== '1';
   return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 
@@ -285,11 +287,65 @@ async function runLiveCoverage(force: boolean) {
   }
 }
 
+/**
+ * Hosted: one scheduled poke, every league.
+ *
+ * The scheduler pokes the bare domain, where there is no league. This fans out
+ * one request per live league that has its own key, each to this same route
+ * with `?tenant=`, so every league runs in its own invocation with its own
+ * sixty seconds and its own Anthropic key. Running them in one invocation
+ * would give the whole platform one time budget.
+ */
+async function fanOut(request: Request): Promise<Response> {
+  const { listTenants, isLive } = await import('@/lib/platform/tenants');
+  const url = new URL(request.url);
+  const tenants = (await listTenants()).filter(isLive);
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) return NextResponse.json({ error: 'CRON_SECRET is required on the hosted product' }, { status: 500 });
+
+  const results = await Promise.all(tenants.map(async t => {
+    const target = new URL(url);
+    target.searchParams.set('tenant', t.slug);
+    try {
+      const res = await fetch(target, { headers: { authorization: `Bearer ${secret}` }, cache: 'no-store' });
+      const body = await res.json().catch(() => ({}));
+      return { league: t.slug, status: res.status, ...body };
+    } catch (err) {
+      return { league: t.slug, error: err instanceof Error ? err.message : String(err) };
+    }
+  }));
+  return NextResponse.json({ leagues: results.length, results });
+}
+
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (!isAIConfigured()) {
+
+  if (process.env.LP_HOSTED === '1') {
+    const { currentTenant, runAsTenant } = await import('@/lib/tenant/context');
+    const named = new URL(request.url).searchParams.get('tenant');
+    // Naming a league is the scheduler's job alone. A league admin is
+    // authorised for their own league only, and with ?tenant= they could
+    // otherwise run another league's AI on that league's key.
+    const secret = process.env.CRON_SECRET?.trim();
+    const bySecret = Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`;
+    if (named && !bySecret) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // An admin pressing "Run scheduler" on their own league's address.
+    if (!named && (await currentTenant())) return runForLeague(request);
+    if (!named && !bySecret) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!named) return fanOut(request);
+    const { getTenant, isLive } = await import('@/lib/platform/tenants');
+    const tenant = await getTenant(named);
+    if (!tenant || !isLive(tenant)) return NextResponse.json({ skipped: 'league-not-live' });
+    return runAsTenant(tenant, () => runForLeague(request));
+  }
+  return runForLeague(request);
+}
+
+/** One league's scheduled run: the batch, or live coverage with ?mode=live. */
+async function runForLeague(request: Request): Promise<Response> {
+  if (!(await isAIConfigured())) {
     return NextResponse.json({ skipped: 'ai-not-configured' });
   }
 

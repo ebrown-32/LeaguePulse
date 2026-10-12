@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { deletePost, getImminent, getPosts } from '@/lib/ai/store';
+import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 
-function authorized(request: Request): boolean {
-  return request.headers.get('x-admin-password') === (process.env.ADMIN_PASSWORD || 'admin123');
+async function authorized(request: Request): Promise<boolean> {
+  return isAdminRequest(request);
 }
 
 /** Public, read-only. The feed is written by the scheduler and the admin
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
  * store the whole time with nothing calling it.
  */
 export async function DELETE(request: Request) {
-  if (!authorized(request)) {
+  if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const id = new URL(request.url).searchParams.get('id');
