@@ -353,6 +353,7 @@ function Setup() {
 function Pricing() {
   const [cycle, setCycle] = useState<'season' | 'monthly'>('season');
   const pro = PLANS.pro;
+  const each = (n: number) => `$${(n / 12).toFixed(2)}`;
   const includes = [
     'Your league on its own web address',
     'The AI desk, on your own Anthropic key',
@@ -362,13 +363,22 @@ function Pricing() {
     'Every past season, imported',
     'Your name, logo and colors',
   ];
+  /** The receipt: what the price pays for, itemised, and the one thing it doesn't. */
+  const receipt = [
+    ['Your league\u2019s own website, up all year', 'Included'],
+    ['Wrangling Sleeper, live scores and odds every Sunday', 'Included'],
+    ['Ten thousand simulated seasons, whenever you ask', 'Included'],
+    ['A real person who fixes it when it breaks', 'Included'],
+    ['Trash talk', 'Free, as always'],
+  ];
   return (
     <section id="pricing" className="scroll-mt-16 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-4 sm:px-5">
         <div className="max-w-2xl">
-          <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">One price for the whole league.</h2>
+          <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Costs less than last place.</h2>
           <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
-            One person subscribes and everyone gets it. Split across a twelve-team league, it is about a dollar each a month.
+            One person pays and the whole league gets it. Split twelve ways, a season is about {each(pro.season)} each,
+            which is less than whatever humiliation your league makes last place pay for.
           </p>
         </div>
         <div className="mt-12 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -384,15 +394,19 @@ function Pricing() {
                 ))}
               </div>
             </div>
-            <div className="mt-6 flex items-baseline gap-3">
+            <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <AnimatePresence mode="wait">
                 <motion.p key={cycle} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
                   className="lp-num text-[72px] font-extrabold leading-none">${cycle === 'season' ? pro.season : pro.monthly}</motion.p>
               </AnimatePresence>
-              <span className="text-[14.5px] text-background/70">{cycle === 'season' ? 'per league, per season' : 'per league, per month'}</span>
+              <span className="text-[14.5px] text-background/70">
+                {cycle === 'season' ? `per league, per season \u00b7 about ${each(pro.season)} a head` : `per league, per month \u00b7 about ${each(pro.monthly)} a head`}
+              </span>
             </div>
-            <p className="mt-2 text-[13.5px] text-background/70">
-              {cycle === 'season' ? `One payment, about $${(pro.season / 5).toFixed(0)} a month over a five-month season.` : 'Cancel any time. Most leagues pause it in the offseason.'}
+            <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-background/75">
+              {cycle === 'season'
+                ? 'Pay once in August, then forget about it until you\u2019re gloating in January. Renews each year unless you cancel, and you can cancel any time.'
+                : 'For leagues with commitment issues. Cancel whenever, which is more than you can say for the running back you took in round two.'}
             </p>
             <ul className="mt-7 grid grid-cols-1 gap-2.5 text-[14.5px] sm:grid-cols-2">
               {includes.map(x => (
@@ -405,22 +419,57 @@ function Pricing() {
               className="mt-9 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-background px-4 py-3.5 text-[15px] font-semibold text-foreground transition hover:bg-background/90">
               Start your {pro.trialDays}-day free trial <Route size={16} />
             </Link>
+            <p className="mt-3 text-center text-[12px] text-background/60">No card to start. If you never add one, the trial just ends. No hard feelings.</p>
           </div>
           <div className="flex flex-col rounded-[22px] border border-border bg-card p-7 sm:p-9">
             <p className="lp-display text-[20px] font-bold">{PLANS.free.name}</p>
             <p className="lp-num mt-6 text-[72px] font-extrabold leading-none">$0</p>
-            <p className="mt-2 text-[13.5px] text-muted-foreground">{PLANS.free.blurb}</p>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+              The whole thing, open source. You bring the server, the database and the patience.
+            </p>
             <ul className="mt-7 space-y-2.5 text-[14.5px]">
-              {['Every feature, forever', 'Your own Vercel and Redis', 'Your own Anthropic key for the AI', 'Community support'].map(x => (
+              {['Every feature, forever', 'Your own Vercel and Redis', 'Your own Anthropic key for the AI', 'Help from the community'].map(x => (
                 <li key={x} className="flex gap-2.5"><Tick className="mt-0.5 shrink-0" />{x}</li>
               ))}
             </ul>
             <a href={PLATFORM.github} target="_blank" rel="noreferrer"
-              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3.5 pt-3.5 text-[14.5px] font-semibold transition hover:bg-muted [margin-top:2.25rem]">
+              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3.5 text-[14.5px] font-semibold transition hover:bg-muted [margin-top:2.25rem]">
               Get the code <Route size={16} />
             </a>
           </div>
         </div>
+
+        {/* Where the money goes */}
+        <motion.div initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ duration: 0.6, ease }}
+          className="mt-4 grid grid-cols-1 gap-8 rounded-[22px] border border-border bg-card p-7 sm:p-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <div>
+            <h3 className="lp-display text-[24px] font-extrabold tracking-[-0.02em]">So where does the money go?</h3>
+            <p className="mt-3 text-[14.5px] leading-relaxed text-muted-foreground">
+              Into keeping your league&apos;s site fast on the one day a week everyone checks it at once. Here&apos;s the receipt.
+            </p>
+            <p className="mt-4 text-[14.5px] leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">Not on it: the AI writers&apos; salaries.</span>{' '}
+              They bill your league&apos;s own Anthropic account directly, with a monthly cap you set. We never mark it up,
+              and a chatty desk never turns into a surprise on your card. Everything that isn&apos;t AI works without a key at all.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-dashed border-border bg-background px-5 py-4 font-mono text-[12.5px]">
+            <p className="text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground">League Pass &middot; receipt</p>
+            <ul className="mt-3 divide-y divide-dashed divide-border">
+              {receipt.map(([what, how]) => (
+                <li key={what} className="flex items-baseline justify-between gap-4 py-2">
+                  <span>{what}</span><span className="shrink-0 text-muted-foreground">{how}</span>
+                </li>
+              ))}
+              <li className="flex items-baseline justify-between gap-4 py-2 text-muted-foreground">
+                <span>AI writers</span><span className="shrink-0">Billed to your key</span>
+              </li>
+            </ul>
+            <p className="mt-2 flex items-baseline justify-between border-t-2 border-foreground pt-2 font-semibold">
+              <span>Total, per league</span><span>${pro.season}/season or ${pro.monthly}/mo</span>
+            </p>
+          </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -452,6 +501,7 @@ function Faq() {
   const qs = [
     ['Is this made by Sleeper?', `No. ${PLATFORM.name} is independent and reads the public data Sleeper publishes for every league. It never asks for your Sleeper password and cannot change anything in your league.`],
     ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
+    ['Why isn\u2019t it free?', `Because running a site that a dozen people refresh every thirty seconds on Sunday costs real money, and so does the person keeping it up. The code is free if you want to run it yourself. The hosted version costs about what your league spends on wings in one draft night, split ${'$'}${(PLANS.pro.season / 12).toFixed(2)} a head.`],
     ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper league, any scoring, median games included. Dynasty leagues get every season linked together.'],
     ['How does the AI get paid for?', 'Your league adds its own Anthropic API key and pays Anthropic directly for what it uses. You can cap monthly spend in your Anthropic account, and everything that is not AI works without a key.'],
     ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],

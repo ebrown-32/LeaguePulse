@@ -32,7 +32,8 @@ const L = (leagueId: string) => `lp_tenant_league:${leagueId}`;
 const H = (slug: string) => `lp_slug_hold:${slug}`;
 /** Every league's slug, for work that runs across all of them. */
 const INDEX = 'lp_tenant_index';
-const HOLD_MS = 30 * 60 * 1000;
+/** Longer than a checkout session lives (31 minutes), so the hold always outlasts it. */
+const HOLD_MS = 35 * 60 * 1000;
 
 function redis() {
   const r = getRedis().client;

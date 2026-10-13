@@ -20,9 +20,11 @@ interface League {
   slug: string; url: string; name: string; leagueId: string; status: Status; plan: 'monthly' | 'season';
   owner: string | null; stripeCustomer: string | null; comp: boolean; created: string; updated: string;
   adminSet: boolean; aiKey: boolean; lastPostAt: string | null;
+  ownerAccount: string | null; admins: number; pendingOwner: string | null;
 }
+interface Conflict { session: string; slug: string; leagueId: string; takenBy: string; email: string | null; at: string }
 interface Data {
-  rootDomain: string; stripeMode: 'live' | 'test'; prices: { monthly: number; season: number };
+  rootDomain: string; stripeMode: 'live' | 'test'; prices: { monthly: number; season: number }; conflicts: Conflict[];
   totals: { all: number; trialing: number; active: number; past_due: number; canceled: number; paying: number; comp: number; mrr: number };
   leagues: League[];
 }
@@ -101,6 +103,17 @@ export default function OperatorPanel() {
         {error && <p className="rounded-xl border border-[hsl(var(--signal)/0.4)] bg-[hsl(var(--signal)/0.08)] px-4 py-3 text-[13.5px]">{error}</p>}
         {data && (
           <>
+            {data.conflicts.length > 0 && (
+              <section className="rounded-[18px] border border-[hsl(var(--signal)/0.45)] bg-[hsl(var(--signal)/0.07)] p-4 text-[13px]">
+                <p className="font-semibold">Checkouts that lost their address ({data.conflicts.length})</p>
+                <p className="mt-0.5 text-muted-foreground">Their subscriptions were cancelled before any charge. Reach out so they can pick another address.</p>
+                <ul className="mt-2 space-y-1">
+                  {data.conflicts.slice(0, 5).map(c => (
+                    <li key={c.session} className="tabular-nums">{new Date(c.at).toLocaleString()}: {c.email ?? 'unknown email'} wanted <b>{c.slug}</b> for league {c.leagueId}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <Kpis data={data} />
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <Signups leagues={data.leagues} />
@@ -298,6 +311,12 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
       setRecovery({ slug, url: d.url });
     } catch (e) { onChange(e instanceof Error ? e.message : 'Could not issue a link'); }
   };
+  const handOver = async (slug: string) => {
+    const email = window.prompt(`Hand ${slug} to which email? They become owner when they sign in with it; the current owner becomes an admin.`);
+    if (!email) return;
+    try { await call('PATCH', { slug, ownerEmail: email }); onChange(`${slug} will go to ${email} when they sign in`); }
+    catch (e) { onChange(e instanceof Error ? e.message : 'Could not hand over'); }
+  };
   const setStatus = async (slug: string, status: 'active' | 'canceled') => {
     try { await call('PATCH', { slug, status }); onChange(status === 'active' ? `Resumed ${slug}` : `Paused ${slug}`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not change status'); }
@@ -346,7 +365,11 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={cn('h-2 w-2 rounded-full', STATUS[l.status].dot)} />{STATUS[l.status].label}</span>
                   </td>
                   <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}</td>
-                  <td className="max-w-[180px] truncate px-3 py-3 text-muted-foreground">{l.owner ?? '—'}</td>
+                  <td className="max-w-[200px] px-3 py-3 text-muted-foreground">
+                    <p className="truncate">{l.ownerAccount ?? l.owner ?? '—'}</p>
+                    {l.pendingOwner && <p className="truncate text-[11.5px] text-primary">Handing to {l.pendingOwner}</p>}
+                    {l.admins > 0 && <p className="text-[11.5px]">+{l.admins} admin{l.admins === 1 ? '' : 's'}</p>}
+                  </td>
                   <td className="px-3 py-3">
                     <span className="flex gap-1.5 text-[11.5px]">
                       <Flag ok={l.adminSet} label="Admin" />
@@ -359,6 +382,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                     <div className="flex items-center justify-end gap-1 whitespace-nowrap text-[12px] font-semibold">
                       {l.stripeCustomer && <a href={`${stripeBase}/customers/${l.stripeCustomer}`} target="_blank" rel="noreferrer" className="rounded-md px-2 py-1 hover:bg-muted">Stripe</a>}
                       <button onClick={() => recover(l.slug)} className="rounded-md px-2 py-1 hover:bg-muted">Reset link</button>
+                      <button onClick={() => handOver(l.slug)} className="rounded-md px-2 py-1 hover:bg-muted">Hand over</button>
                       {l.comp && (l.status === 'canceled'
                         ? <button onClick={() => setStatus(l.slug, 'active')} className="rounded-md px-2 py-1 hover:bg-muted">Resume</button>
                         : <button onClick={() => setStatus(l.slug, 'canceled')} className="rounded-md px-2 py-1 hover:bg-muted">Pause</button>)}

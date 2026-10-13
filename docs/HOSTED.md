@@ -90,7 +90,7 @@ Safari may not).
 | `CRON_SECRET` | any long random string; required in hosted mode |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
-| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 12, 49, 14) |
+| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 19, 79, 14) |
 | `STRIPE_PORTAL_CONFIGURATION` | optional: the customer portal setup (`bpc_…`) League Pass uses. Without it Stripe uses the account default, which must be saved once in the dashboard |
 | `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
 | `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |
@@ -105,16 +105,25 @@ is never used for leagues anyway.
    season price (a yearly recurring price is simplest). Their ids go in
    `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_SEASON`.
 2. Add a webhook endpoint at `https://yourdomain.com/api/platform/stripe-webhook`
-   for `checkout.session.completed`, `customer.subscription.updated` and
-   `customer.subscription.deleted`. Its signing secret is `STRIPE_WEBHOOK_SECRET`.
-3. **Turn on the customer portal** (Settings, Billing, Customer portal) and
+   for `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `invoice.paid` and `invoice.payment_failed`.
+   Its signing secret is `STRIPE_WEBHOOK_SECRET`.
+3. Use a **restricted key** (`rk_live_…`) for `STRIPE_SECRET_KEY` in live mode,
+   with only: Checkout Sessions (write), Customer portal (write) and
+   Subscriptions (write; the webhook reads subscriptions and cancels a checkout
+   whose address was taken). Test it in a sandbox first; a `403` names any
+   missing permission.
+4. **Turn on the customer portal** (Settings, Billing, Customer portal) and
    save it once: allow updating the payment method, cancelling, viewing
    invoices and, if you like, switching between the two League Pass prices.
    League admins reach it from "Manage billing" on their admin page. Until it
    is saved, that button returns an error.
-4. Do all of this in **test mode** first and run a full sign-up with card
-   `4242 4242 4242 4242`. Then repeat steps 1 to 3 in live mode and swap the
-   four Stripe variables for the live ones.
+5. Do all of this in **test mode** first and run a full sign-up with card
+   `4242 4242 4242 4242`. Then repeat steps 1 to 4 in live mode and swap the
+   Stripe variables for the live ones.
+6. In the Dashboard: set the public business name and support email, turn on
+   customer emails (receipts, trial ending, failed payments), and decide on
+   Stripe Tax (it collects nothing until you add a registration).
 
 ## The scheduler
 
@@ -147,6 +156,23 @@ Terms of Service and the Privacy Policy are at `/legal/terms` and
 They are a reasonable starting point written from what the code actually
 stores, not legal advice; have them read by someone qualified, and add your
 legal entity and governing law, before charging real customers.
+
+## Security notes
+
+- Admin sign-in locks an IP out of a league for 15 minutes after 10 wrong
+  passwords. Clerk accounts have their own lockout, breach checks and bot
+  protection.
+- Public AI features (the assistant, analytics questions) are limited per
+  visitor and per league per day: `LP_AI_DAILY_CHAT` (default 300) and
+  `LP_AI_DAILY_ASK` (default 200). Each league pays for its own AI.
+- Every response refuses framing and sends the standard hardening headers
+  (`next.config.js`). The vercel.app address redirects to the real domain.
+- Commits are scanned for secret keys by `.githooks/pre-commit`; enable it per
+  clone with `git config core.hooksPath .githooks`.
+- A checkout whose address was taken while it was open is cancelled before
+  any charge and listed in the operator panel.
+- "Hand over" in the operator panel makes someone owner when they sign in with
+  that email. Billing stays with whoever subscribed in Stripe.
 
 ## Still to build
 

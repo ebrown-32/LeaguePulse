@@ -36,6 +36,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'The league is still being set up. Try again in a moment.' }, { status: 409 });
   }
 
+  // A league bought while signed in belongs to that account; its admin is
+  // reached from the account page, and a checkout link (which can end up in
+  // browser history or a screenshot) must not be able to add a password.
+  const { getMembers } = await import('@/lib/platform/members');
+  if ((await getMembers(tenant.slug)).length) {
+    return NextResponse.json({ error: 'This league is managed from its owner\u2019s account. Sign in to open its admin.' }, { status: 409 });
+  }
+
   return runAsTenant(tenant, async () => {
     if (await adminPasswordSet()) {
       return NextResponse.json({ error: 'An admin password is already set for this league.' }, { status: 409 });

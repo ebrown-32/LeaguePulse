@@ -75,7 +75,26 @@ export async function isAdminPassword(given: string | null | undefined): Promise
   return stored ? verify(given, stored) : false;
 }
 
+/** Wrong guesses allowed per IP, per league, before a 15 minute lockout. */
+const MAX_FAILURES = 10;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+/**
+ * Check a password from a request, counting wrong ones. After ten wrong
+ * guesses from one IP the league's admin is closed to that IP for fifteen
+ * minutes, even for the right password, so it cannot be guessed online.
+ */
+export async function checkAdmin(req: Request, given: string | null | undefined): Promise<boolean> {
+  if (!given) return false;
+  const { clientIp, tooManyFailures, recordFailure } = await import('@/lib/ai/rateLimit');
+  const ip = clientIp(req);
+  if (await tooManyFailures('lp_admin_fail_', ip, MAX_FAILURES)) return false;
+  const ok = await isAdminPassword(given);
+  if (!ok) await recordFailure('lp_admin_fail_', ip, LOCKOUT_MS);
+  return ok;
+}
+
 /** The standard check for an admin request. */
 export async function isAdminRequest(req: Request): Promise<boolean> {
-  return isAdminPassword(req.headers.get('x-admin-password'));
+  return checkAdmin(req, req.headers.get('x-admin-password'));
 }
