@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { isAdminRequest } from '@/lib/tenant/admin';
 import { getRedis } from '@/lib/redisClient';
 import { saveTheme } from '@/lib/themeStorage';
+import { defaultTheme } from '@/lib/themeConfig';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,9 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await getRedis().client?.del(LOGO_KEY);
-  await saveTheme({ logoUrl: null });
-  return NextResponse.json({ logoUrl: null });
+  // Back to the deployment's own default: the LeaguePulse mark on the hosted
+  // product, the bundled logo on a self-hosted copy.
+  const logoUrl = defaultTheme().logoUrl;
+  await saveTheme({ logoUrl });
+  return NextResponse.json({ logoUrl });
 }

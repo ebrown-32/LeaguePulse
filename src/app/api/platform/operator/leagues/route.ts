@@ -131,6 +131,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: 'This league has a live subscription. Cancel it in Stripe first.' }, { status: 409 });
   }
   await deleteTenant(t.slug);
+  await (await import('@/lib/platform/members')).forgetLeague(t.slug);
   forgetTenant(t.slug);
   return NextResponse.json({ ok: true });
 }

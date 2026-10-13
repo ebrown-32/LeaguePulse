@@ -13,7 +13,8 @@ import { getTheme } from '@/lib/themeStorage';
 import Analytics from '@/components/analytics/Analytics';
 import ParticleField from '@/components/ParticleField';
 import type { Metadata } from 'next';
-import { DEFAULT_THEME } from '@/lib/themeConfig';
+import { defaultTheme } from '@/lib/themeConfig';
+import ProductAuth from '@/components/platform/ProductAuth';
 import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
@@ -48,10 +49,13 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: 'LeaguePulse: a home for your Sleeper league',
       description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper league.',
-      icons: { icon: '/favicon.ico' },
+      icons: {
+        icon: [{ url: '/brand/leaguepulse-icon.svg', type: 'image/svg+xml' }, { url: '/brand/leaguepulse-32.png', sizes: '32x32' }],
+        apple: '/brand/leaguepulse-apple.png',
+      },
     };
   }
-  const theme = await getTheme().catch(() => DEFAULT_THEME);
+  const theme = await getTheme().catch(() => defaultTheme());
 
   const title = theme.siteTitle?.trim() || theme.leagueName?.trim() || 'League Pulse';
   const description = theme.siteDescription?.trim()
@@ -88,7 +92,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en" className="dark" suppressHydrationWarning>
         <body className={`${displayFont.variable} ${bodyFont.variable} min-h-screen antialiased`}>
-          {children}
+          {(await import('@/lib/platform/account')).accountsEnabled()
+            ? <ProductAuth>{children}</ProductAuth>
+            : children}
         </body>
       </html>
     );

@@ -1137,3 +1137,12 @@ mark {
   font-stretch: 82%;
   font-variant-numeric: tabular-nums;
 }
+
+/* The wordmark, as in the identity grid: heavy and condensed. */
+.lp-wordmark {
+  font-family: var(--font-lp-display), var(--font-display-fallback), system-ui, sans-serif;
+  font-weight: 900;
+  font-stretch: 72%;
+  letter-spacing: -0.015em;
+  line-height: 1;
+}

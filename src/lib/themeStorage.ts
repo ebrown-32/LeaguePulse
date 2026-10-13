@@ -4,7 +4,7 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import { type ThemeConfig, type FontPairKey, DEFAULT_THEME, fontPairs, accentPresets } from './themeConfig';
+import { type ThemeConfig, type FontPairKey, DEFAULT_THEME, defaultTheme, fontPairs, accentPresets } from './themeConfig';
 import { getRedis } from './redisClient';
 import { perLeague } from '@/lib/tenant/perLeague';
 
@@ -61,20 +61,20 @@ export async function getTheme(): Promise<ThemeConfig> {
 
     if (redis) {
       const raw = await redis.get(REDIS_KEY);
-      if (raw) theme = { ...DEFAULT_THEME, ...JSON.parse(raw) };
+      if (raw) theme = { ...defaultTheme(), ...JSON.parse(raw) };
     } else {
       await ensureDataDir();
       try {
         const raw = await fs.readFile(THEME_FILE, 'utf-8');
-        theme = { ...DEFAULT_THEME, ...JSON.parse(raw) };
+        theme = { ...defaultTheme(), ...JSON.parse(raw) };
       } catch { /* file doesn't exist yet */ }
     }
 
-    const result = theme ?? { ...DEFAULT_THEME };
+    const result = theme ?? { ...defaultTheme() };
     await memCaches.set({ theme: result, expiry: Date.now() + MEM_TTL, mtimeMs: await themeFileMtime() });
     return result;
   } catch {
-    return { ...DEFAULT_THEME };
+    return { ...defaultTheme() };
   }
 }
 
@@ -97,5 +97,5 @@ export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfi
 }
 
 export async function resetTheme(): Promise<ThemeConfig> {
-  return saveTheme(DEFAULT_THEME);
+  return saveTheme(defaultTheme());
 }

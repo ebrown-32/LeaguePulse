@@ -25,6 +25,22 @@ const TABS = [
 type Tab = (typeof TABS)[number]['id'];
 
 const STORAGE_KEY = 'lp_admin_tab';
+const PASS_KEY = 'lp_admin_pass';
+
+/**
+ * On a hosted league, the product site's "open this league's admin" link, so
+ * an owner can sign in with their account instead of a password. Null on a
+ * self-hosted copy, which has no accounts.
+ */
+function productAccountLink(): string | null {
+  if (typeof window === 'undefined' || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) return null;
+  const { hostname, port, protocol } = window.location;
+  const [slug, ...rest] = hostname.split('.');
+  if (!rest.length) return null;
+  const root = rest.join('.');
+  const origin = root === 'localhost' ? `${protocol}//localhost${port ? `:${port}` : ''}` : `https://${root}`;
+  return `${origin}/api/platform/account/open?slug=${encodeURIComponent(slug)}`;
+}
 
 export default function AdminShell() {
   const [password, setPassword] = useState('');
@@ -40,23 +56,51 @@ export default function AdminShell() {
   }, []);
   useEffect(() => { localStorage.setItem(STORAGE_KEY, tab); }, [tab]);
 
-  const login = useCallback(async () => {
-    if (!password) return;
+  const login = useCallback(async (given = password) => {
+    if (!given) return;
     setBusy(true); setError('');
     try {
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: given }),
       });
-      if (res.ok) setAuthed(true);
-      else setError('Incorrect password.');
+      if (res.ok) { setPassword(given); setAuthed(true); }
+      else if (given.startsWith('lpt.')) {
+        try { sessionStorage.removeItem(PASS_KEY); } catch { /* ignore */ }
+        setPassword('');
+        setError('That sign-in has expired. Open the admin again from your account.');
+      } else setError('Incorrect password.');
     } catch {
       setError('Could not reach the server.');
     } finally {
       setBusy(false);
     }
   }, [password]);
+
+  /**
+   * Hosted: arriving from "Open admin" on the account page, with a signed
+   * pass in the URL fragment. It stands in for the password for this tab
+   * (see lib/platform/adminPass); the fragment is cleared straight away.
+   */
+  useEffect(() => {
+    let pass: string | null = null;
+    const m = /[#&]lpt=([^&]+)/.exec(window.location.hash);
+    if (m) {
+      pass = decodeURIComponent(m[1]);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      try { sessionStorage.setItem(PASS_KEY, pass); } catch { /* ignore */ }
+    } else {
+      try { pass = sessionStorage.getItem(PASS_KEY); } catch { /* ignore */ }
+    }
+    if (pass) login(pass);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Worked out after mount: it depends on the address in the browser, and
+  // computing it during render made the server and client HTML differ.
+  const [account, setAccount] = useState<string | null>(null);
+  useEffect(() => { setAccount(productAccountLink()); }, []);
 
   if (!authed) {
     return (
@@ -79,12 +123,22 @@ export default function AdminShell() {
           />
           {error && <p className="mt-2 text-xs text-rose-500">{error}</p>}
           <button
-            onClick={login}
+            onClick={() => login()}
             disabled={busy || !password}
             className="mt-3 w-full rounded-md bg-primary py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
           >
             {busy ? 'Signing in…' : 'Unlock'}
           </button>
+          {account && (
+            <>
+              <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
+              </div>
+              <a href={account} className="block w-full rounded-md border border-border py-2 text-center text-sm font-semibold text-foreground hover:bg-muted">
+                Sign in with your LeaguePulse account
+              </a>
+            </>
+          )}
           {/* Set only on the hosted product, where the operator can issue a
               recovery link. Self-hosted, the password is ADMIN_PASSWORD. */}
           {process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL && (

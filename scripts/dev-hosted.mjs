@@ -6,7 +6,8 @@
  * Reads .env.hosted.local over your usual .env.local, so the hosted settings
  * win, and blanks NEXT_PUBLIC_LEAGUE_ID so no single league is baked in.
  * Anything not in .env.hosted.local, such as Redis, still comes from
- * .env.local. Next allows one dev server per folder, so stop `npm run dev`
+ * .env.local, and every key is written under "dev:" so local leagues stay
+ * apart from the real site that database serves. Next allows one dev server per folder, so stop `npm run dev`
  * first.
  */
 
@@ -20,7 +21,14 @@ if (!existsSync(file)) {
   process.exit(1);
 }
 const vars = parseEnv(readFileSync(file, 'utf8'));
-const env = { ...process.env, ...Object.fromEntries(Object.entries(vars).filter(([, v]) => v !== '')), NEXT_PUBLIC_LEAGUE_ID: '' };
+const env = {
+  ...process.env,
+  ...Object.fromEntries(Object.entries(vars).filter(([, v]) => v !== '')),
+  NEXT_PUBLIC_LEAGUE_ID: '',
+  // Local leagues live under "dev:" in whatever database .env.local points
+  // at, so they never mix with a real site's data in the same database.
+  LP_REDIS_NAMESPACE: process.env.LP_REDIS_NAMESPACE ?? 'dev:',
+};
 
 const child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--turbopack', '-p', process.env.PORT || '3001'], { env, stdio: 'inherit' });
 child.on('exit', code => process.exit(code ?? 0));

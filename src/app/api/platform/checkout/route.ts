@@ -50,9 +50,17 @@ export async function POST(req: Request) {
       }, { status: 503 });
     }
 
+    // Signed in on the product site: the league belongs to this account from
+    // the moment Stripe confirms (see the webhook), and checkout uses its email.
+    const { accountsEnabled, signedInAccount } = await import('@/lib/platform/account');
+    const me = await signedInAccount();
+    if (accountsEnabled() && !me) {
+      return NextResponse.json({ error: 'Sign in to start your league.', signIn: '/sign-up' }, { status: 401 });
+    }
     await holdSlug(slug, leagueId);
     const origin = new URL(req.url).origin;
-    const metadata = { leagueId, slug, plan, leagueName: String(league.name ?? '').slice(0, 200) };
+    const metadata: Record<string, string> = { leagueId, slug, plan, leagueName: String(league.name ?? '').slice(0, 200) };
+    if (me) metadata.userId = me.userId;
     const session = await s.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{
@@ -68,7 +76,7 @@ export async function POST(req: Request) {
         metadata,
       },
       metadata,
-      customer_email: body.email?.includes('@') ? body.email : undefined,
+      customer_email: me?.email ?? (body.email?.includes('@') ? body.email : undefined),
       allow_promotion_codes: true,
       success_url: `${origin}/start/done?session={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/start?league=${leagueId}&slug=${slug}`,

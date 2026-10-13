@@ -26,18 +26,21 @@ const A = (props: SVGProps<SVGPathElement>) =>
   <path fill="var(--mark-accent, hsl(var(--signal)))" stroke="none" {...props} />;
 
 /**
- * The logo: a goalpost whose crossbar is a heartbeat. Uprights, a post, and
- * the pulse running across where the bar would be.
+ * The logo, from the LeaguePulse identity grid: a goalpost in ink whose
+ * crossbar breaks into a single orange spike, the pulse, with the post below.
+ * `tile` sets it on the rounded app-icon square. Colours follow the page's
+ * tokens, so it reads on paper and on the dark bands alike.
  */
-export function Logomark({ size = 30, ...rest }: P) {
+export function Logomark({ size = 30, tile = false, ...rest }: P & { tile?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden {...rest}>
-      <rect x="0.5" y="0.5" width="31" height="31" rx="8" fill="hsl(var(--foreground))" />
-      <g stroke="hsl(var(--background))" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 6.5v11.5M25 6.5v11.5M16 22v4.5" />
-        <path d="M7 18h4.2l1.9-4.8 3.1 8.6 2.4-6.2 1.3 2.4H25" />
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" role="img" aria-label="LeaguePulse" {...rest}>
+      {tile && <rect width="64" height="64" rx="16" fill="hsl(var(--card))" />}
+      <g transform={tile ? 'translate(9.6 9.6) scale(0.7)' : undefined}>
+        <path d="M11 12v24h13.5M53 12v24H39.5M32 42.5V54" stroke="hsl(var(--foreground))" strokeWidth={7}
+          strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M32 19.5 38.6 37 32 33.6 25.4 37Z" fill="hsl(var(--signal))" stroke="hsl(var(--signal))"
+          strokeWidth={1.5} strokeLinejoin="round" />
       </g>
-      <circle cx="25" cy="6.5" r="2" fill="hsl(var(--signal))" />
     </svg>
   );
 }

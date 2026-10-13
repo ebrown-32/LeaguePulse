@@ -26,9 +26,12 @@ import {
   PennantMark, FindMark, AddressMark, ChatMark, Tick, Route,
 } from './marks';
 import WinChance from './landing/WinChance';
+import { NavAccount, WelcomeBack } from './landing/SignedIn';
 import { DeskFeed, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
 
 const ease = [0.22, 1, 0.36, 1] as const;
+/** Commissioner accounts are on when Clerk is configured (hosted only). */
+const accountsOn = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 const rise = {
   hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0, transition: { duration: 0.7, ease } },
@@ -82,8 +85,16 @@ export default function Landing() {
 function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
-      <Logomark size={30} />
-      <span className="lp-display text-[19px] font-extrabold tracking-[-0.03em]">{PLATFORM.name}</span>
+      <Logomark size={34} />
+      <span className="lp-wordmark text-[22px]">{PLATFORM.name}</span>
+    </Link>
+  );
+}
+
+function GetStarted() {
+  return (
+    <Link href="/start" className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[13px] font-semibold text-background transition hover:bg-foreground/85">
+      Get started <Route size={14} />
     </Link>
   );
 }
@@ -106,9 +117,11 @@ function Nav() {
           <a href="#faq" className="hover:text-foreground">FAQ</a>
           <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="hover:text-foreground">Open source</a>
         </nav>
-        <Link href="/start" className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[13px] font-semibold text-background transition hover:bg-foreground/85">
-          Get started <Route size={14} />
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Signed in, the account area replaces "Get started": a returning
+              commissioner wants their leagues, not the sign-up. */}
+          {accountsOn ? <NavAccount getStarted={<GetStarted />} /> : <GetStarted />}
+        </div>
       </div>
     </header>
   );
@@ -117,7 +130,6 @@ function Nav() {
 // ── Hero ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
-  const router = useRouter();
   const [q, setQ] = useState('');
   return (
     <section className="relative pt-28 sm:pt-36">
@@ -139,18 +151,7 @@ function Hero() {
               {PLATFORM.name} turns your Sleeper league into its own site. AI writers who cover your actual teams,
               live chances to win, a guide to which games to have on, and every stat back to your first draft.
             </motion.p>
-            <motion.form variants={rise}
-              onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
-              className="mt-8 flex max-w-md flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sleeper username or league ID" aria-label="Sleeper username or league ID"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
-              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
-                Find my league <Route size={15} />
-              </button>
-            </motion.form>
-            <motion.p variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
-              {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.
-            </motion.p>
+            {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
           </motion.div>
 
           <motion.div className="min-w-0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
@@ -160,6 +161,27 @@ function Hero() {
         </div>
       </div>
     </section>
+  );
+}
+
+
+function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
+  const router = useRouter();
+  return (
+    <>
+            <motion.form initial="hidden" animate="show" variants={rise}
+              onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
+              className="mt-8 flex max-w-md flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sleeper username or league ID" aria-label="Sleeper username or league ID"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
+              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
+                Find my league <Route size={15} />
+              </button>
+            </motion.form>
+            <motion.p initial="hidden" animate="show" variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
+              {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.
+            </motion.p>
+    </>
   );
 }
 
