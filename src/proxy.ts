@@ -14,9 +14,9 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PLATFORM_PREFIXES = ['/landing', '/start', '/legal'];
+const PLATFORM_PREFIXES = ['/landing', '/start', '/legal', '/operator'];
 const hosted = process.env.LP_HOSTED === '1';
-const rootDomain = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.app').toLowerCase();
+const rootDomain = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.io').toLowerCase();
 
 /** The league subdomain in a host, or null on the bare domain. */
 function subdomainOf(host: string): string | null {

@@ -26,7 +26,7 @@ import type { Tenant } from '@/lib/platform/tenants';
  */
 
 const hosted = () => process.env.LP_HOSTED === '1';
-const rootDomain = () => (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.app').toLowerCase();
+const rootDomain = () => (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.io').toLowerCase();
 
 /** The league subdomain in a host, or null for the bare domain. */
 export function subdomainOf(host: string | null | undefined): string | null {

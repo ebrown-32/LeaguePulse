@@ -1070,40 +1070,70 @@ mark {
    shared components read the same tokens, so the kit works here unchanged.
 ───────────────────────────────────────────── */
 .lp-brand {
-  --background: 228 42% 4%;
-  --foreground: 216 33% 96%;
-  --card: 227 34% 7.5%;
-  --card-foreground: 216 33% 96%;
-  --popover: 227 34% 8%;
-  --popover-foreground: 216 33% 96%;
-  --muted: 227 26% 12%;
-  --muted-foreground: 220 14% 68%;
-  --accent: 227 26% 13%;
-  --accent-foreground: 216 33% 96%;
-  --border: 226 24% 15%;
-  --input: 226 24% 15%;
-  --primary: 151 82% 50%;
-  --primary-foreground: 228 45% 6%;
-  --ring: 151 82% 50%;
+  /* Paper, ink, turf and one signal colour. Light first: a matchday
+     programme, not a terminal. */
+  --background: 48 20% 96%;        /* #F7F6F2 paper */
+  --foreground: 210 11% 8%;        /* #121417 ink */
+  --card: 0 0% 100%;
+  --card-foreground: 210 11% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 11% 8%;
+  --muted: 48 14% 91%;             /* #EDEBE5 */
+  --muted-foreground: 216 7% 37%;  /* #585D66, 6:1 on paper */
+  --accent: 48 14% 91%;
+  --accent-foreground: 210 11% 8%;
+  --border: 45 13% 86%;            /* #E1DFD8 */
+  --input: 45 13% 86%;
+  --primary: 156 84% 25%;          /* #0A7550 turf, 5.6:1 with white */
+  --primary-foreground: 0 0% 100%;
+  --ring: 156 84% 25%;
+  --signal: 12 88% 54%;            /* #EE5A2E live / alert */
+  --turf-light: 154 62% 52%;       /* turf on ink */
+  --ink: 210 11% 7%;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
 
-/* A field of light behind the hero: two soft glows and a fine grid that
-   fades out, so the top of the page has depth without an image. */
-.lp-brand-hero-bg {
-  background:
-    radial-gradient(60% 50% at 75% 20%, hsl(151 82% 50% / 0.16), transparent 70%),
-    radial-gradient(50% 45% at 10% 10%, hsl(212 90% 60% / 0.14), transparent 70%),
-    linear-gradient(hsl(216 33% 96% / 0.04) 1px, transparent 1px) 0 0 / 44px 44px,
-    linear-gradient(90deg, hsl(216 33% 96% / 0.04) 1px, transparent 1px) 0 0 / 44px 44px;
-  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
-  mask-image: linear-gradient(to bottom, black 55%, transparent);
+/* A dark band inside the light page: Sunday night. Same tokens, flipped. */
+.lp-brand .lp-ink {
+  --background: 210 11% 7%;
+  --foreground: 48 20% 96%;
+  --card: 210 10% 11%;
+  --card-foreground: 48 20% 96%;
+  --muted: 210 9% 15%;
+  --muted-foreground: 40 6% 66%;
+  --border: 210 8% 19%;
+  --primary: 154 62% 52%;
+  --primary-foreground: 210 11% 7%;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
+/* Yard lines behind the hero: every five yards, fading out downward. */
+.lp-brand-hero-bg {
+  background:
+    repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.055) 0 1px, transparent 1px 72px);
+  -webkit-mask-image: linear-gradient(to bottom, black 20%, transparent 85%);
+  mask-image: linear-gradient(to bottom, black 20%, transparent 85%);
+}
+
+/* Emphasis in a headline: turf ink with a hand-set underline, not a gradient. */
 .lp-brand-text {
-  background: linear-gradient(100deg, hsl(151 82% 58%), hsl(176 80% 56%) 45%, hsl(212 95% 68%));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: hsl(var(--primary));
+  background-image: linear-gradient(hsl(var(--signal) / 0.9), hsl(var(--signal) / 0.9));
+  background-repeat: no-repeat;
+  background-size: 100% 0.09em;
+  background-position: 0 92%;
+}
+
+/* Product site display type: Archivo, a touch condensed. */
+.lp-display {
+  font-family: var(--font-lp-display), var(--font-display-fallback), system-ui, sans-serif;
+  font-stretch: 88%;
+  letter-spacing: -0.02em;
+}
+.lp-num {
+  font-family: var(--font-lp-display), var(--font-display-fallback), system-ui, sans-serif;
+  font-stretch: 82%;
+  font-variant-numeric: tabular-nums;
 }

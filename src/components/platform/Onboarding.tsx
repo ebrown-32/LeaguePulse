@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { ArrowRight, Check, Search, AlertTriangle, ExternalLink } from '@/components/icons';
 import { PLATFORM, PLANS, slugify } from '@/lib/platform/config';
 import { PulseMark } from './Landing';
+import { productDisplay } from './fonts';
 
 interface FoundLeague {
   leagueId: string; name: string; season: string; avatar: string | null;
@@ -101,18 +102,18 @@ export default function Onboarding() {
   const step = !league ? 1 : !slugState?.ok ? 2 : 3;
 
   return (
-    <div className="lp-brand min-h-screen font-body">
+    <div className={`lp-brand min-h-screen font-body ${productDisplay.variable}`}>
       <div className="lp-brand-hero-bg pointer-events-none fixed inset-0 opacity-60" />
       <header className="relative mx-auto flex h-16 max-w-3xl items-center justify-between px-5">
         <Link href="/landing" className="flex items-center gap-2">
-          <PulseMark /><span className="font-display text-[17px] font-bold">{PLATFORM.name}</span>
+          <PulseMark /><span className="lp-display text-[18px] font-extrabold">{PLATFORM.name}</span>
         </Link>
         <Steps step={step} />
       </header>
 
       <main className="relative mx-auto max-w-3xl space-y-5 px-5 pb-24 pt-8">
         <div>
-          <h1 className="font-display text-[34px] font-bold leading-tight tracking-[-0.03em] sm:text-[42px]">Let&apos;s find your league.</h1>
+          <h1 className="lp-display text-[36px] font-extrabold leading-tight tracking-[-0.035em] sm:text-[46px]">Let&apos;s find your league.</h1>
           <p className="mt-2 text-[15px] text-muted-foreground">Your Sleeper username lists your leagues. Or paste a league ID from the league&apos;s settings.</p>
         </div>
 
@@ -129,7 +130,7 @@ export default function Onboarding() {
               {searching ? 'Looking' : 'Find'}
             </button>
           </form>
-          {findError && <p className="mt-3 flex items-center gap-2 text-[13px] text-red-400"><AlertTriangle className="h-4 w-4" />{findError}</p>}
+          {findError && <p className="mt-3 flex items-center gap-2 text-[13px] text-red-600"><AlertTriangle className="h-4 w-4" />{findError}</p>}
           {found && (
             <div className="mt-4 space-y-2">
               {found.user && <p className="text-[12.5px] text-muted-foreground">{found.leagues.length} league{found.leagues.length === 1 ? '' : 's'} for {found.user.name} this season</p>}
@@ -167,7 +168,7 @@ export default function Onboarding() {
                     className="min-w-0 flex-1 bg-transparent px-1 py-3 font-semibold outline-none" />
                   <span className="pr-3 text-muted-foreground">.{PLATFORM.rootDomain}</span>
                 </div>
-                <p className={cn('mt-2 text-[12.5px]', slugState?.ok ? 'text-primary' : slugState ? 'text-red-400' : 'text-muted-foreground')}>
+                <p className={cn('mt-2 text-[12.5px]', slugState?.ok ? 'text-primary' : slugState ? 'text-red-600' : 'text-muted-foreground')}>
                   {slugState?.ok ? `${clean}.${PLATFORM.rootDomain} is yours if you want it.` : slugState?.reason ?? 'Letters, numbers and hyphens.'}
                 </p>
               </Card>
@@ -195,7 +196,7 @@ export default function Onboarding() {
                 <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="Email for receipts (optional)"
                   className="mt-3 w-full rounded-xl border border-border bg-background/70 px-3 py-3 text-[14.5px] outline-none focus:border-primary/60" />
                 <button onClick={start} disabled={starting}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-[15px] font-semibold text-primary-foreground shadow-[0_0_30px_hsl(151_82%_50%/0.3)] transition hover:brightness-110 disabled:opacity-60">
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-[15px] font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60">
                   {starting ? 'Opening checkout' : `Start ${PLANS.pro.trialDays} days free`} <ArrowRight className="h-4 w-4" />
                 </button>
                 <p className="mt-2 text-center text-[12px] text-muted-foreground">
@@ -207,7 +208,7 @@ export default function Onboarding() {
                 </p>
                 {startError && (
                   <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[13px]">
-                    <p className="font-semibold text-amber-300">{startError.msg}</p>
+                    <p className="font-semibold text-amber-800">{startError.msg}</p>
                     {startError.missing?.length ? (
                       <p className="mt-1 text-muted-foreground">Set {startError.missing.join(', ')} in the deployment&apos;s environment to turn on checkout.</p>
                     ) : null}
