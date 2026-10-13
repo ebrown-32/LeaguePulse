@@ -65,7 +65,7 @@ export const PLANS = {
 /** Subdomains a league may not take. */
 export const RESERVED_SLUGS = new Set([
   'www', 'app', 'api', 'admin', 'dashboard', 'start', 'signup', 'login', 'billing', 'help',
-  'support', 'operator', 'docs', 'blog', 'status', 'mail', 'static', 'assets', 'cdn', 'demo', 'leaguepulse',
+  'support', 'operator', 'account', 'accounts', 'sign-in', 'sign-up', 'clerk', 'clkmail', 'docs', 'blog', 'status', 'mail', 'static', 'assets', 'cdn', 'demo', 'leaguepulse',
 ]);
 
 /** Lowercase letters, numbers and single hyphens, 3 to 32 characters. */

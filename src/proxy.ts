@@ -10,11 +10,16 @@
  * show, so it goes to the front page instead.
  *
  * Self-hosted, nothing here changes anything except the tagging.
+ *
+ * Accounts (hosted, with Clerk keys set): requests to the product domain go
+ * through Clerk's middleware first, so the account pages and their API can
+ * read who is signed in. League subdomains never touch Clerk.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-const PLATFORM_PREFIXES = ['/landing', '/start', '/legal', '/operator'];
+const PLATFORM_PREFIXES = ['/landing', '/start', '/legal', '/operator', '/account', '/sign-in', '/sign-up'];
 const hosted = process.env.LP_HOSTED === '1';
 const rootDomain = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.io').toLowerCase();
 
@@ -28,8 +33,11 @@ function subdomainOf(host: string): string | null {
   return null;
 }
 
-export function proxy(req: NextRequest) {
+function route(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // API routes pass straight through; they are matched only so Clerk can
+  // attach the session on the product domain.
+  if (pathname.startsWith('/api/')) return NextResponse.next();
   const headers = new Headers(req.headers);
   // Only this proxy sets these. A client could send its own, and anything
   // that trusted a forged copy would show the wrong league or skip the
@@ -69,8 +77,23 @@ export function proxy(req: NextRequest) {
   return NextResponse.next({ request: { headers } });
 }
 
+const accounts = hosted
+  && Boolean(process.env.CLERK_SECRET_KEY?.trim())
+  && Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim());
+const withClerk = accounts ? clerkMiddleware(async (_auth, req) => route(req)) : null;
+
+export function proxy(req: NextRequest, event: NextFetchEvent) {
+  if (withClerk && !subdomainOf(req.headers.get('host') ?? '')) return withClerk(req, event);
+  return route(req);
+}
+
 export const config = {
-  // Pages only. API routes, Next internals and static files pass straight
-  // through, so this never sits in front of a JSON request or an image.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)'],
+  // Pages, plus the product's own API (for the signed-in session). Other API
+  // routes, Next internals and static files pass straight through, so this
+  // never sits in front of a league's JSON request or an image.
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)',
+    '/api/platform/:path*',
+    '/__clerk/:path*',
+  ],
 };

@@ -91,6 +91,13 @@ export default function Onboarding() {
       });
       const d = await r.json();
       if (d.url) { window.location.href = d.url; return; }
+      // Accounts on: sign in (or create one) first, then come straight back
+      // to this league, address and plan.
+      if (r.status === 401 && d.signIn) {
+        const back = `/start?league=${league.leagueId}&slug=${encodeURIComponent(clean)}&plan=${plan}`;
+        window.location.href = `${d.signIn}?redirect_url=${encodeURIComponent(back)}`;
+        return;
+      }
       setStartError({ msg: d.error ?? 'Could not start checkout', missing: d.missing });
     } catch {
       setStartError({ msg: 'Could not reach the server' });
@@ -106,7 +113,7 @@ export default function Onboarding() {
       <div className="lp-brand-hero-bg pointer-events-none fixed inset-0 opacity-60" />
       <header className="relative mx-auto flex h-16 max-w-3xl items-center justify-between px-5">
         <Link href="/landing" className="flex items-center gap-2">
-          <PulseMark /><span className="lp-display text-[18px] font-extrabold">{PLATFORM.name}</span>
+          <PulseMark /><span className="lp-wordmark text-[21px]">{PLATFORM.name}</span>
         </Link>
         <Steps step={step} />
       </header>

@@ -61,6 +61,11 @@ export async function POST(req: Request) {
           updatedAt: now,
         };
         await saveTenant(tenant);
+        // Bought while signed in: that account owns the league.
+        if (m.userId) {
+          const { addMember } = await import('@/lib/platform/members');
+          await addMember(m.slug, { userId: m.userId, email: tenant.ownerEmail ?? '', role: 'owner' });
+        }
       }
     }
 

@@ -87,10 +87,15 @@ const SHARED_PREFIXES = [
  * which is also what stops the registry lookup recursing into itself.
  */
 async function scopeKey(key: string): Promise<string> {
-  if (SHARED_PREFIXES.some(p => key.startsWith(p))) return key;
+  // A namespace over everything, shared keys included, for running the hosted
+  // product locally against a database that also serves a real site: local
+  // leagues, the platform registry and their caches all sit under it. Set by
+  // `npm run dev:hosted`; never set in production.
+  const ns = process.env.LP_REDIS_NAMESPACE?.trim() ?? '';
+  if (SHARED_PREFIXES.some(p => key.startsWith(p))) return ns + key;
   const { currentTenant } = await import('@/lib/tenant/context');
   const t = await currentTenant();
-  return t ? `t:${t.slug}:${key}` : key;
+  return ns + (t ? `t:${t.slug}:${key}` : key);
 }
 
 function scopeClient(c: RedisLike): RedisLike {

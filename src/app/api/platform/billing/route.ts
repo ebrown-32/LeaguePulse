@@ -41,6 +41,10 @@ export async function POST(req: Request) {
   try {
     const portal = await s.billingPortal.sessions.create({
       customer: tenant.stripeCustomerId,
+      // The portal setup made for League Pass (plans it can switch between,
+      // cancellation at period end). Without it, Stripe uses the account's
+      // default, which has to have been saved once in the dashboard.
+      ...(process.env.STRIPE_PORTAL_CONFIGURATION?.trim() ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION.trim() } : {}),
       return_url: `https://${tenant.slug}.${PLATFORM.rootDomain}/admin`,
     });
     return NextResponse.json({ url: portal.url });

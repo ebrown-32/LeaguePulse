@@ -53,7 +53,12 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
                 {url.replace('https://', '')}
               </a>
             )}
-            {needsAdmin && id && url && <ClaimAdmin session={id} siteUrl={url} />}
+            {tenant && session.metadata?.userId ? (
+              // Bought while signed in: the league is already in their account.
+              <Link href="/account" className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-border px-5 py-3.5 text-[15px] font-semibold">
+                Manage it from My leagues
+              </Link>
+            ) : needsAdmin && id && url && <ClaimAdmin session={id} siteUrl={url} />}
           </>
         )}
       </div>

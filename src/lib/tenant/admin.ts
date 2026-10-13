@@ -62,6 +62,14 @@ export async function isAdminPassword(given: string | null | undefined): Promise
   if (!hosted()) {
     return sameBytes(given, process.env.ADMIN_PASSWORD?.trim() || 'admin123');
   }
+  // A member signed in on the product site arrives with a pass instead of
+  // the password (see lib/platform/adminPass).
+  const { looksLikeAdminPass, verifyAdminPass } = await import('@/lib/platform/adminPass');
+  if (looksLikeAdminPass(given)) {
+    const { currentTenant } = await import('./context');
+    const t = await currentTenant();
+    return t ? verifyAdminPass(given, t.slug) : false;
+  }
   const r = getRedis().client;
   const stored = r ? await r.get(KEY) : null;
   return stored ? verify(given, stored) : false;

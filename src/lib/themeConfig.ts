@@ -6,7 +6,7 @@
 export type FontPairKey =
   | 'bricolage-dm' | 'syne-dm'     | 'fraunces-outfit' | 'outfit'
   | 'anton-inter'  | 'bebas-inter' | 'oswald-roboto'
-  | 'space-inter'  | 'playfair-source' | 'unbounded-dm' | 'instrument-inter'
+  | 'space-inter'  | 'playfair-source' | 'unbounded-dm' | 'instrument-inter' | 'archivo-dm'
   | 'archivo-inter'| 'chakra-inter'    | 'sora-inter'   | 'dmserif-dm'
   | 'rubikmono-inter' | 'teko-inter'   | 'familjen-inter' | 'baskerville-inter';
 
@@ -14,6 +14,7 @@ export type BackgroundStyle = 'grid' | 'particles' | 'plain';
 export type MotionLevel = 'full' | 'reduced';
 
 export type PaletteKey =
+  | 'pulse'
   | 'prussian' | 'harbor'    | 'ensign'  | 'midnight'
   | 'carbon'   | 'evergreen' | 'oxblood' | 'sunset'
   | 'mocha'    | 'porcelain' | 'nord'    | 'synthwave'
@@ -120,6 +121,36 @@ export const DEFAULT_TX_LIGHT: TxColors = {
  * Prussian-blue surfaces, amber-orange accent, alabaster text.
  */
 export const palettes: Record<PaletteKey, PaletteDefinition> = {
+  /** The LeaguePulse identity: ink, paper, turf green and signal orange. */
+  pulse: {
+    name:        'LeaguePulse',
+    description: 'Ink and paper with turf green and a signal orange',
+    swatches:    ['#121417', '#1a1d20', '#0a7550', '#ee5a2e', '#f7f6f2'],
+    accentDark:  { h: 154, s: 62, l: 52 },
+    accentLight: { h: 156, s: 84, l: 25 },
+    txDark:      { trade: '#f07a52', waiver: '#3987e5', freeAgent: '#22a874' },
+    txLight:     { trade: '#c2410c', waiver: '#2a78d6', freeAgent: '#0a7550' },
+    dark: {
+      background: '210 11% 7%', foreground: '48 20% 96%',
+      card: '210 10% 11%', cardForeground: '48 20% 96%',
+      popover: '210 10% 13%', popoverForeground: '48 20% 96%',
+      secondary: '210 9% 15%', secondaryForeground: '40 10% 84%',
+      muted: '210 9% 15%', mutedForeground: '40 6% 66%',
+      accent: '210 9% 16%', accentForeground: '48 20% 96%',
+      border: '210 8% 19%', input: '210 8% 19%',
+      primaryForeground: '210 11% 7%',
+    },
+    light: {
+      background: '48 20% 96%', foreground: '210 11% 8%',
+      card: '0 0% 100%', cardForeground: '210 11% 8%',
+      popover: '0 0% 100%', popoverForeground: '210 11% 8%',
+      secondary: '48 14% 91%', secondaryForeground: '210 11% 14%',
+      muted: '48 14% 91%', mutedForeground: '216 7% 37%',
+      accent: '48 14% 89%', accentForeground: '210 11% 8%',
+      border: '45 13% 86%', input: '45 13% 86%',
+      primaryForeground: '0 0% 100%',
+    },
+  },
   prussian: {
     name:        'Prussian',
     description: 'Black ground, deep blue surfaces, amber accent',
@@ -809,6 +840,33 @@ export const DEFAULT_THEME: ThemeConfig = {
   txColorsLight: DEFAULT_TX_LIGHT,
 };
 
+/**
+ * Where a new league starts on the hosted product: the LeaguePulse identity,
+ * its logo and colours, until the league's admin sets its own. Self-hosted
+ * copies keep DEFAULT_THEME, the open source project's look.
+ */
+export const HOSTED_DEFAULT_THEME: ThemeConfig = {
+  ...DEFAULT_THEME,
+  palette:       'pulse',
+  primaryH:      154,
+  primaryS:      62,
+  primaryL:      52,
+  primaryHLight: 156,
+  primarySLight: 84,
+  primaryLLight: 25,
+  radiusRem:     0.75,
+  fontPair:      'archivo-dm',
+  logoUrl:       '/brand/leaguepulse-mark.svg',
+  faviconUrl:    '/brand/leaguepulse-icon.svg',
+  txColorsDark:  { trade: '#f07a52', waiver: '#3987e5', freeAgent: '#22a874' },
+  txColorsLight: { trade: '#c2410c', waiver: '#2a78d6', freeAgent: '#0a7550' },
+};
+
+/** The starting theme for this deployment. Server side: it reads LP_HOSTED. */
+export function defaultTheme(): ThemeConfig {
+  return process.env.LP_HOSTED === '1' ? HOSTED_DEFAULT_THEME : DEFAULT_THEME;
+}
+
 export const fontPairs: Record<FontPairKey, {
   display:     string;
   body:        string;
@@ -880,6 +938,12 @@ export const fontPairs: Record<FontPairKey, {
     body:        'Inter',
     googleQuery: 'family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700',
     preview:     'Editorial & Elegant',
+  },
+  'archivo-dm': {
+    display:     'Archivo',
+    body:        'DM Sans',
+    googleQuery: 'family=Archivo:wdth,wght@62..125,400..900&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700',
+    preview:     'LeaguePulse',
   },
   'archivo-inter': {
     display:     'Archivo Black',

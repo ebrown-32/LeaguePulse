@@ -64,7 +64,20 @@ one level, so leagues live at `league.yourdomain.com`.
 If you cannot move the nameservers, Vercel has a guide for wildcard domains
 with an external DNS provider, which delegates only certificate validation.
 
-Locally, `http://<slug>.localhost:3000` works in Chrome with no setup.
+### Running it locally
+
+`npm run dev:hosted` runs the hosted product on http://localhost:3001 with the
+settings in `.env.hosted.local` (stop `npm run dev` first; Next allows one dev
+server per folder). It uses the Redis in `.env.local` but writes every key
+under `dev:`, so local leagues never mix with the real site that database
+serves.
+
+To create a league locally, open http://localhost:3001/operator, sign in with
+`LP_OPERATOR_SECRET`, and use "Add a beta league" (Stripe's webhooks cannot
+reach a laptop, so checkout is for the deployed site). Open the setup link it
+gives you to set the admin password, then visit
+`http://<slug>.localhost:3001` (Chrome and Firefox resolve `*.localhost`;
+Safari may not).
 
 ## Environment for the hosted project
 
@@ -78,6 +91,7 @@ Locally, `http://<slug>.localhost:3000` works in Chrome with no setup.
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
 | `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 12, 49, 14) |
+| `STRIPE_PORTAL_CONFIGURATION` | optional: the customer portal setup (`bpc_…`) League Pass uses. Without it Stripe uses the account default, which must be saved once in the dashboard |
 | `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
 | `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |
 
