@@ -10,10 +10,16 @@
 
 import { timingSafeEqual } from 'node:crypto';
 
-export function isOperatorRequest(req: Request): boolean {
-  const secret = process.env.LP_OPERATOR_SECRET?.trim();
-  if (!secret || secret.length < 24) return false;
+/** Whether the request carries `Authorization: Bearer <secret>`, compared in constant time. */
+export function bearerMatches(req: Request, secret: string | undefined | null): boolean {
+  if (!secret) return false;
   const given = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
   const a = Buffer.from(given), b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export function isOperatorRequest(req: Request): boolean {
+  const secret = process.env.LP_OPERATOR_SECRET?.trim();
+  if (!secret || secret.length < 24) return false;
+  return bearerMatches(req, secret);
 }

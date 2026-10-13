@@ -189,7 +189,7 @@ export default function Onboarding() {
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <Card n={3} title="Start your free trial">
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {([['season', `$${PLANS.pro.season}`, 'per season', 'Best value'], ['monthly', `$${PLANS.pro.monthly}`, 'per month', 'Pause any time']] as const).map(([id, price, per, note]) => (
+                  {([['season', `$${PLANS.pro.season}`, 'per season', `About $${(PLANS.pro.season / 12).toFixed(2)} a head`], ['monthly', `$${PLANS.pro.monthly}`, 'per month', 'Cancel whenever']] as const).map(([id, price, per, note]) => (
                     <button key={id} onClick={() => setPlan(id)}
                       className={cn('rounded-2xl border p-4 text-left transition', plan === id ? 'border-primary bg-primary/10' : 'border-border bg-background/50 hover:border-primary/40')}>
                       <span className="flex items-center justify-between">

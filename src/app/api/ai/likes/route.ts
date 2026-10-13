@@ -1,3 +1,4 @@
+import { rateLimit, clientIp } from '@/lib/ai/rateLimit';
 import { NextResponse } from 'next/server';
 import { getLikes, likePost } from '@/lib/ai/store';
 
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Likes are anonymous counters; this keeps one visitor from inflating them.
+  const { ok } = await rateLimit('lp_likes_rl_', clientIp(request), 120, 60 * 60 * 1000);
+  if (!ok) return NextResponse.json({ error: 'Too many likes. Take a breath.' }, { status: 429 });
   try {
     const { id, liked } = await request.json() as { id?: string; liked?: boolean };
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });

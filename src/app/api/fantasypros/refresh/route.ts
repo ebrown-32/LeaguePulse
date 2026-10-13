@@ -1,3 +1,4 @@
+import { bearerMatches } from '@/lib/platform/operator';
 import { NextResponse } from 'next/server';
 import {
   fetchConsensusRankings,
@@ -45,7 +46,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 async function authorized(request: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET;
   // Vercel attaches this header to scheduled invocations automatically.
-  if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true;
+  if (bearerMatches(request, secret)) return true;
   // Admin can trigger a refresh by hand from the back office.
   if (await isAdminRequest(request)) return true;
   // With neither configured we are running locally. Never on the hosted

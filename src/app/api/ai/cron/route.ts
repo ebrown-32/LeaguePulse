@@ -1,3 +1,4 @@
+import { bearerMatches } from '@/lib/platform/operator';
 import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
@@ -143,7 +144,7 @@ async function authorized(request: Request): Promise<boolean> {
   // Unset locally so the admin panel can trigger it. Never open on the hosted
   // product: there it would let anyone spend any league's AI key.
   if (!secret) return process.env.LP_HOSTED !== '1';
-  return request.headers.get('authorization') === `Bearer ${secret}`;
+  return bearerMatches(request, secret);
 }
 
 /** Randomised, strictly increasing publish times across the window. The first
@@ -346,7 +347,7 @@ export async function GET(request: Request) {
     // authorised for their own league only, and with ?tenant= they could
     // otherwise run another league's AI on that league's key.
     const secret = process.env.CRON_SECRET?.trim();
-    const bySecret = Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`;
+    const bySecret = bearerMatches(request, secret);
     if (named && !bySecret) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     // An admin pressing "Run scheduler" on their own league's address.
     if (!named && (await currentTenant())) return runForLeague(request);

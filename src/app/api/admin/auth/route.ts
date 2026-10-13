@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminPassword } from '@/lib/tenant/admin';
+import { checkAdmin } from '@/lib/tenant/admin';
 
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
     
-    if (await isAdminPassword(password)) {
+    if (await checkAdmin(request, password)) {
       return NextResponse.json({ success: true });
     } else {
       return NextResponse.json(

@@ -2,7 +2,7 @@ import { streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { claude, MODEL_FAST, isAIConfigured, GROUNDING_RULES } from '@/lib/ai/claude';
 import { buildLeagueBrief } from '@/lib/ai/leagueBrief';
-import { rateLimit, clientIp } from '@/lib/ai/rateLimit';
+import { rateLimit, clientIp, dailyAllowance } from '@/lib/ai/rateLimit';
 import { getAssistant } from '@/lib/ai/store';
 import { buildChatTools } from '@/lib/ai/chatTools';
 import { resolvePhase } from '@/lib/ai/seasonPhase';
@@ -48,6 +48,11 @@ export async function POST(request: Request) {
       { error: 'Rate limit reached. Try again later.' },
       { status: 429, headers: { 'x-ratelimit-remaining': '0' } },
     );
+  }
+
+  // League-wide, so many visitors together cannot run up the league's AI bill.
+  if (!(await dailyAllowance('lp_chat_day_', Number(process.env.LP_AI_DAILY_CHAT || 300)))) {
+    return Response.json({ error: 'The league\u2019s assistant has hit today\u2019s limit. Try again tomorrow.' }, { status: 429 });
   }
 
   // Cheap rejection before any parsing or model work.

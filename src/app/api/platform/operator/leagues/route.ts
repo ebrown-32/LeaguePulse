@@ -4,6 +4,9 @@
  *   GET     every league with its status, plan, owner and health
  *   POST    { leagueId, slug }        add a league by hand (a free beta league, no Stripe)
  *   PATCH   { slug, status }          pause ("canceled") or resume ("active") a league
+ *   PATCH   { slug, ownerEmail }      hand the league to someone: they become owner
+ *                                     when they sign in with that email (the
+ *                                     current owner becomes an admin)
  *   DELETE  { slug }                  take a league off the platform
  *
  * Status changes made here are overwritten by the next Stripe event for a
@@ -40,7 +43,12 @@ async function health(t: Tenant) {
       getPosts(1).catch(() => []),
     ]);
     const last = posts[0];
+    const { getMembers, getInvites } = await import('@/lib/platform/members');
+    const [members, invites] = await Promise.all([getMembers(t.slug).catch(() => []), getInvites(t.slug).catch(() => [])]);
     return {
+      ownerAccount: members.find(m => m.role === 'owner')?.email ?? null,
+      admins: members.filter(m => m.role === 'admin').length,
+      pendingOwner: invites.find(i => i.role === 'owner')?.email ?? null,
       adminSet: admin,
       aiKey: key,
       lastPostAt: last ? (last.publishAt ?? last.createdAt) : null,
@@ -67,8 +75,12 @@ export async function GET(req: Request) {
   })));
   const count = (s: TenantStatus) => leagues.filter(l => l.status === s).length;
   const paying = leagues.filter(l => l.status === 'active' && !l.comp);
+  const { getRedis } = await import('@/lib/redisClient');
+  const conflicts = ((await getRedis().client?.lrange('lp_tenant_conflicts', 0, 49).catch(() => [])) ?? [])
+    .map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
   return NextResponse.json({
     rootDomain: PLATFORM.rootDomain,
+    conflicts,
     stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'live' : 'test',
     prices: { monthly: PLANS.pro.monthly, season: PLANS.pro.season },
     totals: {
@@ -113,7 +125,15 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!isOperatorRequest(req)) return deny();
-  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string };
+  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string };
+  if (body.ownerEmail !== undefined) {
+    const email = String(body.ownerEmail).trim().toLowerCase();
+    const t = body.slug ? await getTenant(body.slug) : null;
+    if (!t || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'Unknown league or invalid email' }, { status: 400 });
+    const { addInvite } = await import('@/lib/platform/members');
+    await addInvite(t.slug, email, 'operator', 'owner');
+    return NextResponse.json({ ok: true, slug: t.slug, pendingOwner: email });
+  }
   const status = body.status === 'canceled' ? 'canceled' : body.status === 'active' ? 'active' : null;
   const t = body.slug ? await getTenant(body.slug) : null;
   if (!t || !status) return NextResponse.json({ error: 'Unknown league or status' }, { status: 400 });

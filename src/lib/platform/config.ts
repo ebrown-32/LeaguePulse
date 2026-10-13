@@ -52,9 +52,9 @@ export const PLANS = {
   pro: {
     id: 'pro',
     name: 'League Pass',
-    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 12),
+    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 19),
     /** A season runs about five months; the season price is the better deal. */
-    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 49),
+    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 79),
     stripeMonthly: env('STRIPE_PRICE_MONTHLY'),
     stripeSeason: env('STRIPE_PRICE_SEASON'),
     trialDays: Number(process.env.NEXT_PUBLIC_LP_TRIAL_DAYS || 14),

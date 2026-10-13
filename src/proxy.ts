@@ -83,6 +83,13 @@ const accounts = hosted
 const withClerk = accounts ? clerkMiddleware(async (_auth, req) => route(req)) : null;
 
 export function proxy(req: NextRequest, event: NextFetchEvent) {
+  // The production deployment also answers on its vercel.app address, where
+  // sign-in cannot work (Clerk is bound to the real domain) and which would
+  // otherwise be a second copy of the site. Send it to the real one.
+  if (hosted && process.env.VERCEL_ENV === 'production' && (req.headers.get('host') ?? '').endsWith('.vercel.app')) {
+    const url = new URL(req.nextUrl.pathname + req.nextUrl.search, `https://${rootDomain}`);
+    return NextResponse.redirect(url, 308);
+  }
   if (withClerk && !subdomainOf(req.headers.get('host') ?? '')) return withClerk(req, event);
   return route(req);
 }

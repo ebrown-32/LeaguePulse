@@ -56,3 +56,55 @@ export function clientIp(request: Request): string {
     'unknown'
   );
 }
+
+/**
+ * Failed-attempt counting, for things guessed one try at a time (passwords).
+ * Separate from rateLimit() because only failures count: a correct password
+ * used all day never locks anyone out, while a run of wrong guesses does.
+ */
+const failKey = (bucket: string, ip: string) =>
+  `${bucket}${createHash('sha256').update(`lp-rl:${ip}`).digest('base64url').slice(0, 22)}`;
+
+export async function tooManyFailures(bucket: string, ip: string, max: number): Promise<boolean> {
+  const { client } = getRedis();
+  if (!client) return false;
+  try {
+    const raw = await client.get(failKey(bucket, ip));
+    const hit = raw ? (JSON.parse(raw) as { count: number; resetAt: number }) : null;
+    return Boolean(hit && Date.now() < hit.resetAt && hit.count >= max);
+  } catch {
+    return false;
+  }
+}
+
+export async function recordFailure(bucket: string, ip: string, windowMs: number): Promise<void> {
+  const { client } = getRedis();
+  if (!client) return;
+  const key = failKey(bucket, ip);
+  try {
+    const raw = await client.get(key);
+    const now = Date.now();
+    const hit = raw ? (JSON.parse(raw) as { count: number; resetAt: number }) : null;
+    const next = !hit || now > hit.resetAt ? { count: 1, resetAt: now + windowMs } : { ...hit, count: hit.count + 1 };
+    await client.set(key, JSON.stringify(next), Math.ceil((next.resetAt - now) / 1000) + 60);
+  } catch { /* never block on the limiter itself */ }
+}
+
+/**
+ * A league-wide daily allowance, on top of the per-visitor limits, so many
+ * visitors together cannot run up a league's AI bill. Keyed by day; the
+ * key is scoped to the league like every other key on the hosted product.
+ */
+export async function dailyAllowance(bucket: string, limit: number): Promise<boolean> {
+  const { client } = getRedis();
+  if (!client) return true;
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `${bucket}${day}`;
+  try {
+    const n = Number((await client.get(key)) ?? 0) + 1;
+    await client.set(key, String(n), 2 * 24 * 60 * 60);
+    return n <= limit;
+  } catch {
+    return true;
+  }
+}

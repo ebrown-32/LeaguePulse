@@ -78,6 +78,12 @@ export async function POST(req: Request) {
       metadata,
       customer_email: me?.email ?? (body.email?.includes('@') ? body.email : undefined),
       allow_promotion_codes: true,
+      // Closes before the address hold (35 minutes) runs out, so a checkout
+      // can never complete for an address someone else has since taken.
+      // Stripe's minimum is 30 minutes.
+      expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
+      // Groups these sessions in the Stripe Dashboard's checkout reporting.
+      integration_identifier: 'leaguepulse-league-pass-qhzkwmta',
       success_url: `${origin}/start/done?session={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/start?league=${leagueId}&slug=${slug}`,
     });

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Refuse to commit anything that looks like a live secret. Enable once per
+# clone with:  git config core.hooksPath .githooks
+#
+# Stripe (sk_/rk_ live or test), Stripe webhook secrets, Clerk secret keys and
+# Anthropic keys. Env files are already git-ignored; this catches a key pasted
+# into source by mistake.
+pattern='(sk|rk)_(live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{10,}|sk-ant-[A-Za-z0-9_-]{10,}'
+if git diff --cached -U0 --diff-filter=ACM | grep -E '^\+' | grep -Eq "$pattern"; then
+  echo "pre-commit: a secret key appears in the staged changes. Move it to an env file or Vercel and try again." >&2
+  git diff --cached -U0 --diff-filter=ACM | grep -nE "$pattern" | sed -E 's/((sk|rk)_(live|test)_|whsec_|sk-ant-)[A-Za-z0-9_-]+/\1****/g' >&2
+  exit 1
+fi
