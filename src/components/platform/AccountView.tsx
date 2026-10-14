@@ -129,7 +129,7 @@ function LeagueCard({ l, i, onChange }: { l: LeagueRow; i: number; onChange: () 
     if (r.ok && d.url) window.location.href = d.url; else { setBusy(false); setMsg(d.error ?? 'Could not open billing'); }
   };
 
-  const plan = l.comp ? 'Free' : l.plan === 'season' ? 'Season plan' : 'Monthly plan';
+  const plan = (l.comp ? 'Free' : l.plan === 'season' ? 'Season plan' : 'Monthly plan') + (l.tier === 'ai' ? ' + AI' : '');
 
   return (
     <motion.section

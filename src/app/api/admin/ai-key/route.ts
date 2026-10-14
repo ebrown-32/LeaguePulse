@@ -12,7 +12,7 @@
 
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/tenant/admin';
-import { anthropicKey } from '@/lib/ai/claude';
+import { anthropicKey, aiManaged } from '@/lib/ai/claude';
 import { fingerprint, setTenantAnthropicKey } from '@/lib/tenant/secrets';
 import { testAnthropicKey } from '@/lib/ai/diagnostics';
 import { currentTenant } from '@/lib/tenant/context';
@@ -23,11 +23,15 @@ const hosted = () => process.env.LP_HOSTED === '1';
 
 export async function GET(req: Request) {
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const key = await anthropicKey();
+  const [{ tenantAnthropicKey }, managed] = await Promise.all([import('@/lib/tenant/secrets'), aiManaged()]);
+  // The league's own key, if it has one: the platform's key is never fingerprinted here.
+  const own = hosted() ? await tenantAnthropicKey() : await anthropicKey();
   return NextResponse.json({
     mode: hosted() ? 'hosted' : 'self-hosted',
-    configured: Boolean(key),
-    fingerprint: key ? fingerprint(key) : null,
+    configured: Boolean(own) || (managed && Boolean(await anthropicKey())),
+    fingerprint: own ? fingerprint(own) : null,
+    // League Pass + AI: the platform runs the AI; a key of the league's own is optional.
+    managed,
   });
 }
 

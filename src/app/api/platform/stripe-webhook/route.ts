@@ -23,7 +23,7 @@ import type Stripe from 'stripe';
 import { stripe } from '@/lib/platform/stripe';
 import { getTenant, saveTenant, type Tenant, type TenantStatus } from '@/lib/platform/tenants';
 import { getRedis } from '@/lib/redisClient';
-import { PLANS } from '@/lib/platform/config';
+import { priceInfo } from '@/lib/platform/config';
 import { parseEspnLeague } from '@/lib/providers/ids';
 
 export const dynamic = 'force-dynamic';
@@ -33,12 +33,8 @@ const STATUS: Record<string, TenantStatus> = {
   canceled: 'canceled', incomplete_expired: 'canceled', paused: 'canceled',
 };
 
-function planOf(sub: Stripe.Subscription): Tenant['plan'] | null {
-  const price = sub.items?.data?.[0]?.price?.id;
-  if (price && price === PLANS.pro.stripeMonthly) return 'monthly';
-  if (price && price === PLANS.pro.stripeSeason) return 'season';
-  return null;
-}
+/** The tier and billing cycle a subscription is on, from its price; null for a price this product does not sell. */
+const priceOf = (sub: Stripe.Subscription) => priceInfo(sub.items?.data?.[0]?.price?.id);
 
 const idOf = (v: string | { id: string } | null | undefined) => (typeof v === 'string' ? v : v?.id ?? null);
 
@@ -55,8 +51,9 @@ async function syncSubscription(s: Stripe, subscriptionId: string): Promise<void
     ...t,
     status: STATUS[sub.status] ?? t.status,
     stripeSubscriptionId: sub.id,
-    // A plan switch made in the billing portal arrives here.
-    plan: planOf(sub) ?? t.plan,
+    // A plan or tier switch made in the billing portal arrives here.
+    plan: priceOf(sub)?.plan ?? t.plan,
+    tier: priceOf(sub)?.tier ?? t.tier ?? 'standard',
   });
 }
 
@@ -89,7 +86,8 @@ async function checkoutCompleted(s: Stripe, session: Stripe.Checkout.Session): P
     leagueId: m.leagueId,
     leagueName: m.leagueName ?? '',
     status: sub ? STATUS[sub.status] ?? 'trialing' : 'trialing',
-    plan: (sub && planOf(sub)) ?? (m.plan === 'monthly' ? 'monthly' : 'season'),
+    plan: (sub && priceOf(sub)?.plan) ?? (m.plan === 'monthly' ? 'monthly' : 'season'),
+    tier: (sub && priceOf(sub)?.tier) ?? (m.tier === 'ai' ? 'ai' : 'standard'),
     ownerEmail: session.customer_details?.email ?? session.customer_email ?? null,
     stripeCustomerId: idOf(session.customer),
     stripeSubscriptionId: subscriptionId,

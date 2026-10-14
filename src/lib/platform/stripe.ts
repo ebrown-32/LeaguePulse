@@ -17,8 +17,10 @@ export function stripe(): Stripe | null {
   return client;
 }
 
-export function billingReady(): { ok: true } | { ok: false; missing: string[] } {
-  const missing = ['STRIPE_SECRET_KEY', 'STRIPE_PRICE_MONTHLY', 'STRIPE_PRICE_SEASON']
-    .filter(k => !process.env[k]?.trim());
+export function billingReady(tier: 'standard' | 'ai' = 'standard'): { ok: true } | { ok: false; missing: string[] } {
+  const needed = tier === 'ai'
+    ? ['STRIPE_SECRET_KEY', 'STRIPE_PRICE_AI_MONTHLY', 'STRIPE_PRICE_AI_SEASON']
+    : ['STRIPE_SECRET_KEY', 'STRIPE_PRICE_MONTHLY', 'STRIPE_PRICE_SEASON'];
+  const missing = needed.filter(k => !process.env[k]?.trim());
   return missing.length ? { ok: false, missing } : { ok: true };
 }

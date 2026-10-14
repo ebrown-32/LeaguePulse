@@ -13,6 +13,8 @@ import { ImageResponse } from 'next/og';
 import { headers } from 'next/headers';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import sharp from 'sharp';
+import { leagueLogoBytes } from '@/lib/appIcon';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,20 +93,16 @@ function leagueCard(name: string, logo: string | null, host: string) {
   );
 }
 
-/** The league's logo as something the renderer can draw: an uploaded logo from storage, or an absolute URL. */
+/**
+ * The league's logo as something the renderer can draw: a PNG, whatever was
+ * uploaded (the card renderer cannot read WebP, which most uploads are).
+ * Null for a league on the LeaguePulse default, or a logo that cannot be read.
+ */
 async function leagueLogo(logoUrl: string | null | undefined, origin: string): Promise<string | null> {
-  if (!logoUrl || logoUrl.startsWith('/brand/')) return null;
-  if (logoUrl.startsWith('/api/league-logo')) {
-    const { getRedis } = await import('@/lib/redisClient');
-    const dataUri = await getRedis().client?.get('league_logo').catch(() => null);
-    return dataUri && /^data:image\/(png|jpe?g|gif|svg\+xml);base64,/.test(dataUri) ? dataUri : null;
-  }
-  const url = logoUrl.startsWith('/') ? `${origin}${logoUrl}` : logoUrl;
-  // Fetched here, so a logo that has gone missing leaves the monogram rather than a broken card.
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) }).catch(() => null);
-  const type = res?.headers.get('content-type') ?? '';
-  if (!res?.ok || !/^image\/(png|jpe?g|gif|svg\+xml)/.test(type)) return null;
-  return `data:${type.split(';')[0]};base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}`;
+  const bytes = await leagueLogoBytes(logoUrl, origin);
+  if (!bytes) return null;
+  const png = await sharp(bytes, { density: 384 }).resize(400, 400, { fit: 'inside' }).png().toBuffer().catch(() => null);
+  return png ? `data:image/png;base64,${png.toString('base64')}` : null;
 }
 
 export async function GET(req: Request) {

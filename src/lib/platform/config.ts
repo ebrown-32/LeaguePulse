@@ -38,10 +38,20 @@ export const PLATFORM = {
  * Plans. Prices are display values; the amounts actually charged come from
  * the Stripe price ids, so the two are set together.
  *
- * Each league brings its own Anthropic key and pays Anthropic directly for its
- * AI, so the subscription covers hosting, the product and support, not model
- * usage. That keeps the platform's costs flat however chatty a league is.
+ *   free     Self-hosted: the open source app on the league's own servers.
+ *   pro      League Pass: hosted. The AI runs on the league's own Anthropic
+ *            key and bills the league directly, so the platform's cost is
+ *            flat however chatty a league is.
+ *   ai       League Pass + AI: hosted, and the platform runs the AI on its
+ *            own key (LP_MANAGED_ANTHROPIC_API_KEY), within the daily limits.
+ *   custom   A design engagement, priced per league: an inquiry, not a
+ *            checkout.
+ *
+ * A league's tier is `standard` (League Pass) or `ai` (League Pass + AI);
+ * a league with no tier recorded is standard, as every league was before.
  */
+export type Tier = 'standard' | 'ai';
+
 export const PLANS = {
   free: {
     id: 'free',
@@ -52,15 +62,46 @@ export const PLANS = {
   pro: {
     id: 'pro',
     name: 'League Pass',
-    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 19),
+    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 15),
     /** A season runs about five months; the season price is the better deal. */
-    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 79),
+    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 59),
     stripeMonthly: env('STRIPE_PRICE_MONTHLY'),
     stripeSeason: env('STRIPE_PRICE_SEASON'),
     trialDays: Number(process.env.NEXT_PUBLIC_LP_TRIAL_DAYS || 14),
     blurb: 'Hosted for you, on your own address. The AI runs on your own Anthropic key.',
   },
+  ai: {
+    id: 'ai',
+    name: 'League Pass + AI',
+    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_MONTHLY || 34),
+    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_SEASON || 139),
+    stripeMonthly: env('STRIPE_PRICE_AI_MONTHLY'),
+    stripeSeason: env('STRIPE_PRICE_AI_SEASON'),
+    blurb: 'Everything in League Pass, and we run the AI. No key, no second bill.',
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    blurb: 'A site designed around your league, built with you.',
+  },
 } as const;
+
+/** The plan record for a tier. */
+export const tierPlan = (tier: Tier) => (tier === 'ai' ? PLANS.ai : PLANS.pro);
+
+/** The Stripe price for a tier and billing cycle ('' when not configured). */
+export const stripePriceFor = (tier: Tier, cycle: 'monthly' | 'season') =>
+  cycle === 'monthly' ? tierPlan(tier).stripeMonthly : tierPlan(tier).stripeSeason;
+
+/** A Stripe price id back to its tier and cycle, or null for a price this product does not sell. */
+export function priceInfo(priceId: string | null | undefined): { tier: Tier; plan: 'monthly' | 'season' } | null {
+  if (!priceId) return null;
+  if (priceId === PLANS.pro.stripeMonthly) return { tier: 'standard', plan: 'monthly' };
+  if (priceId === PLANS.pro.stripeSeason) return { tier: 'standard', plan: 'season' };
+  if (priceId === PLANS.ai.stripeMonthly) return { tier: 'ai', plan: 'monthly' };
+  if (priceId === PLANS.ai.stripeSeason) return { tier: 'ai', plan: 'season' };
+  return null;
+}
 
 /** Subdomains a league may not take. */
 export const RESERVED_SLUGS = new Set([

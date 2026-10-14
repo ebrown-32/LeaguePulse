@@ -39,9 +39,11 @@ export default function TermsPage() {
 
       <h2>Your Anthropic API key and AI features</h2>
       <p>
-        AI features run on an Anthropic API key that you provide. You are responsible for that account, its usage
-        and its charges, and for complying with Anthropic&apos;s terms. We store your key encrypted and use it only
-        to run your league&apos;s AI features. AI-written content can be inaccurate; it is entertainment, not fact.
+        On League Pass, AI features run on an Anthropic API key that you provide. You are responsible for that
+        account, its usage and its charges, and for complying with Anthropic&apos;s terms. We store your key encrypted
+        and use it only to run your league&apos;s AI features. On League Pass + AI, we provide the AI instead, within
+        reasonable daily limits that keep it running for every league; you can still use your own key if you
+        prefer. Either way, AI-written content can be inaccurate; it is entertainment, not fact.
       </p>
 
       <h2>Your responsibilities</h2>

@@ -90,20 +90,28 @@ Safari may not).
 | `CRON_SECRET` | any long random string; required in hosted mode |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
-| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 19, 79, 14) |
+| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 15, 59, 14) |
+| `STRIPE_PRICE_AI_MONTHLY`, `STRIPE_PRICE_AI_SEASON` | the League Pass + AI prices; see Billing. Without them, sign-up for that tier says billing is not ready |
+| `NEXT_PUBLIC_LP_PRICE_AI_MONTHLY` / `_SEASON` | displayed League Pass + AI prices (defaults 34, 139) |
+| `LP_MANAGED_ANTHROPIC_API_KEY` | the platform's own Anthropic key, used **only** for League Pass + AI leagues that have no key of their own. Set a spend limit on it in the Anthropic console |
+| `LP_MANAGED_DAILY_CHAT` / `LP_MANAGED_DAILY_ASK` | optional: daily chat and analytics questions for a League Pass + AI league on the platform key (defaults 40 and 20). Leagues on their own key keep `LP_AI_DAILY_CHAT` / `_ASK` (300 and 200). Each league's AI cost this month shows in the operator panel |
 | `STRIPE_PORTAL_CONFIGURATION` | optional: the customer portal setup (`bpc_…`) League Pass uses. Without it Stripe uses the account default, which must be saved once in the dashboard |
 | `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
 | `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |
 
 Do **not** set `NEXT_PUBLIC_LEAGUE_ID` or `ANTHROPIC_API_KEY` on the hosted
 project. Public variables are baked into the build, and a platform Anthropic key
-is never used for leagues anyway.
+is never used for leagues anyway (League Pass + AI uses
+`LP_MANAGED_ANTHROPIC_API_KEY`, and only for that tier).
 
 ## Billing
 
 1. In Stripe, create a product **League Pass** with a monthly price and a
    season price (a yearly recurring price is simplest). Their ids go in
-   `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_SEASON`.
+   `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_SEASON`. Create a second product,
+   **League Pass + AI**, the same way (same tax code); its prices go in
+   `STRIPE_PRICE_AI_MONTHLY` and `STRIPE_PRICE_AI_SEASON`. The webhook reads a
+   subscription's tier from its price, so a switch in the portal just works.
 2. Add a webhook endpoint at `https://yourdomain.com/api/platform/stripe-webhook`
    for `checkout.session.completed`, `customer.subscription.updated`,
    `customer.subscription.deleted`, `invoice.paid` and `invoice.payment_failed`.
@@ -115,7 +123,8 @@ is never used for leagues anyway.
    missing permission.
 4. **Turn on the customer portal** (Settings, Billing, Customer portal) and
    save it once: allow updating the payment method, cancelling, viewing
-   invoices and, if you like, switching between the two League Pass prices.
+   invoices and, if you like, switching between the League Pass and League Pass + AI prices
+   (add both products to the portal's product catalogue).
    League admins reach it from "Manage billing" on their admin page. Until it
    is saved, that button returns an error.
 5. Do all of this in **test mode** first and run a full sign-up with card

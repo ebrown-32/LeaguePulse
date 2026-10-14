@@ -45,7 +45,7 @@ export async function GET() {
       slug, name: theme?.leagueName?.trim() || t.leagueName, url,
       logo: logoFor(theme?.logoUrl, url),
       provider: providerOf(t.leagueId),
-      role, status: t.status, plan: t.plan, comp: !t.stripeSubscriptionId,
+      role, status: t.status, plan: t.plan, tier: t.tier ?? 'standard', comp: !t.stripeSubscriptionId,
       canBill: role === 'owner' && Boolean(t.stripeCustomerId),
       // People are shown to the owner, who manages them.
       members: role === 'owner' ? members.map(m => ({ userId: m.userId, email: m.email, role: m.role, you: m.userId === me.userId })) : [],

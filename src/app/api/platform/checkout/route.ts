@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { PLANS, PLATFORM, slugify } from '@/lib/platform/config';
+import { PLANS, PLATFORM, slugify, stripePriceFor } from '@/lib/platform/config';
 import { slugAvailability, holdSlug, tenantForLeague } from '@/lib/platform/tenants';
 import { stripe, billingReady } from '@/lib/platform/stripe';
 import { rateLimit, clientIp } from '@/lib/ai/rateLimit';
@@ -20,12 +20,14 @@ export async function POST(req: Request) {
   const { ok: allowed } = await rateLimit('lp_checkout_rl_', clientIp(req), 20, 60 * 60 * 1000);
   if (!allowed) return NextResponse.json({ error: 'Too many attempts. Try again in a bit.' }, { status: 429 });
 
-  let body: { leagueId?: string; slug?: string; plan?: string; email?: string };
+  let body: { leagueId?: string; slug?: string; plan?: string; tier?: string; email?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
 
   const leagueId = String(body.leagueId ?? '');
   const slug = slugify(String(body.slug ?? ''));
   const plan = body.plan === 'monthly' ? 'monthly' : 'season';
+  // League Pass, or League Pass + AI (the platform runs the league's AI).
+  const tier = body.tier === 'ai' ? 'ai' : 'standard';
   const espn = parseEspnLeague(leagueId);
   if (!espn && !/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'Pick a league first' }, { status: 400 });
 
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
   if (await isOperatorAccount()) {
     const { signedInAccount } = await import('@/lib/platform/account');
     const { createFreeLeague } = await import('@/lib/platform/freeLeague');
-    const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug, owner: await signedInAccount() });
+    const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug, owner: await signedInAccount(), tier });
     if (!made.ok) return NextResponse.json({ error: made.error }, { status: made.status });
     return NextResponse.json({ url: `/account?new=${made.tenant.slug}`, free: true, site: made.url });
   }
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
     const avail = await slugAvailability(slug, leagueId);
     if (!avail.ok) return NextResponse.json({ error: 'That address is not available' }, { status: 409 });
 
-    const ready = billingReady();
+    const ready = billingReady(tier);
     const s = stripe();
     if (!ready.ok || !s) {
       return NextResponse.json({
@@ -83,12 +85,12 @@ export async function POST(req: Request) {
     }
     await holdSlug(slug, leagueId);
     const origin = new URL(req.url).origin;
-    const metadata: Record<string, string> = { leagueId, slug, plan, leagueName: String(league.name ?? '').slice(0, 200) };
+    const metadata: Record<string, string> = { leagueId, slug, plan, tier, leagueName: String(league.name ?? '').slice(0, 200) };
     if (me) metadata.userId = me.userId;
     const session = await s.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{
-        price: plan === 'monthly' ? PLANS.pro.stripeMonthly : PLANS.pro.stripeSeason,
+        price: stripePriceFor(tier, plan),
         quantity: 1,
       }],
       // A trial with no card up front; if none is added by the end it cancels
@@ -109,7 +111,7 @@ export async function POST(req: Request) {
       // Groups these sessions in the Stripe Dashboard's checkout reporting.
       integration_identifier: 'leaguepulse-league-pass-qhzkwmta',
       success_url: `${origin}/start/done?session={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/start?league=${leagueId}&slug=${slug}`,
+      cancel_url: `${origin}/start?league=${leagueId}&slug=${slug}&plan=${plan}&tier=${tier}`,
     });
     return NextResponse.json({ url: session.url });
   } catch (err) {

@@ -12,13 +12,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertTriangle, ExternalLink, Trash2 } from '@/components/icons';
 
-interface Status { mode: 'hosted' | 'self-hosted'; configured: boolean; fingerprint: string | null }
+interface Status { mode: 'hosted' | 'self-hosted'; configured: boolean; fingerprint: string | null; managed?: boolean }
 
 export default function AIKeyCard({ password, onChange }: { password: string; onChange?: (configured: boolean) => void }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [ownKey, setOwnKey] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/ai-key', { headers: { 'x-admin-password': password } }).catch(() => null);
@@ -55,6 +56,28 @@ export default function AIKeyCard({ password, onChange }: { password: string; on
     );
   }
 
+  // League Pass + AI with no key of its own: the AI is included, nothing to set up.
+  if (status.managed && !status.fingerprint && !ownKey) {
+    return (
+      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">AI is included</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            On League Pass + AI the desk, chat assistant and analytics questions run on us. Nothing to set up.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <Check className="h-3.5 w-3.5" /> Running
+          </span>
+          <button onClick={() => setOwnKey(true)} className="text-[11.5px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+            Use your own key instead
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mb-5 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -62,7 +85,7 @@ export default function AIKeyCard({ password, onChange }: { password: string; on
           <p className="text-[13px] font-semibold text-foreground">Your Anthropic API key</p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             The AI desk, chat assistant and analytics questions run on your own key, billed by Anthropic directly.
-            A typical league uses about $5 to $10 a month.
+            Cost depends on how much your league chats with it; set a monthly cap in your Anthropic account.
           </p>
         </div>
         {status.configured ? (

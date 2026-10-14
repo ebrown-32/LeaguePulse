@@ -1,6 +1,6 @@
 import { streamText, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { claude, MODEL_FAST, isAIConfigured, GROUNDING_RULES } from '@/lib/ai/claude';
+import { claude, MODEL_FAST, isAIConfigured, dailyQuestionLimit, GROUNDING_RULES } from '@/lib/ai/claude';
 import { buildLeagueBrief } from '@/lib/ai/leagueBrief';
 import { rateLimit, clientIp, dailyAllowance } from '@/lib/ai/rateLimit';
 import { getAssistant } from '@/lib/ai/store';
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   }
 
   // League-wide, so many visitors together cannot run up the league's AI bill.
-  if (!(await dailyAllowance('lp_chat_day_', Number(process.env.LP_AI_DAILY_CHAT || 300)))) {
+  if (!(await dailyAllowance('lp_chat_day_', await dailyQuestionLimit('chat')))) {
     return Response.json({ error: 'The league\u2019s assistant has hit today\u2019s limit. Try again tomorrow.' }, { status: 429 });
   }
 

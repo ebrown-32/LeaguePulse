@@ -15,6 +15,7 @@ import ParticleField from '@/components/ParticleField';
 import type { Metadata } from 'next';
 import { defaultTheme } from '@/lib/themeConfig';
 import ProductAuth from '@/components/platform/ProductAuth';
+import { appIconUrl } from '@/lib/appIconUrl';
 import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
@@ -86,9 +87,9 @@ export async function generateMetadata(): Promise<Metadata> {
   // was silently ignored.
   const icon = theme.faviconUrl?.trim() || theme.logoUrl?.trim() || '/favicon.ico';
 
-  // Phones want a solid PNG for the home screen; the LeaguePulse default is
-  // an SVG, so it gets its rendered app icon there.
-  const apple = icon.startsWith('/brand/') ? '/brand/leaguepulse-apple.png' : icon;
+  // The home-screen icon on an iPhone: a solid PNG drawn from the league's
+  // own logo (iOS fills a transparent icon with black), or the LeaguePulse one.
+  const apple = appIconUrl(theme.logoUrl, 180);
   const shortName = theme.leagueName?.trim() || tenantName || 'League Pulse';
 
   // What a shared link says: the league's own words if its admin wrote
@@ -180,7 +181,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeInjector />
         {theme.background === 'particles' && <ParticleField />}
         <ThemeProvider>
-          <InstallPromptProvider logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName}>
+          {/* The install prompt previews the very icon the phone will get. */}
+          <InstallPromptProvider logoUrl={appIconUrl(theme.logoUrl, 192)} leagueName={theme.leagueName ?? tenantName}>
             <Analytics />
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}

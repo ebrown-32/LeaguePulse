@@ -24,6 +24,8 @@ export interface Tenant {
   leagueName: string;
   status: TenantStatus;
   plan: 'monthly' | 'season';
+  /** League Pass ('standard', also when absent) or League Pass + AI ('ai'). */
+  tier?: 'standard' | 'ai';
   ownerEmail: string | null;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;

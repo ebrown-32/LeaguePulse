@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { streamObject } from 'ai';
 import { z } from 'zod';
-import { claude, MODEL_FAST, isAIConfigured } from '@/lib/ai/claude';
+import { claude, MODEL_FAST, isAIConfigured, dailyQuestionLimit } from '@/lib/ai/claude';
 import { rateLimit, clientIp, dailyAllowance } from '@/lib/ai/rateLimit';
 import { getCurrentLeagueId } from '@/config/league';
 import { getNFLState } from '@/lib/api';
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'You have asked a lot this hour. Try again later, or build it by hand.' }, { status: 429 });
   }
   // League-wide, so many visitors together cannot run up the league's AI bill.
-  if (!(await dailyAllowance('lp_ask_day_', Number(process.env.LP_AI_DAILY_ASK || 200)))) {
+  if (!(await dailyAllowance('lp_ask_day_', await dailyQuestionLimit('ask')))) {
     return NextResponse.json({ error: 'Your league has used today\u2019s AI questions. Try again tomorrow, or build it by hand.' }, { status: 429 });
   }
 
