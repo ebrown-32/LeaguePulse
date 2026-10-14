@@ -405,16 +405,21 @@ function Health({ leagues }: { leagues: League[] }) {
 }
 
 function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?: unknown) => Promise<any>; onDone: (msg: string) => void }) {
+  const [provider, setProvider] = useState<'sleeper' | 'espn'>('sleeper');
   const [leagueId, setLeagueId] = useState('');
   const [slug, setSlug] = useState('');
+  const [swid, setSwid] = useState('');
+  const [s2, setS2] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [link, setLink] = useState<string | null>(null);
   const add = async () => {
     setBusy(true); setError(''); setLink(null);
     try {
-      const d = await call('POST', { leagueId: leagueId.trim(), slug: slug.trim() });
-      setLink(d.setupLink); setLeagueId(''); setSlug('');
+      const d = await call('POST', provider === 'espn'
+        ? { provider, leagueId: leagueId.trim(), slug: slug.trim(), swid: swid.trim() || undefined, s2: s2.trim() || undefined }
+        : { leagueId: leagueId.trim(), slug: slug.trim() });
+      setLink(d.setupLink); setLeagueId(''); setSlug(''); setSwid(''); setS2('');
       onDone(`Added ${d.slug}.${root}`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add'); }
     setBusy(false);
@@ -422,8 +427,17 @@ function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?:
   return (
     <Panel id="add" title="Add a beta league" meta="Free, no Stripe">
       <p className="mt-1 text-[13px] text-muted-foreground">You get a one-time link for the owner to set their admin password. Or hand it to their account afterwards.</p>
-      <form onSubmit={e => { e.preventDefault(); add(); }} className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
-        <input value={leagueId} onChange={e => setLeagueId(e.target.value)} placeholder="Sleeper league ID" inputMode="numeric"
+      <div className="mt-4 inline-flex rounded-full border border-border bg-background p-0.5 text-[12.5px] font-semibold">
+        {(['sleeper', 'espn'] as const).map(p => (
+          <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }}
+            className={cn('rounded-full px-3.5 py-1.5 transition', provider === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>
+            {p === 'espn' ? 'ESPN' : 'Sleeper'}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={e => { e.preventDefault(); add(); }} className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+        <input value={leagueId} onChange={e => setLeagueId(e.target.value)}
+          placeholder={provider === 'espn' ? 'ESPN league ID or league URL' : 'Sleeper league ID'} inputMode={provider === 'espn' ? 'url' : 'numeric'}
           className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] outline-none focus:border-primary" />
         <div className="flex items-center rounded-xl border border-border bg-background pr-3 focus-within:border-primary">
           <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="address (optional)"
@@ -433,6 +447,14 @@ function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?:
         <button disabled={busy || !leagueId.trim()} className="rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground disabled:opacity-50">
           {busy ? 'Adding…' : 'Add league'}
         </button>
+        {provider === 'espn' && (
+          <div className="grid grid-cols-1 gap-2 md:col-span-3 md:grid-cols-2">
+            <input value={swid} onChange={e => setSwid(e.target.value)} placeholder="SWID (private leagues)" autoComplete="off" spellCheck={false}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-[12.5px] outline-none focus:border-primary" />
+            <input value={s2} onChange={e => setS2(e.target.value)} placeholder="espn_s2 (private leagues)" autoComplete="off" spellCheck={false}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-[12.5px] outline-none focus:border-primary" />
+          </div>
+        )}
       </form>
       {error && <p className="mt-2 text-[12.5px] text-[hsl(var(--signal))]">{error}</p>}
       {link && <CopyLine label="Owner setup link (24 hours, one use)" value={link} />}

@@ -1,6 +1,7 @@
 import { generateObject } from 'ai';
 import { claude, MODEL_FAST } from '@/lib/ai/claude';
 import { z } from 'zod';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 const RELEVANT_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
@@ -75,17 +76,17 @@ const AiResponseSchema = z.object({
 
 async function fetchLeagueContext(leagueId: string) {
   // NFL state: short cache. Week number changes weekly.
-  const nflState = await fetch(`${SLEEPER_BASE}/state/nfl`, {
+  const nflState = await leagueFetch(`${SLEEPER_BASE}/state/nfl`, {
     next: { revalidate: 3600 },
   }).then(r => r.json());
   const currentWeek: number = Math.max(1, nflState.week ?? 1);
 
   const [rosters, users, allPlayers] = await Promise.all([
     // Rosters/users: cache 1 h. Changes with trades/waivers.
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
-    fetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
+    leagueFetch(`${SLEEPER_BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
+    leagueFetch(`${SLEEPER_BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
     // Players: ~19 MB. Too large for Next.js data cache; route-level revalidate covers this.
-    fetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
+    leagueFetch(`${SLEEPER_BASE}/players/nfl`).then(r => r.json()),
   ]);
 
   // Cap at 8 most-recent weeks. Enough signal, avoids excess fetching.
@@ -93,7 +94,7 @@ async function fetchLeagueContext(leagueId: string) {
   const startWeek    = Math.max(1, currentWeek - weeksToFetch + 1);
   const matchupWeeks: any[][] = await Promise.all(
     Array.from({ length: weeksToFetch }, (_, i) => startWeek + i).map(week =>
-      fetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, {
+      leagueFetch(`${SLEEPER_BASE}/league/${leagueId}/matchups/${week}`, {
         next: { revalidate: 1800 }, // 30 min. Scores finalize mid-week.
       })
         .then(r => r.ok ? r.json() : [])

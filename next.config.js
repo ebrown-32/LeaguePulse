@@ -21,6 +21,9 @@ const nextConfig = {
       { protocol: 'https', hostname: 'sleepercdn.com' },
       { protocol: 'https', hostname: 'a.espncdn.com' },
       { protocol: 'https', hostname: 's.espncdn.com' },
+      // ESPN fantasy team logos (see src/lib/providers/espn/translate.ts).
+      { protocol: 'https', hostname: 'g.espncdn.com' },
+      { protocol: 'https', hostname: 'mystique-api.fantasy.espn.com' },
     ],
   },
   async headers() {

@@ -4,6 +4,7 @@ import { getMarkdownSections, parseLeagueSettings } from '@/lib/constitution';
 import { getCurrentLeagueId } from '@/config/league';
 import { getLeagueInfo } from '@/lib/api';
 import ConstitutionView from './ConstitutionView';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export default async function ConstitutionPage() {
     const leagueId  = await getCurrentLeagueId();
     const [leagueRaw, draftsRaw] = await Promise.all([
       getLeagueInfo(leagueId),
-      fetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`, { next: { revalidate: 3600 } })
+      leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`, { next: { revalidate: 3600 } })
         .then(r => r.ok ? r.json() : [])
         .catch(() => []),
     ]);

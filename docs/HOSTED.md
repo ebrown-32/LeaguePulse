@@ -137,6 +137,37 @@ workflow changes take effect once they are on `main`.
 One poke fans out one run per live league that has an AI key, each called on
 the real domain in its own invocation.
 
+## ESPN leagues
+
+A league can come from Sleeper or ESPN. Sleeper is untouched: every Sleeper
+request goes to Sleeper exactly as before. An ESPN league is translated into
+Sleeper's shapes, so every page works on it without knowing.
+
+- **Ids.** An ESPN league is `espn-<league id>-<season>` and a manager
+  `espn-<league id>-u-<member>` (`src/lib/providers/ids.ts`). Sleeper ids are
+  all digits, so the two cannot collide.
+- **Routing.** Call sites fetch Sleeper URLs through `leagueFetch`
+  (`src/lib/providers/leagueFetch.ts`). A URL naming an ESPN id is answered by
+  the adapter (`src/lib/providers/espn/`): on the server directly, registered
+  by `src/instrumentation.ts`; in the browser through `/api/league-data/v1/...`.
+  Only the site's own ESPN league is ever served.
+- **Kept copies.** Translated data is stored under the league's prefix and
+  served from there: finished seasons are fetched once, this week refreshes
+  every 90 seconds while open, and when ESPN fails the last good copy is shown.
+  `/api/espn/sync` (Vercel cron, every five minutes) keeps current seasons warm.
+- **Private leagues.** Most need the `SWID` and `espn_s2` cookies of any member.
+  Sign-up asks for them only when ESPN says the league is private, tests them,
+  and keeps them encrypted (`LP_SECRETS_KEY`) under `lp_espn_creds:<league>`:
+  two days until payment, then permanently. ESPN signs them out after about a
+  year; the league admin page shows the connection's health and takes new ones,
+  and the health record (`lp_espn_creds_health:<league>`) says when they lapsed.
+- **Not yet:** trades (ESPN keeps a completed trade's players only in its
+  league activity feed, which needs checking against a current private league),
+  and keeper or dynasty traded picks. Seasons before 2018 use ESPN's
+  `leagueHistory` endpoint, which has not been checked against a real league.
+- **Tests:** `npm test` checks that Sleeper URLs pass through untouched and pins
+  the translation.
+
 ## Operating it
 
 Operator endpoints take `Authorization: Bearer $LP_OPERATOR_SECRET`.

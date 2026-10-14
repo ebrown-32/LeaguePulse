@@ -12,6 +12,7 @@ import { PLANS, PLATFORM, slugify } from '@/lib/platform/config';
 import { slugAvailability, holdSlug, tenantForLeague } from '@/lib/platform/tenants';
 import { stripe, billingReady } from '@/lib/platform/stripe';
 import { rateLimit, clientIp } from '@/lib/ai/rateLimit';
+import { parseEspnLeague } from '@/lib/providers/ids';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +26,22 @@ export async function POST(req: Request) {
   const leagueId = String(body.leagueId ?? '');
   const slug = slugify(String(body.slug ?? ''));
   const plan = body.plan === 'monthly' ? 'monthly' : 'season';
-  if (!/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'Pick a league first' }, { status: 400 });
+  const espn = parseEspnLeague(leagueId);
+  if (!espn && !/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'Pick a league first' }, { status: 400 });
 
   // The league has to be real, and an NFL league.
-  const league = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`).then(r => r.json()).catch(() => null);
+  let league: { league_id?: string; name?: string; sport?: string } | null;
+  if (espn) {
+    // Read with the cookies sign-up kept, so a private league is checked as
+    // its site will read it.
+    const { findEspnLeague, FIND_MESSAGES } = await import('@/lib/providers/espn/lookup');
+    const { getEspnCredentials } = await import('@/lib/providers/espn/credentials');
+    const found = await findEspnLeague(espn.leagueId, await getEspnCredentials(espn.leagueId));
+    if (!found.ok) return NextResponse.json({ error: FIND_MESSAGES[found.reason] }, { status: found.reason === 'not_found' ? 404 : 400 });
+    league = { league_id: leagueId, name: found.league.name };
+  } else {
+    league = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`).then(r => r.json()).catch(() => null);
+  }
   if (!league?.league_id || (league.sport && league.sport !== 'nfl')) {
     return NextResponse.json({ error: 'That Sleeper league could not be found' }, { status: 404 });
   }

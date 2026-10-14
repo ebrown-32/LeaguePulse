@@ -21,6 +21,7 @@ import {
 import type { SimLeague, SimTeam, SimGame, PlayedGame } from '@/lib/sim/types';
 import { seasonSchedule, phaseOf } from '@/lib/nflSchedule';
 import { configuredRootLeagueId } from '@/config/league';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export interface SimMeta {
   seasonsOfHistory: number;
@@ -41,7 +42,7 @@ const BASE = 'https://api.sleeper.app/v1';
 async function fetchJson<T>(url: string, opts: RequestInit, fallback: T, tries = 3): Promise<T> {
   for (let i = 0; i < tries; i++) {
     try {
-      const r = await fetch(url, opts);
+      const r = await leagueFetch(url, opts);
       if (r.ok) return await r.json();
       if (r.status === 404) return fallback;
     } catch { /* retry */ }

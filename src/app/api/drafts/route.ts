@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { configuredRootLeagueId } from '@/config/league';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -270,13 +271,13 @@ export async function GET() {
 
     await Promise.all(allLeagueIds.map(async leagueId => {
       const [draftsRaw, rosters, users, tradedPicksRaw] = await Promise.all([
-        fetch(`${BASE}/league/${leagueId}/drafts`, { cache: 'no-store' })
+        leagueFetch(`${BASE}/league/${leagueId}/drafts`, { cache: 'no-store' })
           .then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } })
+        leagueFetch(`${BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } })
           .then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${BASE}/league/${leagueId}/users`, { next: { revalidate: 3600 } })
+        leagueFetch(`${BASE}/league/${leagueId}/users`, { next: { revalidate: 3600 } })
           .then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${BASE}/league/${leagueId}/traded_picks`, { cache: 'no-store' })
+        leagueFetch(`${BASE}/league/${leagueId}/traded_picks`, { cache: 'no-store' })
           .then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
@@ -284,7 +285,7 @@ export async function GET() {
         const isActive    = rawDraft.status === 'drafting' || rawDraft.status === 'pre_draft';
         const picksOpts: RequestInit = isActive ? { cache: 'no-store' } : { next: { revalidate: 86400 } };
 
-        const picks = await fetch(`${BASE}/draft/${rawDraft.draft_id}/picks`, picksOpts)
+        const picks = await leagueFetch(`${BASE}/draft/${rawDraft.draft_id}/picks`, picksOpts)
           .then(r => r.ok ? r.json() : [])
           .catch(() => []);
 

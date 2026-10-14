@@ -7,6 +7,10 @@
     {
       "path": "/api/fantasypros/refresh",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/espn/sync",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
