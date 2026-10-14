@@ -46,6 +46,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'That Sleeper league could not be found' }, { status: 404 });
   }
 
+  // The operator signing up a league: no checkout, no trial. It is made now,
+  // free, and belongs to their account.
+  const { isOperatorAccount } = await import('@/lib/platform/operator');
+  if (await isOperatorAccount()) {
+    const { signedInAccount } = await import('@/lib/platform/account');
+    const { createFreeLeague } = await import('@/lib/platform/freeLeague');
+    const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug, owner: await signedInAccount() });
+    if (!made.ok) return NextResponse.json({ error: made.error }, { status: made.status });
+    return NextResponse.json({ url: `/account?new=${made.tenant.slug}`, free: true, site: made.url });
+  }
+
   try {
     const existing = await tenantForLeague(leagueId);
     if (existing && existing.status !== 'canceled') {

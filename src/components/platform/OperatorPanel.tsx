@@ -135,7 +135,7 @@ export default function OperatorPanel() {
               {loading ? 'Refreshing' : 'Refresh'}
             </button>
             <a href="#add" className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground">
-              Add a beta league <Route size={14} />
+              Add a league <Route size={14} />
             </a>
             {!secret && <a href="/account" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">My leagues</a>}
           </div>
@@ -420,13 +420,13 @@ function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?:
         ? { provider, leagueId: leagueId.trim(), slug: slug.trim(), swid: swid.trim() || undefined, s2: s2.trim() || undefined }
         : { leagueId: leagueId.trim(), slug: slug.trim() });
       setLink(d.setupLink); setLeagueId(''); setSlug(''); setSwid(''); setS2('');
-      onDone(`Added ${d.slug}.${root}`);
+      onDone(d.owner ? `Added ${d.slug}.${root} to My leagues` : `Added ${d.slug}.${root}`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add'); }
     setBusy(false);
   };
   return (
-    <Panel id="add" title="Add a beta league" meta="Free, no Stripe">
-      <p className="mt-1 text-[13px] text-muted-foreground">You get a one-time link for the owner to set their admin password. Or hand it to their account afterwards.</p>
+    <Panel id="add" title="Add a league" meta="Free, no Stripe">
+      <p className="mt-1 text-[13px] text-muted-foreground">It goes straight into your My leagues. Hand it to its commissioner from the league&apos;s menu whenever you like.</p>
       <div className="mt-4 inline-flex rounded-full border border-border bg-background p-0.5 text-[12.5px] font-semibold">
         {(['sleeper', 'espn'] as const).map(p => (
           <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }}
