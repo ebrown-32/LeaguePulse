@@ -11,6 +11,7 @@ import {
 } from './api';
 import type { SleeperTransaction } from '@/types/sleeper';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { seasonGamesPlayed } from '@/lib/games';
 
 // Enhanced types for better data accuracy
 export interface EnhancedHistoricalRecord {
@@ -245,6 +246,8 @@ async function processLeagueSeason(
   seasonStats[league.season] = {
     leagueId,
     totalGames: 0,
+    // Matchups played, counted the one way every page counts them (see games.ts).
+    gamesPlayed: seasonGamesPlayed(rosters, league),
     averageScore: 0,
     highestScore: 0,
     lowestScore: Infinity,
@@ -1157,7 +1160,9 @@ function calculateLeagueMetadata(
     allTimeLowScore: Math.min(...allUsers.map(u => u.lowestScore).filter(s => s < Infinity)),
     mostChampionships: maxChampionships,
     averageLeagueScore: allUsers.reduce((sum, u) => sum + u.averagePointsPerGame, 0) / allUsers.length,
-    totalGamesPlayed: allUsers.reduce((sum, u) => sum + u.totalWins + u.totalLosses + u.totalTies, 0) / 2 // Divide by 2 since each game involves 2 players
+    // Summed by season, not from managers' records: a league with median
+    // games puts two results a week in every record, and only one is a game.
+    totalGamesPlayed: seasons.reduce((sum, s) => sum + Number(seasonStats[s]?.gamesPlayed ?? 0), 0),
   };
 }
 

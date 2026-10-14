@@ -15,6 +15,7 @@ export default function PrivacyPage() {
       <h2>What we collect</h2>
       <ul>
         <li><strong>League data from Sleeper or ESPN.</strong> League information: team and manager names, avatars and team logos, rosters, matchups and transactions. We fetch it from Sleeper&apos;s public API, or from ESPN, to build the site. For ESPN managers we show a first name and last initial.</li>
+        <li><strong>A copy of each finished season</strong> of a league&apos;s data, kept so its site loads quickly and its history does not depend on Sleeper or ESPN keeping it.</li>
         <li><strong>ESPN session cookies</strong> (SWID and espn_s2), for a private ESPN league, when a member of the league gives them to us. They are stored encrypted, used only to read that league from ESPN, and never shown again. Cookies given at sign-up are deleted after two days if no site is started; otherwise they are kept until the site&apos;s admin replaces them or the site is removed.</li>
         <li><strong>Account and billing details.</strong> When you subscribe, the email you give and your Stripe customer and subscription ids. Card details go to Stripe and never reach us.</li>
         <li><strong>Your admin password,</strong> stored only as a salted hash, so it cannot be read back.</li>

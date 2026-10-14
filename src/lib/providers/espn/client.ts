@@ -92,7 +92,8 @@ async function history(leagueId: string, season: number, query: string, creds: E
   const list = await get(`/leagueHistory/${leagueId}?seasonId=${season}&${query}`, creds, filter);
   const one = Array.isArray(list) ? list.find(l => Number(l?.seasonId) === season) ?? list[0] : list;
   if (!one) throw new EspnError('not_found', 'ESPN has no such season of this league', 404);
-  return one;
+  // Marked so the translation can say what this season is missing (see coverage).
+  return { ...one, lpSource: 'history' };
 }
 
 async function league(leagueId: string, season: number, query: string, creds: EspnCredentials | null, filter?: unknown) {

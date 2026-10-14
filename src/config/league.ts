@@ -54,6 +54,12 @@ const linked = new Map<string, { ids: string[]; at: number }>();
  */
 const SINGLE_SEASON_MS = 2 * 60 * 1000;
 
+/** Forget the cached chain of seasons, here and in api.ts, after seasons are added or removed. */
+export async function forgetLinkedLeagueIds(): Promise<void> {
+  linked.clear();
+  (await import('@/lib/api')).forgetLinkedLeagueIdsCache();
+}
+
 /**
  * Gets all linked league IDs, with the most recent season first
  */

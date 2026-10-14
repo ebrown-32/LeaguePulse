@@ -122,6 +122,8 @@ export interface TranslatedBase {
   /** The week ESPN considers current, capped at the season's last. */
   currentWeek: number;
   finalWeek: number;
+  /** How many trades ESPN counts for each team this season (it keeps the count after it drops the trades). */
+  tradeCounts: Record<number, number>;
 }
 
 /**
@@ -146,8 +148,18 @@ export function teamLogo(url: unknown, espnLeagueId: string): string | null {
   }
 }
 
+/**
+ * ESPN stores some names with an emoji mangled into replacement characters
+ * ("ï¿½ï¿½ Ocular Patdown"). What is left of it is dropped; the rest of the
+ * name is kept.
+ */
+export function cleanName(s: string): string {
+  // Two or more in a row: a lone "ï" is a letter (Naïve), a run of them is the remains of an emoji.
+  return s.replace(/[ïÂ¿½\u0080-\u009f\uFFFD]{2,}/g, '').replace(/\s+/g, ' ').trim();
+}
+
 const teamName = (t: any) =>
-  String(t.name ?? [t.location, t.nickname].filter(Boolean).join(' ') ?? '').trim() || `Team ${t.id}`;
+  cleanName(String(t.name ?? [t.location, t.nickname].filter(Boolean).join(' ') ?? '')) || `Team ${t.id}`;
 
 /** A manager's name for the page: first name and last initial, never the ESPNFAN handle unless that is all there is. */
 function managerName(m: any): string {
@@ -310,7 +322,24 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
       last_scored_leg: final ? finalWeek : Math.max(0, currentWeek - 1),
       divisions: (sched.divisions ?? []).length > 1 ? sched.divisions.length : 0,
     },
-    metadata: { provider: 'espn', espn_league_id: espnLeagueId },
+    metadata: {
+      provider: 'espn',
+      espn_league_id: espnLeagueId,
+      // A season ESPN only serves from its history endpoint has final scores,
+      // standings, playoffs and the draft, but no lineups, moves or trades:
+      // only how many of each every team made. Said here so pages can say
+      // so (src/lib/coverage.ts), rather than show an empty week as if
+      // nothing happened in it.
+      ...(raw.lpSource === 'history' ? {
+        coverage: {
+          lineups: false, moves: false, trades: false,
+          counts: {
+            trades: Math.ceil(teams.reduce((n, t) => n + Number(t.transactionCounter?.trades ?? 0), 0) / 2),
+            moves: teams.reduce((n, t) => n + Number(t.transactionCounter?.acquisitions ?? 0), 0),
+          },
+        },
+      } : {}),
+    },
   };
 
   // One owner per league: Sleeper marks the commissioner, and season linking
@@ -404,6 +433,7 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
       memberToUser, teamOwner,
     },
     final, currentWeek, finalWeek,
+    tradeCounts: Object.fromEntries(teams.map(t => [Number(t.id), Number(t.transactionCounter?.trades ?? 0)])),
   };
 }
 
@@ -608,4 +638,122 @@ export function translateTrades(topics: any[], ctx: SeasonContext, weekEnds: Rec
     });
   }
   return out;
+}
+
+/** One roster move that is not a trade: a waiver claim or free agent pickup, with when it happened. */
+export interface Pickup { player: string; to: number; at: number }
+/** A player let go by a team, with when. */
+export interface Release { player: string; from: number; at: number }
+
+/**
+ * A finished season's trades, rebuilt from its weekly rosters.
+ *
+ * ESPN deletes a league's trade feed when the season ends, but keeps every
+ * week's rosters, every pickup, and how many trades each team made. A player
+ * on one team one week and another team the next, with no pickup to explain
+ * it, was traded. Moves between the same two teams in the same week are one
+ * trade. Players who passed through a roster within the week count too,
+ * because otherwise one side of a trade can go missing:
+ *
+ *   picked up, then traded on   a player new to a team, whose last pickup
+ *                               that week was by another team, was traded
+ *                               from that team (a real case: claimed on
+ *                               waivers, traded the same week);
+ *   traded, then dropped        a player who leaves a team for nobody,
+ *                               dropped that week by a team that did not
+ *                               have him and did not pick him up, was traded
+ *                               to that team first (a real case: received in
+ *                               a trade and cut straight away).
+ *
+ * ESPN's counts then decide what is kept: trades with players going both
+ * ways first, then one-way moves only while both teams still have a trade
+ * left to account for, and never a one-way move a pickup in the next or last
+ * week explains. Checked against a real league: every season from 2020 to
+ * 2025 rebuilt to exactly ESPN's counts, and the current season to exactly
+ * the trades its feed lists.
+ *
+ * `rosters[0]` is the draft; `rosters[w]` is week w. `pickups[w]` and
+ * `releases[w]` are the moves made during week w.
+ */
+export function rebuildTrades(o: {
+  rosters: Record<number, Record<string, number>>;
+  pickups: Record<number, Pickup[]>;
+  releases?: Record<number, Release[]>;
+  tradeCounts: Record<number, number> | null;
+  weekEnds: Record<string, number>;
+  lastWeek: number;
+  ctx: SeasonContext;
+}): any[] {
+  type Move = { player: string; from: number; to: number };
+  const found: { week: number; a: number; b: number; moves: Move[] }[] = [];
+  const pickedUp = (week: number, player: string, to: number) => (o.pickups[week] ?? []).some(p => p.player === player && p.to === to);
+
+  for (let w = 1; w <= o.lastWeek; w++) {
+    const before = o.rosters[w - 1], after = o.rosters[w];
+    if (!before || !after) continue;
+    const byPair = new Map<string, { a: number; b: number; moves: Move[] }>();
+    const add = (player: string, from: number, to: number) => {
+      const [a, b] = from < to ? [from, to] : [to, from];
+      const key = `${a}-${b}`;
+      if (!byPair.has(key)) byPair.set(key, { a, b, moves: [] });
+      byPair.get(key)!.moves.push({ player, from, to });
+    };
+    for (const [player, to] of Object.entries(after)) {
+      let from: number | undefined = before[player];
+      if (from === to) continue;
+      const last = (o.pickups[w] ?? []).filter(p => p.player === player).sort((x, y) => x.at - y.at).pop();
+      if (last) {
+        if (last.to === to) continue; // a pickup, not a trade
+        from = last.to;               // picked up by one team, traded on to another
+      }
+      if (from === undefined || from === to) continue;
+      add(player, from, to);
+    }
+    // Traded, then dropped before the next week's rosters.
+    for (const r of o.releases?.[w] ?? []) {
+      const had = before[r.player];
+      if (had === undefined || had === r.from || after[r.player] !== undefined) continue;
+      if (pickedUp(w, r.player, r.from)) continue;
+      add(r.player, had, r.from);
+    }
+    for (const t of byPair.values()) found.push({ week: w, ...t });
+  }
+
+  const twoWay = (t: (typeof found)[number]) => new Set(t.moves.map(m => m.to)).size > 1;
+  const left = o.tradeCounts ? { ...o.tradeCounts } : null;
+  const kept: typeof found = [];
+  for (const t of [...found.filter(twoWay), ...found.filter(t => !twoWay(t))]) {
+    if (!twoWay(t) && t.moves.every(m => pickedUp(t.week - 1, m.player, m.to) || pickedUp(t.week + 1, m.player, m.to))) continue;
+    if (left) {
+      if ((left[t.a] ?? 0) < 1 || (left[t.b] ?? 0) < 1) continue;
+      left[t.a]--; left[t.b]--;
+    }
+    kept.push(t);
+  }
+
+  const DAY = 24 * 60 * 60 * 1000;
+  return kept.sort((x, y) => x.week - y.week || x.a - y.a).map(t => {
+    // When exactly is not recorded; the day after the week before ended is
+    // the earliest it can have been, and it sorts with the week's moves.
+    const prevEnd = o.weekEnds[String(t.week - 1)];
+    const at = prevEnd ? prevEnd + DAY : (o.weekEnds[String(t.week)] ?? 0) - 6 * DAY;
+    const ids = [t.a, t.b];
+    return {
+      type: 'trade',
+      transaction_id: `rebuilt-${o.ctx.season}-${t.week}-${t.a}-${t.b}`,
+      status: 'complete',
+      status_updated: at,
+      created: at,
+      roster_ids: ids,
+      consenter_ids: ids,
+      adds: Object.fromEntries(t.moves.map(m => [m.player, m.to])),
+      drops: Object.fromEntries(t.moves.map(m => [m.player, m.from])),
+      draft_picks: [],
+      waiver_budget: [],
+      creator: o.ctx.teamOwner[t.a] ?? '',
+      leg: t.week,
+      settings: null,
+      metadata: { rebuilt: true },
+    };
+  });
 }

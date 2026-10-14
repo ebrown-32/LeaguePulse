@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seasonGaps, type SeasonGaps } from '@/lib/coverage';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { configuredRootLeagueId } from '@/config/league';
@@ -58,11 +59,17 @@ export interface EnrichedTransaction {
   isOffseason: boolean;
   sides: TransactionSide[];
   waiverBid?: number;
+  /** A trade the source no longer kept, rebuilt from weekly rosters: its week is exact, its day is not. */
+  rebuilt?: boolean;
+  /** Added by hand by the league's commissioner (src/lib/manual). */
+  entered?: boolean;
 }
 
 export interface TransactionsResponse {
   transactions: EnrichedTransaction[];
   seasons: string[];
+  /** Seasons whose source did not keep everything, and what it did not keep. */
+  gaps: SeasonGaps[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -124,6 +131,8 @@ function enrichTransactions(
       isOffseason,
       sides,
       ...(tx.waiver_budget?.[0]?.amount !== undefined ? { waiverBid: tx.waiver_budget[0].amount } : {}),
+      ...(tx.metadata?.rebuilt ? { rebuilt: true } : {}),
+      ...(tx.metadata?.manual ? { entered: true } : {}),
     }];
   });
 }
@@ -178,7 +187,7 @@ export async function GET() {
       const rawTxs = weekBatches.flat().filter((t: any) =>
         t.status === 'complete' && ['trade', 'free_agent', 'waiver'].includes(t.type)
       );
-      return { season, isOffseason, rosters, users, rawTxs };
+      return { season, isOffseason, rosters, users, rawTxs, gaps: seasonGaps(info) };
     }));
 
     // Enrich and merge all transactions
@@ -188,7 +197,12 @@ export async function GET() {
 
     all.sort((a, b) => b.created - a.created);
 
-    const seasons = [...new Set(all.map(t => t.season))].sort((a, b) => Number(b) - Number(a));
+    // Every season, including ones with nothing to show: an empty season that
+    // is empty because its source kept nothing says so (gaps), rather than
+    // quietly leaving the list.
+    const seasons = [...new Set([...seasonData.map(s => s.season), ...all.map(t => t.season)])]
+      .filter(Boolean).sort((a, b) => Number(b) - Number(a));
+    const gaps = seasonData.map(s => s.gaps).filter((g): g is SeasonGaps => Boolean(g));
 
     const _debug = seasonData.map(s => ({
       leagueId: s.rosters?.[0] ? 'ok' : 'no-rosters',
@@ -198,7 +212,7 @@ export async function GET() {
     }));
     console.log('[transactions] debug:', JSON.stringify(_debug));
 
-    return NextResponse.json({ transactions: all, seasons, _debug } as any);
+    return NextResponse.json({ transactions: all, seasons, gaps, _debug } as any);
   } catch (err) {
     console.error('[api/transactions]', err);
     return NextResponse.json({ error: 'Failed to load transactions' }, { status: 500 });

@@ -11,6 +11,8 @@ import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { cn } from '@/lib/utils';
 import { TradeSides, PlayerRow } from '@/components/trade/TradeSides';
 import type { EnrichedTransaction, PlayerSummary, DraftPickSummary, TransactionsResponse } from '@/app/api/transactions/route';
+import DataGapNote, { TradesNote } from '@/components/ui/DataGapNote';
+import type { SeasonGaps } from '@/lib/coverage';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -25,6 +27,11 @@ const TYPE_CONFIG = {
 const TYPE_FILTERS = ['All', 'Trades', 'Waivers', 'Free Agents'] as const;
 type TypeFilter = typeof TYPE_FILTERS[number];
 const TYPE_MAP: Record<TypeFilter, string> = { All: '', Trades: 'trade', Waivers: 'waiver', 'Free Agents': 'free_agent' };
+
+/** A move the commissioner added by hand: the source never kept it. */
+function EnteredChip() {
+  return <span className="text-[10px] text-muted-foreground/60">· added by commissioner</span>;
+}
 
 // ── Trade card ───────────────────────────────────────────────────────────────
 
@@ -42,10 +49,15 @@ function TradeCard({ tx }: { tx: EnrichedTransaction }) {
             <ArrowLeftRight className="h-2.5 w-2.5" />
             Trade
           </span>
-          <span className="text-[10px] text-muted-foreground/60">Wk {tx.week}</span>
+          <span className="text-[10px] text-muted-foreground/60"
+            title={tx.rebuilt ? 'Rebuilt from the weekly rosters: the platform didn’t keep this trade’s record.' : undefined}>
+            Wk {tx.week}
+          </span>
+          {tx.entered && <EnteredChip />}
         </div>
         <span className="text-[10px] text-muted-foreground/50">
-          {formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
+          {/* A rebuilt trade's day is approximate, so its age is given by the week alone. */}
+          {tx.rebuilt || tx.entered ? '' : formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
         </span>
       </div>
       {/* Shared with the simulator's Alternate Timelines. */}
@@ -76,9 +88,10 @@ function ActivityCard({ tx }: { tx: EnrichedTransaction }) {
               <span className="text-[10px] font-medium text-muted-foreground/70">${tx.waiverBid} bid</span>
             )}
             <span className="text-[10px] text-muted-foreground/60">Wk {tx.week}</span>
+            {tx.entered && <EnteredChip />}
           </div>
           <span className="text-[10px] text-muted-foreground/50">
-            {formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
+            {tx.entered ? '' : formatDistanceToNow(new Date(tx.created), { addSuffix: true })}
           </span>
         </div>
         <TeamLink
@@ -149,6 +162,7 @@ export default function TransactionsView() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [all,          setAll]         = useState<EnrichedTransaction[]>([]);
   const [seasons,      setSeasons]     = useState<string[]>([]);
+  const [gaps,         setGaps]        = useState<SeasonGaps[]>([]);
   const [loading,      setLoading]     = useState(true);
   const [error,        setError]       = useState<string | null>(null);
   const [typeFilter,    setTypeFilter]   = useState<TypeFilter>('All');
@@ -162,6 +176,7 @@ export default function TransactionsView() {
         if (d.error) throw new Error(d.error);
         setAll(d.transactions ?? []);
         setSeasons(d.seasons ?? []);
+        setGaps(d.gaps ?? []);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -328,7 +343,7 @@ export default function TransactionsView() {
         <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">{error}</div>
       )}
 
-      {!loading && !error && byGroup.length === 0 && (
+      {!loading && !error && byGroup.length === 0 && !gaps.some(g => g.season === seasonFilter) && (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
           <p className="text-sm text-muted-foreground">No transactions found.</p>
         </div>
@@ -367,6 +382,17 @@ export default function TransactionsView() {
             </AnimatePresence>
           </div>
         </div>
+      ))}
+
+      {/* At the foot, one quiet line. With trades showing: which seasons' trades
+          the platform did not keep, and which were rebuilt. Otherwise: a season
+          the platform kept no transactions for, when that season is chosen. */}
+      {!loading && !error && (typeFilter === 'Trades' ? (
+        <TradesNote className="pt-2"
+          gaps={seasonFilter === 'all-time' ? gaps : gaps.filter(g => g.season === seasonFilter)}
+          rebuiltSeasons={[...new Set(all.filter(t => t.rebuilt && (seasonFilter === 'all-time' || t.season === seasonFilter)).map(t => t.season))]} />
+      ) : seasonFilter !== 'all-time' && (
+        <DataGapNote topic="moves" gap={gaps.find(g => g.season === seasonFilter)} className="pt-2" />
       ))}
     </div>
   );

@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { leagueFetch, espnPathOf } from '../src/lib/providers/leagueFetch.ts';
 import { providerOf, espnLeagueKey, parseEspnLeague, espnUserKey, parseEspnUser } from '../src/lib/providers/ids.ts';
-import { translateBase, translateWeek, translateTransactions, translateTrades, weekOf, scoringSettings, teamLogo } from '../src/lib/providers/espn/translate.ts';
+import { cleanName, translateBase, translateWeek, translateTransactions, translateTrades, rebuildTrades, weekOf, scoringSettings, teamLogo } from '../src/lib/providers/espn/translate.ts';
 import { buildPlayerMap, playerIdFn } from '../src/lib/providers/espn/players.ts';
 
 // ── Sleeper is untouched ─────────────────────────────────────────────────────
@@ -154,6 +154,14 @@ test('two accounts with one name: one person unless they run different teams', (
   assert.notEqual(b2.rosters[0].owner_id, b2.rosters[3].owner_id);
 });
 
+test('a season from ESPN\'s history endpoint says what it is missing', () => {
+  assert.equal(translateBase(SEASON, pid).league.metadata.coverage, undefined);
+  const old = translateBase({ ...SEASON, lpSource: 'history' }, pid).league.metadata.coverage;
+  assert.equal(old.lineups, false);
+  assert.equal(old.trades, false);
+  assert.equal(typeof old.counts.trades, 'number');
+});
+
 test('a first season limit cuts the season link', () => {
   assert.equal(translateBase(SEASON, pid, { firstSeason: 2025 }).league.previous_league_id, null);
 });
@@ -246,6 +254,64 @@ test('trades from the activity feed, placed in their week', () => {
   assert.deepEqual(t.drops, { s101: 1, s202: 2 });
   assert.deepEqual(t.roster_ids.sort(), [1, 2]);
   assert.equal(t.creator, b.rosters.find(r => r.roster_id === 2)!.owner_id);
+});
+
+test('past trades rebuilt from weekly rosters, checked against ESPN\'s counts', () => {
+  const ctx = translateBase(SEASON, pid).ctx;
+  const H = 3600_000;
+  const trades = rebuildTrades({
+    rosters: {
+      0: { a: 1, b: 2, j: 3, x: 4 },                 // the draft
+      1: { a: 2, b: 1, j: 4, x: 4 },                 // a for b; j dropped by 3, picked up by 2, traded to 4
+      2: { a: 2, b: 1, j: 4, x: 1 },                 // x moves 4 to 1 with no pickup: a stray, not a trade
+    },
+    pickups: { 1: [{ player: 'j', to: 2, at: 5 }], 2: [] },
+    tradeCounts: { 1: 1, 2: 2, 4: 1 },
+    weekEnds: { 1: 100 * H, 2: 200 * H },
+    lastWeek: 2,
+    ctx,
+  });
+  assert.equal(trades.length, 2);
+  const [ab, j] = trades;
+  assert.deepEqual(ab.roster_ids, [1, 2]);
+  assert.deepEqual(ab.adds, { a: 2, b: 1 });
+  assert.deepEqual(j.adds, { j: 4 });
+  assert.deepEqual(j.drops, { j: 2 }, 'traded by the team that picked him up');
+  assert.equal(ab.leg, 1);
+  assert.ok(trades.every(t => t.metadata.rebuilt));
+});
+
+test('both sides of a trade, even a player who only passed through', () => {
+  const ctx = translateBase(SEASON, pid).ctx;
+  // As in a real league: team 2 claims h on waivers and trades him to 3 for c, the
+  // same week; team 3 trades g to 4 for r, and 3 drops g straight away.
+  const trades = rebuildTrades({
+    rosters: { 0: { c: 3, r: 4 }, 1: { c: 3, r: 4, g: 3 }, 2: { c: 2, h: 3, r: 3 } },
+    pickups: { 2: [{ player: 'h', to: 2, at: 1 }] },
+    releases: { 2: [{ player: 'g', from: 4, at: 2 }] },
+    tradeCounts: { 2: 1, 3: 2, 4: 1 },
+    weekEnds: {}, lastWeek: 2, ctx,
+  });
+  const byTeams = Object.fromEntries(trades.map(t => [t.roster_ids.join('-'), t]));
+  assert.deepEqual(byTeams['2-3'].adds, { c: 2, h: 3 });
+  assert.deepEqual(byTeams['3-4'].adds, { r: 3, g: 4 });
+});
+
+test('a pickup is never mistaken for a trade', () => {
+  const ctx = translateBase(SEASON, pid).ctx;
+  const trades = rebuildTrades({
+    rosters: { 0: { p: 1 }, 1: { p: 2 } },
+    pickups: { 1: [{ player: 'p', to: 2, at: 1 }] },
+    tradeCounts: null, weekEnds: {}, lastWeek: 1, ctx,
+  });
+  assert.equal(trades.length, 0);
+});
+
+test('mangled emoji left in ESPN names are dropped', () => {
+  // Exactly as ESPN sends one real team's name.
+  assert.equal(cleanName('ï¿½ï¿½ï¿½Â\u009fï¿½ï Ocular Patdown'), 'Ocular Patdown');
+  assert.equal(cleanName('Naïve Bayes'), 'Naïve Bayes');
+  assert.equal(cleanName('Fight Milk FC'), 'Fight Milk FC');
 });
 
 test('team logos only from ESPN hosts, always https', () => {

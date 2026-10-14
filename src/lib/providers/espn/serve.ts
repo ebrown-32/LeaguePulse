@@ -31,6 +31,12 @@ async function ownEspnLeague(): Promise<string | null> {
 }
 
 export async function serveLeagueData(path: string): Promise<Response> {
+  // A season the commissioner entered (src/lib/manual).
+  if (/^(?:league|draft)\/manual-\d{4}/.test(path)) {
+    const [{ getManual }, { serveManualSeason }] = await Promise.all([import('@/lib/manual/store'), import('@/lib/manual/model')]);
+    const hit = serveManualSeason(await getManual(), path);
+    return hit ? json(hit.body, hit.status) : json(null, 404);
+  }
   const parts = path.split('?')[0].split('/').filter(Boolean);
   const own = await ownEspnLeague();
 

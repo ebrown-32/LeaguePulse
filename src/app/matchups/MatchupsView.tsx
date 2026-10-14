@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import MatchupDetailModal, { prefetchMatchup, type MatchupTarget } from '@/components/matchup/MatchupDetailModal';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
+import DataGapNote from '@/components/ui/DataGapNote';
+import { seasonGaps, type SeasonGaps } from '@/lib/coverage';
 import { getLeagueInfo, getLeagueRosters, getLeagueUsers, getLeagueMatchups, getNFLState, getAllLeagueSeasons, getAllLinkedLeagueIds } from '@/lib/api';
 import { weekPhase, type WeekPhase } from '@/lib/nflSchedule';
 import { getCurrentLeagueId, leagueConfigured } from '@/config/league';
@@ -53,6 +55,8 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
   /** Whether the season being viewed played median games. Read per season:
    *  the setting can change between seasons. */
   const [seasonMedian, setSeasonMedian] = useState(false);
+  // What the selected season's source did not keep (old ESPN seasons have no lineups).
+  const [seasonGapsInfo, setSeasonGapsInfo] = useState<SeasonGaps | null>(null);
 
   // Win odds for the whole slate in one request, and kept fresh while games
   // are on. Before kickoff they carry the projections, which is the only
@@ -141,17 +145,20 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
         const linkedLeagues = await getAllLinkedLeagueIds(league.league_id);
 
         let median = Number(league.settings?.league_average_match ?? 0) === 1;
+        let gaps: SeasonGaps | null = seasonGaps(league);
         const seasonLeagueId = await (async () => {
           for (const leagueId of linkedLeagues) {
             const leagueInfo = await getLeagueInfo(leagueId);
             if (leagueInfo.season === selectedSeason) {
               median = Number(leagueInfo.settings?.league_average_match ?? 0) === 1;
+              gaps = seasonGaps(leagueInfo);
               return leagueId;
             }
           }
           return league.league_id;
         })();
         setSeasonMedian(median);
+        setSeasonGapsInfo(gaps);
 
         const [seasonRostersData, matchupsData] = await Promise.all([
           getLeagueRosters(seasonLeagueId),
@@ -289,6 +296,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
         />
       )}
 
+
       {/* Matchups Content */}
       {loadingSeasonData ? (
         <div className="flex items-center justify-center py-16">
@@ -424,6 +432,9 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
           })}
         </div>
       )}
+
+      {/* An old season whose lineups were not kept: one quiet line at the foot. */}
+      {!loadingSeasonData && <DataGapNote topic="lineups" gap={seasonGapsInfo} />}
 
       <MatchupDetailModal target={openMatchup} onClose={() => setOpenMatchup(null)} />
     </div>

@@ -161,12 +161,62 @@ Sleeper's shapes, so every page works on it without knowing.
   two days until payment, then permanently. ESPN signs them out after about a
   year; the league admin page shows the connection's health and takes new ones,
   and the health record (`lp_espn_creds_health:<league>`) says when they lapsed.
-- **Not yet:** trades (ESPN keeps a completed trade's players only in its
-  league activity feed, which needs checking against a current private league),
-  and keeper or dynasty traded picks. Seasons before 2018 use ESPN's
-  `leagueHistory` endpoint, which has not been checked against a real league.
+- **Trades.** This season's come from ESPN's league activity feed, which
+  lists each trade's players, and are kept for good (ESPN deletes the feed
+  when the season ends). A finished season with none kept has its trades
+  rebuilt from its weekly rosters (`rebuildTrades` in `translate.ts`): a
+  player who changed teams between two weeks with no pickup to explain it was
+  traded, checked against ESPN's per-team trade counts. On a real league this
+  matched ESPN exactly for 2020 to 2025 and matched the feed for 2026.
+  Seasons ESPN only serves through `leagueHistory` (2019 and earlier there)
+  return the final roster for every week, so their trades cannot be recovered.
+- **Not yet:** keeper or dynasty traded draft picks.
 - **Tests:** `npm test` checks that Sleeper URLs pass through untouched and pins
   the translation.
+
+## Finished seasons are kept
+
+A season that is over (from the March after it) never changes, so it is
+recorded once and kept: every response a page can ask for about it (league,
+managers, rosters, each week's matchups and moves, playoffs, draft), exactly
+as Sleeper or the ESPN adapter gave it, gzipped in Redis under the league's
+prefix (`league_bundle_v1:<league id>`). See `src/lib/bundles/`.
+
+`leagueFetch` answers those requests from the season's bundle (one request
+per season in the browser, instead of one per week), and sends everything
+else, including the whole current season, to the source exactly as before.
+A season that cannot be recorded completely is not kept, and pages read it
+live. Measured locally on a ten-season league: about 1,000 requests and 22
+seconds before, about 50 requests and 3 seconds after.
+
+- Kill switch: `NEXT_PUBLIC_LP_BUNDLES=0` turns bundles off everywhere.
+- Changing what a bundle holds: bump `BUNDLE_VERSION` in `paths.ts`; every
+  season is recorded again on its next visit.
+- One season again (a late stat correction): `dropBundle(leagueId)` in
+  `store.ts`. No button for it yet.
+
+## Gaps, and what admins can fill in
+
+Old ESPN seasons (those ESPN only serves from `leagueHistory`) have scores,
+standings, playoffs and the draft, but no lineups, moves or trades, only
+ESPN's counts. The adapter marks such a season (`metadata.coverage` on its
+league record), and pages say so in one quiet line, only for the season on
+screen (`src/components/ui/DataGapNote.tsx`): Transactions and Matchups.
+Rebuilt trades say so on hover over their week.
+
+Admins fill gaps in under Admin → League data (`src/app/admin/data/`):
+
+- **Trades and pickups** for any season, shown everywhere marked "Added by
+  commissioner", with ESPN's count as the target.
+- **Older seasons** from before the league used Sleeper or ESPN: teams (tied
+  to existing managers so all-time records combine), weekly scores (typed, or
+  pasted from a spreadsheet), the champion. Each is a league of its own,
+  `manual-<year>`, linked in before the earliest real season.
+
+Entries live in `manual_data_v1` under the league's prefix and are joined in
+by `leagueFetch` as data is read (`src/lib/manual/`), so they show on every
+page and deleting one restores the source exactly. Not yet: lineups and
+corrections to the platform's own data.
 
 ## Operating it
 
