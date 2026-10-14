@@ -6,7 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bundleRefOf, leagueKeys, seasonFinal, lookup, type SeasonBundle } from '../src/lib/bundles/paths.ts';
+import { BUNDLE_VERSION, bundleRefOf, leagueKeys, seasonFinal, lookup, type SeasonBundle } from '../src/lib/bundles/paths.ts';
 import { leagueFetch } from '../src/lib/providers/leagueFetch.ts';
 
 const V1 = 'https://api.sleeper.app/v1';
@@ -43,7 +43,7 @@ test('a season is final from the March after it', () => {
 });
 
 const BUNDLE: SeasonBundle = {
-  v: 5, leagueId: SLEEPER, season: 2024, builtAt: 0,
+  v: BUNDLE_VERSION, leagueId: SLEEPER, season: 2024, builtAt: 0,
   league: {
     '': { status: 200, body: { league_id: SLEEPER, season: '2024' } },
     'matchups/3': { status: 200, body: [{ roster_id: 1, points: 101.5 }] },

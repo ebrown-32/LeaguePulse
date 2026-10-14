@@ -19,8 +19,9 @@
  * 3: ESPN seasons say what they are missing (league metadata.coverage).
  * 4: ESPN names with mangled emoji are cleaned.
  * 5: Rebuilt ESPN trades include players who only passed through a roster.
+ * 6: ESPN draft picks carry the player's name, position and team.
  */
-export const BUNDLE_VERSION = 5;
+export const BUNDLE_VERSION = 6;
 
 /** Regular season and playoffs never go past week 18. Weeks with no games are recorded as Sleeper answers them. */
 export const MAX_WEEK = 18;

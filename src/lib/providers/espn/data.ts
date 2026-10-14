@@ -27,7 +27,7 @@ import { getRedis } from '@/lib/redisClient';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { EspnError, fetchSeason, fetchWeek, fetchTransactions, fetchSeasonPlayers, fetchTrades, fetchWeekEnds } from './client';
 import { getEspnCredentials } from './credentials';
-import { translateBase, translateWeek, translateTransactions, translateTrades, rebuildTrades, periodOfWeek, type TranslatedBase, type Pickup, type Release } from './translate';
+import { translateBase, translateWeek, translateTransactions, translateTrades, rebuildTrades, periodOfWeek, cleanName, POSITION, PRO_TEAM, type TranslatedBase, type Pickup, type Release } from './translate';
 import { buildPlayerMap, playerIdFn } from './players';
 
 const MIN = 60_000, HOUR = 60 * MIN;
@@ -151,6 +151,25 @@ async function playerPairs(season: number, force = false): Promise<Record<string
   return entry.data;
 }
 
+/**
+ * Every ESPN player's name, position and NFL team for a season, compact
+ * ([name, position, team] by ESPN id). Draft picks need them: a pick may be a
+ * player Sleeper has never heard of, from a season long ago. Shared, like the
+ * pairs above; failure leaves picks without names rather than failing the season.
+ */
+async function playerInfo(season: number): Promise<Record<string, [string, string, string]>> {
+  const thisYear = new Date().getFullYear();
+  const entry = await cached(`lp_espn_xwalk_info_v1:${season}`, async () => {
+    const out: Record<string, [string, string, string]> = {};
+    for (const p of await fetchSeasonPlayers(season)) {
+      if (p?.id == null || !p.fullName) continue;
+      out[String(p.id)] = [cleanName(String(p.fullName)), POSITION[Number(p.defaultPositionId)] ?? '', PRO_TEAM[Number(p.proTeamId)] ?? 'FA'];
+    }
+    return out;
+  }, { maxAge: () => (season < thisYear - 1 ? 30 * 24 * HOUR : 12 * HOUR) }).catch(() => null);
+  return entry?.data ?? {};
+}
+
 // ── A league's seasons ───────────────────────────────────────────────────────
 
 function firstSeason(): number | undefined {
@@ -173,12 +192,15 @@ export function seasonOver(season: number, now = new Date()): boolean {
 const settled = (b: TranslatedBase) => b.final || seasonOver(b.ctx.season);
 
 export async function seasonBase(lid: string, season: number, force = false): Promise<TranslatedBase> {
-  // 'base4': the base carries ESPN's trade counts (see rebuildTrades), clean names
-  // and what the season is missing (metadata.coverage).
-  const entry = await cached(k(lid, season, 'base4'), async () => {
+  // 'base5': the base carries ESPN's trade counts (see rebuildTrades), clean names,
+  // what the season is missing (metadata.coverage) and drafted players' names.
+  const entry = await cached(k(lid, season, 'base5'), async () => {
     const creds = await getEspnCredentials(lid);
-    const [raw, pairs] = await Promise.all([fetchSeason(lid, season, creds), playerPairs(season)]);
-    return translateBase(raw, playerIdFn(pairs), { firstSeason: firstSeason() });
+    const [raw, pairs, info] = await Promise.all([fetchSeason(lid, season, creds), playerPairs(season), playerInfo(season)]);
+    return translateBase(raw, playerIdFn(pairs), {
+      firstSeason: firstSeason(),
+      info: id => { const x = info[String(id)]; return x ? { name: x[0], position: x[1], team: x[2] } : null; },
+    });
   }, {
     maxAge: b => (settled(b) ? Infinity : 10 * MIN),
     force,
