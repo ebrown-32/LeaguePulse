@@ -41,7 +41,7 @@ export function NavAccount({ getStarted }: { getStarted: React.ReactNode }) {
   if (!isSignedIn) {
     return (
       <div className="flex items-center gap-4">
-        <Link href="/account" className="text-[13.5px] font-semibold text-muted-foreground hover:text-foreground">Sign in</Link>
+        <Link href="/account" className="hidden text-[13.5px] font-semibold text-muted-foreground hover:text-foreground sm:inline">Sign in</Link>
         {getStarted}
       </div>
     );
@@ -59,6 +59,7 @@ export function NavAccount({ getStarted }: { getStarted: React.ReactNode }) {
       <UserButton appearance={avatarAppearance}>
         <UserButton.MenuItems>
           <UserButton.Link label="My leagues" href="/account" labelIcon={<img src="/brand/leaguepulse-mark.svg" alt="" width={16} height={16} />} />
+          {data?.operator ? <UserButton.Link label="Back office" href="/operator" labelIcon={<span className="block h-3.5 w-3.5 rounded-full border-2 border-current" />} /> : null}
         </UserButton.MenuItems>
       </UserButton>
     </div>

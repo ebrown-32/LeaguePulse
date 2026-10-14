@@ -56,8 +56,13 @@ export async function generateMetadata(): Promise<Metadata> {
     };
   }
   const theme = await getTheme().catch(() => defaultTheme());
+  // Hosted: the league's own name until its admin sets one, so the browser tab
+  // and the home-screen label say the league, not the product.
+  const tenantName = process.env.LP_HOSTED === '1'
+    ? (await (await import('@/lib/tenant/context')).currentTenant().catch(() => null))?.leagueName?.trim() || null
+    : null;
 
-  const title = theme.siteTitle?.trim() || theme.leagueName?.trim() || 'League Pulse';
+  const title = theme.siteTitle?.trim() || theme.leagueName?.trim() || tenantName || 'League Pulse';
   const description = theme.siteDescription?.trim()
     || 'A new way to consume fantasy football. Give your league a pulse.';
   // Falls back through the custom icon, then the league logo, then the bundled
@@ -69,10 +74,18 @@ export async function generateMetadata(): Promise<Metadata> {
   // was silently ignored.
   const icon = theme.faviconUrl?.trim() || theme.logoUrl?.trim() || '/favicon.ico';
 
+  // Phones want a solid PNG for the home screen; the LeaguePulse default is
+  // an SVG, so it gets its rendered app icon there.
+  const apple = icon.startsWith('/brand/') ? '/brand/leaguepulse-apple.png' : icon;
+  const shortName = theme.leagueName?.trim() || tenantName || 'League Pulse';
+
   return {
     title,
     description,
-    icons: { icon: [{ url: icon, href: icon }], shortcut: icon, apple: icon },
+    icons: { icon: [{ url: icon, href: icon }], shortcut: icon, apple },
+    // Installed on an iPhone: opens full screen, labelled with the league's name.
+    // iOS shortens a long label itself, with an ellipsis, as it does for any app.
+    appleWebApp: { capable: true, title: shortName, statusBarStyle: 'default' },
     openGraph: { title, description, images: [{ url: theme.logoUrl?.trim() || '/logo.png' }] },
   };
 }
@@ -104,6 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // with no league, or whose subscription has ended, gets a plain page rather
   // than a league site with nothing to load.
   let tenantLeague: string | null = null;
+  let tenantName: string | null = null;
   if (process.env.LP_HOSTED === '1') {
     const tenant = await (await import('@/lib/tenant/context')).currentTenant();
     const { isLive } = await import('@/lib/platform/tenants');
@@ -121,6 +135,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // getCurrentLeagueId() asks Sleeper about the right league. A league id is
     // public, so nothing secret is exposed.
     tenantLeague = tenant.leagueId;
+    tenantName = tenant.leagueName?.trim() || null;
   }
 
   const theme = await getTheme();
@@ -145,10 +160,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeInjector />
         {theme.background === 'particles' && <ParticleField />}
         <ThemeProvider>
-          <InstallPromptProvider logoUrl={theme.logoUrl} leagueName={theme.leagueName}>
+          <InstallPromptProvider logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName}>
             <Analytics />
             <div className="flex min-h-screen flex-col">
-              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName} />
+              {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} />
               <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
                 <PageTransition>{children}</PageTransition>
               </main>

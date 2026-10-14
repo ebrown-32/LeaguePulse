@@ -498,7 +498,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                         <AddSquareIcon className="h-4 w-4" />
                       </span>
                       <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
-                        Add to home screen
+                        Install as an App
                       </span>
                     </button>
                   </div>

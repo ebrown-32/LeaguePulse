@@ -1146,3 +1146,36 @@ mark {
   letter-spacing: -0.015em;
   line-height: 1;
 }
+
+/* The landing page's wire ticker: two copies of the row, slid by exactly one. */
+.lp-ticker-track { animation: lp-ticker 46s linear infinite; }
+.lp-ticker:hover .lp-ticker-track { animation-play-state: paused; }
+@keyframes lp-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .lp-ticker-track { animation: none; } }
+
+/* Yard lines and hash marks on the dark closing band. */
+.lp-yardlines {
+  background:
+    repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.05) 0 1px, transparent 1px 9%),
+    repeating-linear-gradient(90deg, transparent 0 4.4%, hsl(var(--foreground) / 0.04) 4.4% calc(4.4% + 1px), transparent calc(4.4% + 1px) 9%);
+  background-size: 100% 100%, 100% 14px;
+  background-position: 0 0, 0 70%;
+  background-repeat: repeat, repeat-x;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+}
+
+/* Hero headline: the underline under "press box." draws in after the words land. */
+.lp-underline-draw { animation: lp-underline 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.95s both; }
+@keyframes lp-underline { from { background-size: 0% 0.09em; } to { background-size: 100% 0.09em; } }
+@media (prefers-reduced-motion: reduce) { .lp-underline-draw { animation: none; } }
+
+/* The pricing slider: a turf track that fills to the thumb. */
+.lp-range { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(to right, hsl(var(--primary)) var(--fill), hsl(var(--muted)) var(--fill)); }
+.lp-range::-webkit-slider-thumb { -webkit-appearance: none; height: 22px; width: 22px; border-radius: 999px;
+  background: hsl(var(--card)); border: 2px solid hsl(var(--primary)); box-shadow: 0 2px 8px hsl(var(--foreground) / 0.15);
+  transition: transform 0.15s; }
+.lp-range::-webkit-slider-thumb:active { transform: scale(1.15); }
+.lp-range::-moz-range-thumb { height: 20px; width: 20px; border-radius: 999px; background: hsl(var(--card)); border: 2px solid hsl(var(--primary)); }
+.lp-range:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 4px; }

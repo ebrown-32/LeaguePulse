@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ArrowRight, Check, Search, AlertTriangle, ExternalLink } from '@/components/icons';
 import { PLATFORM, PLANS, slugify } from '@/lib/platform/config';
-import { PulseMark } from './Landing';
+import { Lockup } from './marks';
 import { productDisplay } from './fonts';
 
 interface FoundLeague {
@@ -113,7 +113,7 @@ export default function Onboarding() {
       <div className="lp-brand-hero-bg pointer-events-none fixed inset-0 opacity-60" />
       <header className="relative mx-auto flex h-16 max-w-3xl items-center justify-between px-5">
         <Link href="/landing" className="flex items-center gap-2">
-          <PulseMark /><span className="lp-wordmark text-[21px]">{PLATFORM.name}</span>
+          <Lockup size={30} text={21} />
         </Link>
         <Steps step={step} />
       </header>

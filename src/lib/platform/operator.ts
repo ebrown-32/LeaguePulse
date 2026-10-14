@@ -23,3 +23,26 @@ export function isOperatorRequest(req: Request): boolean {
   if (!secret || secret.length < 24) return false;
   return bearerMatches(req, secret);
 }
+
+/**
+ * The operator's own accounts: verified emails in LP_OPERATOR_EMAILS (comma
+ * separated) are operators when signed in on the product site, so the back
+ * office opens without pasting the secret. The secret still works, for
+ * scripts and as a way in if accounts are ever down.
+ */
+export function operatorEmails(): string[] {
+  return (process.env.LP_OPERATOR_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+}
+
+export async function isOperatorAccount(): Promise<boolean> {
+  const emails = operatorEmails();
+  if (!emails.length) return false;
+  const { signedInAccount } = await import('./account');
+  const me = await signedInAccount();
+  return Boolean(me?.email && emails.includes(me.email.toLowerCase()));
+}
+
+/** Secret or signed-in operator account. */
+export async function isOperator(req: Request): Promise<boolean> {
+  return isOperatorRequest(req) || isOperatorAccount();
+}

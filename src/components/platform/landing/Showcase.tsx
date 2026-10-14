@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, animate, motion, useInView, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ChartView from '@/components/analytics/ChartView';
 import { runQuery, type Row } from '@/lib/analytics/engine';
@@ -50,13 +50,13 @@ function Face({ initials, tone }: { initials: string; tone: 'ink' | 'turf' | 'si
 // ── The desk ─────────────────────────────────────────────────────────────────
 
 const POSTS = [
-  { who: 'Dana Cole', handle: 'thecolecall', role: 'Beat writer', initials: 'DC', tone: 'ink' as const,
+  { who: 'Dana Cole', handle: 'thecolecall', role: 'Beat writer', initials: 'DC', tone: 'ink' as const, likes: 24,
     kind: 'Power rankings', text: 'Gridiron Ghosts stay No. 1. Three straight weeks over 120 and the bench is outscoring two starting lineups.' },
-  { who: 'Big Mike', handle: 'bigmikefantasy', role: 'Fan', initials: 'BM', tone: 'signal' as const, reply: true,
+  { who: 'Big Mike', handle: 'bigmikefantasy', role: 'Fan', initials: 'BM', tone: 'signal' as const, reply: true, likes: 9,
     text: 'Ranking a 7-1 team first is not analysis, Dana. It is reading the standings out loud.' },
-  { who: 'The Analyst', handle: 'byexpectation', role: 'Numbers', initials: 'TA', tone: 'turf' as const, reply: true,
+  { who: 'The Analyst', handle: 'byexpectation', role: 'Numbers', initials: 'TA', tone: 'turf' as const, reply: true, likes: 14,
     text: 'For the record: Ghosts have the best points-for and the third-easiest schedule left. Both things are true, Mike.' },
-  { who: 'Dana Cole', handle: 'thecolecall', role: 'Beat writer', initials: 'DC', tone: 'ink' as const,
+  { who: 'Dana Cole', handle: 'thecolecall', role: 'Beat writer', initials: 'DC', tone: 'ink' as const, likes: 31,
     kind: 'Trade grade', text: 'Fourth & Long Shots sent their RB1 away for "depth" and are now starting a fullback. C minus, generously.' },
 ];
 
@@ -109,6 +109,7 @@ export function DeskFeed() {
                   {p.kind && <span className="rounded-md bg-muted px-1.5 py-px text-[10.5px] font-semibold text-foreground/80">{p.kind}</span>}
                 </p>
                 <p className="mt-1 text-foreground/85">{p.text}</p>
+                <Like base={p.likes} />
               </div>
             </motion.article>
           ))}
@@ -123,6 +124,37 @@ export function DeskFeed() {
         )}
       </div>
     </div>
+  );
+}
+
+/** A heart that pops, throws a few sparks, and counts. Try it. */
+function Like({ base }: { base: number }) {
+  const reduce = useReducedMotion();
+  const [on, setOn] = useState(false);
+  const [burst, setBurst] = useState(0);
+  return (
+    <button type="button" onClick={() => { setOn(v => !v); if (!on) setBurst(b => b + 1); }} aria-pressed={on}
+      className={cn('relative mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 -ml-2 text-[12px] font-semibold transition-colors',
+        on ? 'text-[hsl(var(--signal))]' : 'text-muted-foreground hover:text-foreground')}>
+      <span className="relative inline-flex">
+        <motion.svg key={burst} width="15" height="15" viewBox="0 0 24 24" aria-hidden
+          initial={reduce || !on ? false : { scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 12 }}>
+          <path d="M12 20.5s-7.5-4.6-9.2-9.3C1.6 7.8 3.8 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.4 0 5.6 3.3 4.4 6.7-1.7 4.7-9.2 9.3-9.2 9.3Z"
+            fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinejoin="round" />
+        </motion.svg>
+        <AnimatePresence>
+          {on && !reduce && Array.from({ length: 6 }, (_, i) => {
+            const a = (i / 6) * Math.PI * 2;
+            return (
+              <motion.span key={`${burst}-${i}`} className="pointer-events-none absolute left-1/2 top-1/2 h-1 w-1 rounded-full bg-[hsl(var(--signal))]"
+                initial={{ x: 0, y: 0, opacity: 1 }} animate={{ x: Math.cos(a) * 14, y: Math.sin(a) * 14, opacity: 0 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }} />
+            );
+          })}
+        </AnimatePresence>
+      </span>
+      <span className="tabular-nums">{base + (on ? 1 : 0)}</span>
+    </button>
   );
 }
 
@@ -177,10 +209,10 @@ export function GameDayBoard() {
               <span className="lp-num w-6 text-[22px] font-extrabold text-muted-foreground">{i + 1}</span>
               <div className="min-w-0 flex-1">
                 <p className="lp-display text-[17px] font-bold">{g.away} <span className="text-muted-foreground">at</span> {g.home}</p>
-                <p className="text-[12px] text-muted-foreground">{g.mine} of yours, {g.theirs} of theirs on the field</p>
+                <p className="text-[12px] text-muted-foreground"><span className="font-bold sm:hidden">{g.tv} · </span>{g.mine} of yours, {g.theirs} of theirs on the field</p>
               </div>
-              <span className="rounded-md border border-border px-1.5 py-0.5 text-[10.5px] font-bold tracking-wide text-muted-foreground">{g.tv}</span>
-              <div className="w-20 text-right">
+              <span className="hidden rounded-md border border-border px-1.5 py-0.5 text-[10.5px] font-bold tracking-wide text-muted-foreground sm:inline">{g.tv}</span>
+              <div className="w-16 shrink-0 text-right sm:w-20">
                 <p className="lp-num text-[20px] font-extrabold leading-none">±{g.swing}%</p>
                 <p className="text-[10.5px] text-muted-foreground">swing</p>
               </div>
@@ -207,37 +239,62 @@ const SIGNALS = [
 ];
 
 export function GotwSignals() {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
   const total = Math.round(SIGNALS.reduce((s, x) => s + x.weight * x.score, 0) * 100);
+  const [shown, setShown] = useState(reduce ? total : 0);
+  const [focus, setFocus] = useState<number | null>(null);
+  useEffect(() => {
+    if (reduce || !inView) return;
+    const c = animate(0, total, { duration: 1.4, ease: [0.22, 1, 0.36, 1], onUpdate: v => setShown(Math.round(v)) });
+    return () => c.stop();
+  }, [reduce, inView, total]);
+
   return (
-    <div className="rounded-[22px] border border-border bg-card p-5 sm:p-6">
+    <div ref={ref} className="rounded-[22px] border border-border bg-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Game of the Week · Week 9</p>
           <p className="lp-display mt-2 text-[22px] font-bold leading-tight">Gridiron Ghosts <span className="text-muted-foreground">vs</span> Fourth &amp; Long Shots</p>
         </div>
         <div className="text-right">
-          <p className="lp-num text-[44px] font-extrabold leading-none">{total}</p>
+          <p className="lp-num text-[44px] font-extrabold leading-none tabular-nums">{shown}</p>
           <p className="text-[10.5px] font-semibold text-muted-foreground">out of 100</p>
         </div>
       </div>
-      <ul className="mt-5 space-y-3.5">
-        {SIGNALS.map((s, i) => (
-          <li key={s.label}>
-            <div className="flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="font-semibold">{s.label}</span>
-              <span className="truncate text-[12px] text-muted-foreground">{s.note}</span>
-            </div>
-            <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-3">
-              <div className="relative h-2 rounded-full bg-muted">
-                <motion.div className="absolute inset-y-0 left-0 rounded-full bg-primary"
-                  initial={{ width: 0 }} whileInView={{ width: `${s.score * 100}%` }} viewport={{ once: true }}
-                  transition={{ duration: 0.9, delay: 0.1 + i * 0.08, ease: [0.22, 1, 0.36, 1] }} />
-              </div>
-              <span className="w-[4.5rem] text-right text-[11px] tabular-nums text-muted-foreground">{Math.round(s.weight * 100)}% of score</span>
-            </div>
-          </li>
-        ))}
+      <ul className="mt-5 space-y-1" onPointerLeave={() => setFocus(null)}>
+        {SIGNALS.map((s, i) => {
+          const pts = Math.round(s.weight * s.score * 100);
+          const dim = focus !== null && focus !== i;
+          return (
+            <li key={s.label}>
+              <button type="button" onPointerEnter={e => e.pointerType === 'mouse' && setFocus(i)} onClick={() => setFocus(f => (f === i ? null : i))}
+                className={cn('w-full rounded-xl px-2.5 py-2 text-left transition-[background-color,opacity] duration-200 -mx-2.5', focus === i && 'bg-muted', dim && 'opacity-45')}
+                style={{ width: 'calc(100% + 1.25rem)' }}>
+                <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="font-semibold">{s.label}</span>
+                  <span className="truncate text-[12px] text-muted-foreground">{s.note}</span>
+                </div>
+                <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-3">
+                  <div className="relative h-2 rounded-full bg-background">
+                    <motion.div className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                      initial={{ width: 0 }} animate={inView ? { width: `${s.score * 100}%` } : {}}
+                      transition={{ duration: 0.9, delay: 0.1 + i * 0.08, ease: [0.22, 1, 0.36, 1] }} />
+                  </div>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span key={focus === i ? 'pts' : 'w'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
+                      className={cn('w-[5.5rem] text-right text-[11px] tabular-nums', focus === i ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                      {focus === i ? `+${pts} of ${total}` : `${Math.round(s.weight * 100)}% of score`}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+              </button>
+            </li>
+          );
+        })}
       </ul>
+      <p className="mt-3 text-[11.5px] text-muted-foreground">Hover or tap a signal to see what it adds.</p>
     </div>
   );
 }
@@ -245,7 +302,6 @@ export function GotwSignals() {
 // ── Ask the data ─────────────────────────────────────────────────────────────
 
 const MANAGERS = ['Ghosts', 'Long Shots', 'Waiver Wire', 'Bench Mob', 'Punt Intended', 'Hail Marys', 'Red Zone', 'Fumblers'];
-const QUESTION = 'Who leaves the most points on the bench?';
 
 /** Sample rows in the product's own matchups table shape. */
 function sampleMatchups(): Row[] {
@@ -253,51 +309,73 @@ function sampleMatchups(): Row[] {
   const rows: Row[] = [];
   MANAGERS.forEach((m, mi) => {
     for (let w = 1; w <= 9; w++) {
-      rows.push({ season: '2026', week: w, manager: m, team: m, bench_points: Math.round((12 + mi * 2.6 + rnd() * 22) * 10) / 10 });
+      rows.push({
+        season: '2026', week: w, manager: m, team: m,
+        points: Math.round((128 - mi * 3.1 + (rnd() - 0.5) * 34) * 10) / 10,
+        opp_points: Math.round((112 + (rnd() - 0.5) * 40 + (mi % 3) * 4) * 10) / 10,
+        bench_points: Math.round((12 + mi * 2.6 + rnd() * 22) * 10) / 10,
+      });
     }
   });
   return rows;
 }
 
-const SPEC: QuerySpec = {
-  dataset: 'matchups',
-  dimensions: ['manager'],
-  measures: [{ field: 'bench_points', agg: 'sum' }],
-  filters: [],
-  sort: { by: 'sum(bench_points)', dir: 'desc' },
-  chart: 'hbar',
-};
+const by = (field: string, agg: 'sum' | 'avg'): QuerySpec => ({
+  dataset: 'matchups', dimensions: ['manager'], measures: [{ field, agg }], filters: [],
+  sort: { by: `${agg}(${field})`, dir: 'desc' }, chart: 'hbar',
+});
+
+/** The questions on offer, each a spec the real query engine runs. */
+const QUESTIONS = [
+  { q: 'Who leaves the most points on the bench?', title: 'Bench points by manager, 2026', how: 'sum of bench points, highest first', spec: by('bench_points', 'sum') },
+  { q: 'Who actually scores the most?', title: 'Average points per week, 2026', how: 'average of points, highest first', spec: by('points', 'avg') },
+  { q: 'Who has had the worst luck?', title: 'Points scored against each team, 2026', how: 'sum of points against, highest first', spec: by('opp_points', 'sum') },
+];
 
 export function AskAnalytics() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
   const reduce = useReducedMotion();
-  const [typed, setTyped] = useState(reduce ? QUESTION.length : 0);
-  const done = typed >= QUESTION.length;
-  const result = useMemo(() => runQuery(sampleMatchups(), SPEC), []);
+  const [pick, setPick] = useState(0);
+  const question = QUESTIONS[pick];
+  const [typed, setTyped] = useState(reduce ? question.q.length : 0);
+  const done = typed >= question.q.length;
+  const rows = useMemo(() => sampleMatchups(), []);
+  const result = useMemo(() => runQuery(rows, question.spec), [rows, question]);
 
   useEffect(() => {
     if (reduce || !inView || done) return;
-    const t = setTimeout(() => setTyped(n => n + 1), 38);
+    const t = setTimeout(() => setTyped(n => n + 1), 32);
     return () => clearTimeout(t);
   }, [reduce, inView, typed, done]);
+
+  const ask = (i: number) => { if (i === pick) return; setPick(i); setTyped(reduce ? QUESTIONS[i].q.length : 0); };
 
   return (
     <div ref={ref} className="rounded-[22px] border border-border bg-card p-4 sm:p-5">
       <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-[14px]">
         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Ask</span>
         <span className="min-w-0 flex-1 truncate">
-          {QUESTION.slice(0, typed)}
+          {question.q.slice(0, typed)}
           {!done && <span className="ml-px inline-block h-4 w-[2px] translate-y-[3px] animate-pulse bg-foreground" />}
         </span>
       </div>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {QUESTIONS.map((x, i) => (
+          <motion.button key={x.q} type="button" onClick={() => ask(i)} whileTap={{ scale: 0.96 }}
+            className={cn('rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors',
+              i === pick ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground')}>
+            {x.q.replace(/\?$/, '')}
+          </motion.button>
+        ))}
+      </div>
       <div className="mt-4 min-h-[300px]">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {done && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <p className="text-[13px] font-semibold">Bench points by manager, 2026</p>
-              <p className="mb-2 text-[12px] text-muted-foreground">Matchups · {result.matched} rows · sum of bench points, highest first</p>
-              <ChartView spec={SPEC} result={result} height={280} />
+            <motion.div key={pick} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35 }}>
+              <p className="text-[13px] font-semibold">{question.title}</p>
+              <p className="mb-2 text-[12px] text-muted-foreground">Matchups · {result.matched} rows · {question.how}</p>
+              <ChartView spec={question.spec} result={result} height={280} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -323,9 +401,11 @@ export function PlayoffSim() {
   const inView = useInView(ref, { once: true, margin: '-80px' });
   const reduce = useReducedMotion();
   const [n, setN] = useState(reduce ? SIMS : 0);
+  const [run, setRun] = useState(0);
 
   useEffect(() => {
     if (reduce || !inView) return;
+    setN(0);
     let raf = 0; const t0 = performance.now();
     const tick = (ts: number) => {
       const f = Math.min(1, (ts - t0) / 3200);
@@ -334,15 +414,17 @@ export function PlayoffSim() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [reduce, inView]);
+  }, [reduce, inView, run]);
 
   // Early estimates wobble; the wobble shrinks with the square root of the
-  // simulations run, the way a real Monte Carlo estimate settles.
+  // simulations run, the way a real Monte Carlo estimate settles. Each run
+  // wobbles differently and lands in the same place.
   const shown = ODDS.map((o, i) => {
     if (n >= SIMS) return o.p;
-    const noise = Math.sin(n / 37 + i * 1.7) * Math.sqrt((o.p * (1 - o.p)) / Math.max(n, 8)) * 2.2;
+    const noise = Math.sin(n / 37 + i * 1.7 + run * 2.3) * Math.sqrt((o.p * (1 - o.p)) / Math.max(n, 8)) * 2.2;
     return Math.max(0.01, Math.min(0.995, o.p + noise));
   });
+  const running = n < SIMS;
 
   return (
     <div ref={ref} className="rounded-[22px] border border-border bg-card p-5 sm:p-6">
@@ -366,6 +448,17 @@ export function PlayoffSim() {
           </li>
         ))}
       </ul>
+      <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+        <p className="text-[12px] text-muted-foreground">{running ? 'Simulating\u2026' : 'Settled. Run it again and watch it land in the same place.'}</p>
+        <motion.button type="button" onClick={() => setRun(r => r + 1)} disabled={running || reduce === true} whileTap={{ scale: 0.95 }}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] font-semibold transition hover:border-foreground/30 disabled:opacity-40">
+          <motion.svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"
+            animate={running ? { rotate: 360 } : { rotate: 0 }} transition={running ? { repeat: Infinity, duration: 0.9, ease: 'linear' } : { duration: 0.3 }}>
+            <path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" />
+          </motion.svg>
+          Run 10,000 more
+        </motion.button>
+      </div>
     </div>
   );
 }

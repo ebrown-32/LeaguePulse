@@ -11,7 +11,7 @@ import { UserButton } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { productDisplay } from './fonts';
-import { Logomark, Route } from './marks';
+import { Lockup, Route } from './marks';
 import { PLATFORM } from '@/lib/platform/config';
 import { STATUS, siteUrl, openAdminHref, useMyLeagues, type LeagueRow } from './accountClient';
 
@@ -23,10 +23,12 @@ export default function AccountView() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-5">
           <Link href="/" className="flex items-center gap-2.5">
-            <Logomark size={30} />
-            <span className="lp-wordmark text-[20px]">{PLATFORM.name}</span>
+            <Lockup size={30} text={20} />
           </Link>
           <div className="ml-auto flex items-center gap-3">
+            {data?.operator && (
+              <Link href="/operator" className="rounded-full border border-border px-3.5 py-2 text-[13px] font-semibold hover:bg-muted">Back office</Link>
+            )}
             <Link href="/start" className="hidden rounded-full bg-foreground px-4 py-2 text-[13px] font-semibold text-background sm:inline-flex sm:items-center sm:gap-1.5">
               New league <Route size={14} />
             </Link>
