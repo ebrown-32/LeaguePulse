@@ -9,6 +9,21 @@ import { accountsEnabled, signedInAccount } from '@/lib/platform/account';
 import { claimForUser, getInvites, getMembers } from '@/lib/platform/members';
 import { getTenant } from '@/lib/platform/tenants';
 import { PLATFORM } from '@/lib/platform/config';
+import { runAsTenant } from '@/lib/tenant/context';
+import { getTheme } from '@/lib/themeStorage';
+import { providerOf } from '@/lib/providers/ids';
+
+/**
+ * The league's icon as its site shows it. An uploaded logo is served by the
+ * league's own address, so it is linked there; the built-in brand icons live
+ * on every address.
+ */
+function logoFor(logoUrl: string | null | undefined, site: string): string | null {
+  const u = logoUrl?.trim();
+  if (!u) return null;
+  if (/^https:\/\//.test(u) || u.startsWith('/brand/')) return u;
+  return u.startsWith('/') ? `${site}${u}` : null;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -24,8 +39,12 @@ export async function GET() {
     const members = await getMembers(slug);
     const role = members.find(m => m.userId === me.userId)?.role ?? null;
     if (!role) return null;
+    const url = `https://${slug}.${PLATFORM.rootDomain}`;
+    const theme = await runAsTenant(t, () => getTheme()).catch(() => null);
     return {
-      slug, name: t.leagueName, url: `https://${slug}.${PLATFORM.rootDomain}`,
+      slug, name: theme?.leagueName?.trim() || t.leagueName, url,
+      logo: logoFor(theme?.logoUrl, url),
+      provider: providerOf(t.leagueId),
       role, status: t.status, plan: t.plan, comp: !t.stripeSubscriptionId,
       canBill: role === 'owner' && Boolean(t.stripeCustomerId),
       // People are shown to the owner, who manages them.
