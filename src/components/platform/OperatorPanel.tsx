@@ -605,7 +605,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12.5px]">
                   <div><dt className="text-muted-foreground">Owner</dt><dd className="truncate font-medium">{l.ownerAccount ?? l.owner ?? '—'}</dd></div>
-                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && ` · $${l.aiCost.toFixed(2)}`}</span>}</dd></div>
+                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && `, $${l.aiCost.toFixed(2)}`}</span>}</dd></div>
                   <div><dt className="text-muted-foreground">Last post</dt><dd className="font-medium">{ago(l.lastPostAt)}</dd></div>
                   <div><dt className="text-muted-foreground">Created</dt><dd className="font-medium">{new Date(l.created).toLocaleDateString()}</dd></div>
                 </dl>
@@ -634,7 +634,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                       <a href={l.url} target="_blank" rel="noreferrer" className="text-[12px] text-muted-foreground hover:text-primary">{l.slug}.{data.rootDomain}</a>
                     </td>
                     <td className="px-3 py-3"><Pill s={l.status} /></td>
-                    <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && ` · $${l.aiCost.toFixed(2)}`}</span>}</td>
+                    <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && `, $${l.aiCost.toFixed(2)}`}</span>}</td>
                     <td className="max-w-[200px] px-3 py-3 text-muted-foreground">
                       <p className="truncate">{l.ownerAccount ?? l.owner ?? '—'}</p>
                       {l.pendingOwner && <p className="truncate text-[11.5px] text-primary">Handing to {l.pendingOwner}</p>}
@@ -705,7 +705,7 @@ function Inquiries({ items, call, onChange }: { items: Inquiry[]; call: (m: stri
         {items.map(q => (
           <li key={q.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-start sm:gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold">{q.name}{q.league && <span className="font-normal text-muted-foreground"> · {q.league}</span>}</p>
+              <p className="text-[14px] font-semibold">{q.name}{q.league && <span className="font-normal text-muted-foreground">, {q.league}</span>}</p>
               <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">{q.message}</p>
               <p className="mt-1 text-[11.5px] text-muted-foreground">{ago(q.at)}</p>
             </div>

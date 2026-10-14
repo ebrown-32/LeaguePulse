@@ -110,7 +110,7 @@ export function WelcomeBack({ fallback }: { fallback: React.ReactNode }) {
                 <a href={siteUrl(l.slug, l.url)} target="_blank" rel="noreferrer" className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold">{l.name || l.slug}</p>
                   <p className="truncate text-[11.5px] text-muted-foreground">
-                    {STATUS[l.status].label} · {l.role === 'owner' ? 'Owner' : 'Admin'}
+                    {STATUS[l.status].label}, {l.role === 'owner' ? 'Owner' : 'Admin'}
                   </p>
                 </a>
                 <a href={openAdminHref(l.slug)}

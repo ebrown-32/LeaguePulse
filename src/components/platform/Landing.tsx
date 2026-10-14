@@ -120,7 +120,8 @@ function GetStarted() {
 /** The sections the nav links to, in page order. */
 const NAV_LINKS = [
   { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' }, { label: 'The App', href: '#app' },
-  { label: 'Analytics', href: '#analytics' }, { label: 'Pricing', href: '#pricing' }, { label: 'FAQ', href: '#faq' },
+  { label: 'Analytics', href: '#analytics' }, { label: 'Leagues', href: '#leagues' }, { label: 'Pricing', href: '#pricing' },
+  { label: 'FAQ', href: '#faq' },
 ];
 
 /** Which of the nav's sections is on screen. */
@@ -247,7 +248,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
     { t: 'The Desk', href: '#desk', m: DeskMark }, { t: 'Game Day', href: '#gameday', m: GameDayMark },
     { t: 'Install as an App', href: '#app', m: PhoneMark }, { t: 'Game of the Week', href: '#gotw', m: GameBallMark },
     { t: 'Analytics', href: '#analytics', m: SheetMark }, { t: 'Simulator', href: '#simulator', m: BranchMark },
-    { t: 'Pricing', href: '#pricing', m: RingMark },
+    { t: 'Featured leagues', href: '#leagues', m: PennantMark }, { t: 'Pricing', href: '#pricing', m: RingMark },
   ];
 
   // Close first, then glide to the section once the page can scroll again.
@@ -302,7 +303,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
 
       <motion.div variants={row} className="relative mt-7 flex flex-wrap gap-2 text-[14px] font-semibold">
         <a href="#faq" onClick={go('#faq')} className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Questions</a>
-        {accountsOn && <a href="/account" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Sign in &middot; My leagues</a>}
+        {accountsOn && <a href="/account" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Sign in to your leagues</a>}
         <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Open source</a>
       </motion.div>
 
@@ -362,7 +363,7 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
         <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
           <motion.p variants={rise} className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            The app for Sleeper and ESPN fantasy football leagues
+            The custom app for your fantasy football leagues.
           </motion.p>
           <h1 className="lp-display mt-4 max-w-4xl text-[46px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[76px] lg:text-[88px]">
             <Words text="Your league finally gets a" />{' '}
@@ -686,40 +687,66 @@ function Setup() {
 
 // ── Pricing ──────────────────────────────────────────────────────────────────
 
+/** Index of the featured plan, which phones open on. */
+const FEATURED = 2;
+
 function Pricing() {
   const [cycle, setCycle] = useState<'season' | 'monthly'>('season');
   const [teams, setTeams] = useState(12);
   const [asking, setAsking] = useState(false);
+  const rail = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(FEATURED);
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const head = (n: number) => `$${(n / teams).toFixed(2)}`;
   const priced = (p: { season: number; monthly: number }) => (cycle === 'season' ? p.season : p.monthly);
   const per = cycle === 'season' ? 'per season' : 'per month';
 
   const tiers: TierCard[] = [
     {
-      name: PLANS.free.name, price: '$0', per: 'forever',
+      name: PLANS.free.name, short: 'Free', price: '$0', per: 'forever',
       blurb: 'The whole app, open source. You bring the server, the database and the patience.',
       points: ['Every feature', 'Your own Vercel and Redis', 'Your own Anthropic key', 'Help from the community'],
       cta: { label: 'Get the code', href: PLATFORM.github, external: true },
     },
     {
-      name: PLANS.pro.name, price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
+      name: PLANS.pro.name, short: 'Pass', price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
       blurb: 'Hosted on your league\u2019s own address. The AI writes on your own Anthropic key.',
       points: ['Every feature, every past season', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=standard` },
     },
     {
-      name: PLANS.ai.name, price: `$${priced(PLANS.ai)}`, per, note: `about ${head(priced(PLANS.ai))} a head`, featured: true, badge: 'Easiest',
+      name: PLANS.ai.name, short: '+ AI', price: `$${priced(PLANS.ai)}`, per, note: `about ${head(priced(PLANS.ai))} a head`, featured: true, badge: 'Easiest',
       blurb: 'Everything in League Pass, and we run the AI. No key to find, no second bill.',
       points: ['Everything in League Pass', 'AI writers, chat and analytics included', 'Nothing to set up', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=ai` },
     },
     {
-      name: PLANS.custom.name, price: 'Let\u2019s talk',
+      name: PLANS.custom.name, short: 'Custom', price: 'Let\u2019s talk',
       blurb: 'For big ballers. A site designed around your league, built with you.',
       points: ['Your own design and branding', 'Features made for your league', 'Your own domain', 'Every season brought over for you'],
       cta: { label: 'Tell us your vision', onClick: () => setAsking(true) },
     },
   ];
+
+  /** The card nearest the rail's left edge is the one in view. */
+  const onRail = () => {
+    const el = rail.current;
+    if (!el) return;
+    const cards = Array.from(el.children) as HTMLElement[];
+    const x = el.scrollLeft + el.clientWidth / 2;
+    const i = cards.reduce((best, c, k) => (Math.abs(c.offsetLeft + c.offsetWidth / 2 - x) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - x) ? k : best), 0);
+    if (i !== active) setActive(i);
+  };
+  const goTo = (i: number, behavior: ScrollBehavior = 'smooth') => {
+    const el = rail.current, card = el?.children[i] as HTMLElement | undefined;
+    if (!el || !card) return;
+    el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2, behavior });
+  };
+  // Open on the featured plan; only matters while the cards are a rail.
+  useEffect(() => {
+    const el = rail.current;
+    if (el && el.scrollWidth > el.clientWidth) goTo(FEATURED, 'instant');
+  }, []);
 
   /** The receipt: what the price pays for, itemised, and the one thing that depends on the tier. */
   const receipt = [
@@ -741,8 +768,8 @@ function Pricing() {
             </p>
           </div>
           {/* One switch for every card, and the league size the per-head prices use. */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end">
-            <div className="inline-flex self-start rounded-full border border-border bg-card p-1 text-[13px] font-semibold lg:self-end">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:flex-col lg:items-end">
+            <div className="grid grid-cols-2 rounded-full border border-border bg-card p-1 text-[13px] font-semibold sm:inline-grid sm:self-start lg:self-end">
               {(['season', 'monthly'] as const).map(c => (
                 <button key={c} onClick={() => setCycle(c)} aria-pressed={cycle === c}
                   className={cn('relative rounded-full px-4 py-2', cycle === c ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
@@ -751,17 +778,30 @@ function Pricing() {
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-3 text-[13px] text-muted-foreground">
+            <label className="flex items-center gap-3 text-[13px] text-muted-foreground max-sm:px-1">
               <span className="whitespace-nowrap"><span className="lp-num text-[17px] font-extrabold text-foreground">{teams}</span> teams</span>
               <input type="range" min={4} max={16} step={2} value={teams} onChange={e => setTeams(Number(e.target.value))} aria-label="How many teams"
-                className="lp-range w-40" style={{ ['--fill' as string]: `${((teams - 4) / 12) * 100}%` }} />
+                className="lp-range w-full sm:w-40" style={{ ['--fill' as string]: `${((teams - 4) / 12) * 100}%` }} />
             </label>
           </div>
         </div>
 
-        <div className="mt-10 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {tiers.map((t, i) => <TierCardView key={t.name} t={t} i={i} cycle={cycle} />)}
+        {/* Phones: one plan at a time, swiped, opening on the featured one with
+            its neighbours peeking either side. Wider: a grid. */}
+        <div className="mt-8 flex justify-center gap-1 md:hidden" role="tablist" aria-label="Plans">
+          {tiers.map((t, i) => (
+            <button key={t.name} role="tab" aria-selected={active === i} onClick={() => goTo(i)}
+              className={cn('relative rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors', active === i ? 'text-background' : 'text-muted-foreground')}>
+              {active === i && <motion.span layoutId="plan-tab" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', bounce: 0.18, duration: 0.4 }} />}
+              <span className="relative">{t.short ?? t.name}</span>
+            </button>
+          ))}
         </div>
+        <motion.div ref={rail} onScroll={onRail} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }}
+          variants={{ show: { transition: { staggerChildren: 0.06 } } }}
+          className="no-scrollbar -mx-4 -mb-8 mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-10 pt-2 md:mx-0 md:mb-0 md:mt-10 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 md:pt-0 lg:grid-cols-4">
+          {tiers.map(t => <TierCardView key={t.name} t={t} cycle={cycle} />)}
+        </motion.div>
         <p className="mt-4 text-center text-[12.5px] text-muted-foreground">
           {cycle === 'season'
             ? 'Pay once in August, forget about it until you\u2019re gloating in January. Renews yearly; cancel any time.'
@@ -770,9 +810,9 @@ function Pricing() {
 
         {/* Where the money goes */}
         <motion.div initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ duration: 0.6, ease }}
-          className="mt-10 grid grid-cols-1 gap-8 rounded-[22px] border border-border bg-card p-7 sm:p-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          className="mt-10 grid grid-cols-1 gap-6 rounded-[22px] border border-border bg-card p-5 sm:gap-8 sm:p-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div>
-            <h3 className="lp-display text-[24px] font-extrabold tracking-[-0.02em]">So where does the money go?</h3>
+            <h3 className="lp-display text-[22px] font-extrabold sm:text-[24px] tracking-[-0.02em]">So where does the money go?</h3>
             <p className="mt-3 text-[14.5px] leading-relaxed text-muted-foreground">
               Into keeping your league&apos;s site fast on the one day a week everyone checks it at once. Here&apos;s the receipt.
             </p>
@@ -781,12 +821,18 @@ function Pricing() {
               On League Pass they bill your league&apos;s own Anthropic account, with a cap you set, and we never mark it up.
               On League Pass + AI they&apos;re on us. Everything that isn&apos;t AI works either way.
             </p>
+            {/* Phones: the receipt waits behind a tap rather than adding a screen of scrolling. */}
+            <button onClick={() => setReceiptOpen(o => !o)} aria-expanded={receiptOpen}
+              className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[13px] font-semibold md:hidden">
+              {receiptOpen ? 'Hide the receipt' : 'Show the receipt'}
+              <Route size={14} className={cn('transition-transform', receiptOpen ? '-rotate-90' : 'rotate-90')} />
+            </button>
           </div>
-          <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-4 font-mono text-[11.5px] leading-snug sm:px-5 sm:text-[12.5px]">
-            <p className="text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground">League Pass &middot; receipt</p>
+          <div className={cn(!receiptOpen && 'max-md:hidden', 'rounded-2xl border border-dashed border-border bg-background px-3.5 py-4 font-mono text-[11px] leading-snug sm:px-5 sm:text-[12.5px]')}>
+            <p className="text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground">League Pass receipt</p>
             <ul className="mt-3 divide-y divide-dashed divide-border">
               {receipt.map(([what, how]) => (
-                <li key={what} className="flex items-baseline justify-between gap-4 py-2">
+                <li key={what} className="flex items-baseline justify-between gap-3 py-2 sm:gap-4">
                   <span>{what}</span><span className="shrink-0 text-muted-foreground">{how}</span>
                 </li>
               ))}
@@ -807,33 +853,32 @@ function Pricing() {
 }
 
 interface TierCard {
-  name: string; price: string; per?: string; note?: string; blurb: string; points: string[];
+  name: string; short?: string; price: string; per?: string; note?: string; blurb: string; points: string[];
   featured?: boolean; badge?: string;
   cta: { label: string; href?: string; external?: boolean; onClick?: () => void };
 }
 
 /** One plan, as a card. The featured one is ink, the rest paper; prices animate with the billing switch. */
-function TierCardView({ t, i, cycle }: { t: TierCard; i: number; cycle: string }) {
+function TierCardView({ t, cycle }: { t: TierCard; cycle: string }) {
   const ink = t.featured;
   const cta = cn('mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[14.5px] font-semibold transition',
     ink ? 'bg-background text-foreground hover:bg-background/90' : 'border border-border hover:bg-muted');
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.55, delay: i * 0.06, ease }}
-      className={cn('relative flex flex-col rounded-[22px] p-6 sm:p-7', ink ? 'bg-foreground text-background shadow-[0_30px_60px_-30px_hsl(var(--foreground)/0.6)]' : 'border border-border bg-card')}>
+    <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.55, ease } } }}
+      className={cn('relative flex w-[84%] max-w-[340px] shrink-0 snap-center flex-col rounded-[22px] p-6 sm:p-7 md:w-auto md:max-w-none', ink ? 'bg-foreground text-background shadow-[0_20px_36px_-24px_hsl(var(--foreground)/0.55)] md:shadow-[0_30px_60px_-30px_hsl(var(--foreground)/0.6)]' : 'border border-border bg-card')}>
       <div className="flex items-center justify-between gap-2">
         <p className="lp-display text-[17px] font-bold">{t.name}</p>
         {t.badge && <span className="rounded-full bg-[hsl(var(--signal))] px-2.5 py-0.5 text-[11px] font-bold text-white">{t.badge}</span>}
       </div>
-      <div className="mt-5 lg:min-h-[76px]">
+      <div className="mt-4 sm:mt-5 lg:min-h-[76px]">
         <AnimatePresence mode="wait">
           <motion.p key={t.per ? `${t.price}-${cycle}` : t.price} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}
-            className={cn('lp-num font-extrabold leading-none', t.price.startsWith('$') ? 'text-[52px]' : 'text-[38px] tracking-[-0.02em]')}>
+            className={cn('lp-num font-extrabold leading-none', t.price.startsWith('$') ? 'text-[46px] sm:text-[52px]' : 'text-[34px] tracking-[-0.02em] sm:text-[38px]')}>
             {t.price}
           </motion.p>
         </AnimatePresence>
         <p className={cn('mt-2 text-[12.5px]', ink ? 'text-background/65' : 'text-muted-foreground')}>
-          {[t.per, t.note].filter(Boolean).join(' \u00b7 ') || '\u00a0'}
+          {[t.per, t.note].filter(Boolean).join(', ') || '\u00a0'}
         </p>
       </div>
       <p className={cn('mt-4 text-[13.5px] leading-relaxed', ink ? 'text-background/80' : 'text-muted-foreground')}>{t.blurb}</p>
@@ -942,7 +987,7 @@ function FinalCta() {
       <div className="lp-yardlines pointer-events-none absolute inset-0" />
       <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
         <h2 className="lp-display max-w-4xl text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[72px]">
-          Your league already has the stories. <span className="text-primary">Give them a home.</span>
+          Your league already has the stories. <span className="text-primary">Give them some life... a pulse if you will.</span>
         </h2>
         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
           <Magnetic>
@@ -962,7 +1007,8 @@ function Footer() {
   const cols: { title: string; links: { label: string; href: string; external?: boolean; muted?: boolean }[] }[] = [
     { title: 'The product', links: [
       { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' }, { label: 'Game of the Week', href: '#gotw' },
-      { label: 'Analytics', href: '#analytics' }, { label: 'Simulator', href: '#simulator' }, { label: 'Pricing', href: '#pricing' },
+      { label: 'Analytics', href: '#analytics' }, { label: 'Simulator', href: '#simulator' }, { label: 'Featured leagues', href: '#leagues' },
+      { label: 'Pricing', href: '#pricing' },
     ] },
     { title: 'Your league', links: [
       { label: 'Start a league', href: '/start' },

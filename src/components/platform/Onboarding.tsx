@@ -207,7 +207,7 @@ export default function Onboarding() {
                   <LeagueAvatar l={l} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-display text-[15.5px] font-bold">{l.name}</span>
-                    <span className="block text-[12px] text-muted-foreground">{l.teams} teams · {l.format} · {l.scoring} · {l.season}</span>
+                    <span className="block text-[12px] text-muted-foreground">{l.teams} teams, {l.format}, {l.scoring}, {l.season}</span>
                   </span>
                   {l.hostedAt ? (
                     <a href={`https://${l.hostedAt}.${PLATFORM.rootDomain}`} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary" onClick={e => e.stopPropagation()}>

@@ -60,7 +60,7 @@ function LeagueScreen({ app }: { app?: boolean }) {
       </div>
       <div className="flex-1 space-y-1.5 overflow-hidden px-2.5 pt-2">
         <div className="rounded-xl bg-white p-2.5 shadow-sm">
-          <p className="text-[7.5px] font-bold uppercase tracking-wider text-[#585D66]">Week 9 · Sunday</p>
+          <p className="text-[7.5px] font-bold uppercase tracking-wider text-[#585D66]">Week 9, Sunday</p>
           <div className="mt-1 flex items-end justify-between">
             <div><p className="text-[8.5px] font-semibold">Ghosts</p><p className="text-[17px] font-extrabold leading-none">112.4</p></div>
             <div className="text-right"><p className="text-[8.5px] font-semibold">Long Shots</p><p className="text-[17px] font-extrabold leading-none text-[#585D66]">104.9</p></div>
