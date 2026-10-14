@@ -53,6 +53,11 @@ export default function Onboarding() {
   const [email, setEmail] = useState('');
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<{ msg: string; missing?: string[] } | null>(null);
+  // The operator's own account makes leagues free, without a checkout.
+  const [operator, setOperator] = useState(false);
+  useEffect(() => {
+    fetch('/api/platform/operator/me').then(r => r.json()).then(d => setOperator(Boolean(d?.operator))).catch(() => {});
+  }, []);
 
   const find = async (value: string, as: Provider = provider) => {
     const v = value.trim();
@@ -237,7 +242,8 @@ export default function Onboarding() {
         <AnimatePresence>
           {league && slugState?.ok && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <Card n={3} title="Start your free trial">
+              <Card n={3} title={operator ? 'Create your league' : 'Start your free trial'}>
+                {!operator && (<>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {([['season', `$${PLANS.pro.season}`, 'per season', `About $${(PLANS.pro.season / 12).toFixed(2)} a head`], ['monthly', `$${PLANS.pro.monthly}`, 'per month', 'Cancel whenever']] as const).map(([id, price, per, note]) => (
                     <button key={id} onClick={() => setPlan(id)}
@@ -252,12 +258,17 @@ export default function Onboarding() {
                 </div>
                 <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="Email for receipts (optional)"
                   className="mt-3 w-full rounded-xl border border-border bg-background/70 px-3 py-3 text-[14.5px] outline-none focus:border-primary/60" />
+                </>)}
                 <button onClick={start} disabled={starting}
                   className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-[15px] font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60">
-                  {starting ? 'Opening checkout' : `Start ${PLANS.pro.trialDays} days free`} <ArrowRight className="h-4 w-4" />
+                  {operator
+                    ? (starting ? 'Creating' : 'Create it free')
+                    : (starting ? 'Opening checkout' : `Start ${PLANS.pro.trialDays} days free`)} <ArrowRight className="h-4 w-4" />
                 </button>
                 <p className="mt-2 text-center text-[12px] text-muted-foreground">
-                  No card needed for the trial. If you don&apos;t add one, it simply ends.
+                  {operator
+                    ? 'Operator account: no checkout. It goes straight into My leagues.'
+                    : 'No card needed for the trial. If you don’t add one, it simply ends.'}
                 </p>
                 <p className="mt-1 text-center text-[11.5px] text-muted-foreground">
                   By continuing you agree to the <a href="/legal/terms" target="_blank" className="underline hover:text-foreground">Terms</a> and{' '}

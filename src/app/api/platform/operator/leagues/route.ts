@@ -19,15 +19,16 @@
 import { NextResponse } from 'next/server';
 import { isOperator } from '@/lib/platform/operator';
 import {
-  listTenants, getTenant, saveTenant, deleteTenant, tenantForLeague, slugAvailability,
+  listTenants, getTenant, saveTenant, deleteTenant,
   type Tenant, type TenantStatus,
 } from '@/lib/platform/tenants';
-import { PLATFORM, PLANS, slugify } from '@/lib/platform/config';
+import { PLATFORM, PLANS } from '@/lib/platform/config';
 import { runAsTenant, forgetTenant } from '@/lib/tenant/context';
 import { adminPasswordSet } from '@/lib/tenant/admin';
 import { tenantAnthropicKey } from '@/lib/tenant/secrets';
 import { getPosts } from '@/lib/ai/store';
 import { issueRecoveryLink } from '@/lib/platform/recovery';
+import { createFreeLeague } from '@/lib/platform/freeLeague';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -119,25 +120,15 @@ export async function POST(req: Request) {
     if (!league?.league_id) return NextResponse.json({ error: 'Sleeper has no league with that id.' }, { status: 404 });
   }
 
-  const slug = slugify(String(body.slug || league.name || ''));
-  const existing = await tenantForLeague(leagueId);
-  if (existing && existing.status !== 'canceled') {
-    return NextResponse.json({ error: `That league already lives at ${existing.slug}.${PLATFORM.rootDomain}.` }, { status: 409 });
-  }
-  const avail = await slugAvailability(slug, leagueId);
-  if (!avail.ok) return NextResponse.json({ error: `The address "${slug}" is ${avail.reason}.` }, { status: 409 });
-
-  const now = new Date().toISOString();
-  const tenant: Tenant = {
-    slug, leagueId, leagueName: String(league.name ?? '').slice(0, 200),
-    status: 'active', plan: 'season', ownerEmail: null,
-    stripeCustomerId: null, stripeSubscriptionId: null, createdAt: now, updatedAt: now,
-  };
-  await saveTenant(tenant);
-  // The owner sets their admin password through the same one-time link a
-  // locked-out owner gets.
-  const link = await issueRecoveryLink(slug);
-  return NextResponse.json({ ok: true, slug, url: `https://${slug}.${PLATFORM.rootDomain}`, setupLink: link.url });
+  // Made from the signed-in operator account: it is that account's league
+  // straight away. Made with the secret (a script): the owner gets a one-time
+  // link to set the admin password, as before.
+  const { isOperatorRequest } = await import('@/lib/platform/operator');
+  const owner = isOperatorRequest(req) ? null : await (await import('@/lib/platform/account')).signedInAccount();
+  const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug: body.slug, owner });
+  if (!made.ok) return NextResponse.json({ error: made.error }, { status: made.status });
+  const setupLink = owner ? null : (await issueRecoveryLink(made.tenant.slug)).url;
+  return NextResponse.json({ ok: true, slug: made.tenant.slug, url: made.url, setupLink, owner: owner?.email ?? null });
 }
 
 export async function PATCH(req: Request) {
