@@ -22,15 +22,16 @@ const accountsOn = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
 type Status = 'trialing' | 'active' | 'past_due' | 'canceled';
 interface League {
-  slug: string; url: string; name: string; leagueId: string; status: Status; plan: 'monthly' | 'season';
+  slug: string; url: string; name: string; leagueId: string; status: Status; plan: 'monthly' | 'season'; tier: 'standard' | 'ai';
   owner: string | null; stripeCustomer: string | null; comp: boolean; created: string; updated: string;
-  adminSet: boolean; aiKey: boolean; lastPostAt: string | null;
+  adminSet: boolean; aiKey: boolean; lastPostAt: string | null; aiCost: number;
   ownerAccount: string | null; admins: number; pendingOwner: string | null;
 }
 interface Conflict { session: string; slug: string; leagueId: string; takenBy: string; email: string | null; at: string }
+interface Inquiry { id: string; name: string; email: string; league: string; message: string; at: string }
 interface Data {
-  rootDomain: string; stripeMode: 'live' | 'test'; prices: { monthly: number; season: number }; conflicts: Conflict[];
-  totals: { all: number; trialing: number; active: number; past_due: number; canceled: number; paying: number; comp: number; mrr: number };
+  rootDomain: string; stripeMode: 'live' | 'test'; prices: { monthly: number; season: number }; conflicts: Conflict[]; inquiries: Inquiry[];
+  totals: { all: number; trialing: number; active: number; past_due: number; canceled: number; paying: number; comp: number; mrr: number; ai?: number; aiCost?: number };
   leagues: League[];
 }
 
@@ -160,6 +161,7 @@ export default function OperatorPanel() {
                 </ul>
               </motion.section>
             )}
+            {data.inquiries.length > 0 && <Inquiries items={data.inquiries} call={call} onChange={(msg) => { flash(msg); load(); }} />}
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
               <Signups leagues={data.leagues} />
               <Health leagues={data.leagues} />
@@ -284,11 +286,11 @@ function Kpis({ data }: { data: Data }) {
   const t = data.totals;
   const tiles: { label: string; value: number; prefix?: string; sub: string; tone?: 'turf' | 'alert' }[] = [
     { label: 'Monthly revenue', value: Math.round(t.mrr), prefix: '$', sub: 'Season plans over five months', tone: 'turf' },
-    { label: 'Paying', value: t.paying, sub: `${t.active} active in total` },
+    { label: 'Paying', value: t.paying, sub: `${t.active} active, ${t.canceled} cancelled` },
     { label: 'On trial', value: t.trialing, sub: 'No card needed to start' },
     { label: 'Beta', value: t.comp, sub: 'Free, added here' },
     { label: 'Payment failing', value: t.past_due, sub: 'Stripe is retrying', tone: t.past_due ? 'alert' : undefined },
-    { label: 'Cancelled', value: t.canceled, sub: 'Shows as paused' },
+    { label: 'AI we pay for', value: Math.round(t.aiCost ?? 0), prefix: '$', sub: `This month, ${t.ai ?? 0} on + AI` },
   ];
   return (
     <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -406,6 +408,7 @@ function Health({ leagues }: { leagues: League[] }) {
 
 function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?: unknown) => Promise<any>; onDone: (msg: string) => void }) {
   const [provider, setProvider] = useState<'sleeper' | 'espn'>('sleeper');
+  const [tier, setTier] = useState<'standard' | 'ai'>('standard');
   const [leagueId, setLeagueId] = useState('');
   const [slug, setSlug] = useState('');
   const [swid, setSwid] = useState('');
@@ -417,8 +420,8 @@ function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?:
     setBusy(true); setError(''); setLink(null);
     try {
       const d = await call('POST', provider === 'espn'
-        ? { provider, leagueId: leagueId.trim(), slug: slug.trim(), swid: swid.trim() || undefined, s2: s2.trim() || undefined }
-        : { leagueId: leagueId.trim(), slug: slug.trim() });
+        ? { provider, tier, leagueId: leagueId.trim(), slug: slug.trim(), swid: swid.trim() || undefined, s2: s2.trim() || undefined }
+        : { tier, leagueId: leagueId.trim(), slug: slug.trim() });
       setLink(d.setupLink); setLeagueId(''); setSlug(''); setSwid(''); setS2('');
       onDone(d.owner ? `Added ${d.slug}.${root} to My leagues` : `Added ${d.slug}.${root}`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add'); }
@@ -427,13 +430,23 @@ function AddLeague({ root, call, onDone }: { root: string; call: (m: string, b?:
   return (
     <Panel id="add" title="Add a league" meta="Free, no Stripe">
       <p className="mt-1 text-[13px] text-muted-foreground">It goes straight into your My leagues. Hand it to its commissioner from the league&apos;s menu whenever you like.</p>
-      <div className="mt-4 inline-flex rounded-full border border-border bg-background p-0.5 text-[12.5px] font-semibold">
-        {(['sleeper', 'espn'] as const).map(p => (
-          <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }}
-            className={cn('rounded-full px-3.5 py-1.5 transition', provider === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>
-            {p === 'espn' ? 'ESPN' : 'Sleeper'}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <div className="inline-flex rounded-full border border-border bg-background p-0.5 text-[12.5px] font-semibold">
+          {(['sleeper', 'espn'] as const).map(p => (
+            <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }}
+              className={cn('rounded-full px-3.5 py-1.5 transition', provider === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>
+              {p === 'espn' ? 'ESPN' : 'Sleeper'}
+            </button>
+          ))}
+        </div>
+        <div className="inline-flex rounded-full border border-border bg-background p-0.5 text-[12.5px] font-semibold">
+          {(['standard', 'ai'] as const).map(t => (
+            <button key={t} type="button" onClick={() => setTier(t)}
+              className={cn('rounded-full px-3.5 py-1.5 transition', tier === t ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>
+              {t === 'ai' ? 'League Pass + AI' : 'League Pass'}
+            </button>
+          ))}
+        </div>
       </div>
       <form onSubmit={e => { e.preventDefault(); add(); }} className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
         <input value={leagueId} onChange={e => setLeagueId(e.target.value)}
@@ -522,6 +535,10 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
     try { await call('PATCH', { slug, status }); onChange(status === 'active' ? `Resumed ${slug}` : `Paused ${slug}`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not change status'); }
   };
+  const setTier = async (slug: string, tier: 'standard' | 'ai') => {
+    try { await call('PATCH', { slug, tier }); onChange(tier === 'ai' ? `${slug} is on League Pass + AI` : `${slug} is on League Pass`); }
+    catch (e) { onChange(e instanceof Error ? e.message : 'Could not change tier'); }
+  };
   const remove = async (slug: string) => {
     try { await call('DELETE', { slug }); setConfirm(null); onChange(`Removed ${slug}`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not remove'); }
@@ -537,6 +554,9 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
         {l.stripeCustomer && <a href={`${stripeBase}/customers/${l.stripeCustomer}`} target="_blank" rel="noreferrer" className={btn}>Stripe</a>}
         <button onClick={() => recover(l.slug)} className={btn}>Reset link</button>
         <button onClick={() => setHanding(l)} className={btn}>Hand over</button>
+        {l.comp && (l.tier === 'ai'
+          ? <button onClick={() => setTier(l.slug, 'standard')} className={btn}>Stop running its AI</button>
+          : <button onClick={() => setTier(l.slug, 'ai')} className={btn}>Run its AI (+ AI)</button>)}
         {l.comp && (l.status === 'canceled'
           ? <button onClick={() => setStatus(l.slug, 'active')} className={btn}>Resume</button>
           : <button onClick={() => setStatus(l.slug, 'canceled')} className={btn}>Pause</button>)}
@@ -585,7 +605,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12.5px]">
                   <div><dt className="text-muted-foreground">Owner</dt><dd className="truncate font-medium">{l.ownerAccount ?? l.owner ?? '—'}</dd></div>
-                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize">{l.comp ? 'Beta' : l.plan}</dd></div>
+                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && ` · $${l.aiCost.toFixed(2)}`}</span>}</dd></div>
                   <div><dt className="text-muted-foreground">Last post</dt><dd className="font-medium">{ago(l.lastPostAt)}</dd></div>
                   <div><dt className="text-muted-foreground">Created</dt><dd className="font-medium">{new Date(l.created).toLocaleDateString()}</dd></div>
                 </dl>
@@ -614,7 +634,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                       <a href={l.url} target="_blank" rel="noreferrer" className="text-[12px] text-muted-foreground hover:text-primary">{l.slug}.{data.rootDomain}</a>
                     </td>
                     <td className="px-3 py-3"><Pill s={l.status} /></td>
-                    <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}</td>
+                    <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && ` · $${l.aiCost.toFixed(2)}`}</span>}</td>
                     <td className="max-w-[200px] px-3 py-3 text-muted-foreground">
                       <p className="truncate">{l.ownerAccount ?? l.owner ?? '—'}</p>
                       {l.pendingOwner && <p className="truncate text-[11.5px] text-primary">Handing to {l.pendingOwner}</p>}
@@ -674,6 +694,31 @@ function HandOver({ league, onCancel, onSubmit }: { league: League; onCancel: ()
         </div>
       </motion.form>
     </motion.div>
+  );
+}
+
+/** Custom tier inquiries, newest first: reply by email, then dismiss. */
+function Inquiries({ items, call, onChange }: { items: Inquiry[]; call: (m: string, b?: unknown) => Promise<any>; onChange: (msg: string) => void }) {
+  return (
+    <Panel title="Custom inquiries" meta={<>{items.length} waiting</>}>
+      <ul className="mt-3 divide-y divide-border">
+        {items.map(q => (
+          <li key={q.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-start sm:gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold">{q.name}{q.league && <span className="font-normal text-muted-foreground"> · {q.league}</span>}</p>
+              <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">{q.message}</p>
+              <p className="mt-1 text-[11.5px] text-muted-foreground">{ago(q.at)}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <a href={`mailto:${q.email}?subject=${encodeURIComponent('Your LeaguePulse custom site')}`}
+                className="rounded-lg bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-primary-foreground">Reply</a>
+              <button onClick={async () => { await call('PATCH', { dismissInquiry: q.id }); onChange('Inquiry dismissed'); }}
+                className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-semibold hover:bg-muted">Dismiss</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 

@@ -9,6 +9,7 @@
  * Server-only: ANTHROPIC_API_KEY must never reach the browser.
  */
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { wrapLanguageModel, type LanguageModelMiddleware } from 'ai';
 
 /** Fast + cheap: tweets, comments, quick reactions. */
 export const MODEL_FAST = 'claude-haiku-4-5-20251001';
@@ -30,14 +31,46 @@ const hosted = () => process.env.LP_HOSTED === '1';
  * The Anthropic key for the current request.
  *
  * Self-hosted: ANTHROPIC_API_KEY, as always. Hosted: the league's own key, so
- * each league pays for its own AI. There is deliberately no fallback from a
- * league's missing key to a platform key: that would quietly bill one
- * account for every league's usage.
+ * each league pays for its own AI; and for a league on League Pass + AI with
+ * no key of its own, the platform's key for managed leagues
+ * (LP_MANAGED_ANTHROPIC_API_KEY), because running its AI is what it pays for.
+ * There is deliberately no fallback for any other league: that would quietly
+ * bill the platform for every league's usage.
  */
 export async function anthropicKey(): Promise<string | null> {
   if (!hosted()) return process.env.ANTHROPIC_API_KEY?.trim() || null;
   const { tenantAnthropicKey } = await import('@/lib/tenant/secrets');
-  return tenantAnthropicKey();
+  const own = await tenantAnthropicKey();
+  if (own) return own;
+  return (await aiManaged()) ? process.env.LP_MANAGED_ANTHROPIC_API_KEY?.trim() || null : null;
+}
+
+/** Whether the platform runs this league's AI (League Pass + AI). Hosted only. */
+export async function aiManaged(): Promise<boolean> {
+  if (!hosted()) return false;
+  const { currentTenant } = await import('@/lib/tenant/context');
+  return (await currentTenant())?.tier === 'ai';
+}
+
+/**
+ * Whether this request's AI is billed to the platform: a League Pass + AI
+ * league with no key of its own. Those leagues get the tighter daily limits.
+ */
+export async function onPlatformKey(): Promise<boolean> {
+  if (!hosted() || !(await aiManaged())) return false;
+  const { tenantAnthropicKey } = await import('@/lib/tenant/secrets');
+  return !(await tenantAnthropicKey());
+}
+
+/**
+ * A league's daily allowance of chat or analytics questions. A league on its
+ * own key keeps the generous default (it pays for what it uses); a league
+ * whose AI the platform pays for gets a cap sized to its price.
+ */
+export async function dailyQuestionLimit(kind: 'chat' | 'ask'): Promise<number> {
+  const env = (name: string, fallback: number) => Number(process.env[name] || fallback);
+  if (await onPlatformKey()) return kind === 'chat' ? env('LP_MANAGED_DAILY_CHAT', 40) : env('LP_MANAGED_DAILY_ASK', 20);
+  return kind === 'chat' ? env('LP_AI_DAILY_CHAT', 300) : env('LP_AI_DAILY_ASK', 200);
 }
 
 /** Whether AI can run for this request. Async: on the hosted product it is per league. */
@@ -59,6 +92,10 @@ let hostedClient: ReturnType<typeof createAnthropic> | null = null;
  * is overwritten on every request.
  */
 export function claude(model: string = MODEL_SMART) {
+  return wrapLanguageModel({ model: baseModel(model), middleware: counted(model) });
+}
+
+function baseModel(model: string) {
   if (hosted()) {
     hostedClient ??= createAnthropic({
       apiKey: 'resolved-per-request',
@@ -76,6 +113,62 @@ export function claude(model: string = MODEL_SMART) {
   if (!apiKey) throw new AINotConfiguredError();
   client ??= createAnthropic({ apiKey });
   return client(model);
+}
+
+type Usage = { inputTokens: { total?: number; noCache?: number; cacheRead?: number; cacheWrite?: number }; outputTokens: { total?: number } };
+type Part = { type: string; toolName?: string };
+
+/**
+ * Counts every call's tokens and web searches against the league (see
+ * usage.ts). The league is captured when the call starts: a stream finishes
+ * after the request code that started it has moved on.
+ */
+function counted(model: string): LanguageModelMiddleware {
+  const record = async (usage: Usage, parts: Part[]) => {
+    const n = (v?: number) => v ?? 0;
+    const cacheRead = n(usage.inputTokens.cacheRead), cacheWrite = n(usage.inputTokens.cacheWrite);
+    const { recordUsage } = await import('./usage');
+    await recordUsage({
+      model,
+      input: usage.inputTokens.noCache ?? Math.max(0, n(usage.inputTokens.total) - cacheRead - cacheWrite),
+      output: n(usage.outputTokens.total), cacheRead, cacheWrite,
+      searches: parts.filter(p => p.type === 'tool-call' && p.toolName === 'web_search').length,
+    });
+  };
+  const inLeague = async (fn: () => Promise<void>): Promise<() => Promise<void>> => {
+    try {
+      const { currentTenant, runAsTenant } = await import('@/lib/tenant/context');
+      const t = await currentTenant();
+      return () => Promise.resolve().then(() => runAsTenant(t, fn)).catch(() => {});
+    } catch {
+      return async () => {};
+    }
+  };
+  return {
+    specificationVersion: 'v3',
+    wrapGenerate: async ({ doGenerate }) => {
+      const result = await doGenerate();
+      await (await inLeague(() => record(result.usage, result.content as Part[])))();
+      return result;
+    },
+    wrapStream: async ({ doStream }) => {
+      const { stream, ...rest } = await doStream();
+      const parts: Part[] = [];
+      let usage: Usage | null = null;
+      const save = await inLeague(async () => { if (usage) await record(usage, parts); });
+      return {
+        stream: stream.pipeThrough(new TransformStream({
+          transform(part, ctrl) {
+            if (part.type === 'tool-call') parts.push(part as Part);
+            if (part.type === 'finish') usage = part.usage;
+            ctrl.enqueue(part);
+          },
+          async flush() { await save(); },
+        })),
+        ...rest,
+      };
+    },
+  };
 }
 
 /** Shared guardrails. Every persona prompt is appended to this. */

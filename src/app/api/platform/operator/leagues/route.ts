@@ -43,6 +43,9 @@ async function health(t: Tenant) {
       tenantAnthropicKey().then(Boolean).catch(() => false),
       getPosts(1).catch(() => []),
     ]);
+    // What its AI cost this month at list prices, whoever's key paid for it.
+    const { monthUsage } = await import('@/lib/ai/usage');
+    const usage = await monthUsage().catch(() => null);
     const last = posts[0];
     const { getMembers, getInvites } = await import('@/lib/platform/members');
     const [members, invites] = await Promise.all([getMembers(t.slug).catch(() => []), getInvites(t.slug).catch(() => [])]);
@@ -53,6 +56,7 @@ async function health(t: Tenant) {
       adminSet: admin,
       aiKey: key,
       lastPostAt: last ? (last.publishAt ?? last.createdAt) : null,
+      aiCost: usage?.cost ?? 0,
     };
   });
 }
@@ -67,6 +71,7 @@ export async function GET(req: Request) {
     leagueId: t.leagueId,
     status: t.status,
     plan: t.plan,
+    tier: t.tier ?? 'standard',
     owner: t.ownerEmail,
     stripeCustomer: t.stripeCustomerId,
     comp: !t.stripeSubscriptionId,
@@ -79,9 +84,11 @@ export async function GET(req: Request) {
   const { getRedis } = await import('@/lib/redisClient');
   const conflicts = ((await getRedis().client?.lrange('lp_tenant_conflicts', 0, 49).catch(() => [])) ?? [])
     .map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
+  const { listInquiries } = await import('@/lib/platform/inquiries');
   return NextResponse.json({
     rootDomain: PLATFORM.rootDomain,
     conflicts,
+    inquiries: await listInquiries(),
     stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'live' : 'test',
     prices: { monthly: PLANS.pro.monthly, season: PLANS.pro.season },
     totals: {
@@ -89,7 +96,13 @@ export async function GET(req: Request) {
       past_due: count('past_due'), canceled: count('canceled'),
       paying: paying.length, comp: leagues.filter(l => l.comp && l.status !== 'canceled').length,
       // A season is about five months, so the season price is spread over five.
-      mrr: paying.reduce((s, l) => s + (l.plan === 'monthly' ? PLANS.pro.monthly : PLANS.pro.season / 5), 0),
+      mrr: paying.reduce((s, l) => {
+        const p = l.tier === 'ai' ? PLANS.ai : PLANS.pro;
+        return s + (l.plan === 'monthly' ? p.monthly : p.season / 5);
+      }, 0),
+      ai: leagues.filter(l => l.tier === 'ai' && l.status !== 'canceled').length,
+      // This month's AI bill the platform carries: + AI leagues without their own key.
+      aiCost: Math.round(leagues.filter(l => l.tier === 'ai' && !l.aiKey).reduce((s, l) => s + l.aiCost, 0) * 100) / 100,
     },
     leagues,
   });
@@ -97,7 +110,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!(await isOperator(req))) return deny();
-  const body = await req.json().catch(() => ({})) as { leagueId?: string; slug?: string; provider?: string; swid?: string; s2?: string };
+  const body = await req.json().catch(() => ({})) as { leagueId?: string; slug?: string; provider?: string; swid?: string; s2?: string; tier?: string };
   let leagueId = String(body.leagueId ?? '').trim();
   let league: { league_id?: string; name?: string } | null;
   if (body.provider === 'espn') {
@@ -125,7 +138,7 @@ export async function POST(req: Request) {
   // link to set the admin password, as before.
   const { isOperatorRequest } = await import('@/lib/platform/operator');
   const owner = isOperatorRequest(req) ? null : await (await import('@/lib/platform/account')).signedInAccount();
-  const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug: body.slug, owner });
+  const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug: body.slug, owner, tier: body.tier === 'ai' ? 'ai' : 'standard' });
   if (!made.ok) return NextResponse.json({ error: made.error }, { status: made.status });
   const setupLink = owner ? null : (await issueRecoveryLink(made.tenant.slug)).url;
   return NextResponse.json({ ok: true, slug: made.tenant.slug, url: made.url, setupLink, owner: owner?.email ?? null });
@@ -133,7 +146,21 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!(await isOperator(req))) return deny();
-  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string };
+  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string; tier?: string; dismissInquiry?: string };
+  if (body.dismissInquiry) {
+    const { removeInquiry } = await import('@/lib/platform/inquiries');
+    await removeInquiry(String(body.dismissInquiry));
+    return NextResponse.json({ ok: true });
+  }
+  // League Pass or League Pass + AI, for a league the operator manages (a comp league; a paid one changes through Stripe).
+  if (body.tier !== undefined) {
+    const t = body.slug ? await getTenant(body.slug) : null;
+    if (!t || (body.tier !== 'standard' && body.tier !== 'ai')) return NextResponse.json({ error: 'Unknown league or tier' }, { status: 400 });
+    if (t.stripeSubscriptionId) return NextResponse.json({ error: 'A paid league changes tier through its billing.' }, { status: 400 });
+    await saveTenant({ ...t, tier: body.tier });
+    forgetTenant(t.slug);
+    return NextResponse.json({ ok: true });
+  }
   if (body.ownerEmail !== undefined) {
     const email = String(body.ownerEmail).trim().toLowerCase();
     const t = body.slug ? await getTenant(body.slug) : null;

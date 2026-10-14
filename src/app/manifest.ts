@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getTheme } from '@/lib/themeStorage';
+import { appIconUrl } from '@/lib/appIconUrl';
 
 // Reflects the league's actual branding (custom logo/name/accent color if set)
 // rather than generic LeaguePulse defaults, so what gets added to the home
@@ -12,10 +13,11 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     : null;
   const leagueName = theme.leagueName?.trim() || tenantName;
   const name = leagueName ? `${leagueName} | LeaguePulse` : 'League Pulse';
-  const icon = theme.logoUrl || '/logo.png';
-  // The LeaguePulse default ships proper app icons: sized PNGs and a maskable
-  // one Android can crop to its own shape.
-  const brandIcons = icon.startsWith('/brand/');
+  // App icons drawn from the league's own logo (or the LeaguePulse icons for
+  // a league on the default): sized PNGs, and a maskable one Android can crop
+  // to its own shape without cutting into the logo.
+  const icon = (size: 192 | 512, purpose: 'any' | 'maskable' = 'any') =>
+    ({ src: appIconUrl(theme.logoUrl, size, purpose), sizes: `${size}x${size}`, type: 'image/png', purpose });
   // Comma-separated hsl() syntax, not the newer space-separated CSS Color 4
   // form — some Android WebView manifest parsers still choke on the latter.
   const themeColor = `hsl(${theme.primaryH}, ${theme.primaryS}%, 44%)`;
@@ -28,15 +30,6 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     display: 'standalone',
     background_color: 'hsl(222, 40%, 3%)',
     theme_color: themeColor,
-    icons: brandIcons
-      ? [
-          { src: '/brand/leaguepulse-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/brand/leaguepulse-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/brand/leaguepulse-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ]
-      : [
-          { src: icon, sizes: 'any', type: 'image/png', purpose: 'any' },
-          { src: icon, sizes: 'any', type: 'image/png', purpose: 'maskable' },
-        ],
+    icons: [icon(192), icon(512), icon(512, 'maskable')],
   };
 }

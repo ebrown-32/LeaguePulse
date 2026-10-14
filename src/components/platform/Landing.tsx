@@ -29,6 +29,7 @@ import {
 } from './marks';
 import WinChance from './landing/WinChance';
 import InstallApp from './landing/InstallApp';
+import InquirySheet from './landing/Inquiry';
 import FeaturedLeagues from './landing/Featured';
 import { NavAccount, WelcomeBack } from './landing/SignedIn';
 import { DeskFeed, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
@@ -56,7 +57,7 @@ export default function Landing() {
       <Chapter id="desk" n="01" mark={DeskMark} eyebrow="The Desk"
         title={<>Beat writers who actually <span className="lp-brand-text">watch your league.</span></>}
         body="A cast of AI writers and loud fans post all week: power rankings, matchup previews, trade grades, live reactions on Sunday. They argue in the replies. Every claim is checked against your real standings, trades and game status before it posts."
-        points={['Posts through the day, quiet overnight', 'You choose the cast and their voices', 'Runs on your own Anthropic key']}
+        points={['Posts through the day, quiet overnight', 'You choose the cast and their voices', 'Your own AI key, or ours with League Pass + AI']}
         visual={<DeskFeed />} />
       <GameDayBand />
       <InstallBand />
@@ -688,18 +689,39 @@ function Setup() {
 function Pricing() {
   const [cycle, setCycle] = useState<'season' | 'monthly'>('season');
   const [teams, setTeams] = useState(12);
-  const pro = PLANS.pro;
-  const each = (n: number) => `$${(n / teams).toFixed(2)}`;
-  const includes = [
-    'Your league on its own web address',
-    'The AI desk, on your own Anthropic key',
-    'Live win chances and Game Day',
-    'Game of the Week, weekly reports, simulator',
-    'Analytics with plain-English questions',
-    'Every past season, imported',
-    'Your name, logo and colors',
+  const [asking, setAsking] = useState(false);
+  const head = (n: number) => `$${(n / teams).toFixed(2)}`;
+  const priced = (p: { season: number; monthly: number }) => (cycle === 'season' ? p.season : p.monthly);
+  const per = cycle === 'season' ? 'per season' : 'per month';
+
+  const tiers: TierCard[] = [
+    {
+      name: PLANS.free.name, price: '$0', per: 'forever',
+      blurb: 'The whole app, open source. You bring the server, the database and the patience.',
+      points: ['Every feature', 'Your own Vercel and Redis', 'Your own Anthropic key', 'Help from the community'],
+      cta: { label: 'Get the code', href: PLATFORM.github, external: true },
+    },
+    {
+      name: PLANS.pro.name, price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
+      blurb: 'Hosted on your league\u2019s own address. The AI writes on your own Anthropic key.',
+      points: ['Every feature, every past season', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
+      cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=standard` },
+    },
+    {
+      name: PLANS.ai.name, price: `$${priced(PLANS.ai)}`, per, note: `about ${head(priced(PLANS.ai))} a head`, featured: true, badge: 'Easiest',
+      blurb: 'Everything in League Pass, and we run the AI. No key to find, no second bill.',
+      points: ['Everything in League Pass', 'AI writers, chat and analytics included', 'Nothing to set up', `${PLANS.pro.trialDays} days free, no card`],
+      cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=ai` },
+    },
+    {
+      name: PLANS.custom.name, price: 'Let\u2019s talk',
+      blurb: 'For big ballers. A site designed around your league, built with you.',
+      points: ['Your own design and branding', 'Features made for your league', 'Your own domain', 'Every season brought over for you'],
+      cta: { label: 'Tell us your vision', onClick: () => setAsking(true) },
+    },
   ];
-  /** The receipt: what the price pays for, itemised, and the one thing it doesn't. */
+
+  /** The receipt: what the price pays for, itemised, and the one thing that depends on the tier. */
   const receipt = [
     ['Your league\u2019s own website, up all year', 'Included'],
     ['Wrangling Sleeper or ESPN, live scores and odds every Sunday', 'Included'],
@@ -707,98 +729,57 @@ function Pricing() {
     ['A real person who fixes it when it breaks', 'Included'],
     ['Trash talk', 'Free, as always'],
   ];
+
   return (
     <section id="pricing" className="scroll-mt-16 lg:scroll-mt-28 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-4 sm:px-5">
-        <div className="max-w-2xl">
-          <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Costs less than last place.</h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
-            One person pays and the whole league gets it. Split {teams} ways, a season is about {each(pro.season)} each,
-            which is less than whatever humiliation your league makes last place pay for.
-          </p>
-          <div className="mt-6 max-w-md rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-baseline justify-between text-[13px]">
-              <label htmlFor="lp-teams" className="font-semibold">How many teams?</label>
-              <span className="text-muted-foreground"><span className="lp-num text-[22px] font-extrabold text-foreground">{teams}</span> teams</span>
-            </div>
-            <input id="lp-teams" type="range" min={4} max={16} step={2} value={teams} onChange={e => setTeams(Number(e.target.value))}
-              className="lp-range mt-3 w-full" style={{ ['--fill' as string]: `${((teams - 4) / 12) * 100}%` }} />
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              <span className="font-semibold text-foreground">{each(pro.season)}</span> each for the season, or <span className="font-semibold text-foreground">{each(pro.monthly)}</span> each a month.
-              {teams >= 14 ? ' Big league, small bill.' : teams <= 6 ? ' Small league, still cheaper than a bad trade.' : ''}
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Costs less than last place.</h2>
+            <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
+              One person pays and the whole league gets it. Run it yourself for nothing, let us host it, or let us run the AI too.
             </p>
           </div>
-        </div>
-        <div className="mt-12 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div className="rounded-[22px] bg-foreground p-7 text-background sm:p-9">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="lp-display text-[20px] font-bold">{pro.name}</p>
-              <div className="flex rounded-full bg-background/10 p-0.5 text-[12.5px] font-semibold">
-                {(['season', 'monthly'] as const).map(c => (
-                  <button key={c} onClick={() => setCycle(c)} className={cn('relative rounded-full px-3.5 py-1.5', cycle === c ? 'text-foreground' : 'text-background/70')}>
-                    {cycle === c && <motion.span layoutId="cycle" className="absolute inset-0 rounded-full bg-background" transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }} />}
-                    <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <AnimatePresence mode="wait">
-                <motion.p key={cycle} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
-                  className="lp-num text-[72px] font-extrabold leading-none">${cycle === 'season' ? pro.season : pro.monthly}</motion.p>
-              </AnimatePresence>
-              <span className="text-[14.5px] text-background/70">
-                {cycle === 'season' ? `per league, per season \u00b7 about ${each(pro.season)} a head` : `per league, per month \u00b7 about ${each(pro.monthly)} a head`}
-              </span>
-            </div>
-            <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-background/75">
-              {cycle === 'season'
-                ? 'Pay once in August, then forget about it until you\u2019re gloating in January. Renews each year unless you cancel, and you can cancel any time.'
-                : 'For leagues with commitment issues. Cancel whenever, which is more than you can say for the running back you took in round two.'}
-            </p>
-            <ul className="mt-7 grid grid-cols-1 gap-2.5 text-[14.5px] sm:grid-cols-2">
-              {includes.map(x => (
-                <li key={x} className="flex gap-2.5">
-                  <Tick className="mt-0.5 shrink-0" style={{ ['--primary' as string]: '154 62% 52%' }} />{x}
-                </li>
+          {/* One switch for every card, and the league size the per-head prices use. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end">
+            <div className="inline-flex self-start rounded-full border border-border bg-card p-1 text-[13px] font-semibold lg:self-end">
+              {(['season', 'monthly'] as const).map(c => (
+                <button key={c} onClick={() => setCycle(c)} aria-pressed={cycle === c}
+                  className={cn('relative rounded-full px-4 py-2', cycle === c ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
+                  {cycle === c && <motion.span layoutId="cycle" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }} />}
+                  <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
+                </button>
               ))}
-            </ul>
-            <Link href={`/start?plan=${cycle}`}
-              className="mt-9 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-background px-4 py-3.5 text-[15px] font-semibold text-foreground transition hover:bg-background/90">
-              Start your {pro.trialDays}-day free trial <Route size={16} />
-            </Link>
-            <p className="mt-3 text-center text-[12px] text-background/60">No card to start. If you never add one, the trial just ends. No hard feelings.</p>
-          </div>
-          <div className="flex flex-col rounded-[22px] border border-border bg-card p-7 sm:p-9">
-            <p className="lp-display text-[20px] font-bold">{PLANS.free.name}</p>
-            <p className="lp-num mt-6 text-[72px] font-extrabold leading-none">$0</p>
-            <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
-              The whole thing, open source. You bring the server, the database and the patience.
-            </p>
-            <ul className="mt-7 space-y-2.5 text-[14.5px]">
-              {['Every feature, forever', 'Your own Vercel and Redis', 'Your own Anthropic key for the AI', 'Help from the community'].map(x => (
-                <li key={x} className="flex gap-2.5"><Tick className="mt-0.5 shrink-0" />{x}</li>
-              ))}
-            </ul>
-            <a href={PLATFORM.github} target="_blank" rel="noreferrer"
-              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-3.5 text-[14.5px] font-semibold transition hover:bg-muted [margin-top:2.25rem]">
-              Get the code <Route size={16} />
-            </a>
+            </div>
+            <label className="flex items-center gap-3 text-[13px] text-muted-foreground">
+              <span className="whitespace-nowrap"><span className="lp-num text-[17px] font-extrabold text-foreground">{teams}</span> teams</span>
+              <input type="range" min={4} max={16} step={2} value={teams} onChange={e => setTeams(Number(e.target.value))} aria-label="How many teams"
+                className="lp-range w-40" style={{ ['--fill' as string]: `${((teams - 4) / 12) * 100}%` }} />
+            </label>
           </div>
         </div>
 
+        <div className="mt-10 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {tiers.map((t, i) => <TierCardView key={t.name} t={t} i={i} cycle={cycle} />)}
+        </div>
+        <p className="mt-4 text-center text-[12.5px] text-muted-foreground">
+          {cycle === 'season'
+            ? 'Pay once in August, forget about it until you\u2019re gloating in January. Renews yearly; cancel any time.'
+            : 'For leagues with commitment issues. Cancel whenever, which is more than you can say for your round-two running back.'}
+        </p>
+
         {/* Where the money goes */}
         <motion.div initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ duration: 0.6, ease }}
-          className="mt-4 grid grid-cols-1 gap-8 rounded-[22px] border border-border bg-card p-7 sm:p-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          className="mt-10 grid grid-cols-1 gap-8 rounded-[22px] border border-border bg-card p-7 sm:p-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div>
             <h3 className="lp-display text-[24px] font-extrabold tracking-[-0.02em]">So where does the money go?</h3>
             <p className="mt-3 text-[14.5px] leading-relaxed text-muted-foreground">
               Into keeping your league&apos;s site fast on the one day a week everyone checks it at once. Here&apos;s the receipt.
             </p>
             <p className="mt-4 text-[14.5px] leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">Not on it: the AI writers&apos; salaries.</span>{' '}
-              They bill your league&apos;s own Anthropic account directly, with a monthly cap you set. We never mark it up,
-              and a chatty desk never turns into a surprise on your card. Everything that isn&apos;t AI works without a key at all.
+              <span className="font-semibold text-foreground">The AI writers are the one line that changes.</span>{' '}
+              On League Pass they bill your league&apos;s own Anthropic account, with a cap you set, and we never mark it up.
+              On League Pass + AI they&apos;re on us. Everything that isn&apos;t AI works either way.
             </p>
           </div>
           <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-4 font-mono text-[11.5px] leading-snug sm:px-5 sm:text-[12.5px]">
@@ -810,16 +791,65 @@ function Pricing() {
                 </li>
               ))}
               <li className="flex items-baseline justify-between gap-4 py-2 text-muted-foreground">
-                <span>AI writers</span><span className="shrink-0">Billed to your key</span>
+                <span>AI writers</span><span className="shrink-0 text-right">Your key, or on us with + AI</span>
               </li>
             </ul>
-            <p className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 border-t-2 border-foreground pt-2 font-semibold">
-              <span>Total, per league</span><span>${pro.season}/season or ${pro.monthly}/mo</span>
-            </p>
+            <div className="mt-2 space-y-1 border-t-2 border-foreground pt-2 font-semibold">
+              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass</span><span>${PLANS.pro.season}/season or ${PLANS.pro.monthly}/mo</span></p>
+              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass + AI</span><span>${PLANS.ai.season}/season or ${PLANS.ai.monthly}/mo</span></p>
+            </div>
           </div>
         </motion.div>
       </div>
+      <AnimatePresence>{asking && <InquirySheet onClose={() => setAsking(false)} />}</AnimatePresence>
     </section>
+  );
+}
+
+interface TierCard {
+  name: string; price: string; per?: string; note?: string; blurb: string; points: string[];
+  featured?: boolean; badge?: string;
+  cta: { label: string; href?: string; external?: boolean; onClick?: () => void };
+}
+
+/** One plan, as a card. The featured one is ink, the rest paper; prices animate with the billing switch. */
+function TierCardView({ t, i, cycle }: { t: TierCard; i: number; cycle: string }) {
+  const ink = t.featured;
+  const cta = cn('mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[14.5px] font-semibold transition',
+    ink ? 'bg-background text-foreground hover:bg-background/90' : 'border border-border hover:bg-muted');
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.55, delay: i * 0.06, ease }}
+      className={cn('relative flex flex-col rounded-[22px] p-6 sm:p-7', ink ? 'bg-foreground text-background shadow-[0_30px_60px_-30px_hsl(var(--foreground)/0.6)]' : 'border border-border bg-card')}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="lp-display text-[17px] font-bold">{t.name}</p>
+        {t.badge && <span className="rounded-full bg-[hsl(var(--signal))] px-2.5 py-0.5 text-[11px] font-bold text-white">{t.badge}</span>}
+      </div>
+      <div className="mt-5 lg:min-h-[76px]">
+        <AnimatePresence mode="wait">
+          <motion.p key={t.per ? `${t.price}-${cycle}` : t.price} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}
+            className={cn('lp-num font-extrabold leading-none', t.price.startsWith('$') ? 'text-[52px]' : 'text-[38px] tracking-[-0.02em]')}>
+            {t.price}
+          </motion.p>
+        </AnimatePresence>
+        <p className={cn('mt-2 text-[12.5px]', ink ? 'text-background/65' : 'text-muted-foreground')}>
+          {[t.per, t.note].filter(Boolean).join(' \u00b7 ') || '\u00a0'}
+        </p>
+      </div>
+      <p className={cn('mt-4 text-[13.5px] leading-relaxed', ink ? 'text-background/80' : 'text-muted-foreground')}>{t.blurb}</p>
+      <ul className="mb-7 mt-5 space-y-2.5 text-[13.5px]">
+        {t.points.map(x => (
+          <li key={x} className="flex gap-2.5">
+            <Tick className="mt-0.5 shrink-0" style={ink ? { ['--primary' as string]: '154 62% 52%' } : undefined} />{x}
+          </li>
+        ))}
+      </ul>
+      {t.cta.onClick
+        ? <button onClick={t.cta.onClick} className={cta}>{t.cta.label} <Route size={16} /></button>
+        : t.cta.external
+          ? <a href={t.cta.href} target="_blank" rel="noreferrer" className={cta}>{t.cta.label} <Route size={16} /></a>
+          : <Link href={t.cta.href!} className={cta}>{t.cta.label} <Route size={16} /></Link>}
+    </motion.div>
   );
 }
 
@@ -852,7 +882,7 @@ function Faq() {
     ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
     ['Why isn\u2019t it free?', `The code is free to host yourself. The paid plan is for convenience, because running a site that a dozen people refresh every thirty seconds on Sunday costs real money, and so does the person keeping it up. The code is free if you want to run it yourself. The hosted version costs about what your league spends on wings in one draft night, split ${'$'}${(PLANS.pro.season / 12).toFixed(2)} a head. I'm happy to handle it for you.`],
     ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper or ESPN league, any scoring. Every season is linked together, so dynasty and keeper history carries through.'],
-    ['How does the AI get paid for?', 'Your league adds its own Anthropic API key and pays Anthropic directly for what it uses. You can cap monthly spend in your Anthropic account, and everything that is not AI works without a key.'],
+    ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it\u2019s included: we run it, within generous daily limits. Everything that isn\u2019t AI works either way.'],
     ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
     ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
     ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],

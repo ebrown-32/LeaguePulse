@@ -19,7 +19,7 @@ import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ArrowRight, Check, Search, AlertTriangle, ExternalLink } from '@/components/icons';
-import { PLATFORM, PLANS, slugify } from '@/lib/platform/config';
+import { PLATFORM, PLANS, slugify, type Tier } from '@/lib/platform/config';
 import { Lockup } from './marks';
 import { productDisplay } from './fonts';
 
@@ -50,6 +50,8 @@ export default function Onboarding() {
   const [slug, setSlug] = useState(params.get('slug') ?? '');
   const [slugState, setSlugState] = useState<{ ok: boolean; reason?: string; slug: string } | null>(null);
   const [plan, setPlan] = useState<'season' | 'monthly'>(params.get('plan') === 'monthly' ? 'monthly' : 'season');
+  // League Pass, or League Pass + AI (we run the AI). Arrives from the pricing page's choice.
+  const [tier, setTier] = useState<Tier>(params.get('tier') === 'ai' ? 'ai' : 'standard');
   const [email, setEmail] = useState('');
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<{ msg: string; missing?: string[] } | null>(null);
@@ -120,14 +122,14 @@ export default function Onboarding() {
     try {
       const r = await fetch('/api/platform/checkout', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ leagueId: league.leagueId, slug: clean, plan, email }),
+        body: JSON.stringify({ leagueId: league.leagueId, slug: clean, plan, tier, email }),
       });
       const d = await r.json();
       if (d.url) { window.location.href = d.url; return; }
       // Accounts on: sign in (or create one) first, then come straight back
       // to this league, address and plan.
       if (r.status === 401 && d.signIn) {
-        const back = `/start?league=${league.leagueId}&slug=${encodeURIComponent(clean)}&plan=${plan}`;
+        const back = `/start?league=${league.leagueId}&slug=${encodeURIComponent(clean)}&plan=${plan}&tier=${tier}`;
         window.location.href = `${d.signIn}?redirect_url=${encodeURIComponent(back)}`;
         return;
       }
@@ -243,18 +245,47 @@ export default function Onboarding() {
           {league && slugState?.ok && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <Card n={3} title={operator ? 'Create your league' : 'Start your free trial'}>
-                {!operator && (<>
+                {/* The tier: who runs the AI. */}
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {([['season', `$${PLANS.pro.season}`, 'per season', `About $${(PLANS.pro.season / 12).toFixed(2)} a head`], ['monthly', `$${PLANS.pro.monthly}`, 'per month', 'Cancel whenever']] as const).map(([id, price, per, note]) => (
-                    <button key={id} onClick={() => setPlan(id)}
-                      className={cn('rounded-2xl border p-4 text-left transition', plan === id ? 'border-primary bg-primary/10' : 'border-border bg-background/50 hover:border-primary/40')}>
-                      <span className="flex items-center justify-between">
-                        <span className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground">{id === 'season' ? 'Season' : 'Monthly'}</span>
-                        <span className={cn('rounded-full px-2 py-0.5 text-[10.5px] font-semibold', plan === id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{note}</span>
-                      </span>
-                      <span className="mt-2 block font-display text-[30px] font-bold leading-none">{price}<span className="ml-1 text-[13px] font-normal text-muted-foreground">{per}</span></span>
-                    </button>
-                  ))}
+                  {(['standard', 'ai'] as const).map(id => {
+                    const p = id === 'ai' ? PLANS.ai : PLANS.pro;
+                    const price = plan === 'season' ? p.season : p.monthly;
+                    return (
+                      <button key={id} onClick={() => setTier(id)} aria-pressed={tier === id}
+                        className={cn('relative rounded-2xl border p-4 text-left transition', tier === id ? 'border-primary bg-primary/10' : 'border-border bg-background/50 hover:border-primary/40')}>
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-[13.5px] font-bold">{p.name}</span>
+                          <span className={cn('flex h-5 w-5 items-center justify-center rounded-full border', tier === id ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
+                            {tier === id && <Check className="h-3 w-3" />}
+                          </span>
+                        </span>
+                        {!operator && (
+                          <span className="mt-2 block font-display text-[28px] font-bold leading-none">
+                            ${price}<span className="ml-1 text-[12.5px] font-normal text-muted-foreground">{plan === 'season' ? 'per season' : 'per month'}</span>
+                          </span>
+                        )}
+                        <span className="mt-2 block text-[12.5px] leading-snug text-muted-foreground">
+                          {id === 'ai' ? 'We run the AI writers. Nothing to set up, no second bill.' : 'The AI runs on your own Anthropic key. You pay Anthropic for what you use, with a cap you set.'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!operator && (<>
+                {/* The billing cycle. */}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div role="radiogroup" aria-label="Billing" className="inline-flex rounded-full border border-border bg-background/70 p-1 text-[12.5px] font-semibold">
+                    {(['season', 'monthly'] as const).map(c => (
+                      <button key={c} role="radio" aria-checked={plan === c} onClick={() => setPlan(c)}
+                        className={cn('relative rounded-full px-3.5 py-1.5 transition', plan === c ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                        {plan === c && <motion.span layoutId="cycle-pill" className="absolute inset-0 rounded-full bg-primary" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+                        <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[12px] text-muted-foreground">
+                    {plan === 'season' ? `About $${((tier === 'ai' ? PLANS.ai : PLANS.pro).season / 12).toFixed(2)} a head for 12 teams` : 'Cancel whenever'}
+                  </span>
                 </div>
                 <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="Email for receipts (optional)"
                   className="mt-3 w-full rounded-xl border border-border bg-background/70 px-3 py-3 text-[14.5px] outline-none focus:border-primary/60" />

@@ -21,6 +21,8 @@ export async function createFreeLeague(o: {
   name: string;
   slug?: string;
   owner: Account | null;
+  /** League Pass, or League Pass + AI (the platform runs the AI). */
+  tier?: 'standard' | 'ai';
 }): Promise<FreeLeagueResult> {
   const slug = slugify(o.slug || o.name || '');
   const existing = await tenantForLeague(o.leagueId);
@@ -33,7 +35,7 @@ export async function createFreeLeague(o: {
   const now = new Date().toISOString();
   const tenant: Tenant = {
     slug, leagueId: o.leagueId, leagueName: o.name.slice(0, 200),
-    status: 'active', plan: 'season', ownerEmail: o.owner?.email ?? null,
+    status: 'active', plan: 'season', tier: o.tier ?? 'standard', ownerEmail: o.owner?.email ?? null,
     stripeCustomerId: null, stripeSubscriptionId: null, createdAt: now, updatedAt: now,
   };
   await saveTenant(tenant);

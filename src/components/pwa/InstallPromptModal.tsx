@@ -77,7 +77,7 @@ export default function InstallPromptModal({
                     className="relative h-16 w-16 overflow-hidden rounded-[18px] border border-border bg-white shadow-lg"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoUrl || '/logo.png'} alt="" className="h-full w-full object-contain" />
+                    <img src={logoUrl || '/brand/leaguepulse-192.png'} alt="" className="h-full w-full object-cover" />
                   </motion.div>
                   <span className="mt-1.5 w-full truncate text-center text-[10.5px] font-medium text-muted-foreground">{appName}</span>
                 </div>
