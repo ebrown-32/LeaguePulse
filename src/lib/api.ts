@@ -16,6 +16,11 @@ const BASE_URL = 'https://api.sleeper.app/v1';
 let leagueIdsCache: Record<string, { ids: string[]; ts: number }> = {};
 const LEAGUE_IDS_TTL_MS = 3_600_000; // 1 h
 
+/** Forget every cached chain of seasons: a commissioner added or removed one. */
+export function forgetLinkedLeagueIdsCache(): void {
+  leagueIdsCache = {};
+}
+
 /**
  * Fetches all linked league IDs for a given league, including previous and future seasons
  */
@@ -28,6 +33,8 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
 
   const linkedIds = new Set<string>();
   linkedIds.add(leagueId);
+  // Each season's year, as the walk below reads it, to put them in order.
+  const seasonOf = new Map<string, number>();
 
   try {
     // First, get the current league info
@@ -49,6 +56,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
       forwardVisited.add(forwardId);
       const fwdLeague = await getLeagueInfo(forwardId);
       if (!fwdLeague) break;
+      seasonOf.set(forwardId, Number(fwdLeague.season));
       const nextSeason = (parseInt(fwdLeague.season) + 1).toString();
       const ownerLeagues: any[] = await leagueFetch(
         `${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`
@@ -58,6 +66,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
       const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === forwardId);
       if (!nextLeague) break;
       linkedIds.add(nextLeague.league_id);
+      seasonOf.set(nextLeague.league_id, Number(nextLeague.season));
       forwardId = nextLeague.league_id;
     }
 
@@ -68,6 +77,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
     while (currentId && !visited.has(currentId)) {
       visited.add(currentId);
       const league = await getLeagueInfo(currentId);
+      if (league) seasonOf.set(currentId, Number(league.season));
       if (league && league.previous_league_id && !visited.has(league.previous_league_id)) {
         linkedIds.add(league.previous_league_id);
         currentId = league.previous_league_id;
@@ -76,8 +86,11 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
       }
     }
 
-    // Convert to array and sort by season (most recent first)
-    const sortedIds = Array.from(linkedIds).sort().reverse();
+    // Most recent season first. By the season itself: sorting the ids as text
+    // only works while every id is one platform's (Sleeper's grow over time),
+    // and a season a commissioner entered (manual-2016) would sort as newest.
+    const sortedIds = Array.from(linkedIds).sort().reverse()
+      .sort((a, b) => (seasonOf.get(b) ?? 0) - (seasonOf.get(a) ?? 0));
     
     console.log('Linked league IDs:', sortedIds);
     

@@ -7,6 +7,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';
+import LeagueDataAdmin from './data/LeagueDataAdmin';
 import BillingCard from '@/components/admin/BillingCard';
 import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 
@@ -22,6 +23,7 @@ import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 const TABS = [
   { id: 'appearance', label: 'Appearance', blurb: 'Palette, fonts, background and motion.' },
   { id: 'ai',         label: 'AI Desk',    blurb: 'Personalities, publishing and diagnostics.' },
+  { id: 'data',       label: 'League data', blurb: 'Fill in what the platform didn’t keep, and add older seasons.' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -177,6 +179,7 @@ export default function AdminShell() {
           from behind another tab. */}
       {tab === 'appearance' && <AppearanceEditor adminPassword={password} />}
       {tab === 'ai' && <AIDeskAdmin adminPassword={password} />}
+      {tab === 'data' && <LeagueDataAdmin adminPassword={password} />}
       <BillingCard password={password} />
     </PageLayout>
   );

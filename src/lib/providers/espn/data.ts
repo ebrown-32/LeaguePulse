@@ -27,7 +27,7 @@ import { getRedis } from '@/lib/redisClient';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { EspnError, fetchSeason, fetchWeek, fetchTransactions, fetchSeasonPlayers, fetchTrades, fetchWeekEnds } from './client';
 import { getEspnCredentials } from './credentials';
-import { translateBase, translateWeek, translateTransactions, translateTrades, periodOfWeek, type TranslatedBase } from './translate';
+import { translateBase, translateWeek, translateTransactions, translateTrades, rebuildTrades, periodOfWeek, type TranslatedBase, type Pickup, type Release } from './translate';
 import { buildPlayerMap, playerIdFn } from './players';
 
 const MIN = 60_000, HOUR = 60 * MIN;
@@ -173,7 +173,9 @@ export function seasonOver(season: number, now = new Date()): boolean {
 const settled = (b: TranslatedBase) => b.final || seasonOver(b.ctx.season);
 
 export async function seasonBase(lid: string, season: number, force = false): Promise<TranslatedBase> {
-  const entry = await cached(k(lid, season, 'base'), async () => {
+  // 'base4': the base carries ESPN's trade counts (see rebuildTrades), clean names
+  // and what the season is missing (metadata.coverage).
+  const entry = await cached(k(lid, season, 'base4'), async () => {
     const creds = await getEspnCredentials(lid);
     const [raw, pairs] = await Promise.all([fetchSeason(lid, season, creds), playerPairs(season)]);
     return translateBase(raw, playerIdFn(pairs), { firstSeason: firstSeason() });
@@ -214,18 +216,27 @@ export async function seasonWeek(lid: string, season: number, week: number, forc
   return entry.data;
 }
 
+/** A week's waiver claims and free agent moves, without trades. */
+async function seasonMoves(lid: string, season: number, week: number, force = false): Promise<any[]> {
+  const base = await seasonBase(lid, season);
+  if (week < 1 || week > base.finalWeek) return [];
+  const entry = await cached(k(lid, season, `tx${week}`), async () => {
+    const creds = await getEspnCredentials(lid);
+    const [raw, pairs] = await Promise.all([fetchTransactions(lid, season, week, creds), playerPairs(season)]);
+    return translateTransactions(raw, base.ctx, week, playerIdFn(pairs));
+  }, { maxAge: () => weekAge(base, week, 5 * MIN, HOUR), force, report: reporter(lid) });
+  return entry.data;
+}
+
+/** A week's transactions: its moves, and the season's trades that fell in it. */
 export async function seasonTransactions(lid: string, season: number, week: number, force = false): Promise<any[]> {
   const base = await seasonBase(lid, season);
   if (week < 1 || week > base.finalWeek) return [];
-  const [entry, trades] = await Promise.all([
-    cached(k(lid, season, `tx${week}`), async () => {
-      const creds = await getEspnCredentials(lid);
-      const [raw, pairs] = await Promise.all([fetchTransactions(lid, season, week, creds), playerPairs(season)]);
-      return translateTransactions(raw, base.ctx, week, playerIdFn(pairs));
-    }, { maxAge: () => weekAge(base, week, 5 * MIN, HOUR), force, report: reporter(lid) }),
+  const [moves, trades] = await Promise.all([
+    seasonMoves(lid, season, week, force),
     seasonTrades(lid, season, force).catch(() => [] as any[]),
   ]);
-  return [...trades.filter(t => t.leg === week), ...entry.data].sort((a, b) => b.status_updated - a.status_updated);
+  return [...trades.filter(t => t.leg === week), ...moves].sort((a, b) => b.status_updated - a.status_updated);
 }
 
 /** When each NFL week ends, for placing trades. The same for every league, so shared. */
@@ -236,24 +247,57 @@ async function weekEnds(season: number): Promise<Record<string, number>> {
 }
 
 /**
- * The season's trades. Kept once read and never dropped: ESPN deletes a
- * league's activity feed when the season ends, so the copy here is the only
- * one left. A refresh that comes back with fewer trades than are kept (the
- * feed already gone) keeps what was kept.
+ * The season's trades.
+ *
+ * While a season is on, from ESPN's league activity feed, which lists each
+ * trade's players. ESPN deletes that feed when the season ends, so what it
+ * gave is kept and never dropped. A finished season with none kept (it ended
+ * before LeaguePulse was reading it) has its trades rebuilt from its weekly
+ * rosters instead; see rebuildTrades. Seasons ESPN only serves from its
+ * history endpoint (before 2020, for the leagues seen) have no weekly
+ * rosters, so their trades cannot be recovered.
  */
 export async function seasonTrades(lid: string, season: number, force = false): Promise<any[]> {
   const base = await seasonBase(lid, season);
-  const key = k(lid, season, 'trades');
-  const before = await readEntry<any[]>(key);
+  // 'trades3': rebuilt trades now include players who only passed through a roster.
+  const key = k(lid, season, 'trades3');
+  const before = await readEntry<any[]>(k(lid, season, 'trades')) ?? await readEntry<any[]>(k(lid, season, 'trades2')) ?? await readEntry<any[]>(key);
   const entry = await cached(key, async () => {
     const creds = await getEspnCredentials(lid);
     const [topics, pairs, ends] = await Promise.all([fetchTrades(lid, season, creds), playerPairs(season), weekEnds(season).catch(() => ({}))]);
     const fresh = translateTrades(topics, base.ctx, ends, base.currentWeek, playerIdFn(pairs));
-    const kept = before?.data ?? [];
+    const kept = (before?.data ?? []).filter(t => !t.metadata?.rebuilt);
     const ids = new Set(fresh.map(t => t.transaction_id));
-    return [...fresh, ...kept.filter(t => !ids.has(t.transaction_id))];
+    const fromFeed = [...fresh, ...kept.filter(t => !ids.has(t.transaction_id))];
+    if (fromFeed.length || !settled(base)) return fromFeed;
+    return rebuildSeasonTrades(lid, season, base, ends);
   }, { maxAge: () => (settled(base) ? Infinity : 5 * MIN), force, report: reporter(lid) });
   return entry.data;
+}
+
+async function rebuildSeasonTrades(lid: string, season: number, base: TranslatedBase, ends: Record<string, number>): Promise<any[]> {
+  const weeks = Array.from({ length: base.finalWeek }, (_, i) => i + 1);
+  const [weekRows, weekMoves] = await Promise.all([
+    Promise.all(weeks.map(w => seasonWeek(lid, season, w))),
+    Promise.all(weeks.map(w => seasonMoves(lid, season, w))),
+  ]);
+  const rosters: Record<number, Record<string, number>> = {
+    0: Object.fromEntries(base.picks.filter(p => p.player_id).map(p => [p.player_id, p.roster_id])),
+  };
+  weekRows.forEach((rows, i) => {
+    const r: Record<string, number> = {};
+    for (const row of rows) for (const p of row.players ?? []) r[p] = row.roster_id;
+    rosters[i + 1] = r;
+  });
+  // No weekly rosters (a season from ESPN's history endpoint): nothing to rebuild from.
+  if (!Object.keys(rosters[1] ?? {}).length) return [];
+  const pickups: Record<number, Pickup[]> = {};
+  const releases: Record<number, Release[]> = {};
+  weekMoves.forEach((moves, i) => {
+    pickups[i + 1] = moves.flatMap(m => Object.entries(m.adds ?? {}).map(([player, to]) => ({ player, to: Number(to), at: Number(m.created) })));
+    releases[i + 1] = moves.flatMap(m => Object.entries(m.drops ?? {}).map(([player, from]) => ({ player, from: Number(from), at: Number(m.created) })));
+  });
+  return rebuildTrades({ rosters, pickups, releases, tradeCounts: base.tradeCounts ?? null, weekEnds: ends, lastWeek: base.finalWeek, ctx: base.ctx });
 }
 
 /**

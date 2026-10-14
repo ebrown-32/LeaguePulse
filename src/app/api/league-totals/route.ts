@@ -10,8 +10,7 @@ export const maxDuration = 60;
  *
  * Its own route rather than part of the home page's history call: this walks
  * every week of every season Sleeper has for the league, and the dashboard
- * should paint long before it finishes. Cached hard, because a completed
- * season's transaction log never changes.
+ * should paint long before it finishes.
  */
 export async function GET() {
   if (!(await leagueConfigured())) {
@@ -52,7 +51,9 @@ export async function GET() {
     bySeason.sort((a, b) => b.season.localeCompare(a.season));
     return NextResponse.json(
       { totals, bySeason },
-      { headers: { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' } },
+      // Briefly, and per browser: finished seasons come from their bundles, so
+      // counting again is cheap, and a commissioner's new entry should show.
+      { headers: { 'Cache-Control': 'private, max-age=60' } },
     );
   } catch (err) {
     console.error('[api/league-totals]', err);

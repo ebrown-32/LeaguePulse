@@ -49,6 +49,7 @@ import {
 } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { seasonGamesPlayed } from '@/lib/games';
 
 // ─── Profanity filter ────────────────────────────────────────────────────────
 
@@ -94,7 +95,8 @@ async function calculateHistoricalInsights(seasons: string[], currentLeagueId: s
     return {
       totalSeasons:          historyData.allTimeStats.totalSeasons,
       totalTeams,
-      totalGames:            historyData.allTimeStats.totalGames,
+      // Matchups, counted as History counts them (see lib/games.ts).
+      totalGames:            historyData.seasonAnalyses.reduce((n: number, s: any) => n + seasonGamesPlayed(s.rosters, s.league), 0),
       champions:             historyData.records.filter((r: any) => r.type === 'championship'),
       uniqueChampionsCount:  uniqueChampions.size,
       highestScore:          historyData.allTimeStats.highestScore,
