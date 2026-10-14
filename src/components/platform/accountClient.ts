@@ -10,7 +10,7 @@ export interface LeagueRow {
   members: { userId: string; email: string; role: 'owner' | 'admin'; you: boolean }[];
   invites: { email: string; role: string }[];
 }
-export interface AccountData { account: { email: string | null; name: string | null; emailVerified: boolean }; leagues: LeagueRow[] }
+export interface AccountData { account: { email: string | null; name: string | null; emailVerified: boolean }; operator?: boolean; leagues: LeagueRow[] }
 
 export const STATUS: Record<LeagueRow['status'], { label: string; dot: string }> = {
   active: { label: 'Active', dot: 'bg-primary' },

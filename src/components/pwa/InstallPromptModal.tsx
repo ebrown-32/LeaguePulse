@@ -14,14 +14,20 @@ interface InstallPromptModalProps {
   leagueName?: string | null;
 }
 
-function Step({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function Step({ n, icon, children }: { n: number; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+    <motion.li
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.15 + n * 0.08 }}
+      className="flex items-center gap-3"
+    >
+      <span className="w-4 shrink-0 text-center text-[11px] font-bold tabular-nums text-muted-foreground">{n}</span>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
         {icon}
       </div>
-      <p className="text-sm text-foreground leading-snug">{children}</p>
-    </div>
+      <p className="text-sm leading-snug text-foreground">{children}</p>
+    </motion.li>
   );
 }
 
@@ -61,29 +67,40 @@ export default function InstallPromptModal({
             </button>
 
             <div className="p-6 pt-8">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-border shadow-lg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={logoUrl || '/logo.png'} alt="" className="h-full w-full object-cover" />
+              <div className="mb-5 flex items-center gap-4">
+                {/* A preview of the icon as it will sit on the home screen. */}
+                <div className="flex w-16 shrink-0 flex-col items-center">
+                  <motion.div
+                    initial={{ scale: 0.6, rotate: -8, opacity: 0 }}
+                    animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.1 }}
+                    className="relative h-16 w-16 overflow-hidden rounded-[18px] border border-border bg-white shadow-lg"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logoUrl || '/logo.png'} alt="" className="h-full w-full object-contain" />
+                  </motion.div>
+                  <span className="mt-1.5 w-full truncate text-center text-[10.5px] font-medium text-muted-foreground">{appName}</span>
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-foreground leading-tight">Add {appName} to Your Home Screen</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Faster access, full screen, no browser bars.</p>
+                  <h2 className="text-lg font-bold leading-tight text-foreground">Install {appName} as an App</h2>
+                  <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+                    It lives on your home screen and opens full screen, one tap from Sunday&apos;s scores. No app store, nothing to download.
+                  </p>
                 </div>
               </div>
 
               {platform === 'ios' && (
-                <div className="space-y-4">
-                  <Step icon={<ShareIosIcon className="h-5 w-5" />}>
-                    Tap the <strong className="font-semibold">Share</strong> button in Safari's toolbar
+                <ol className="space-y-3.5">
+                  <Step n={1} icon={<ShareIosIcon className="h-5 w-5" />}>
+                    Tap <strong className="font-semibold">Share</strong> in Safari&apos;s toolbar
                   </Step>
-                  <Step icon={<AddSquareIcon className="h-5 w-5" />}>
-                    Scroll down and tap <strong className="font-semibold">Add to Home Screen</strong>
+                  <Step n={2} icon={<AddSquareIcon className="h-5 w-5" />}>
+                    Choose <strong className="font-semibold">Add to Home Screen</strong>
                   </Step>
-                  <Step icon={<span className="text-sm font-bold">✓</span>}>
-                    Tap <strong className="font-semibold">Add</strong> in the top right to confirm
+                  <Step n={3} icon={<span className="text-sm font-bold">✓</span>}>
+                    Tap <strong className="font-semibold">Add</strong>. That&apos;s it, it&apos;s an app now.
                   </Step>
-                </div>
+                </ol>
               )}
 
               {platform === 'android' && canInstallNatively && (
@@ -92,19 +109,19 @@ export default function InstallPromptModal({
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-3 text-sm font-semibold hover:bg-primary/90 transition-colors"
                 >
                   <DownloadIcon className="h-4 w-4" />
-                  Install App
+                  Install as an App
                 </button>
               )}
 
               {platform === 'android' && !canInstallNatively && (
-                <div className="space-y-4">
-                  <Step icon={<MenuDotsIcon className="h-5 w-5" />}>
-                    Tap the <strong className="font-semibold">menu</strong> button in your browser's toolbar
+                <ol className="space-y-3.5">
+                  <Step n={1} icon={<MenuDotsIcon className="h-5 w-5" />}>
+                    Tap the <strong className="font-semibold">menu</strong> in your browser&apos;s toolbar
                   </Step>
-                  <Step icon={<AddSquareIcon className="h-5 w-5" />}>
-                    Select <strong className="font-semibold">Add to Home Screen</strong> or <strong className="font-semibold">Install App</strong>
+                  <Step n={2} icon={<AddSquareIcon className="h-5 w-5" />}>
+                    Choose <strong className="font-semibold">Install app</strong> or <strong className="font-semibold">Add to Home screen</strong>
                   </Step>
-                </div>
+                </ol>
               )}
 
               <div className="flex items-center justify-center gap-6 mt-6 pt-5 border-t border-border">
@@ -112,13 +129,13 @@ export default function InstallPromptModal({
                   onClick={() => onClose(false)}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Maybe later
+                  Not now
                 </button>
                 <button
                   onClick={() => onClose(true)}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Don't show again
+                  Don&apos;t ask again
                 </button>
               </div>
             </div>

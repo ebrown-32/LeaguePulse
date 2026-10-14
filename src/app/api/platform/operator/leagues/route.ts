@@ -17,7 +17,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { isOperatorRequest } from '@/lib/platform/operator';
+import { isOperator } from '@/lib/platform/operator';
 import {
   listTenants, getTenant, saveTenant, deleteTenant, tenantForLeague, slugAvailability,
   type Tenant, type TenantStatus,
@@ -57,7 +57,7 @@ async function health(t: Tenant) {
 }
 
 export async function GET(req: Request) {
-  if (!isOperatorRequest(req)) return deny();
+  if (!(await isOperator(req))) return deny();
   const tenants = (await listTenants()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const leagues = await Promise.all(tenants.map(async t => ({
     slug: t.slug,
@@ -95,7 +95,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isOperatorRequest(req)) return deny();
+  if (!(await isOperator(req))) return deny();
   const body = await req.json().catch(() => ({})) as { leagueId?: string; slug?: string };
   const leagueId = String(body.leagueId ?? '').trim();
   if (!/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'That is not a Sleeper league id.' }, { status: 400 });
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  if (!isOperatorRequest(req)) return deny();
+  if (!(await isOperator(req))) return deny();
   const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string };
   if (body.ownerEmail !== undefined) {
     const email = String(body.ownerEmail).trim().toLowerCase();
@@ -143,7 +143,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!isOperatorRequest(req)) return deny();
+  if (!(await isOperator(req))) return deny();
   const body = await req.json().catch(() => ({})) as { slug?: string };
   const t = body.slug ? await getTenant(body.slug) : null;
   if (!t) return NextResponse.json({ error: 'Unknown league' }, { status: 404 });

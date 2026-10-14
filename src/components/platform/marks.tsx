@@ -26,22 +26,38 @@ const A = (props: SVGProps<SVGPathElement>) =>
   <path fill="var(--mark-accent, hsl(var(--signal)))" stroke="none" {...props} />;
 
 /**
- * The logo, from the LeaguePulse identity grid: a goalpost in ink whose
- * crossbar breaks into a single orange spike, the pulse, with the post below.
- * `tile` sets it on the rounded app-icon square. Colours follow the page's
- * tokens, so it reads on paper and on the dark bands alike.
+ * The logo, from the LeaguePulse identity guide: an ink "L" with a bevelled
+ * top and a slanted foot, and an orange speech-bubble "P" carrying a white
+ * heartbeat. `tile` sets it on the rounded app-icon square. The L follows the
+ * page's ink, so it turns paper-white on the dark bands; the bubble stays
+ * signal orange everywhere, as in the guide.
  */
+export const LP_L = 'M7 20.5 L19.5 12.5 V44.5 H34 L39.5 54 H10 Q7 54 7 51 Z';
+export const LP_P = 'M21.5 7.5 H41 C49.5 7.5 55.5 13.8 55.5 22.5 C55.5 31.2 49.5 37.5 41 37.5 H30 L22 45.5 V39 Q21.5 38.2 21.5 36.5 Z';
+export const LP_PULSE = 'M25 22.5 H31 L33.6 16 L37.4 30 L40.6 19.5 L42.6 22.5 H50';
+
 export function Logomark({ size = 30, tile = false, ...rest }: P & { tile?: boolean }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" role="img" aria-label="LeaguePulse" {...rest}>
-      {tile && <rect width="64" height="64" rx="16" fill="hsl(var(--card))" />}
-      <g transform={tile ? 'translate(9.6 9.6) scale(0.7)' : undefined}>
-        <path d="M11 12v24h13.5M53 12v24H39.5M32 42.5V54" stroke="hsl(var(--foreground))" strokeWidth={7}
-          strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M32 19.5 38.6 37 32 33.6 25.4 37Z" fill="hsl(var(--signal))" stroke="hsl(var(--signal))"
-          strokeWidth={1.5} strokeLinejoin="round" />
+      {tile && <rect width="64" height="64" rx="14" fill="hsl(var(--card))" />}
+      <g transform={tile ? 'translate(8.3 8.3) scale(0.74)' : undefined}>
+        <path d={LP_L} fill="hsl(var(--foreground))" />
+        <path d={LP_P} fill="hsl(var(--signal))" />
+        <path d={LP_PULSE} stroke="#fff" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
+  );
+}
+
+/** The horizontal lockup: the mark, then "League" in ink and "Pulse" in orange. */
+export function Lockup({ size = 32, text = 22, className }: { size?: number; text?: number; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
+      <Logomark size={size} />
+      <span className="lp-wordmark" style={{ fontSize: text }}>
+        League<span className="text-[hsl(var(--signal))]">Pulse</span>
+      </span>
+    </span>
   );
 }
 
@@ -148,6 +164,19 @@ export function PennantMark(p: P) {
       <path d="M7 3.5V28.5" />
       <A d="M8 5.5 26 10.5 8 16Z" />
       <path d="M7 5l19 5.5L7 16.5" />
+    </Frame>
+  );
+}
+
+/** The app: a phone with a tile landing on its home screen. */
+export function PhoneMark(p: P) {
+  return (
+    <Frame {...p}>
+      <rect x="8.5" y="3.5" width="15" height="25" rx="3.5" />
+      <path d="M13.5 6.5h5M14.5 25.5h3" />
+      <path d="M11.5 11h3v3h-3zM17.5 11h3v3h-3zM11.5 17h3v3h-3z" strokeWidth={1.4} />
+      <A d="M17.5 17h3.5v3.5h-3.5z" transform="translate(-0.5 -0.5)" />
+      <A d="M26.5 6.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9Z" />
     </Frame>
   );
 }

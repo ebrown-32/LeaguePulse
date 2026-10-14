@@ -34,8 +34,10 @@ export async function GET() {
     };
   }))).filter(Boolean);
 
+  const { isOperatorAccount } = await import('@/lib/platform/operator');
   return NextResponse.json({
     account: { email: me.email, name: me.name, emailVerified: Boolean(me.email) },
+    operator: await isOperatorAccount(),
     leagues,
   });
 }

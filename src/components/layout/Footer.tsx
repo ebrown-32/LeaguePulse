@@ -1,99 +1,63 @@
 import Link from 'next/link';
 import { unstable_noStore as noStore } from 'next/cache';
 import Logo from '@/components/ui/Logo';
-import { GithubIcon, ExternalLink, Settings } from '@/components/icons';
 import { getTheme } from '@/lib/themeStorage';
+import { PLATFORM } from '@/lib/platform/config';
+import InstallAppCard from './InstallAppCard';
+
+/**
+ * A league site's footer: quiet, and the league's own.
+ *
+ * The league's name and a short row of its pages, an install link on phones,
+ * and the fine print. LeaguePulse appears once, as a small "Powered by" link
+ * back to the product, so the site still reads as the league's.
+ */
+
+const LINKS: [string, string][] = [
+  ['Game Day', '/live'], ['Matchups', '/matchups'], ['Standings', '/standings'], ['History', '/history'],
+  ['The Feed', '/desk'], ['Rosters', '/rosters'], ['Drafts', '/drafts'], ['Constitution', '/constitution'],
+];
 
 export default async function Footer() {
   // See RootLayout: admin-saved branding must not be served from a cached render.
   noStore();
   const theme = await getTheme();
+  const hosted = process.env.LP_HOSTED === '1';
+  const tenant = hosted ? await (await import('@/lib/tenant/context')).currentTenant().catch(() => null) : null;
+  const leagueName = theme.leagueName?.trim() || tenant?.leagueName?.trim() || 'Your league';
   const year = new Date().getFullYear();
+  const product = `https://${PLATFORM.rootDomain}`;
+  const quiet = 'transition-colors hover:text-foreground';
 
   return (
-    <footer className="relative border-t border-border/50 bg-card/50 backdrop-blur-sm">
-
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-8 py-10 sm:grid-cols-2 lg:flex lg:flex-row lg:items-center lg:justify-between">
-
-          {/* Brand */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <Logo src={theme.logoUrl} />
-              {theme.leagueName ? (
-                <div className="flex flex-col leading-none">
-                  <span className="font-display text-sm font-semibold text-foreground">{theme.leagueName}</span>
-                  <span className="text-[9px] font-medium tracking-widest text-primary/70 uppercase">powered by League Pulse</span>
-                </div>
-              ) : (
-                <span className="font-display text-sm font-semibold uppercase tracking-widest text-foreground">
-                  League <span className="text-primary">Pulse</span>
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground max-w-[20rem] leading-relaxed">
-              Give your league some life.
-            </p>
-          </div>
-
-          {/* GitHub CTA */}
-          <div className="flex flex-col gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Open Source
-            </p>
-            <a
-              href="https://github.com/ebrown-32/LeaguePulse"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="
-                inline-flex items-center gap-2 rounded-md border border-border/60
-                bg-background/60 px-3 py-2 text-sm font-medium text-foreground
-                hover:border-primary/30 hover:text-primary hover:bg-primary/5
-                group transition-colors
-              "
-            >
-              <GithubIcon className="h-4 w-4" />
-              <span>View on GitHub</span>
-              <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-primary ml-0.5" />
-            </a>
-          </div>
-
-          {/* Admin */}
-          <div className="flex flex-col gap-2">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Settings
-            </p>
-            <Link
-              href="/admin"
-              className="
-                inline-flex items-center gap-2 rounded-md border border-border/60
-                bg-background/60 px-3 py-2 text-sm font-medium text-foreground
-                hover:border-primary/30 hover:text-primary hover:bg-primary/5
-                group transition-colors
-              "
-            >
-              <Settings className="h-4 w-4" />
-              <span>Admin</span>
+    <footer className="mt-16 border-t border-border/50">
+      <div className="mx-auto max-w-7xl px-4 pb-24 pt-10 sm:px-6 sm:pb-10 lg:px-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Logo src={theme.logoUrl} className="h-7 w-7 object-contain" />
+              <span className="font-display text-base font-semibold text-foreground">{leagueName}</span>
             </Link>
+            <InstallAppCard />
           </div>
+          <nav aria-label="League pages" className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+            {LINKS.map(([label, href]) => <Link key={href} href={href} className={quiet}>{label}</Link>)}
+          </nav>
+        </div>
 
-          {/* Credits */}
-          <div className="flex flex-col gap-1 items-start lg:items-end">
-            <p className="text-xs text-muted-foreground">
-              © {year}{' '}
-              <a
-                href="https://elibrown.info"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary transition-colors"
-              >
-                Eli Brown
-              </a>
-            </p>
-            <p className="text-[10px] text-muted-foreground/50">
-              Data sourced from Sleeper. Not affiliated with Sleeper.
-            </p>
+        <div className="mt-8 flex flex-col gap-4 border-t border-border/40 pt-6 text-xs text-muted-foreground/80 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span>&copy; {year} {leagueName}</span>
+            <Link href="/admin" className={quiet}>Admin</Link>
+            {hosted && <a href={`${product}/legal/terms`} className={quiet}>Terms</a>}
+            {hosted && <a href={`${product}/legal/privacy`} className={quiet}>Privacy</a>}
+            <span>Data from Sleeper. Not affiliated with Sleeper or the NFL.</span>
           </div>
+          <a href={product} className={`group inline-flex items-center gap-1.5 ${quiet}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/leaguepulse-icon.svg" alt="" className="h-4 w-4 rounded opacity-70 grayscale transition group-hover:opacity-100 group-hover:grayscale-0" />
+            Powered by <span className="font-semibold">LeaguePulse</span>
+          </a>
         </div>
       </div>
     </footer>

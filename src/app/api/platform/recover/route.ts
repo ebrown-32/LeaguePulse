@@ -9,14 +9,14 @@
  */
 
 import { NextResponse } from 'next/server';
-import { isOperatorRequest } from '@/lib/platform/operator';
+import { isOperator } from '@/lib/platform/operator';
 import { getTenant } from '@/lib/platform/tenants';
 import { issueRecoveryLink } from '@/lib/platform/recovery';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  if (!isOperatorRequest(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isOperator(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const slug = String((await req.json().catch(() => ({})))?.slug ?? '').toLowerCase();
   const tenant = slug ? await getTenant(slug) : null;
   if (!tenant) return NextResponse.json({ error: 'No such league' }, { status: 404 });
