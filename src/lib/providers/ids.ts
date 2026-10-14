@@ -9,12 +9,16 @@
  * has to know.
  *
  *   league    espn-<espn league id>-<season>     espn-48153503-2019
- *   manager   espn-<espn league id>-u-<member>   espn-48153503-u-189C4665-164F-...
+ *   manager   espn-<espn league id>-u-<key>      espn-48153503-u-n3f9a01c2d4e5b6a7
  *
  * ESPN keeps one league id across every season, so the season is part of the
  * league id here, the way each Sleeper season is a league of its own. A
  * manager is the same person every season, so a manager id has no season:
  * all-time records follow the manager across years exactly as on Sleeper.
+ *
+ * A manager's key is a hash of their full name where ESPN gives one (n<hex>),
+ * because people switch ESPN accounts between seasons and are still the same
+ * manager; otherwise their ESPN member id. See managerIds in espn/translate.ts.
  *
  * No imports: this runs in the browser and in Node's own test runner.
  */
@@ -39,12 +43,12 @@ export function parseEspnLeague(id: string): { leagueId: string; season: number 
   return m ? { leagueId: m[1], season: Number(m[2]) } : null;
 }
 
-/** ESPN member ids are braced GUIDs: `{189C4665-...}`. The braces go, the rest is kept. */
-export function espnUserKey(espnLeagueId: string | number, memberId: string): string {
-  return `${ESPN_PREFIX}${espnLeagueId}-u-${memberId.replace(/[{}]/g, '')}`;
+/** A manager id from a key: a name hash, or an ESPN member id (a braced GUID, braces dropped). */
+export function espnUserKey(espnLeagueId: string | number, key: string): string {
+  return `${ESPN_PREFIX}${espnLeagueId}-u-${key.replace(/[{}]/g, '')}`;
 }
 
-export function parseEspnUser(id: string): { leagueId: string; memberId: string } | null {
-  const m = /^espn-(\d{1,12})-u-([0-9A-Fa-f-]{8,64})$/.exec(id);
-  return m ? { leagueId: m[1], memberId: `{${m[2].toUpperCase()}}` } : null;
+export function parseEspnUser(id: string): { leagueId: string; key: string } | null {
+  const m = /^espn-(\d{1,12})-u-([0-9A-Za-z-]{8,64})$/.exec(id);
+  return m ? { leagueId: m[1], key: m[2] } : null;
 }

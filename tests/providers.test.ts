@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { leagueFetch, espnPathOf } from '../src/lib/providers/leagueFetch.ts';
 import { providerOf, espnLeagueKey, parseEspnLeague, espnUserKey, parseEspnUser } from '../src/lib/providers/ids.ts';
-import { translateBase, translateWeek, translateTransactions, scoringSettings, teamLogo } from '../src/lib/providers/espn/translate.ts';
+import { translateBase, translateWeek, translateTransactions, translateTrades, weekOf, scoringSettings, teamLogo } from '../src/lib/providers/espn/translate.ts';
 import { buildPlayerMap, playerIdFn } from '../src/lib/providers/espn/players.ts';
 
 // ── Sleeper is untouched ─────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ test('ids', () => {
   assert.equal(parseEspnLeague('espn-48153503'), null);
   const u = espnUserKey('42', '{189C4665-164F-447A-AB45-D69C716D8531}');
   assert.equal(u, 'espn-42-u-189C4665-164F-447A-AB45-D69C716D8531');
-  assert.deepEqual(parseEspnUser(u), { leagueId: '42', memberId: '{189C4665-164F-447A-AB45-D69C716D8531}' });
+  assert.deepEqual(parseEspnUser(u), { leagueId: '42', key: '189C4665-164F-447A-AB45-D69C716D8531' });
 });
 
 // ── ESPN to Sleeper ──────────────────────────────────────────────────────────
@@ -112,13 +112,56 @@ test('league: Sleeper fields, season link, one commissioner', () => {
   assert.equal(b.users.find(u => u.user_id.endsWith('-u-C'))!.display_name, 'ESPNFAN3');
 });
 
+test('a two week round listed out of order still starts at its first week; top-half bonus is a median game', () => {
+  const raw = structuredClone(SEASON);
+  raw.settings.scheduleSettings.matchupPeriods = { 1: [1], 2: [3, 2] } as any;
+  (raw.settings.scoringSettings as any).scoringEnhancementType = 'WIN_BONUS_TOP_HALF';
+  const b = translateBase(raw, pid);
+  assert.equal(b.league.settings.playoff_week_start, 2);
+  assert.equal(b.league.settings.league_average_match, 1);
+  assert.equal(translateBase(SEASON, pid).league.settings.league_average_match, 0);
+});
+
+test('a manager who switches ESPN accounts is still one manager', () => {
+  const next = structuredClone(SEASON);
+  next.seasonId = 2026;
+  next.members[0] = member('{NEW}', 'Ann', 'Lee');
+  next.teams[0] = team(1, '{NEW}', 3, 400, 1, 1);
+  const a = translateBase(SEASON, pid), b = translateBase(next, pid);
+  assert.equal(a.rosters[0].owner_id, b.rosters[0].owner_id);
+  assert.ok(!a.rosters[0].owner_id.toLowerCase().includes('lee'), 'no name in the id');
+  // Nameless members keep their ESPN member id.
+  assert.equal(a.users.find(u => u.display_name === 'ESPNFAN3')!.user_id, 'espn-77-u-C');
+});
+
+test('two accounts with one name: one person unless they run different teams', () => {
+  // A second account that co-owns the same team (seen in a real league).
+  const coOwn = structuredClone(SEASON);
+  coOwn.members.push(member('{A2}', 'Ann', 'Lee'));
+  coOwn.teams[0].owners = ['{A}', '{A2}'];
+  const b1 = translateBase(coOwn, pid);
+  assert.equal(b1.users.filter(u => u.display_name === 'Ann L.').length, 1);
+  assert.equal(b1.rosters[0].owner_id, translateBase(SEASON, pid).rosters[0].owner_id);
+  assert.deepEqual(b1.rosters[0].co_owners, []);
+  // A member with no team and the same name: still the one person.
+  const idle = structuredClone(SEASON);
+  idle.members.push(member('{A2}', 'Ann', 'Lee'));
+  assert.equal(translateBase(idle, pid).users.filter(u => u.display_name === 'Ann L.').length, 1);
+  // Two teams: two people.
+  const two = structuredClone(idle);
+  two.teams[3] = team(4, '{A2}', 0, 250, 4, 4);
+  const b2 = translateBase(two, pid);
+  assert.notEqual(b2.rosters[0].owner_id, b2.rosters[3].owner_id);
+});
+
 test('a first season limit cuts the season link', () => {
   assert.equal(translateBase(SEASON, pid, { firstSeason: 2025 }).league.previous_league_id, null);
 });
 
 test('rosters: record, points split like Sleeper, final place', () => {
-  const r1 = translateBase(SEASON, pid).rosters.find(r => r.roster_id === 1)!;
-  assert.equal(r1.owner_id, 'espn-77-u-A');
+  const b = translateBase(SEASON, pid);
+  const r1 = b.rosters.find(r => r.roster_id === 1)!;
+  assert.equal(b.users.find(u => u.user_id === r1.owner_id)!.display_name, 'Ann L.');
   assert.deepEqual(r1.starters, ['s101', 'DEF1']);
   assert.deepEqual(r1.players, ['s101', 'DEF1', 's201']);
   assert.equal(r1.settings.fpts, 400);
@@ -180,14 +223,38 @@ test('transactions: completed waivers and free agents only', () => {
   assert.equal(tx[0].type, 'waiver');
   assert.deepEqual(tx[0].adds, { s300: 1 });
   assert.deepEqual(tx[0].drops, { s201: 1 });
-  assert.equal(tx[0].creator, 'espn-77-u-A');
+  assert.equal(tx[0].creator, b.rosters.find(r => r.roster_id === 1)!.owner_id);
   assert.equal(tx[0].settings.waiver_bid, 7);
 });
 
+test('trades from the activity feed, placed in their week', () => {
+  const b = translateBase(SEASON, pid);
+  const H = 3600_000;
+  const ends = { 1: 10 * H, 2: 200 * H, 3: 400 * H };
+  // Monday night of week 1 is still week 1; the Tuesday after is week 2.
+  assert.equal(weekOf(10 * H + 2 * H, ends, 9), 1);
+  assert.equal(weekOf(30 * H, ends, 9), 2);
+  assert.equal(weekOf(900 * H, ends, 9), 3);
+  const [t] = translateTrades([{ id: 'x', date: 30 * H, author: '{B}', messages: [
+    { messageTypeId: 244, targetId: 101, from: 1, to: 2 },
+    { messageTypeId: 244, targetId: 202, from: 2, to: 1 },
+    { messageTypeId: 178, targetId: 999, from: null, to: 1 },
+  ] }], b.ctx, ends, 1, pid);
+  assert.equal(t.type, 'trade');
+  assert.equal(t.leg, 2);
+  assert.deepEqual(t.adds, { s101: 2, s202: 1 });
+  assert.deepEqual(t.drops, { s101: 1, s202: 2 });
+  assert.deepEqual(t.roster_ids.sort(), [1, 2]);
+  assert.equal(t.creator, b.rosters.find(r => r.roster_id === 2)!.owner_id);
+});
+
 test('team logos only from ESPN hosts, always https', () => {
-  assert.equal(teamLogo('http://g.espncdn.com/a.svg'), 'https://g.espncdn.com/a.svg');
-  assert.equal(teamLogo('https://evil.example.com/a.png'), null);
-  assert.equal(teamLogo(''), null);
+  assert.equal(teamLogo('http://g.espncdn.com/a.svg', '7'), 'https://g.espncdn.com/a.svg');
+  assert.equal(teamLogo('https://evil.example.com/a.png', '7'), null);
+  assert.equal(teamLogo('https://mystique-api.fantasy.espn.com/apis/v1/domains/lm/images/876d5580-7794-11f0-949b-6d519c9ebbbd', '7'),
+    '/api/league-data/logo/7/876d5580-7794-11f0-949b-6d519c9ebbbd');
+  assert.equal(teamLogo('https://mystique-api.fantasy.espn.com/apis/v1/other/thing', '7'), null);
+  assert.equal(teamLogo('', '7'), null);
 });
 
 test('players: defences by team, Sleeper espn_id, then unique name', () => {

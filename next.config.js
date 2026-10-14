@@ -16,6 +16,8 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  // The share card's fonts (src/app/api/og), read from disk at request time.
+  outputFileTracingIncludes: { '/api/og': ['./src/app/api/og/*.woff'] },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'sleepercdn.com' },
@@ -23,7 +25,6 @@ const nextConfig = {
       { protocol: 'https', hostname: 's.espncdn.com' },
       // ESPN fantasy team logos (see src/lib/providers/espn/translate.ts).
       { protocol: 'https', hostname: 'g.espncdn.com' },
-      { protocol: 'https', hostname: 'mystique-api.fantasy.espn.com' },
     ],
   },
   async headers() {

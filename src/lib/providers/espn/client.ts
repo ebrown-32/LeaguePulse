@@ -78,16 +78,32 @@ async function request(path: string, creds: EspnCredentials | null, filter?: unk
 const leaguePath = (leagueId: string, season: number) => `/seasons/${season}/segments/0/leagues/${leagueId}`;
 
 /**
- * Seasons before 2018 live behind a different endpoint, which answers with a
- * list. Libraries that read ESPN use it; it has not been checked against a
- * real pre-2018 league here.
+ * A season of a league, by either of ESPN's two endpoints.
+ *
+ * Seasons before 2018 are only behind `leagueHistory`, which answers with a
+ * list. Later seasons are behind the seasons endpoint, but ESPN can refuse a
+ * past one there that `leagueHistory` still serves (a real league: 2018 and
+ * 2019 refused, 2020 on served; its history endpoint served every one). So a
+ * past season that is refused or missing is asked for there too. Seasons
+ * read that way have scores but no player-by-player lineups, which ESPN does
+ * not keep that far back.
  */
-async function league(leagueId: string, season: number, query: string, creds: EspnCredentials | null, filter?: unknown) {
-  if (season >= 2018) return get(`${leaguePath(leagueId, season)}?${query}`, creds, filter);
+async function history(leagueId: string, season: number, query: string, creds: EspnCredentials | null, filter?: unknown) {
   const list = await get(`/leagueHistory/${leagueId}?seasonId=${season}&${query}`, creds, filter);
-  const one = Array.isArray(list) ? list[0] : list;
+  const one = Array.isArray(list) ? list.find(l => Number(l?.seasonId) === season) ?? list[0] : list;
   if (!one) throw new EspnError('not_found', 'ESPN has no such season of this league', 404);
   return one;
+}
+
+async function league(leagueId: string, season: number, query: string, creds: EspnCredentials | null, filter?: unknown) {
+  if (season < 2018) return history(leagueId, season, query, creds, filter);
+  try {
+    return await get(`${leaguePath(leagueId, season)}?${query}`, creds, filter);
+  } catch (err) {
+    const past = season < new Date().getFullYear();
+    if (!past || !(err instanceof EspnError) || (err.kind !== 'auth' && err.kind !== 'not_found')) throw err;
+    try { return await history(leagueId, season, query, creds, filter); } catch { throw err; }
+  }
 }
 
 /** Settings, teams, rosters, schedule, status and draft: everything but weekly box scores. */
@@ -111,4 +127,53 @@ export async function fetchSeasonPlayers(season: number): Promise<any[]> {
   const list = await get(`/seasons/${season}/players?scoringPeriodId=0&view=players_wl`, null, { filterActive: null });
   if (!Array.isArray(list)) throw new EspnError('unavailable', 'ESPN player list was not a list');
   return list;
+}
+
+/**
+ * A season's completed trades, from the league's activity feed: the one place
+ * ESPN keeps a finished trade's players (its transaction list keeps them only
+ * on the proposal, which it stops returning once the trade goes through).
+ * ESPN deletes a league's feed when the season is over, so a past season has
+ * none: an empty list, not an error.
+ */
+export async function fetchTrades(leagueId: string, season: number, creds: EspnCredentials | null): Promise<any[]> {
+  const topics: any[] = [];
+  for (let offset = 0; offset < 1000; offset += 200) {
+    let page: any;
+    try {
+      page = await get(`${leaguePath(leagueId, season)}/communication/?view=kona_league_communication`, creds, {
+        topics: {
+          filterType: { value: ['ACTIVITY_TRANSACTIONS'] },
+          limit: 200, offset,
+          limitPerMessageSet: { value: 25 },
+          sortMessageDate: { sortPriority: 1, sortAsc: false },
+          sortFor: { sortPriority: 2, sortAsc: false },
+          // 244: a player moved in a trade.
+          filterIncludeMessageTypeIds: { value: [244] },
+        },
+      });
+    } catch (err) {
+      if (err instanceof EspnError && err.kind === 'not_found') return topics;
+      throw err;
+    }
+    const batch = Array.isArray(page?.topics) ? page.topics : [];
+    topics.push(...batch);
+    if (batch.length < 200) break;
+  }
+  return topics;
+}
+
+/**
+ * When each NFL week of a season ends: the kickoff of its last game, from
+ * ESPN's public pro schedule. Used to place a trade in the week it happened.
+ */
+export async function fetchWeekEnds(season: number): Promise<Record<string, number>> {
+  const data = await get(`/seasons/${season}?view=proTeamSchedules_wl`, null);
+  const ends: Record<string, number> = {};
+  for (const team of data?.settings?.proTeams ?? []) {
+    for (const [week, games] of Object.entries(team.proGamesByScoringPeriod ?? {})) {
+      for (const g of games as any[]) if (Number(g?.date) > (ends[week] ?? 0)) ends[week] = Number(g.date);
+    }
+  }
+  return ends;
 }

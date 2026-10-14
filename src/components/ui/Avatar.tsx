@@ -26,9 +26,13 @@ export default function Avatar({ avatarId, size = 40, className = '' }: AvatarPr
       </div>
     );
   }
-  const avatarUrl = /^https?:\/\//.test(avatarId)
+  const avatarUrl = /^(https?:\/\/|\/)/.test(avatarId)
     ? avatarId
     : `https://sleepercdn.com/avatars/${avatarId}`;
+  // Next's optimizer only takes hosts listed in next.config.js and throws on
+  // any other, which would take the whole page down for one picture (a stale
+  // cached URL, say). Anything unexpected is shown as a plain image instead.
+  const optimizable = /^\/(?!\/)/.test(avatarUrl) || /^https:\/\/([a-z0-9-]+\.)*(sleepercdn\.com|espncdn\.com)\//.test(avatarUrl);
 
   return (
     <div
@@ -37,6 +41,7 @@ export default function Avatar({ avatarId, size = 40, className = '' }: AvatarPr
     >
       <Image
         src={avatarUrl}
+        unoptimized={!optimizable}
         alt="User avatar"
         className="object-cover"
         width={size}

@@ -125,15 +125,21 @@ export interface TranslatedBase {
 }
 
 /**
- * A team's logo, when the app can show it. ESPN logos are ESPN's own art or a
- * commissioner's upload hosted by ESPN; anything else (a logo linked from
- * some other site) is left out rather than loaded from an unknown host.
+ * A team's logo, when the app can show it.
+ *
+ * ESPN's own logo art is public. A logo a manager uploaded lives on ESPN's
+ * image service, which only answers signed-in browsers, so it is served
+ * through this site instead (/api/league-data/logo/<league>/<image>, with
+ * the league's cookies). A logo linked from anywhere else is left out rather than loaded
+ * from an unknown host.
  */
-const LOGO_HOSTS = new Set(['g.espncdn.com', 'a.espncdn.com', 's.espncdn.com', 'mystique-api.fantasy.espn.com']);
-export function teamLogo(url: unknown): string | null {
+const LOGO_HOSTS = new Set(['g.espncdn.com', 'a.espncdn.com', 's.espncdn.com']);
+export function teamLogo(url: unknown, espnLeagueId: string): string | null {
   if (typeof url !== 'string' || !url) return null;
   try {
     const u = new URL(url.replace(/^http:/, 'https:'));
+    const uploaded = u.hostname === 'mystique-api.fantasy.espn.com' && /^\/apis\/v1\/domains\/lm\/images\/([0-9a-f-]{8,64})$/i.exec(u.pathname);
+    if (uploaded) return `/api/league-data/logo/${espnLeagueId}/${uploaded[1].toLowerCase()}`;
     return LOGO_HOSTS.has(u.hostname) ? u.toString() : null;
   } catch {
     return null;
@@ -149,6 +155,49 @@ function managerName(m: any): string {
   const last = String(m.lastName ?? '').trim();
   if (first) return last ? `${first} ${last[0]}.` : first;
   return String(m.displayName ?? 'Manager');
+}
+
+/** A short, stable hash with no imports (this file also runs in the browser): two 32-bit FNV-1a passes. */
+function hash64(s: string): string {
+  const pass = (seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, '0');
+  };
+  return pass(0x811c9dc5) + pass(0x050c5d1f);
+}
+
+const fullName = (m: any) =>
+  `${String(m.firstName ?? '').trim()} ${String(m.lastName ?? '').trim()}`.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Each member's manager id.
+ *
+ * People change ESPN accounts between seasons (a real league: one manager on
+ * one account for 2017 to 2019 and another from 2020; another with two
+ * accounts in the league at once), and on ESPN that is a new member id. A
+ * manager is the same person whatever account they used, so where ESPN gives
+ * a full name the id is a hash of it: the same in every season, with no name
+ * in it. Two members of one season with the same full name are one person
+ * when they share a team or only one has a team (a real league: two accounts
+ * co-owning one team); members with that name who each run a different team
+ * are different people and keep their member ids.
+ */
+function managerIds(espnLeagueId: string, members: any[], teams: any[]): Record<string, string> {
+  const teamOf = new Map<string, number>();
+  for (const t of teams) for (const o of [t.primaryOwner, ...(t.owners ?? [])]) if (o && !teamOf.has(o)) teamOf.set(o, Number(t.id));
+  const byName = new Map<string, any[]>();
+  for (const m of members) {
+    const n = fullName(m);
+    if (n) byName.set(n, [...(byName.get(n) ?? []), m]);
+  }
+  const out: Record<string, string> = {};
+  for (const m of members) {
+    const n = fullName(m);
+    const sameTeams = n ? new Set(byName.get(n)!.map(x => teamOf.get(x.id)).filter(t => t !== undefined)) : new Set();
+    out[m.id] = espnUserKey(espnLeagueId, n && sameTeams.size <= 1 ? `n${hash64(n)}` : m.id);
+  }
+  return out;
 }
 
 /** Every slot as Sleeper's roster_positions: starters in Sleeper's order, then bench and IR. */
@@ -198,10 +247,11 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
     : Object.fromEntries(Array.from({ length: Number(status.finalScoringPeriod ?? 17) }, (_, i) => [String(i + 1), [i + 1]]));
   const finalWeek = Number(status.finalScoringPeriod ?? Math.max(...Object.values(periods).flat()));
   const currentWeek = Math.max(1, Math.min(Number(raw.scoringPeriodId ?? status.latestScoringPeriod ?? 1), finalWeek));
-  const playoffStart = periods[String(regularPeriods + 1)]?.[0] ?? regularPeriods + 1;
+  // ESPN does not keep a period's weeks in order (a two week round can read [16, 15]).
+  const firstPlayoff = periods[String(regularPeriods + 1)];
+  const playoffStart = firstPlayoff?.length ? Math.min(...firstPlayoff.map(Number)) : regularPeriods + 1;
 
-  const memberToUser: Record<string, string> = {};
-  for (const m of members) memberToUser[m.id] = espnUserKey(espnLeagueId, m.id);
+  const memberToUser = managerIds(espnLeagueId, members, teams);
   const ownerOf = (t: any) => String(t.primaryOwner ?? t.owners?.[0] ?? '');
   const teamOwner: Record<number, string> = {};
   for (const t of teams) {
@@ -252,6 +302,10 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
       reserve_slots: Number(counts[IR] ?? 0),
       waiver_budget: acq.isUsingAcquisitionBudget ? Number(acq.acquisitionBudget ?? 0) : 0,
       trade_deadline: 99,
+      // ESPN's "win bonus for top half" is Sleeper's league median game: a
+      // second result each week, a win for scoring in the top half. ESPN
+      // already counts it in each team's record.
+      league_average_match: settings.scoringSettings?.scoringEnhancementType === 'WIN_BONUS_TOP_HALF' ? 1 : 0,
       leg: currentWeek,
       last_scored_leg: final ? finalWeek : Math.max(0, currentWeek - 1),
       divisions: (sched.divisions ?? []).length > 1 ? sched.divisions.length : 0,
@@ -264,14 +318,19 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
   const commissioner = members.find(m => m.isLeagueCreator) ?? members.find(m => m.isLeagueManager) ?? members[0];
   const teamByOwner = new Map<string, any>();
   for (const t of teams) for (const o of t.owners ?? [ownerOf(t)]) if (o && !teamByOwner.has(o)) teamByOwner.set(o, t);
-  const users = members.map(m => {
+  // One entry per manager: two accounts of one person (see managerIds) are one user.
+  const seen = new Set<string>();
+  const users = [...members]
+    .sort((a, b) => Number(teamByOwner.has(b.id)) - Number(teamByOwner.has(a.id)))
+    .filter(m => !seen.has(memberToUser[m.id]) && Boolean(seen.add(memberToUser[m.id])))
+    .map(m => {
     const t = teamByOwner.get(m.id);
     return {
       user_id: memberToUser[m.id],
       username: String(m.displayName ?? ''),
       display_name: managerName(m),
       avatar: '',
-      metadata: { team_name: t ? teamName(t) : undefined, avatar: teamLogo(t?.logo) },
+      metadata: { team_name: t ? teamName(t) : undefined, avatar: teamLogo(t?.logo, espnLeagueId) },
       is_owner: m === commissioner,
     };
   });
@@ -305,7 +364,7 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
         ...(final && Number(t.rankCalculatedFinal ?? t.rankFinal ?? 0) > 0
           ? { poff: Number(t.rankCalculatedFinal || t.rankFinal) } : {}),
       },
-      metadata: { team_name: teamName(t), logo: teamLogo(t.logo) },
+      metadata: { team_name: teamName(t), logo: teamLogo(t.logo, espnLeagueId) },
     };
   });
 
@@ -461,9 +520,7 @@ export function translateWeek(raw: any, ctx: SeasonContext, week: number, pid: P
  * Sleeper's transactions for one week, from ESPN's mTransactions2 view for
  * that scoring period: completed waiver claims and free agent moves.
  *
- * Trades are not here. ESPN's transaction list keeps a completed trade's
- * players only on the original proposal, which it stops returning once the
- * trade goes through; they need ESPN's league activity feed instead.
+ * Trades are not here: see translateTrades.
  */
 export function translateTransactions(raw: any, ctx: SeasonContext, week: number, pid: PlayerIdMap): any[] {
   const out: any[] = [];
@@ -500,4 +557,55 @@ export function translateTransactions(raw: any, ctx: SeasonContext, week: number
     });
   }
   return out.sort((a, b) => b.status_updated - a.status_updated);
+}
+
+/** A game runs about four hours from kickoff; a trade before then is that week's. */
+const GAME_MS = 4 * 60 * 60 * 1000;
+
+/** The week a moment belongs to: the first whose last game had not finished. */
+export function weekOf(at: number, weekEnds: Record<string, number>, fallback: number): number {
+  const weeks = Object.keys(weekEnds).map(Number).sort((a, b) => a - b);
+  for (const w of weeks) if (at <= weekEnds[w] + GAME_MS) return w;
+  return weeks.length ? weeks[weeks.length - 1] : fallback;
+}
+
+/**
+ * Sleeper's trade transactions from ESPN's league activity feed. Each feed
+ * topic is one trade, and each of its messages one player moving: `targetId`
+ * the player, `from` and `to` the teams. Placed in the week they happened,
+ * as Sleeper places them.
+ */
+export function translateTrades(topics: any[], ctx: SeasonContext, weekEnds: Record<string, number>, fallbackWeek: number, pid: PlayerIdMap): any[] {
+  const out: any[] = [];
+  for (const t of topics ?? []) {
+    const moves = (t.messages ?? []).filter((m: any) => Number(m.messageTypeId) === 244 && Number(m.from) > 0 && Number(m.to) > 0);
+    if (!moves.length) continue;
+    const adds: Record<string, number> = {}, drops: Record<string, number> = {};
+    const teams = new Set<number>();
+    for (const m of moves) {
+      const id = pid(Number(m.targetId));
+      adds[id] = Number(m.to);
+      drops[id] = Number(m.from);
+      teams.add(Number(m.from)); teams.add(Number(m.to));
+    }
+    const at = Number(t.date ?? moves[0].date ?? 0);
+    const ids = [...teams];
+    out.push({
+      type: 'trade',
+      transaction_id: String(t.id),
+      status: 'complete',
+      status_updated: at,
+      created: at,
+      roster_ids: ids,
+      consenter_ids: ids,
+      adds, drops,
+      draft_picks: [],
+      waiver_budget: [],
+      creator: (t.author && ctx.memberToUser[t.author]) || ctx.teamOwner[ids[0]] || '',
+      leg: weekOf(at, weekEnds, fallbackWeek),
+      settings: null,
+      metadata: null,
+    });
+  }
+  return out;
 }

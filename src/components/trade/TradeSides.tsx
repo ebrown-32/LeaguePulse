@@ -122,7 +122,7 @@ function TeamHeading({ side, compact, linkTeams }: {
       <div className="flex items-center gap-1.5">
         <img
           src={side.avatar
-            ? (/^https?:\/\//.test(side.avatar) ? side.avatar : `https://sleepercdn.com/avatars/${side.avatar}`)
+            ? (/^(https?:\/\/|\/)/.test(side.avatar) ? side.avatar : `https://sleepercdn.com/avatars/${side.avatar}`)
             : 'https://sleepercdn.com/images/v2/icons/player-default.webp'}
           alt=""
           width={compact ? 18 : 20}
