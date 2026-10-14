@@ -137,7 +137,7 @@ export default function WinChance() {
     <div ref={ref} className="relative rounded-[22px] border border-border bg-card p-4 shadow-[0_1px_0_hsl(var(--border)),0_30px_60px_-30px_hsl(var(--foreground)/0.25)] sm:p-6">
       {/* Scoreboard */}
       <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        <span>Week 9 · Sunday</span>
+        <span>Week 9, Sunday</span>
         <span className={cn('inline-flex items-center gap-1.5', live ? 'text-[hsl(var(--signal))]' : '')}>
           {live && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--signal))]" />}
           {live ? clock(now) : 'Final'}

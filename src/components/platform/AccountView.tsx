@@ -47,7 +47,7 @@ export default function AccountView() {
             <h1 className="lp-display text-[32px] font-extrabold leading-none tracking-[-0.03em] sm:text-[42px]">My leagues</h1>
             {data?.account.email && (
               <p className="mt-2 truncate text-[13.5px] text-muted-foreground">
-                {count ? `${count} league${count === 1 ? '' : 's'} · ` : ''}{data.account.email}
+                {count ? `${count} league${count === 1 ? '' : 's'}, ` : ''}{data.account.email}
               </p>
             )}
           </div>

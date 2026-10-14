@@ -209,7 +209,7 @@ export function GameDayBoard() {
               <span className="lp-num w-6 text-[22px] font-extrabold text-muted-foreground">{i + 1}</span>
               <div className="min-w-0 flex-1">
                 <p className="lp-display text-[17px] font-bold">{g.away} <span className="text-muted-foreground">at</span> {g.home}</p>
-                <p className="text-[12px] text-muted-foreground"><span className="font-bold sm:hidden">{g.tv} · </span>{g.mine} of yours, {g.theirs} of theirs on the field</p>
+                <p className="text-[12px] text-muted-foreground"><span className="font-bold sm:hidden">{g.tv}, </span>{g.mine} of yours, {g.theirs} of theirs on the field</p>
               </div>
               <span className="hidden rounded-md border border-border px-1.5 py-0.5 text-[10.5px] font-bold tracking-wide text-muted-foreground sm:inline">{g.tv}</span>
               <div className="w-16 shrink-0 text-right sm:w-20">
@@ -218,7 +218,7 @@ export function GameDayBoard() {
               </div>
             </div>
             <div className="mt-3">
-              <Field at={g.drive.yards[step]} defending={defending} label={`${g.ball} ball · ${g.drive.desc[step]}`} />
+              <Field at={g.drive.yards[step]} defending={defending} label={`${g.ball} ball, ${g.drive.desc[step]}`} />
             </div>
           </motion.div>
         );
@@ -255,7 +255,7 @@ export function GotwSignals() {
     <div ref={ref} className="rounded-[22px] border border-border bg-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Game of the Week · Week 9</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Game of the Week, Week 9</p>
           <p className="lp-display mt-2 text-[22px] font-bold leading-tight">Gridiron Ghosts <span className="text-muted-foreground">vs</span> Fourth &amp; Long Shots</p>
         </div>
         <div className="text-right">
@@ -374,7 +374,7 @@ export function AskAnalytics() {
           {done && (
             <motion.div key={pick} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35 }}>
               <p className="text-[13px] font-semibold">{question.title}</p>
-              <p className="mb-2 text-[12px] text-muted-foreground">Matchups · {result.matched} rows · {question.how}</p>
+              <p className="mb-2 text-[12px] text-muted-foreground">Matchups, {result.matched} rows, {question.how}</p>
               <ChartView spec={question.spec} result={result} height={280} />
             </motion.div>
           )}
