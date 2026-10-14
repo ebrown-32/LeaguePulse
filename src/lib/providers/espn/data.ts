@@ -25,9 +25,9 @@
 import { after } from 'next/server';
 import { getRedis } from '@/lib/redisClient';
 import { getPlayersDirectory } from '@/lib/playerStats';
-import { EspnError, fetchSeason, fetchWeek, fetchTransactions, fetchSeasonPlayers } from './client';
+import { EspnError, fetchSeason, fetchWeek, fetchTransactions, fetchSeasonPlayers, fetchTrades, fetchWeekEnds } from './client';
 import { getEspnCredentials } from './credentials';
-import { translateBase, translateWeek, translateTransactions, periodOfWeek, type TranslatedBase } from './translate';
+import { translateBase, translateWeek, translateTransactions, translateTrades, periodOfWeek, type TranslatedBase } from './translate';
 import { buildPlayerMap, playerIdFn } from './players';
 
 const MIN = 60_000, HOUR = 60 * MIN;
@@ -217,11 +217,42 @@ export async function seasonWeek(lid: string, season: number, week: number, forc
 export async function seasonTransactions(lid: string, season: number, week: number, force = false): Promise<any[]> {
   const base = await seasonBase(lid, season);
   if (week < 1 || week > base.finalWeek) return [];
-  const entry = await cached(k(lid, season, `tx${week}`), async () => {
+  const [entry, trades] = await Promise.all([
+    cached(k(lid, season, `tx${week}`), async () => {
+      const creds = await getEspnCredentials(lid);
+      const [raw, pairs] = await Promise.all([fetchTransactions(lid, season, week, creds), playerPairs(season)]);
+      return translateTransactions(raw, base.ctx, week, playerIdFn(pairs));
+    }, { maxAge: () => weekAge(base, week, 5 * MIN, HOUR), force, report: reporter(lid) }),
+    seasonTrades(lid, season, force).catch(() => [] as any[]),
+  ]);
+  return [...trades.filter(t => t.leg === week), ...entry.data].sort((a, b) => b.status_updated - a.status_updated);
+}
+
+/** When each NFL week ends, for placing trades. The same for every league, so shared. */
+async function weekEnds(season: number): Promise<Record<string, number>> {
+  const entry = await cached(`lp_espn_xwalk_weekends_v1:${season}`, () => fetchWeekEnds(season),
+    { maxAge: () => (seasonOver(season) ? Infinity : 24 * HOUR) });
+  return entry.data;
+}
+
+/**
+ * The season's trades. Kept once read and never dropped: ESPN deletes a
+ * league's activity feed when the season ends, so the copy here is the only
+ * one left. A refresh that comes back with fewer trades than are kept (the
+ * feed already gone) keeps what was kept.
+ */
+export async function seasonTrades(lid: string, season: number, force = false): Promise<any[]> {
+  const base = await seasonBase(lid, season);
+  const key = k(lid, season, 'trades');
+  const before = await readEntry<any[]>(key);
+  const entry = await cached(key, async () => {
     const creds = await getEspnCredentials(lid);
-    const [raw, pairs] = await Promise.all([fetchTransactions(lid, season, week, creds), playerPairs(season)]);
-    return translateTransactions(raw, base.ctx, week, playerIdFn(pairs));
-  }, { maxAge: () => weekAge(base, week, 5 * MIN, HOUR), force, report: reporter(lid) });
+    const [topics, pairs, ends] = await Promise.all([fetchTrades(lid, season, creds), playerPairs(season), weekEnds(season).catch(() => ({}))]);
+    const fresh = translateTrades(topics, base.ctx, ends, base.currentWeek, playerIdFn(pairs));
+    const kept = before?.data ?? [];
+    const ids = new Set(fresh.map(t => t.transaction_id));
+    return [...fresh, ...kept.filter(t => !ids.has(t.transaction_id))];
+  }, { maxAge: () => (settled(base) ? Infinity : 5 * MIN), force, report: reporter(lid) });
   return entry.data;
 }
 
@@ -238,6 +269,7 @@ export async function syncLeague(lid: string, season: number): Promise<{ week: n
   const base = await seasonBase(lid, season, true);
   if (!base.final) {
     await seasonWeek(lid, season, base.currentWeek, true);
+    // Also refreshes the season's trades.
     await seasonTransactions(lid, season, base.currentWeek, true);
     // The week just finished can still change (stat corrections, Monday night).
     if (base.currentWeek > 1) await seasonWeek(lid, season, base.currentWeek - 1, true);

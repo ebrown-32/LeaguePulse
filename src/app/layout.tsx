@@ -44,11 +44,23 @@ const bodyFont = DM_Sans({
  */
 export async function generateMetadata(): Promise<Metadata> {
   noStore();
+  const h = await headers();
+  // Share cards and their images resolve against the address being shared,
+  // never a fixed domain: a league's link must show the league's own card.
+  const host = h.get('host');
+  const metadataBase = host ? new URL(`${h.get('x-forwarded-proto') ?? (host.includes('localhost') ? 'http' : 'https')}://${host}`) : undefined;
   // The product's own pages carry the product's name, not a league's.
-  if ((await headers()).get('x-lp-surface') === 'platform') {
+  if (h.get('x-lp-surface') === 'platform') {
+    const share = 'Your fantasy league, as an app. For Sleeper and ESPN.';
     return {
+      metadataBase,
       title: 'LeaguePulse: a home for your Sleeper or ESPN league',
       description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper or ESPN league.',
+      openGraph: {
+        title: 'LeaguePulse', description: share, siteName: 'LeaguePulse', type: 'website',
+        images: [{ url: '/api/og', width: 1200, height: 630, alt: 'LeaguePulse: your fantasy league, as an app' }],
+      },
+      twitter: { card: 'summary_large_image', title: 'LeaguePulse', description: share, images: ['/api/og'] },
       icons: {
         icon: [{ url: '/brand/leaguepulse-icon.svg', type: 'image/svg+xml' }, { url: '/brand/leaguepulse-32.png', sizes: '32x32' }],
         apple: '/brand/leaguepulse-apple.png',
@@ -79,14 +91,22 @@ export async function generateMetadata(): Promise<Metadata> {
   const apple = icon.startsWith('/brand/') ? '/brand/leaguepulse-apple.png' : icon;
   const shortName = theme.leagueName?.trim() || tenantName || 'League Pulse';
 
+  // What a shared link says: the league's own words if its admin wrote
+  // some, otherwise one plain line about what is behind it.
+  const shareName = theme.leagueName?.trim() || tenantName || theme.siteTitle?.trim() || 'Our league';
+  const share = theme.siteDescription?.trim() || `Live scores, history and the weekly report for ${shareName}.`;
+  const card = { url: '/api/og', width: 1200, height: 630, alt: shareName };
+
   return {
+    metadataBase,
     title,
     description,
     icons: { icon: [{ url: icon, href: icon }], shortcut: icon, apple },
     // Installed on an iPhone: opens full screen, labelled with the league's name.
     // iOS shortens a long label itself, with an ellipsis, as it does for any app.
     appleWebApp: { capable: true, title: shortName, statusBarStyle: 'default' },
-    openGraph: { title, description, images: [{ url: theme.logoUrl?.trim() || '/logo.png' }] },
+    openGraph: { title: shareName, description: share, siteName: shareName, type: 'website', images: [card] },
+    twitter: { card: 'summary_large_image', title: shareName, description: share, images: ['/api/og'] },
   };
 }
 

@@ -46,7 +46,13 @@ export async function leagueConfigured(): Promise<boolean> {
  * product one server serves many leagues, and a single cached chain handed
  * one league's history to the next.
  */
-const linked = new Map<string, string[]>();
+const linked = new Map<string, { ids: string[]; at: number }>();
+/**
+ * A single season is also what a failed lookup returns (one bad request
+ * anywhere in the chain), so it is only trusted briefly; a full chain is kept
+ * for the life of the process as before.
+ */
+const SINGLE_SEASON_MS = 2 * 60 * 1000;
 
 /**
  * Gets all linked league IDs, with the most recent season first
@@ -55,11 +61,11 @@ export async function getLinkedLeagueIds(): Promise<string[]> {
   const root = await getRootLeagueId();
   if (!root || root === UNSET) return [];
   const hit = linked.get(root);
-  if (hit) return hit;
+  if (hit && (hit.ids.length > 1 || Date.now() - hit.at < SINGLE_SEASON_MS)) return hit.ids;
 
   try {
     const ids = await getAllLinkedLeagueIds(root);
-    linked.set(root, ids);
+    linked.set(root, { ids, at: Date.now() });
     return ids;
   } catch (error) {
     console.error('Failed to get linked league IDs:', error);
