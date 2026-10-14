@@ -8,6 +8,7 @@ import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';
 import BillingCard from '@/components/admin/BillingCard';
+import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 
 /**
  * The single admin panel.
@@ -159,6 +160,8 @@ export default function AdminShell() {
 
   return (
     <PageLayout title="Admin" subtitle={active.blurb}>
+      {/* ESPN leagues only: first, because a broken connection is the thing to fix. */}
+      <EspnConnectionCard password={password} />
       <div className="mb-6">
         <TabSelector
           id="admin"

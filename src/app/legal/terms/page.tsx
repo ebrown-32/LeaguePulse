@@ -9,7 +9,7 @@ export default function TermsPage() {
     ? <a href={`mailto:${PLATFORM.supportEmail}`}>{PLATFORM.supportEmail}</a>
     : 'the support address on our site';
   return (
-    <LegalPage title="Terms of Service" updated="October 12, 2026">
+    <LegalPage title="Terms of Service" updated="October 13, 2026">
       <p>
         These terms cover your use of {n}&apos;s hosted service at {PLATFORM.rootDomain} and its league sites. By
         starting a trial or subscription, or by using a league site, you agree to them.
@@ -17,9 +17,14 @@ export default function TermsPage() {
 
       <h2>The service</h2>
       <p>
-        {n} builds a website for a fantasy football league from that league&apos;s public data on Sleeper. {n} is
+        {n} builds a website for a fantasy football league from that league&apos;s data on Sleeper or ESPN. {n} is
         not affiliated with, endorsed by or sponsored by Sleeper, the NFL or ESPN. Data from those sources can be
         late, incomplete or wrong, and features that depend on it can stop working if a source changes.
+      </p>
+      <p>
+        A private ESPN league is read with ESPN session cookies that a member of the league gives us. By giving them,
+        you confirm you are a member of that league. We use them only to read it, and the site&apos;s admin can replace them at any
+        time.
       </p>
 
       <h2>Subscriptions and trials</h2>

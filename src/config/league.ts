@@ -1,4 +1,5 @@
 import { getAllLinkedLeagueIds } from '@/lib/api';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 /**
  * The self-hosted league, from the environment. In hosted mode this is unset
@@ -79,7 +80,7 @@ export async function getCurrentLeagueId(): Promise<string> {
  */
 export async function getLeagueIdForSeason(season: string): Promise<string | null> {
   const ids = await getLinkedLeagueIds();
-  const league = await fetch(`https://api.sleeper.app/v1/league/${ids[0]}`).then(res => res.json());
+  const league = await leagueFetch(`https://api.sleeper.app/v1/league/${ids[0]}`).then(res => res.json());
   
   // If the requested season matches the current league, return it
   if (league.season === season) {
@@ -88,7 +89,7 @@ export async function getLeagueIdForSeason(season: string): Promise<string | nul
 
   // Otherwise, find the league ID for the requested season
   for (const id of ids) {
-    const leagueInfo = await fetch(`https://api.sleeper.app/v1/league/${id}`).then(res => res.json());
+    const leagueInfo = await leagueFetch(`https://api.sleeper.app/v1/league/${id}`).then(res => res.json());
     if (leagueInfo.season === season) {
       return id;
     }

@@ -75,7 +75,7 @@ let scoped: RedisResolution | null = null;
  */
 const SHARED_PREFIXES = [
   'lp_tenant', 'lp_slug_hold', 'lp_storage_probe',
-  'lp_espn_xwalk', 'lp_fp_snapshot', 'lp_calib_v', 'lp_gotw_v',
+  'lp_espn_xwalk', 'lp_espn_creds', 'lp_fp_snapshot', 'lp_calib_v', 'lp_gotw_v',
 ];
 
 /**

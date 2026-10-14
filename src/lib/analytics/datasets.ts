@@ -22,6 +22,7 @@ import { getPlayersDirectory } from '@/lib/playerStats';
 import { weekPhase } from '@/lib/nflSchedule';
 import { playoffRoundWeeks } from '@/lib/sim/playoffs';
 import type { DatasetId } from './schema';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export type Row = Record<string, string | number | boolean | null>;
 export type Tables = Record<DatasetId, Row[]> & { builtAt: string; seasonList: string[] };
@@ -253,7 +254,7 @@ async function build(rootLeagueId: string): Promise<Tables> {
 
     // ── Draft ────────────────────────────────────────────────────────────────
     if (info.draft_id) {
-      const picks: any[] = await fetch(`https://api.sleeper.app/v1/draft/${info.draft_id}/picks`)
+      const picks: any[] = await leagueFetch(`https://api.sleeper.app/v1/draft/${info.draft_id}/picks`)
         .then(r => (r.ok ? r.json() : [])).catch(() => []);
       for (const p of picks ?? []) {
         // picked_by is a user; fall back to the roster when it is blank, which

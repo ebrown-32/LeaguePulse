@@ -11,6 +11,7 @@ import {
   type PlayerCard,
 } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,7 +125,7 @@ export async function GET(
     // per-player transaction endpoint, so the weeks must be swept.
     const perSeason = await Promise.all(linkedIds.map(async (id: string) => {
       const [info, rosters, users] = await Promise.all([
-        fetch(`${BASE}/league/${id}`, { next: { revalidate: 86400 } }).then(r => r.json()).catch(() => null),
+        leagueFetch(`${BASE}/league/${id}`, { next: { revalidate: 86400 } }).then(r => r.json()).catch(() => null),
         getLeagueRosters(id).catch(() => []),
         getLeagueUsers(id).catch(() => []),
       ]);
@@ -137,7 +138,7 @@ export async function GET(
 
       const batches = await Promise.all(
         Array.from({ length: maxWeek }, (_, i) =>
-          fetch(`${BASE}/league/${id}/transactions/${i + 1}`, opts)
+          leagueFetch(`${BASE}/league/${id}/transactions/${i + 1}`, opts)
             .then(r => (r.ok ? r.json() : []))
             .catch(() => []),
         ),

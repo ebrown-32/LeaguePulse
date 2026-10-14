@@ -6,7 +6,9 @@
  * Every team, writer and number on this page is invented sample data, drawn
  * as live UI rather than screenshots: screenshots of a real league would put
  * real people's names on a public page, and live UI stays sharp and can move.
- * Every feature shown is one the product has.
+ * Every feature shown is one the product has. The one exception is Featured
+ * leagues (landing/Featured.tsx): real sites, linked, with screenshots
+ * cropped to show no one's name.
  *
  * Design: paper, ink, turf green and one signal orange; Archivo, slightly
  * condensed, for display and numbers; a small icon set drawn for the product
@@ -27,6 +29,7 @@ import {
 } from './marks';
 import WinChance from './landing/WinChance';
 import InstallApp from './landing/InstallApp';
+import FeaturedLeagues from './landing/Featured';
 import { NavAccount, WelcomeBack } from './landing/SignedIn';
 import { DeskFeed, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
 
@@ -74,6 +77,7 @@ export default function Landing() {
         visual={<PlayoffSim />} />
       <AlsoInside />
       <Setup />
+      <FeaturedLeagues />
       <Pricing />
       <OpenSource />
       <Faq />
@@ -357,7 +361,7 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
         <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
           <motion.p variants={rise} className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            The app for Sleeper fantasy football leagues
+            The app for Sleeper and ESPN fantasy football leagues
           </motion.p>
           <h1 className="lp-display mt-4 max-w-4xl text-[46px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[76px] lg:text-[88px]">
             <Words text="Your league finally gets a" />{' '}
@@ -368,7 +372,7 @@ function Hero() {
         <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
           <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } }}>
             <motion.p variants={rise} className="max-w-md text-[17px] leading-relaxed text-muted-foreground">
-              {PLATFORM.name} turns your Sleeper league into its own app. AI writers who cover your actual teams,
+              {PLATFORM.name} turns your Sleeper or ESPN league into its own app. AI writers who cover your actual teams,
               live chances to win, a guide to which games to have on, and every stat back to your first draft.
               Everyone installs it from the link in two taps. No app store.
             </motion.p>
@@ -409,7 +413,8 @@ function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
               </button>
             </motion.form>
             <motion.p initial="hidden" animate="show" variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
-              {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.
+              {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.{' '}
+              <Link href="/start?provider=espn" className="font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">On ESPN?</Link>
             </motion.p>
     </>
   );
@@ -620,7 +625,7 @@ function InstallBand() {
 
 function AlsoInside() {
   const items = [
-    { m: RingMark, t: 'Your whole history', b: 'Champions, records, rivalries and trophy cases, linked back through every season on Sleeper.' },
+    { m: RingMark, t: 'Your whole history', b: 'Champions, records, rivalries and trophy cases, linked back through every season you have played.' },
     { m: PlayMark, t: 'The weekly report', b: 'Best and worst lineups, the luckiest win and the points left on the bench, every week.' },
     { m: PennantMark, t: 'Your colors, your address', b: 'Your league’s name, logo and colors on its own web address. Installs on phones like an app.' },
   ];
@@ -647,7 +652,7 @@ function AlsoInside() {
 
 function Setup() {
   const steps = [
-    { down: '1st & 10', m: FindMark, t: 'Find your league', b: 'Type your Sleeper username and pick the league. Nobody gives us a password.' },
+    { down: '1st & 10', m: FindMark, t: 'Find your league', b: 'Type your Sleeper username or paste your ESPN league ID, then pick the league. Nobody gives us a password.' },
     { down: '2nd & 4', m: AddressMark, t: 'Pick its address', b: `Something like yourleague.${PLATFORM.rootDomain}. Every past season loads on its own.` },
     { down: 'Touchdown', m: ChatMark, t: 'Drop the link in the chat', b: 'League-mates just open it. No accounts, no app store. The desk starts posting the same day.' },
   ];
@@ -697,7 +702,7 @@ function Pricing() {
   /** The receipt: what the price pays for, itemised, and the one thing it doesn't. */
   const receipt = [
     ['Your league\u2019s own website, up all year', 'Included'],
-    ['Wrangling Sleeper, live scores and odds every Sunday', 'Included'],
+    ['Wrangling Sleeper or ESPN, live scores and odds every Sunday', 'Included'],
     ['Ten thousand simulated seasons, whenever you ask', 'Included'],
     ['A real person who fixes it when it breaks', 'Included'],
     ['Trash talk', 'Free, as always'],
@@ -842,10 +847,11 @@ function OpenSource() {
 
 function Faq() {
   const qs = [
-    ['Is this made by Sleeper?', `No. ${PLATFORM.name} is independent and reads the public data Sleeper publishes for every league. It never asks for your Sleeper password and cannot change anything in your league.`],
+    ['Is this made by Sleeper or ESPN?', `No. ${PLATFORM.name} is independent. It reads the public data Sleeper publishes for every league, or your league\u2019s data from ESPN. It never asks for your password and never changes anything in your league.`],
+    ['Does it work with ESPN?', 'Yes. Paste your ESPN league ID. Most ESPN leagues are private, so one member copies two cookies from their browser once (sign-up shows how). ESPN signs those out after about a year, and your admin page asks for fresh ones when it does. Scores, standings, history and drafts all come across. Trades from ESPN are on the way.'],
     ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
     ['Why isn\u2019t it free?', `The code is free to host yourself. The paid plan is for convenience, because running a site that a dozen people refresh every thirty seconds on Sunday costs real money, and so does the person keeping it up. The code is free if you want to run it yourself. The hosted version costs about what your league spends on wings in one draft night, split ${'$'}${(PLANS.pro.season / 12).toFixed(2)} a head. I'm happy to handle it for you.`],
-    ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper league, any scoring, median games included. Dynasty leagues get every season linked together.'],
+    ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper or ESPN league, any scoring. Every season is linked together, so dynasty and keeper history carries through.'],
     ['How does the AI get paid for?', 'Your league adds its own Anthropic API key and pays Anthropic directly for what it uses. You can cap monthly spend in your Anthropic account, and everything that is not AI works without a key.'],
     ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
     ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
@@ -951,7 +957,7 @@ function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" onClick={e => toTop(e)} className="inline-flex"><Lockup size={36} text={24} /></Link>
             <p className="mt-4 max-w-[17rem] text-[13.5px] leading-relaxed text-muted-foreground">
-              A press box for your Sleeper league. Made for leagues that take it far too seriously.
+              A press box for your fantasy league. Made for leagues that take it far too seriously.
             </p>
           </div>
           {cols.map(col => (

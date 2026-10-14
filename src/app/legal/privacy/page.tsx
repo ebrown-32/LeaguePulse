@@ -9,12 +9,13 @@ export default function PrivacyPage() {
     ? <a href={`mailto:${PLATFORM.supportEmail}`}>{PLATFORM.supportEmail}</a>
     : 'the support address on our site';
   return (
-    <LegalPage title="Privacy Policy" updated="October 12, 2026">
+    <LegalPage title="Privacy Policy" updated="October 13, 2026">
       <p>This policy explains what {n} collects, why, and who it is shared with. We don&apos;t sell personal data and we don&apos;t run advertising.</p>
 
       <h2>What we collect</h2>
       <ul>
-        <li><strong>League data from Sleeper.</strong> Public league information: team and manager display names, avatars, rosters, matchups and transactions. We fetch it from Sleeper&apos;s public API to build the site.</li>
+        <li><strong>League data from Sleeper or ESPN.</strong> League information: team and manager names, avatars and team logos, rosters, matchups and transactions. We fetch it from Sleeper&apos;s public API, or from ESPN, to build the site. For ESPN managers we show a first name and last initial.</li>
+        <li><strong>ESPN session cookies</strong> (SWID and espn_s2), for a private ESPN league, when a member of the league gives them to us. They are stored encrypted, used only to read that league from ESPN, and never shown again. Cookies given at sign-up are deleted after two days if no site is started; otherwise they are kept until the site&apos;s admin replaces them or the site is removed.</li>
         <li><strong>Account and billing details.</strong> When you subscribe, the email you give and your Stripe customer and subscription ids. Card details go to Stripe and never reach us.</li>
         <li><strong>Your admin password,</strong> stored only as a salted hash, so it cannot be read back.</li>
         <li><strong>Your Anthropic API key,</strong> stored encrypted, used only to run your league&apos;s AI features, and never shown again in full.</li>
@@ -38,7 +39,7 @@ export default function PrivacyPage() {
         <li><strong>Stripe</strong> processes payments.</li>
         <li><strong>Anthropic</strong> receives league data and questions when AI features run, under your own API key and your agreement with Anthropic.</li>
       </ul>
-      <p>We also request public data from Sleeper and ESPN; we don&apos;t send them anything about you.</p>
+      <p>We also request data from Sleeper and ESPN. For a private ESPN league that request carries the league&apos;s ESPN cookies, as described above; otherwise we don&apos;t send them anything about you.</p>
 
       <h2>How long we keep it</h2>
       <p>

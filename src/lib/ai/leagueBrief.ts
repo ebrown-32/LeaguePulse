@@ -28,6 +28,7 @@ import {
   resolveStatsSeason,
 } from '@/lib/playerStats';
 import { perLeague } from '@/lib/tenant/perLeague';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 const BASE = 'https://api.sleeper.app/v1';
 const TTL_MS = 5 * 60 * 1000;
@@ -257,7 +258,7 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
     const weeks = Math.max(1, currentWeek);
     const batches = await Promise.all(
       Array.from({ length: Math.min(weeks, 6) }, (_, i) =>
-        fetch(`${BASE}/league/${leagueId}/transactions/${weeks - i}`, { cache: 'no-store' })
+        leagueFetch(`${BASE}/league/${leagueId}/transactions/${weeks - i}`, { cache: 'no-store' })
           .then(r => (r.ok ? r.json() : []))
           .catch(() => []),
       ),

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { configuredRootLeagueId } from '@/config/league';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ async function fetchAllPlayers(): Promise<Record<string, any>> {
   if (playersCache && Date.now() - playersCache.ts < PLAYERS_TTL_MS) {
     return playersCache.data;
   }
-  const data = await fetch(`${BASE}/players/nfl`, { cache: 'no-store' })
+  const data = await leagueFetch(`${BASE}/players/nfl`, { cache: 'no-store' })
     .then(r => r.ok ? r.json() : {})
     .catch(() => ({}));
   playersCache = { data, ts: Date.now() };
@@ -135,7 +136,7 @@ export async function GET() {
 
   try {
     const [nflState, allLeagueIds, allPlayers] = await Promise.all([
-      fetch(`${BASE}/state/nfl`, { cache: 'no-store' }).then(r => r.json()),
+      leagueFetch(`${BASE}/state/nfl`, { cache: 'no-store' }).then(r => r.json()),
       getAllLinkedLeagueIds(initialId),
       fetchAllPlayers(),
     ]);
@@ -145,9 +146,9 @@ export async function GET() {
     // Fetch all seasons in parallel: info + rosters + users + transactions per week
     const seasonData = await Promise.all(allLeagueIds.map(async leagueId => {
       const [info, rosters, users] = await Promise.all([
-        fetch(`${BASE}/league/${leagueId}`, { next: { revalidate: 86400 } }).then(r => r.json()),
-        fetch(`${BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
-        fetch(`${BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
+        leagueFetch(`${BASE}/league/${leagueId}`, { next: { revalidate: 86400 } }).then(r => r.json()),
+        leagueFetch(`${BASE}/league/${leagueId}/rosters`, { next: { revalidate: 3600 } }).then(r => r.json()),
+        leagueFetch(`${BASE}/league/${leagueId}/users`,   { next: { revalidate: 3600 } }).then(r => r.json()),
       ]);
 
       const season = info.season as string;
@@ -168,7 +169,7 @@ export async function GET() {
 
       const weekBatches = await Promise.all(
         Array.from({ length: maxWeek }, (_, i) =>
-          fetch(`${BASE}/league/${leagueId}/transactions/${i + 1}`, fetchOpts)
+          leagueFetch(`${BASE}/league/${leagueId}/transactions/${i + 1}`, fetchOpts)
             .then(r => r.ok ? r.json() : [])
             .catch(() => [])
         )

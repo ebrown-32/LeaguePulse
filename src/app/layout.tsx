@@ -47,8 +47,8 @@ export async function generateMetadata(): Promise<Metadata> {
   // The product's own pages carry the product's name, not a league's.
   if ((await headers()).get('x-lp-surface') === 'platform') {
     return {
-      title: 'LeaguePulse: a home for your Sleeper league',
-      description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper league.',
+      title: 'LeaguePulse: a home for your Sleeper or ESPN league',
+      description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper or ESPN league.',
       icons: {
         icon: [{ url: '/brand/leaguepulse-icon.svg', type: 'image/svg+xml' }, { url: '/brand/leaguepulse-32.png', sizes: '32x32' }],
         apple: '/brand/leaguepulse-apple.png',

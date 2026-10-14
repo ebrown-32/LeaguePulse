@@ -7,6 +7,7 @@ import {
   SleeperMatchup,
   SleeperTransaction,
 } from "@/types/sleeper";
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 const BASE_URL = 'https://api.sleeper.app/v1';
 
@@ -49,7 +50,7 @@ export async function getAllLinkedLeagueIds(leagueId: string): Promise<string[]>
       const fwdLeague = await getLeagueInfo(forwardId);
       if (!fwdLeague) break;
       const nextSeason = (parseInt(fwdLeague.season) + 1).toString();
-      const ownerLeagues: any[] = await fetch(
+      const ownerLeagues: any[] = await leagueFetch(
         `${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`
       )
         .then(res => res.ok ? res.json() : [])
@@ -102,13 +103,13 @@ export async function getUserLeagues(userId: string, season?: string): Promise<S
     if (!owner) return [];
 
     const nextSeason = (parseInt(league.season) + 1).toString();
-    const response = await fetch(`${BASE_URL}/user/${owner.user_id}/leagues/nfl/${nextSeason}`);
+    const response = await leagueFetch(`${BASE_URL}/user/${owner.user_id}/leagues/nfl/${nextSeason}`);
     if (!response.ok) return [];
     return response.json();
   }
 
   // When season is provided, fetch leagues for that season
-  const response = await fetch(`${BASE_URL}/user/${userId}/leagues/nfl/${season}`);
+  const response = await leagueFetch(`${BASE_URL}/user/${userId}/leagues/nfl/${season}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch user leagues: ${response.statusText}`);
   }
@@ -117,7 +118,7 @@ export async function getUserLeagues(userId: string, season?: string): Promise<S
 
 export async function getLeagueInfo(leagueId: string) {
   try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}`);
+    const response = await leagueFetch(`${BASE_URL}/league/${leagueId}`);
     if (!response.ok) {
       if (response.status === 404) {
         return null; // League not found
@@ -132,7 +133,7 @@ export async function getLeagueInfo(leagueId: string) {
 }
 
 export async function getLeagueUsers(leagueId: string): Promise<SleeperUser[]> {
-  const response = await fetch(`${BASE_URL}/league/${leagueId}/users`);
+  const response = await leagueFetch(`${BASE_URL}/league/${leagueId}/users`);
   if (!response.ok) {
     throw new Error(`Failed to fetch league users: ${response.statusText}`);
   }
@@ -140,7 +141,7 @@ export async function getLeagueUsers(leagueId: string): Promise<SleeperUser[]> {
 }
 
 export async function getLeagueRosters(leagueId: string, season?: string): Promise<any[]> {
-  const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}${season ? `/${season}` : ''}/rosters`);
+  const response = await leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}${season ? `/${season}` : ''}/rosters`);
   if (!response.ok) {
     throw new Error('Failed to fetch league rosters');
   }
@@ -148,10 +149,10 @@ export async function getLeagueRosters(leagueId: string, season?: string): Promi
 }
 
 export async function getPlayoffBracket(leagueId: string): Promise<any> {
-  const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
+  const response = await leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
   if (!response.ok) {
     // If winners bracket fails, try losers bracket
-    const losersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+    const losersResponse = await leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
     if (!losersResponse.ok) {
       throw new Error('Failed to fetch playoff bracket');
     }
@@ -160,7 +161,7 @@ export async function getPlayoffBracket(leagueId: string): Promise<any> {
   
   // Try to get both brackets
   try {
-    const losersResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+    const losersResponse = await leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
     const losers_bracket = losersResponse.ok ? await losersResponse.json() : null;
     return { 
       winners_bracket: await response.json(), 
@@ -175,7 +176,7 @@ export async function getPlayoffBracket(leagueId: string): Promise<any> {
 }
 
 export async function getLeagueMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {
-  const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`);
+  const response = await leagueFetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch league matchups: ${response.statusText}`);
   }
@@ -184,7 +185,7 @@ export async function getLeagueMatchups(leagueId: string, week: number): Promise
 
 export async function getLeagueTransactions(leagueId: string, week: number): Promise<SleeperTransaction[]> {
   try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`);
+    const response = await leagueFetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`);
     if (!response.ok) return [];
     const data = await response.json();
     return Array.isArray(data) ? data.filter((t: SleeperTransaction) => t.status === 'complete') : [];
@@ -201,7 +202,7 @@ export async function getSeasonTransactions(leagueId: string, totalWeeks: number
 }
 
 export async function getNFLState(): Promise<SleeperNFLState> {
-  const response = await fetch(`${BASE_URL}/state/nfl`);
+  const response = await leagueFetch(`${BASE_URL}/state/nfl`);
   if (!response.ok) {
     throw new Error(`Failed to fetch NFL state: ${response.statusText}`);
   }
@@ -230,7 +231,7 @@ export async function getAllLeagueSeasons(leagueId: string): Promise<string[]> {
 
     // Check for next season's league
     const nextSeason = (parseInt(currentLeague.season) + 1).toString();
-    const ownerLeagues = await fetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
+    const ownerLeagues = await leagueFetch(`${BASE_URL}/user/${currentOwner.user_id}/leagues/nfl/${nextSeason}`).then(res => res.ok ? res.json() : []);
     const nextLeague = ownerLeagues.find((l: any) => l.previous_league_id === leagueId);
     if (nextLeague) {
       seasons.push(nextLeague.season);

@@ -3,6 +3,7 @@ import { getAllLinkedLeagueIds } from '@/lib/api';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { configuredRootLeagueId } from '@/config/league';
 import { perLeague } from '@/lib/tenant/perLeague';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ const RESPONSE_TTL_MS = 900_000; // 15 min
 async function fetchJson<T>(url: string, opts: RequestInit, fallback: T, tries = 3): Promise<T> {
   for (let i = 0; i < tries; i++) {
     try {
-      const r = await fetch(url, opts);
+      const r = await leagueFetch(url, opts);
       if (r.ok) return await r.json();
       if (r.status === 404) return fallback;
     } catch { /* retry */ }

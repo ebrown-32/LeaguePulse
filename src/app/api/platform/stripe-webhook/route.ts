@@ -24,6 +24,7 @@ import { stripe } from '@/lib/platform/stripe';
 import { getTenant, saveTenant, type Tenant, type TenantStatus } from '@/lib/platform/tenants';
 import { getRedis } from '@/lib/redisClient';
 import { PLANS } from '@/lib/platform/config';
+import { parseEspnLeague } from '@/lib/providers/ids';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,13 @@ async function checkoutCompleted(s: Stripe, session: Stripe.Checkout.Session): P
     updatedAt: now,
   };
   await saveTenant(tenant);
+  // An ESPN league's cookies were kept for two days at sign-up; it is paid
+  // for now, so they stay.
+  const espn = parseEspnLeague(m.leagueId);
+  if (espn) {
+    const { keepEspnCredentials } = await import('@/lib/providers/espn/credentials');
+    await keepEspnCredentials(espn.leagueId);
+  }
   // Bought while signed in: that account owns the league.
   if (m.userId) {
     const { addMember } = await import('@/lib/platform/members');

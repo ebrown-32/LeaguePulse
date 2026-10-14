@@ -9,12 +9,17 @@
 
 import { getRedis } from '@/lib/redisClient';
 import { validSlug, RESERVED_SLUGS } from './config';
+import { parseEspnLeague } from '@/lib/providers/ids';
 
 export type TenantStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
 
 export interface Tenant {
   slug: string;
-  /** The Sleeper league id the site was created from (the current season). */
+  /**
+   * The league the site was created from (the season current then): a Sleeper
+   * league id, or an ESPN one in the form espn-<league>-<season> (see
+   * src/lib/providers/ids.ts).
+   */
   leagueId: string;
   leagueName: string;
   status: TenantStatus;
@@ -27,7 +32,16 @@ export interface Tenant {
 }
 
 const T = (slug: string) => `lp_tenant:${slug}`;
-const L = (leagueId: string) => `lp_tenant_league:${leagueId}`;
+/**
+ * A Sleeper league id as is. An ESPN league without its season: ESPN keeps
+ * one id for every season, so a site made from one season is that league's
+ * site in every other season too.
+ */
+export function leagueRegistryKey(leagueId: string): string {
+  const espn = parseEspnLeague(leagueId);
+  return espn ? `espn-${espn.leagueId}` : leagueId;
+}
+const L = (leagueId: string) => `lp_tenant_league:${leagueRegistryKey(leagueId)}`;
 /** A short hold on an address while its buyer is at checkout. */
 const H = (slug: string) => `lp_slug_hold:${slug}`;
 /** Every league's slug, for work that runs across all of them. */

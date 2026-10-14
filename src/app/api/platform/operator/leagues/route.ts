@@ -96,11 +96,28 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!(await isOperator(req))) return deny();
-  const body = await req.json().catch(() => ({})) as { leagueId?: string; slug?: string };
-  const leagueId = String(body.leagueId ?? '').trim();
-  if (!/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'That is not a Sleeper league id.' }, { status: 400 });
-  const league = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`).then(r => r.json()).catch(() => null);
-  if (!league?.league_id) return NextResponse.json({ error: 'Sleeper has no league with that id.' }, { status: 404 });
+  const body = await req.json().catch(() => ({})) as { leagueId?: string; slug?: string; provider?: string; swid?: string; s2?: string };
+  let leagueId = String(body.leagueId ?? '').trim();
+  let league: { league_id?: string; name?: string } | null;
+  if (body.provider === 'espn') {
+    // An ESPN league id or league page URL, and for a private league the
+    // cookies, which are checked against ESPN before they are kept.
+    const { parseEspnInput, findEspnLeague, FIND_MESSAGES } = await import('@/lib/providers/espn/lookup');
+    const { cleanCredentials, getEspnCredentials, setEspnCredentials } = await import('@/lib/providers/espn/credentials');
+    const lid = parseEspnInput(leagueId);
+    if (!lid) return NextResponse.json({ error: 'That is not an ESPN league id or league URL.' }, { status: 400 });
+    const fresh = body.swid || body.s2 ? cleanCredentials(body) : null;
+    if ((body.swid || body.s2) && !fresh) return NextResponse.json({ error: 'Those do not look like ESPN cookies.' }, { status: 400 });
+    const found = await findEspnLeague(lid, fresh ?? await getEspnCredentials(lid));
+    if (!found.ok) return NextResponse.json({ error: FIND_MESSAGES[found.reason] }, { status: found.reason === 'not_found' ? 404 : 400 });
+    if (fresh) await setEspnCredentials(lid, fresh);
+    leagueId = found.league.leagueId;
+    league = { league_id: leagueId, name: found.league.name };
+  } else {
+    if (!/^\d{15,22}$/.test(leagueId)) return NextResponse.json({ error: 'That is not a Sleeper league id.' }, { status: 400 });
+    league = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`).then(r => r.json()).catch(() => null);
+    if (!league?.league_id) return NextResponse.json({ error: 'Sleeper has no league with that id.' }, { status: 404 });
+  }
 
   const slug = slugify(String(body.slug || league.name || ''));
   const existing = await tenantForLeague(leagueId);

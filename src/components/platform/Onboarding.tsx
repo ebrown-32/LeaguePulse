@@ -6,6 +6,11 @@
  * Three steps on one page, each sliding in once the one before it is done,
  * so the whole flow is visible as it fills in rather than a wizard that hides
  * where you are.
+ *
+ * Sleeper or ESPN. A Sleeper league is found by username or league id, with
+ * no login. An ESPN league by its id or league page URL; most are private,
+ * and those need two of the commissioner's (or any member's) ESPN cookies,
+ * asked for only once ESPN has said the league is private.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -25,9 +30,19 @@ interface FoundLeague {
 
 const avatarUrl = (id: string | null) => (id ? `https://sleepercdn.com/avatars/thumbs/${id}` : null);
 
+type Provider = 'sleeper' | 'espn';
+
+/** Back from a cancelled checkout: `league=espn-123-2026` means the ESPN league 123. */
+const espnIdOf = (v: string | null) => /^espn-(\d+)-\d{4}$/.exec(v ?? '')?.[1] ?? null;
+
 export default function Onboarding() {
   const params = useSearchParams();
-  const [q, setQ] = useState(params.get('q') ?? '');
+  const [provider, setProvider] = useState<Provider>(
+    params.get('provider') === 'espn' || espnIdOf(params.get('league')) ? 'espn' : 'sleeper');
+  const [q, setQ] = useState(params.get('q') ?? espnIdOf(params.get('league')) ?? '');
+  const [needsCookies, setNeedsCookies] = useState(false);
+  const [swid, setSwid] = useState('');
+  const [s2, setS2] = useState('');
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<{ user: { name: string } | null; leagues: FoundLeague[] } | null>(null);
   const [findError, setFindError] = useState<string | null>(null);
@@ -39,14 +54,27 @@ export default function Onboarding() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<{ msg: string; missing?: string[] } | null>(null);
 
-  const find = async (value: string) => {
+  const find = async (value: string, as: Provider = provider) => {
     const v = value.trim();
     if (!v) return;
     setSearching(true); setFindError(null); setFound(null); setLeague(null);
     try {
-      const r = await fetch(`/api/platform/lookup?q=${encodeURIComponent(v)}`);
+      const r = as === 'espn'
+        ? await fetch('/api/platform/espn/lookup', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ q: v, swid: swid.trim() || undefined, s2: s2.trim() || undefined }),
+          })
+        : await fetch(`/api/platform/lookup?q=${encodeURIComponent(v)}`);
       const d = await r.json();
+      if (as === 'espn' && d.needsCredentials) {
+        setNeedsCookies(true);
+        // A private league is not an error: the cookie panel explains it.
+        // Cookies ESPN turned down are.
+        if (!swid.trim() && !s2.trim()) return;
+      }
       if (!r.ok) throw new Error(d.error ?? 'Could not look that up');
+      // Kept server side (encrypted); no need to hold them in the page.
+      if (as === 'espn') { setSwid(''); setS2(''); }
       setFound(d);
       if (d.leagues.length === 1 && !d.leagues[0].hostedAt) choose(d.leagues[0]);
     } catch (e: any) {
@@ -58,7 +86,7 @@ export default function Onboarding() {
 
   // Arriving from the landing page with a username already typed.
   useEffect(() => {
-    const initial = params.get('q') ?? params.get('league');
+    const initial = params.get('q') ?? espnIdOf(params.get('league')) ?? params.get('league');
     if (initial) find(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -121,15 +149,30 @@ export default function Onboarding() {
       <main className="relative mx-auto max-w-3xl space-y-5 px-5 pb-24 pt-8">
         <div>
           <h1 className="lp-display text-[36px] font-extrabold leading-tight tracking-[-0.035em] sm:text-[46px]">Let&apos;s find your league.</h1>
-          <p className="mt-2 text-[15px] text-muted-foreground">Your Sleeper username lists your leagues. Or paste a league ID from the league&apos;s settings.</p>
+          <p className="mt-2 text-[15px] text-muted-foreground">
+            {provider === 'espn'
+              ? 'Paste your ESPN league ID, or the address of your league page on ESPN.'
+              : 'Your Sleeper username lists your leagues. Or paste a league ID from the league’s settings.'}
+          </p>
         </div>
 
         {/* 1. Find */}
         <Card n={1} title="Find your league" done={!!league}>
+          <div role="tablist" aria-label="Where your league is" className="mb-4 inline-flex rounded-full border border-border bg-background/70 p-1 text-[13px] font-semibold">
+            {(['sleeper', 'espn'] as const).map(p => (
+              <button key={p} role="tab" aria-selected={provider === p} type="button"
+                onClick={() => { if (p === provider) return; setProvider(p); setQ(''); setFound(null); setLeague(null); setFindError(null); setNeedsCookies(false); }}
+                className={cn('relative rounded-full px-4 py-1.5 transition', provider === p ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                {provider === p && <motion.span layoutId="provider-pill" className="absolute inset-0 rounded-full bg-primary" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+                <span className="relative">{p === 'espn' ? 'ESPN' : 'Sleeper'}</span>
+              </button>
+            ))}
+          </div>
           <form onSubmit={e => { e.preventDefault(); find(q); }} className="flex flex-col gap-2 sm:flex-row">
             <label className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder="Sleeper username or league ID"
+              <input value={q} onChange={e => setQ(e.target.value)} autoFocus
+                placeholder={provider === 'espn' ? 'ESPN league ID or league page URL' : 'Sleeper username or league ID'}
                 className="w-full rounded-xl border border-border bg-background/70 py-3 pl-10 pr-3 text-[15px] outline-none focus:border-primary/60" />
             </label>
             <button disabled={searching || !q.trim()}
@@ -138,6 +181,13 @@ export default function Onboarding() {
             </button>
           </form>
           {findError && <p className="mt-3 flex items-center gap-2 text-[13px] text-red-600"><AlertTriangle className="h-4 w-4" />{findError}</p>}
+          <AnimatePresence>
+            {provider === 'espn' && needsCookies && !league && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <EspnCookies swid={swid} s2={s2} setSwid={setSwid} setS2={setS2} busy={searching} onSubmit={() => find(q)} />
+              </motion.div>
+            )}
+          </AnimatePresence>
           {found && (
             <div className="mt-4 space-y-2">
               {found.user && <p className="text-[12.5px] text-muted-foreground">{found.leagues.length} league{found.leagues.length === 1 ? '' : 's'} for {found.user.name} this season</p>}
@@ -264,4 +314,48 @@ function LeagueAvatar({ l }: { l: FoundLeague }) {
     // eslint-disable-next-line @next/next/no-img-element
     ? <img src={src} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-border" />
     : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 font-display font-bold text-primary">{l.name.slice(0, 2).toUpperCase()}</span>;
+}
+
+/**
+ * The two ESPN cookies a private league needs, and how to find them. Asked
+ * for only after ESPN has said the league is private.
+ */
+function EspnCookies({ swid, s2, setSwid, setS2, busy, onSubmit }: {
+  swid: string; s2: string; setSwid: (v: string) => void; setS2: (v: string) => void; busy: boolean; onSubmit: () => void;
+}) {
+  const steps = [
+    <>On a computer, sign in at <a href="https://fantasy.espn.com/football/" target="_blank" rel="noopener noreferrer" className="font-semibold underline">fantasy.espn.com</a> with any account in the league.</>,
+    <>Open your browser&apos;s developer tools (<b>Chrome</b> and <b>Edge</b>: right-click the page, <b>Inspect</b>), then <b>Application</b> (Firefox and Safari: <b>Storage</b>), <b>Cookies</b>, <b>https://fantasy.espn.com</b>.</>,
+    <>Copy the values of <b>SWID</b> and <b>espn_s2</b> into the boxes below.</>,
+  ];
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSubmit(); }} className="mt-4 rounded-2xl border border-primary/30 bg-primary/[0.05] p-4 sm:p-5">
+      <p className="font-display text-[15.5px] font-bold">Your league is private on ESPN</p>
+      <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+        ESPN has no sign-in button for other sites, so private leagues are read with two cookies from a browser that is signed in to ESPN.
+      </p>
+      <ol className="mt-3 space-y-2">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-2.5 text-[13px] leading-snug [&_b]:font-semibold">
+            <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{i + 1}</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <input value={swid} onChange={e => setSwid(e.target.value)} placeholder="SWID  {XXXXXXXX-XXXX-…}" autoComplete="off" spellCheck={false}
+          className="w-full rounded-xl border border-border bg-background/80 px-3 py-2.5 font-mono text-[12.5px] outline-none focus:border-primary/60" />
+        <input value={s2} onChange={e => setS2(e.target.value)} placeholder="espn_s2  AEB…" autoComplete="off" spellCheck={false}
+          className="w-full rounded-xl border border-border bg-background/80 px-3 py-2.5 font-mono text-[12.5px] outline-none focus:border-primary/60" />
+      </div>
+      <button disabled={busy || !swid.trim() || !s2.trim()}
+        className="mt-3 w-full rounded-xl bg-primary px-5 py-3 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-50">
+        {busy ? 'Checking with ESPN' : 'Connect league'}
+      </button>
+      <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
+        We only use them to read your league. They&apos;re stored encrypted, never shown again, and deleted after two days if you don&apos;t start a site.
+        ESPN signs them out after about a year; your league&apos;s admin page asks for new ones when that happens.
+      </p>
+    </form>
+  );
 }

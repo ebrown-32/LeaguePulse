@@ -1,4 +1,5 @@
 import { leagueCache } from './hybridStorage';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 const SLEEPER_BASE_URL = 'https://api.sleeper.app/v1';
 
@@ -64,7 +65,7 @@ class SleeperAPI {
   private playerCacheTimeout = 24 * 60 * 60 * 1000; // 24 hours
 
   async fetchLeague(leagueId: string): Promise<SleeperLeague> {
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/league/${leagueId}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch league: ${response.statusText}`);
     }
@@ -72,7 +73,7 @@ class SleeperAPI {
   }
 
   async fetchRosters(leagueId: string): Promise<SleeperRoster[]> {
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/rosters`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/league/${leagueId}/rosters`);
     if (!response.ok) {
       throw new Error(`Failed to fetch rosters: ${response.statusText}`);
     }
@@ -80,7 +81,7 @@ class SleeperAPI {
   }
 
   async fetchUsers(leagueId: string): Promise<SleeperUser[]> {
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/users`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/league/${leagueId}/users`);
     if (!response.ok) {
       throw new Error(`Failed to fetch users: ${response.statusText}`);
     }
@@ -88,7 +89,7 @@ class SleeperAPI {
   }
 
   async fetchMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/matchups/${week}`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/league/${leagueId}/matchups/${week}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch matchups: ${response.statusText}`);
     }
@@ -101,7 +102,7 @@ class SleeperAPI {
       return Object.fromEntries(this.playerCache);
     }
 
-    const response = await fetch(`${SLEEPER_BASE_URL}/players/nfl`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/players/nfl`);
     if (!response.ok) {
       throw new Error(`Failed to fetch players: ${response.statusText}`);
     }
@@ -119,7 +120,7 @@ class SleeperAPI {
   }
 
   async fetchNFLState(): Promise<any> {
-    const response = await fetch(`${SLEEPER_BASE_URL}/state/nfl`);
+    const response = await leagueFetch(`${SLEEPER_BASE_URL}/state/nfl`);
     if (!response.ok) {
       throw new Error(`Failed to fetch NFL state: ${response.statusText}`);
     }
@@ -127,7 +128,7 @@ class SleeperAPI {
   }
 
   async fetchTrendingPlayers(type: 'add' | 'drop' = 'add', lookback_hours = 24, limit = 25): Promise<any[]> {
-    const response = await fetch(
+    const response = await leagueFetch(
       `${SLEEPER_BASE_URL}/players/nfl/trending/${type}?lookback_hours=${lookback_hours}&limit=${limit}`
     );
     if (!response.ok) {

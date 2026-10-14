@@ -16,6 +16,7 @@ import { runReplay, type ReplayWeek } from '@/lib/sim/replay';
 import { lastPlayoffWeek } from '@/lib/sim/playoffs';
 import type { TransactionSide, PlayerSummary } from '@/app/api/transactions/route';
 import { configuredRootLeagueId } from '@/config/league';
+import { leagueFetch } from '@/lib/providers/leagueFetch';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -25,7 +26,7 @@ const BASE = 'https://api.sleeper.app/v1';
 async function fetchJson<T>(url: string, fallback: T, tries = 3): Promise<T> {
   for (let i = 0; i < tries; i++) {
     try {
-      const r = await fetch(url, { next: { revalidate: 3600 } });
+      const r = await leagueFetch(url, { next: { revalidate: 3600 } });
       if (r.ok) return await r.json();
       if (r.status === 404) return fallback;
     } catch { /* retry */ }
