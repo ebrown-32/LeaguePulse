@@ -49,12 +49,11 @@ export function NavAccount({ getStarted }: { getStarted: React.ReactNode }) {
   const n = data?.leagues.length;
   return (
     <div className="flex items-center gap-3">
+      {/* A plain link, like the nav's others: no pill inside the pill. */}
       <Link href="/account"
-        className="hidden items-center gap-2 rounded-full border border-border bg-card py-1.5 pl-3.5 pr-1.5 text-[13px] font-semibold transition hover:border-foreground/30 sm:inline-flex">
+        className="hidden items-baseline gap-1.5 text-[13.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground sm:inline-flex">
         My leagues
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-foreground px-1.5 text-[11.5px] font-bold tabular-nums text-background">
-          {n ?? '·'}
-        </span>
+        {n != null && <span className="tabular-nums text-foreground/45">{n}</span>}
       </Link>
       <UserButton appearance={avatarAppearance}>
         <UserButton.MenuItems>

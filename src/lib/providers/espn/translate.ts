@@ -22,6 +22,8 @@ import { espnLeagueKey, espnUserKey } from '../ids.ts';
 
 /** ESPN player id to Sleeper player id. Unmatched players get an `espn_<id>` id. */
 export type PlayerIdMap = (espnPlayerId: number) => string;
+/** An ESPN player's name, position and NFL team as ESPN had them that season. */
+export type PlayerInfo = (espnPlayerId: number) => { name: string; position: string; team: string } | null;
 
 // ── ESPN codes ───────────────────────────────────────────────────────────────
 
@@ -241,7 +243,7 @@ const split = (n: number) => {
  * response with views mSettings, mTeam, mRoster, mMatchup, mStatus and
  * mDraftDetail.
  */
-export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: number } = {}): TranslatedBase {
+export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: number; info?: PlayerInfo } = {}): TranslatedBase {
   const espnLeagueId = String(raw.id);
   const season = Number(raw.seasonId);
   const key = espnLeagueKey(espnLeagueId, season);
@@ -399,6 +401,14 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
 
   const { winners, losers } = brackets(schedule, teams, regularPeriods, Number(sched.playoffTeamCount ?? 0));
 
+  // Sleeper puts the drafted player's name, position and team on the pick
+  // itself, and the draft board reads them from there.
+  const pickPlayer = (espnId: number) => {
+    const i = opts.info?.(espnId);
+    if (!i) return {};
+    const [first, ...last] = i.name.split(' ');
+    return { first_name: first, last_name: last.join(' '), position: i.position, team: i.team };
+  };
   const picks = (draft.picks ?? []).map((p: any) => ({
     draft_id: key,
     round: Number(p.roundId),
@@ -408,7 +418,7 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
     player_id: pid(Number(p.playerId)),
     picked_by: p.memberId ? (memberToUser[p.memberId] ?? '') : teamOwner[p.teamId] ?? '',
     is_keeper: Boolean(p.keeper) || null,
-    metadata: { amount: p.bidAmount ? String(p.bidAmount) : undefined },
+    metadata: { ...pickPlayer(Number(p.playerId)), amount: p.bidAmount ? String(p.bidAmount) : undefined },
   }));
   const order: number[] = settings.draftSettings?.pickOrder ?? [];
   const draftType = String(settings.draftSettings?.type ?? '').toUpperCase() === 'AUCTION' ? 'auction' : 'snake';

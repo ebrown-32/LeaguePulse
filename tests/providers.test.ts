@@ -344,3 +344,14 @@ test('players: defences by team, Sleeper espn_id, then unique name', () => {
   assert.equal(id(-16012), 'KC');
   assert.equal(id(2), 'espn_2', 'two Chris Joneses at DL and no team to tell them apart: not guessed');
 });
+
+test('ESPN draft picks carry the player, as Sleeper picks do', () => {
+  const info = (id: number) => (id === 101 ? { name: 'Patrick Mahomes II', position: 'QB', team: 'KC' } : null);
+  const [pick] = translateBase(SEASON, pid, { info }).picks;
+  assert.deepEqual(
+    { first: pick.metadata.first_name, last: pick.metadata.last_name, pos: pick.metadata.position, team: pick.metadata.team },
+    { first: 'Patrick', last: 'Mahomes II', pos: 'QB', team: 'KC' },
+  );
+  // Without the player list the pick still translates, just without a name.
+  assert.equal(translateBase(SEASON, pid).picks[0].metadata.first_name, undefined);
+});
