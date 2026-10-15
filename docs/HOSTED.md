@@ -298,15 +298,20 @@ but not set prices or build. Without `DATABASE_URL` there are no franchises,
 and the Franchises link is left out of the navigation.
 
 **Franchise HQ** (`src/lib/tycoon/`) runs each franchise as a business on real
-results. `economy.ts` is a pure, deterministic replay from the 2026 kickoff to
-now: daily merchandise, sponsors and upkeep; a game day each archived week
+results. `economy.ts` is a pure, deterministic replay of the franchise's whole
+history, from opening day of its first archived season to now (a franchise that
+left stops a week after its last game): daily merchandise, sponsors and upkeep; a game day each archived week
 (crowds from fan interest against ticket price, then concessions, parking,
 suites and sponsors); and the manager's decisions (prices, upgrades) in order,
 from `tycoon_log:<franchiseId>` in the league's storage. Fan interest follows
 form, weekly scoring rank, the stadium and the franchise's history; prices
 well above fair breed resentment. Profit becomes VC (one per $4,000), spent in
-the shop (`catalog.ts`). History before 2026 sets a franchise's head start.
-Unclaimed franchises run on autopilot at fair prices. Stadiums, crowds and
+the shop (`catalog.ts`). Every franchise starts the same; its history is what
+separates them. Until a manager's first decision, the old front office runs it:
+fair prices, and each offseason a share of the season's earnings reinvested
+(60% after a winning season, 30% after a losing one; more seats and parking
+only when crowds fill nine in ten), the owner taking the rest down to a small
+reserve. The page's charts and books show the latest season. Stadiums, crowds and
 the league's value ranking are public; prices and books are the manager's.
 
 Balancing: the numbers live in `economy.ts` and `catalog.ts`, and

@@ -158,7 +158,7 @@ export default function SearchPalette({ pages }: Props) {
         onClick={() => setOpen(true)}
         aria-label="Search"
         title="Search (Cmd K)"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
       >
         <Search className="h-4 w-4" />
       </button>

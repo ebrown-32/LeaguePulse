@@ -2,7 +2,8 @@
 
 /**
  * Every franchise in the league's history, from the archive: the ones playing
- * now first, then the ones that have left. Each card opens the franchise's page.
+ * now first, then the ones that have left, each by franchise value (Franchise
+ * HQ), most valuable first. Each card opens the franchise's page.
  */
 
 import { useEffect, useState } from 'react';
@@ -21,6 +22,11 @@ export default function FranchisesView() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [archived, setArchived] = useState(true);
   const [error, setError] = useState('');
+  const [board, setBoard] = useState<Board[] | null>(null);
+
+  useEffect(() => {
+    fetch('/api/tycoon').then(r => (r.ok ? r.json() : null)).then(d => setBoard(d?.available ? d.franchises : [])).catch(() => setBoard([]));
+  }, []);
 
   useEffect(() => {
     fetch('/api/franchises')
@@ -30,27 +36,34 @@ export default function FranchisesView() {
   }, []);
 
   if (error) return <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">{error}</p>;
-  if (!rows) return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-40 animate-pulse rounded-2xl border border-border bg-card" />)}</div>;
+  // Both, so the cards appear in value order rather than jumping into it.
+  if (!rows || board === null) return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-40 animate-pulse rounded-2xl border border-border bg-card" />)}</div>;
   if (!archived || !rows.length) {
     return <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">The league&apos;s history is still being gathered. Franchises appear here once it is.</p>;
   }
 
-  const active = rows.filter(r => r.active), former = rows.filter(r => !r.active);
+  // Most valuable first; a franchise without a value (no game days yet) goes by its record.
+  const values = new Map((board ?? []).map(b => [b.franchiseId, b.value]));
+  const byValue = (a: Row, b: Row) =>
+    (values.get(b.franchiseId) ?? -1) - (values.get(a.franchiseId) ?? -1) || b.titles - a.titles || b.wins - a.wins;
+  const active = rows.filter(r => r.active).sort(byValue), former = rows.filter(r => !r.active).sort(byValue);
   return (
     <div className="space-y-8">
-      <Leaderboard rows={rows} />
-      <Grid rows={active} />
+      <Leaderboard rows={rows} board={board} />
+      <Grid rows={active} values={values} />
       {former.length > 0 && (
         <section>
           <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Former franchises</h2>
-          <Grid rows={former} muted />
+          <Grid rows={former} values={values} muted />
         </section>
       )}
     </div>
   );
 }
 
-function Grid({ rows, muted }: { rows: Row[]; muted?: boolean }) {
+const money = (v: number) => `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M`;
+
+function Grid({ rows, values, muted }: { rows: Row[]; values: Map<string, number>; muted?: boolean }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((f, i) => (
@@ -64,6 +77,12 @@ function Grid({ rows, muted }: { rows: Row[]; muted?: boolean }) {
                 <p className="truncate text-[16px] font-bold leading-tight tracking-tight">{f.teamName || f.manager}</p>
                 <p className="truncate text-[13px] text-muted-foreground">{f.manager}</p>
               </div>
+              {values.has(f.franchiseId) && (
+                <span className="shrink-0 text-right">
+                  <span className="block text-[15px] font-bold tabular-nums leading-tight">{money(values.get(f.franchiseId)!)}</span>
+                  <span className="block text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">Value</span>
+                </span>
+              )}
             </div>
             {f.motto && <p className="mt-3 line-clamp-1 text-[13px] italic text-muted-foreground">&ldquo;{f.motto}&rdquo;</p>}
             <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -118,16 +137,12 @@ interface Board { rank: number; franchiseId: string; value: number; interest: nu
  * The league's franchises by value (Franchise HQ, lib/tycoon). Quiet by
  * default: the top three; the rest unfold on request.
  */
-function Leaderboard({ rows }: { rows: Row[] }) {
-  const [board, setBoard] = useState<Board[] | null>(null);
+function Leaderboard({ rows, board }: { rows: Row[]; board: Board[] | null }) {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    fetch('/api/tycoon').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.available) setBoard(d.franchises); }).catch(() => {});
-  }, []);
   if (!board?.length) return null;
   const meta = new Map(rows.map(r => [r.franchiseId, r]));
   const top = board[0].value;
-  const value = (v: number) => `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M`;
+  const value = money;
   const name = (b: Board) => b.teamName ?? b.manager ?? '';
 
   return (

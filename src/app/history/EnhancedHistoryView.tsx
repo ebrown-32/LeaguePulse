@@ -26,6 +26,7 @@ import {
   type EnhancedLeagueHistory,
 } from '@/lib/enhancedHistoryApi';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { LEGACY_WEIGHTS, rankByLegacy } from '@/lib/legacy';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,44 @@ const RECORD_CATEGORIES = [
 ] as const;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+const LEGACY_LABELS: Record<keyof typeof LEGACY_WEIGHTS, string> = {
+  championships: 'Championships', winPct: 'Win %', wins: 'Wins', points: 'Points scored',
+};
+
+/** How the ranking works, folded away until asked. */
+function LegacyNote() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-4 px-1">
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+        className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+        Ranked by career: titles, wins, win % and points. {open ? 'Hide the weights' : 'How it works'}
+      </button>
+      {open && (
+        <div className="mt-3 rounded-xl border border-border bg-card p-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4">
+            {(Object.keys(LEGACY_WEIGHTS) as (keyof typeof LEGACY_WEIGHTS)[]).map(k => (
+              <div key={k}>
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="text-muted-foreground">{LEGACY_LABELS[k]}</span>
+                  <span className="font-bold tabular-nums text-foreground">{LEGACY_WEIGHTS[k]}</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(LEGACY_WEIGHTS[k] / 35) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            Titles and wins count against the league&apos;s leader in each. Win % and points per game are measured against .500 and the
+            league&apos;s average, steadied by a season&apos;s worth of games so one hot year does not outrank a long career.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function RankBadge({ rank }: { rank: number }) {
   const cls =
@@ -141,12 +180,9 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  const sortedManagers = [...allTimeStats].sort((a, b) => {
-    if (Math.abs(b.winPercentage - a.winPercentage) > 0.0001) return b.winPercentage - a.winPercentage;
-    if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
-    return b.championships - a.championships;
-  });
-  const maxWinPct = sortedManagers[0]?.winPercentage ?? 1;
+  // Ranked by legacy (lib/legacy): championships, win percentage, wins and points, weighted.
+  const sortedManagers = rankByLegacy(allTimeStats);
+  const maxWinPct = Math.max(...sortedManagers.map(m => m.winPercentage), 0) || 1;
 
   const championRecords = records
     .filter(r => r.type === 'championship')
@@ -253,7 +289,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
               <div className="space-y-1.5">
                 {sortedManagers.map((manager, i) => {
                   const isGoat  = i === 0;
-                  const barPct  = maxWinPct > 0 ? (manager.winPercentage / maxWinPct) * 100 : 0;
+                  const barPct  = (manager.winPercentage / maxWinPct) * 100;
                   const repeat  = manager.championships > 1;
 
                   return (
@@ -294,7 +330,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         </div>
 
                         <span className="w-24 text-right font-mono text-sm text-foreground">
-                          {manager.totalWins},{manager.totalLosses}{manager.totalTies > 0 ? `,${manager.totalTies}` : ''}
+                          {manager.totalWins}-{manager.totalLosses}{manager.totalTies > 0 ? `-${manager.totalTies}` : ''}
                         </span>
                         <span className={`w-16 text-right text-sm font-bold tabular-nums ${isGoat ? 'text-amber-500' : 'text-foreground'}`}>
                           {(manager.winPercentage * 100).toFixed(1)}%
@@ -347,7 +383,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               {(manager.winPercentage * 100).toFixed(1)}%
                             </div>
                             <div className="text-xs font-mono text-muted-foreground">
-                              {manager.totalWins},{manager.totalLosses}
+                              {manager.totalWins}-{manager.totalLosses}{manager.totalTies > 0 ? `-${manager.totalTies}` : ''}
                             </div>
                           </div>
                         </div>
@@ -372,6 +408,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                   );
                 })}
               </div>
+              <LegacyNote />
           </div>
 
           {/* ══ Champions ════════════════════════════════════════════════ */}

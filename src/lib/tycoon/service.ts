@@ -2,11 +2,13 @@
  * The franchise tycoon, wired to a league: real results from the archive,
  * each franchise's decisions from storage, the economy (economy.ts) in between.
  *
- *   When it starts   The 2026 season's kickoff (FIRST_SEASON), for every league,
- *                    so a league's franchises compete on the same calendar.
- *                    Seasons before it are the franchise's legacy: its head start.
- *   Game days        Each archived week of a franchise's games from then on,
- *                    counted the Tuesday after the week's games (when they are final).
+ *   When it starts   Opening day of the franchise's first season in the league:
+ *                    every archived season is played through the economy, so a
+ *                    franchise's value is its whole history, not this season's.
+ *   When it stops    Today; or, for a franchise that has left the league, a week
+ *                    after its last game.
+ *   Game days        Each archived week of a franchise's games, counted the
+ *                    Tuesday after the week's games (when they are final).
  *   Decisions        Price changes and purchases, kept per franchise under the
  *                    league's storage (`tycoon_log:<franchiseId>`), replayed in order.
  *
@@ -15,9 +17,7 @@
 
 import { getRedis } from '@/lib/redisClient';
 import { ensureArchive, T } from '@/lib/archive/db';
-import { simulate, franchiseValue, DAY, type Decision, type EconomyState, type GameDay, type Legacy } from './economy';
-
-export const FIRST_SEASON = 2026;
+import { simulate, franchiseValue, DAY, type Decision, type EconomyState, type GameDay } from './economy';
 
 /** NFL kickoff: the Thursday after Labor Day (the first Monday of September), in UTC. */
 export function kickoff(season: number): number {
@@ -28,39 +28,34 @@ export function kickoff(season: number): number {
 /** When a week's games are final: the Tuesday after them. */
 export const weekFinal = (season: number, week: number) => kickoff(season) + ((week - 1) * 7 + 5) * DAY;
 
-interface LeagueInputs { legacy: Map<string, Legacy>; games: Map<string, GameDay[]>; names: Map<string, string>; start: number }
+interface LeagueInputs { games: Map<string, GameDay[]>; names: Map<string, string>; latestSeason: number; titles: Map<string, number[]> }
 
 const cache = new Map<string, { at: number; inputs: LeagueInputs }>();
 const CACHE_MS = 60_000;
 
-/** Every franchise's legacy and game days, from the archive, for a league. */
+/** Every franchise's game days in every archived season, for a league. */
 export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
   const hit = cache.get(site);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.inputs;
   const db = await ensureArchive().catch(() => null);
   if (!db) return null;
 
-  const [past, rows] = await Promise.all([
-    db.query(`
-      SELECT t.owner_id AS id, count(*)::int AS seasons, sum(coalesce(t.wins,0))::int AS w, sum(coalesce(t.losses,0))::int AS l, sum(coalesce(t.ties,0))::int AS ti,
-        count(*) FILTER (WHERE t.final_rank = 1)::int AS titles, count(*) FILTER (WHERE t.final_rank <= 2)::int AS finals
-      FROM ${T('teams')} t JOIN ${T('seasons')} s USING (site, season_id)
-      WHERE t.site = $1 AND s.season < $2 AND t.owner_id IS NOT NULL GROUP BY t.owner_id`, [site, FIRST_SEASON]),
-    db.query(`
+  // Champions, from the playoff bracket (teams.final_rank, see lib/archive).
+  const champs = await db.query(`
+      SELECT s.season, t.owner_id AS id FROM ${T('teams')} t JOIN ${T('seasons')} s USING (site, season_id)
+      WHERE t.site = $1 AND t.final_rank = 1 AND t.owner_id IS NOT NULL`, [site]);
+  const titles = new Map<string, number[]>();
+  for (const r of champs.rows) titles.set(r.id, [...(titles.get(r.id) ?? []), Number(r.season)]);
+
+  const rows = await db.query(`
       SELECT s.season, m.week, m.matchup_id, m.points::float AS points, t.owner_id AS id,
         coalesce(t.team_name, mg.display_name, t.owner_id) AS name,
         coalesce((s.settings->>'playoff_week_start')::int, 0) AS playoff_start
       FROM ${T('matchups')} m JOIN ${T('seasons')} s USING (site, season_id)
       JOIN ${T('teams')} t ON t.site = m.site AND t.season_id = m.season_id AND t.roster_id = m.roster_id
       LEFT JOIN ${T('managers')} mg ON mg.site = t.site AND mg.user_id = t.owner_id
-      WHERE m.site = $1 AND s.season >= $2 AND t.owner_id IS NOT NULL
-      ORDER BY s.season, m.week`, [site, FIRST_SEASON]),
-  ]);
-
-  const legacy = new Map<string, Legacy>(past.rows.map(r => {
-    const g = r.w + r.l + r.ti;
-    return [r.id, { titles: r.titles, finals: r.finals, winPct: g ? (r.w + r.ti / 2) / g : 0.5, seasons: r.seasons }];
-  }));
+      WHERE m.site = $1 AND t.owner_id IS NOT NULL
+      ORDER BY s.season, m.week`, [site]);
 
   // Group each week's scores to rank teams and pair opponents.
   const names = new Map<string, string>();
@@ -97,7 +92,8 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
       record.set(key, { w: rec.w + r, g: rec.g + 1 });
     }
   }
-  const inputs = { legacy, games, names, start: kickoff(FIRST_SEASON) };
+  const latestSeason = Math.max(0, ...rows.rows.map(r => Number(r.season)));
+  const inputs = { games, names, latestSeason, titles };
   cache.set(site, { at: Date.now(), inputs });
   return inputs;
 }
@@ -121,11 +117,13 @@ export async function recordDecision(franchiseId: string, d: Decision): Promise<
 export async function economyOf(site: string, franchiseId: string, now = Date.now()): Promise<EconomyState | null> {
   const inputs = await leagueInputs(site);
   if (!inputs) return null;
+  const games = inputs.games.get(franchiseId) ?? [];
+  const first = games[0], last = games.at(-1);
+  // A franchise that has left the league stops a week after its last game.
+  const end = last && last.season < inputs.latestSeason ? Math.min(now, last.at + 7 * DAY) : now;
   return simulate({
-    legacy: inputs.legacy.get(franchiseId) ?? { titles: 0, finals: 0, winPct: 0.5, seasons: 0 },
-    games: inputs.games.get(franchiseId) ?? [],
-    decisions: await decisionsOf(franchiseId),
-    start: inputs.start, now,
+    games, decisions: await decisionsOf(franchiseId), titles: inputs.titles.get(franchiseId) ?? [],
+    start: first ? kickoff(first.season) : end, now: end,
   });
 }
 

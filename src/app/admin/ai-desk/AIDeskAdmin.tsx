@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw } from '@/components/icons';
+import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw, Sparkles } from '@/components/icons';
+import PersonaStudio, { type StudioDraft, type StudioTarget } from './PersonaStudio';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
@@ -217,6 +218,7 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
   const [dirty, setDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [studio, setStudio] = useState<StudioTarget | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -371,6 +373,21 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
     setDirty(true);
     setSaved(false);
   }, []);
+
+  /** A draft from the persona studio: a new member of the cast, or the open one, improved. */
+  const applyStudio = useCallback((draft: StudioDraft, type: 'media' | 'fan') => {
+    const fields = { name: draft.name, handle: draft.handle, tagline: draft.tagline, voice: draft.voice, kinds: draft.kinds, avatarStyle: draft.avatarStyle };
+    if (studio?.kind === 'refine') {
+      const id = studio.persona.id;
+      // A new look only when it has no uploaded portrait of its own.
+      setPeople(ps => ps.map(p => (p.id === id ? { ...p, ...fields, avatarSeed: p.avatarImage ? p.avatarSeed : draft.handle.replace('@', '') } : p)));
+    } else {
+      const id = `custom-${Date.now().toString(36)}`;
+      setPeople(ps => [...ps, { id, ...fields, accent: 'text-primary', type, custom: true, enabled: true, avatarSeed: draft.handle.replace('@', '') }]);
+      setActiveId(id);
+    }
+    setDirty(true); setSaved(false); setStudio(null);
+  }, [studio]);
 
   const restoreHidden = useCallback(() => {
     setPeople(ps => ps.map(p => (p.hidden ? { ...p, hidden: false } : p)));
@@ -638,6 +655,12 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
+              onClick={() => setStudio({ kind: 'create', type: 'media' })}
+              className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md bg-foreground px-2.5 text-xs font-semibold text-background transition-colors hover:bg-foreground/85"
+            >
+              <Sparkles className="h-3 w-3" /> Create with the assistant
+            </button>
+            <button
               onClick={() => addPersona('media')}
               className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
             >
@@ -794,13 +817,19 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
                 </label>
               </div>
 
-              <label className="block">
-                <span className="mb-1 block text-xs text-muted-foreground">
-                  Voice, this is the instruction Claude writes from
-                </span>
-                <textarea value={active.voice} onChange={e => update({ voice: e.target.value })} rows={5}
+              <div>
+                <div className="mb-1 flex flex-wrap items-end justify-between gap-2">
+                  <label htmlFor="persona-voice" className="block text-xs text-muted-foreground">
+                    Voice, this is the instruction Claude writes from
+                  </label>
+                  <button type="button" onClick={() => setStudio({ kind: 'refine', persona: active })}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-colors hover:bg-primary/15">
+                    <Sparkles className="h-3 w-3" /> Improve with the assistant
+                  </button>
+                </div>
+                <textarea id="persona-voice" value={active.voice} onChange={e => update({ voice: e.target.value })} rows={5}
                   className={cn(FIELD, 'leading-relaxed')} />
-              </label>
+              </div>
 
               <div>
                 <span className="mb-1.5 block text-xs text-muted-foreground">Writes</span>
@@ -1078,6 +1107,8 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
 
       {/* Reserve room so the bar never covers the last control. */}
       {(dirty || saving || saved || saveError) && <div className="h-20" aria-hidden />}
+
+      <PersonaStudio target={studio} password={password} onClose={() => setStudio(null)} onApply={applyStudio} />
     </>
   );
 }

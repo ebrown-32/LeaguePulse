@@ -302,11 +302,17 @@ export async function getLeagueWeeks(leagueId: string): Promise<number> {
   }
   
   // Total weeks = regular season + playoff weeks
-  const totalWeeks = playoffStartWeek + numPlayoffWeeks - 1;
-  
-  console.log(`League ${leagueId} (${league.season}): playoff starts week ${playoffStartWeek}, ${playoffTeams} teams, ${isTwoWeekChampionship ? '2-week' : '1-week'} championship, ${numPlayoffWeeks} playoff weeks, total weeks: ${totalWeeks}`);
-  
-  return totalWeeks;
+  const planned = playoffStartWeek + numPlayoffWeeks - 1;
+
+  // The league's own record of its last scored week wins where there is one.
+  // The estimate above assumes a three week postseason, which cut off the
+  // final week of every league whose playoffs run four (weeks 15 to 18), so
+  // those games went missing from history and next-gen stats. A finished
+  // season ends where it was scored; one in progress keeps its full planned
+  // length (live features read the current week), or more if already past it.
+  const last = Math.min(18, Number(league.settings?.last_scored_leg ?? 0) || 0);
+  if (league.status === 'complete' && last > 0) return last;
+  return Math.max(planned, last);
 }
 
 // Helper function to get user display info
@@ -572,6 +578,34 @@ interface AdvancedTeamMetrics {
   finalRank: number;
   playoffAppearance: boolean;
   championship: boolean;
+  /** Across the view: one season, or every season when all time. */
+  playoffAppearances: number;
+  championships: number;
+  /** One line per season in the view, oldest first. */
+  seasons: SeasonLine[];
+}
+
+export interface SeasonLine { season: string; ppg: number; wins: number; losses: number; ties: number; playoff: boolean; champion: boolean }
+
+/**
+ * A season's playoff teams and champion, from its playoff bracket. Only once
+ * the regular season is over: Sleeper sets a bracket up in advance, and a
+ * team's current rank is not a berth. A finished season without a bracket
+ * falls back to final rank within the playoff spots. The champion is the
+ * winner of the bracket's title game (placement 1), once the season is complete.
+ */
+async function seasonPostseason(league: any, rosters: SleeperRoster[]): Promise<{ playoff: Set<number>; champion: number | null }> {
+  const over = league.status === 'complete' || league.status === 'post_season';
+  if (!over) return { playoff: new Set(), champion: null };
+  const bracket = await getPlayoffBracket(league.league_id).catch(() => null);
+  const games: any[] = (bracket?.winners_bracket ?? []).filter(Boolean);
+  const inBracket = new Set<number>(games.flatMap(m => [m.t1, m.t2]).filter((t): t is number => typeof t === 'number'));
+  const spots = league.settings?.playoff_teams || 6;
+  const playoff = inBracket.size ? inBracket
+    : new Set(rosters.filter(r => (r.settings.rank || 0) > 0 && (r.settings.rank || 0) <= spots).map(r => r.roster_id));
+  const final = games.find(m => m.p === 1 && typeof m.w === 'number')
+    ?? [...games].filter(m => typeof m.r === 'number' && typeof m.w === 'number').sort((a, b) => b.r - a.r)[0];
+  return { playoff, champion: league.status === 'complete' && final ? final.w : null };
 }
 
 export async function getAdvancedTeamMetrics(leagueId: string, season?: string): Promise<AdvancedTeamMetrics[]> {
@@ -645,6 +679,15 @@ export async function getAdvancedTeamMetrics(leagueId: string, season?: string):
           existing.momentum.longestWinStreak = Math.max(existing.momentum.longestWinStreak, metric.momentum.longestWinStreak);
           existing.luck.closeLosses += metric.luck.closeLosses;
           existing.luck.expectedWins += metric.luck.expectedWins;
+          existing.playoffAppearances += metric.playoffAppearances;
+          existing.championships += metric.championships;
+          existing.seasons.push(...metric.seasons);
+          // Late-season form, summed across seasons rather than the latest season's alone.
+          const [aw, al] = existing.momentum.lateSeasonRecord.split('-').map(Number);
+          const [bw, bl] = metric.momentum.lateSeasonRecord.split('-').map(Number);
+          const w = (aw || 0) + (bw || 0), l = (al || 0) + (bl || 0);
+          existing.momentum.lateSeasonRecord = `${w}-${l}`;
+          existing.momentum.finalWeeksWinRate = w + l > 0 ? w / (w + l) : 0.5;
         });
         
         console.log(`Season ${league.season}: ${leagueMetrics.length} teams processed, weekly scores: ${leagueMetrics.map(m => m.points.weeklyScores.length).join(', ')}`);
@@ -660,6 +703,11 @@ export async function getAdvancedTeamMetrics(leagueId: string, season?: string):
       const allTimeLeagueAverage = allTimeScores.length > 0 ? allTimeScores.reduce((sum, score) => sum + score, 0) / allTimeScores.length : 0;
       
       metrics.forEach(metric => {
+        // All time: playoffs and titles are counts across seasons, not the latest season's flags.
+        metric.season = 'all-time';
+        metric.playoffAppearance = metric.playoffAppearances > 0;
+        metric.championship = metric.championships > 0;
+        metric.seasons.sort((a, b) => Number(a.season) - Number(b.season));
         const totalGames = metric.points.weeklyScores.length; // Only count completed games
         const totalWLT = metric.record.wins + metric.record.losses + metric.record.ties;
         metric.record.winPct = totalWLT > 0 ? (metric.record.wins + metric.record.ties * 0.5) / totalWLT * 100 : 0;
@@ -686,7 +734,7 @@ export async function getAdvancedTeamMetrics(leagueId: string, season?: string):
         metric.explosiveness.score = totalGames > 0 ? (allTimeExplosiveGames / totalGames) * 100 : 0;
         metric.explosiveness.explosiveRate = totalGames > 0 ? allTimeExplosiveGames / totalGames : 0;
         
-        metric.clutch.score = metric.clutch.closeGames > 0 ? (metric.clutch.closeWins / metric.clutch.closeGames) * 100 : 0;
+        metric.clutch.score = metric.clutch.closeGames > 0 ? (metric.clutch.closeWins / metric.clutch.closeGames) * 100 : 50;
         metric.clutch.closeWinRate = metric.clutch.closeGames > 0 ? metric.clutch.closeWins / metric.clutch.closeGames : 0;
         
         metric.efficiency.score = calculateEfficiencyScore(metric.points.average, metric.record.winPct, totalGames);
@@ -696,7 +744,7 @@ export async function getAdvancedTeamMetrics(leagueId: string, season?: string):
         
         metric.momentum.score = calculateMomentumScore(metric.momentum.finalWeeksWinRate);
         
-        metric.luck.score = calculateLuckScore(metric.luck.expectedWins, metric.record.wins || 0, metric.luck.closeLosses);
+        metric.luck.score = calculateLuckScore(metric.luck.expectedWins, metric.record.wins || 0, totalWLT);
         metric.luck.luckRating = (metric.record.wins || 0) - metric.luck.expectedWins;
       });
 
@@ -758,12 +806,24 @@ async function calculateAdvancedSeasonMetrics(
   // and median games were silently ignored everywhere this is used. The
   // real setting is `league_average_match`, 1 when enabled.
   const medianGamesEnabled = Number(league.settings?.league_average_match ?? 0) === 1;
-  
+
+  // The same games every page counts (history, analytics): a team with a
+  // matchup that week, in a week that is final. A season in progress drops
+  // the week being played: partial scores are not a game's result.
+  if (league.status !== 'complete') {
+    const { weekPhase } = await import('./nflSchedule');
+    allMatchups = await Promise.all(allMatchups.map(async (rows, i) =>
+      ((await weekPhase(String(league.season), i + 1).catch(() => 'upcoming')) === 'final' ? rows : [])));
+  }
+  allMatchups = allMatchups.map(rows => rows.filter(m => m.matchup_id != null));
+
   // Calculate league-wide statistics
   const allScores = allMatchups.flat().map(m => m.points || 0).filter(score => score > 0);
   const leagueAverage = allScores.length > 0 ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length : 0;
   const explosiveThreshold = leagueAverage * 1.2;
   const closeGameThreshold = 10; // Points difference for "close game"
+
+  const postseason = await seasonPostseason(league, rosters);
 
   // Get playoff teams for clutch calculations
   const playoffTeams = league.settings.playoff_teams || 6;
@@ -790,30 +850,26 @@ async function calculateAdvancedSeasonMetrics(
     const standardDeviation = calculateStandardDeviation(weeklyScores);
     const coefficientOfVariation = mean > 0 ? standardDeviation / mean : 0;
 
-    // Calculate close games and clutch performance
-    const closeGames = teamMatchups.filter(match => {
-      const opposingMatch = allMatchups.flat().find(m => 
-        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
-      );
-      return opposingMatch && Math.abs((match.points || 0) - (opposingMatch.points || 0)) < closeGameThreshold;
+    // Each game this team played, with its opponent from the same week.
+    // matchup_id repeats every week (matchup 1 exists in week 1 and in week
+    // 2), so the opponent has to be looked up within the week: searching every
+    // week found the week 1 opponent for every game, which skewed close games,
+    // clutch and wins over playoff teams, and put every game in week 1.
+    const games = allMatchups.flatMap((weekMatchups, week) => {
+      const me = weekMatchups.find(m => m.roster_id === roster.roster_id);
+      if (!me || me.matchup_id == null) return [];
+      const opp = weekMatchups.find(m => m.matchup_id === me.matchup_id && m.roster_id !== me.roster_id);
+      if (!opp || !((me.points || 0) > 0 || (opp.points || 0) > 0)) return [];
+      const margin = (me.points || 0) - (opp.points || 0);
+      return [{ week, opp, margin }];
     });
 
-    const closeWins = closeGames.filter(match => {
-      const opposingMatch = allMatchups.flat().find(m => 
-        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
-      );
-      return opposingMatch && (match.points || 0) > (opposingMatch.points || 0);
-    }).length;
+    // Calculate close games and clutch performance
+    const closeGames = games.filter(g => Math.abs(g.margin) < closeGameThreshold);
+    const closeWins = closeGames.filter(g => g.margin > 0).length;
 
     // Calculate wins against playoff teams
-    const playoffWins = teamMatchups.filter(match => {
-      const opposingMatch = allMatchups.flat().find(m => 
-        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
-      );
-      return opposingMatch && 
-             (match.points || 0) > (opposingMatch.points || 0) && 
-             playoffRosterIds.has(opposingMatch.roster_id);
-    }).length;
+    const playoffWins = games.filter(g => g.margin > 0 && playoffRosterIds.has(g.opp.roster_id)).length;
 
     // Calculate explosive games
     const explosiveGames = weeklyScores.filter(score => score > explosiveThreshold).length;
@@ -824,37 +880,27 @@ async function calculateAdvancedSeasonMetrics(
     // Calculate late season performance (last 4 weeks)
     const regularSeasonWeeks = league.settings.playoff_week_start ? league.settings.playoff_week_start - 1 : 14;
     const lateSeasonWeeks = Math.max(0, regularSeasonWeeks - 4);
-    const lateSeasonMatchups = teamMatchups.filter(match => {
-      const week = allMatchups.findIndex(weekMatchups => 
-        weekMatchups.some(m => m.matchup_id === match.matchup_id)
-      );
-      return week >= lateSeasonWeeks && week < regularSeasonWeeks;
-    });
+    // Weeks are counted from 0 here: the last four regular-season weeks.
+    const lateSeasonMatchups = games.filter(g => g.week >= lateSeasonWeeks && g.week < regularSeasonWeeks);
+    const lateSeasonWins = lateSeasonMatchups.filter(g => g.margin > 0).length;
 
-    const lateSeasonWins = lateSeasonMatchups.filter(match => {
-      const opposingMatch = allMatchups.flat().find(m => 
-        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
-      );
-      return opposingMatch && (match.points || 0) > (opposingMatch.points || 0);
-    }).length;
-
-    const lateSeasonWinRate = lateSeasonMatchups.length > 0 ? lateSeasonWins / lateSeasonMatchups.length : 0;
+    // None played yet (a season in progress): neutral, not a losing finish.
+    const lateSeasonWinRate = lateSeasonMatchups.length > 0 ? lateSeasonWins / lateSeasonMatchups.length : 0.5;
 
     // Calculate expected wins based on points scored
-    const expectedWins = calculateExpectedWins(weeklyScores, allScores);
+    // Against the regular season only (the record it is compared with), and
+    // twice a week when the league also plays the weekly median game.
+    const regularWeeks = allMatchups.slice(0, regularSeasonWeeks);
+    const regularScores = regularWeeks.flat().map(m => m.points || 0).filter(score => score > 0);
+    const myRegularScores = regularWeeks.map(w => w.find(m => m.roster_id === roster.roster_id)?.points || 0).filter(score => score > 0);
+    const expectedWins = calculateExpectedWins(myRegularScores, regularScores) * (medianGamesEnabled ? 2 : 1);
 
     // Calculate close losses
-    const closeLosses = teamMatchups.filter(match => {
-      const opposingMatch = allMatchups.flat().find(m => 
-        m.matchup_id === match.matchup_id && m.roster_id !== match.roster_id
-      );
-      return opposingMatch && 
-             (match.points || 0) < (opposingMatch.points || 0) && 
-             Math.abs((match.points || 0) - (opposingMatch.points || 0)) < closeGameThreshold;
-    }).length;
+    const closeLosses = closeGames.filter(g => g.margin < 0).length;
 
     const finalRank = roster.settings.rank || 0;
-    const playoffAppearance = finalRank > 0 && finalRank <= playoffTeams;
+    const playoffAppearance = postseason.playoff.has(roster.roster_id);
+    const championship = postseason.champion === roster.roster_id;
 
     // Calculate total games played (accounting for median games)
     // Sleeper roster settings already include median game wins/losses if enabled
@@ -900,7 +946,8 @@ async function calculateAdvancedSeasonMetrics(
         highestWeekRank: calculateHighestWeekRank(teamMatchups, allMatchups),
       },
       clutch: {
-        score: closeGames.length > 0 ? (closeWins / closeGames.length) * 100 : 0,
+        // No close games is no evidence either way: neutral, not zero.
+        score: closeGames.length > 0 ? (closeWins / closeGames.length) * 100 : 50,
         closeWins,
         closeGames: closeGames.length,
         closeWinRate: closeGames.length > 0 ? closeWins / closeGames.length : 0,
@@ -921,7 +968,7 @@ async function calculateAdvancedSeasonMetrics(
         currentStreak: calculateCurrentStreak(teamMatchups, allMatchups),
       },
       luck: {
-        score: calculateLuckScore(expectedWins, roster.settings.wins || 0, closeLosses),
+        score: calculateLuckScore(expectedWins, roster.settings.wins || 0, totalGames),
         expectedWins,
         luckRating: (roster.settings.wins || 0) - expectedWins,
         closeLosses,
@@ -929,7 +976,14 @@ async function calculateAdvancedSeasonMetrics(
       season: league.season,
       finalRank,
       playoffAppearance,
-      championship: false, // Will be calculated separately if needed
+      championship,
+      playoffAppearances: playoffAppearance ? 1 : 0,
+      championships: championship ? 1 : 0,
+      seasons: [{
+        season: String(league.season), ppg: mean,
+        wins: roster.settings.wins || 0, losses: roster.settings.losses || 0, ties: roster.settings.ties || 0,
+        playoff: playoffAppearance, champion: championship,
+      }],
     };
   });
 
@@ -996,10 +1050,15 @@ function calculateExpectedWins(teamScores: number[], allScores: number[]): numbe
   return expectedWins;
 }
 
-function calculateLuckScore(expectedWins: number, actualWins: number, closeLosses: number): number {
-  const winLuck = Math.max(0, Math.min(100, 50 + (actualWins - expectedWins) * 20));
-  const closeLossPenalty = Math.max(0, closeLosses * 10);
-  return Math.max(0, winLuck - closeLossPenalty);
+/**
+ * Luck, 0 to 100 with 50 neutral: wins above what the scoring deserved, per
+ * game, so a season and a career read on the same scale (two wins of luck in
+ * fourteen games is about 85). Close losses are not counted again: they are
+ * already wins that did not happen.
+ */
+function calculateLuckScore(expectedWins: number, actualWins: number, games: number): number {
+  if (!games) return 50;
+  return Math.max(0, Math.min(100, 50 + ((actualWins - expectedWins) / games) * 250));
 }
 
 // matchup_id is only unique within a single week, so opponent lookups must

@@ -20,6 +20,9 @@ interface SeasonSlice {
   season: string;
   weeks: number;
   actual: number;
+  /** Weeks with lineup data, and their points: what efficiency is measured over. */
+  managedWeeks: number;
+  managedActual: number;
   optimal: number;
   efficiency: number | null;
   benchPoints: number;
@@ -37,7 +40,7 @@ interface CareerMetrics {
   userId: string; username: string; avatar: string;
   seasons: SeasonSlice[];
   weeksPlayed: number;
-  actual: number; optimal: number; efficiency: number | null;
+  actual: number; managedWeeks: number; managedActual: number; optimal: number; efficiency: number | null;
   benchPoints: number; benchPerWeek: number;
   allPlayWins: number; allPlayLosses: number; allPlayPct: number;
   medianWins: number; medianLosses: number;
@@ -103,7 +106,7 @@ function viewOf(m: CareerMetrics, season: string): ManagerView | null {
       m, weeks: m.weeksPlayed, efficiency: m.efficiency,
       benchPoints: m.benchPoints, benchPerWeek: m.benchPerWeek,
       allPlayPct: m.allPlayPct, medianWins: m.medianWins, medianLosses: m.medianLosses,
-      actual: m.actual, optimal: m.optimal,
+      actual: m.managedActual, optimal: m.optimal,
     };
   }
   const slice = m.seasons.find(x => x.season === season);
@@ -113,10 +116,10 @@ function viewOf(m: CareerMetrics, season: string): ManagerView | null {
   return {
     m, weeks: slice.weeks, efficiency: slice.efficiency,
     benchPoints: slice.benchPoints,
-    benchPerWeek: round(slice.benchPoints / slice.weeks),
+    benchPerWeek: slice.managedWeeks ? round(slice.benchPoints / slice.managedWeeks) : 0,
     allPlayPct: ap ? round((slice.allPlayWins / ap) * 100) : 0,
     medianWins: slice.medianWins, medianLosses: slice.medianLosses,
-    actual: slice.actual, optimal: slice.optimal,
+    actual: slice.managedActual, optimal: slice.optimal,
   };
 }
 
@@ -163,6 +166,12 @@ export default function CareerMetricsSection({ season = 'all-time' }: { season?:
   const bestAllPlay = [...views].sort((a, b) => b.allPlayPct - a.allPlayPct)[0];
 
   const scope = season === 'all-time' ? 'all time' : season;
+  // Seasons with lineup data (every player's points). Some have none: ESPN keeps
+  // no player scores for its oldest seasons, so lineups there cannot be judged.
+  const lineupSeasons = report.seasons.filter(y => report.managers.some(m => m.seasons.some(x => x.season === y && x.managedWeeks > 0)));
+  const noLineups = report.seasons.filter(y => !lineupSeasons.includes(y));
+  const latest = report.seasons.at(-1);
+  const lastSeason = (m: CareerMetrics) => m.seasons.filter(x => x.weeks > 0).map(x => x.season).sort().at(-1);
   const weeksShown = views.reduce((n, v) => Math.max(n, v.weeks), 0);
 
   if (!views.length) {
@@ -181,7 +190,7 @@ export default function CareerMetricsSection({ season = 'all-time' }: { season?:
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {season === 'all-time'
-            ? `${report.weeksCovered} league weeks across ${report.seasons.join(', ')}, every one scored against the best lineup that manager could have started.`
+            ? `${report.weeksCovered} league weeks across ${report.seasons.length} seasons. Lineups are scored against the best lineup each manager could have started${noLineups.length ? `, from ${lineupSeasons[0]} on: ${noLineups.length === 1 ? noLineups[0] : `${noLineups[0]} to ${noLineups.at(-1)}`} has no player scores to judge lineups by, so it counts in all-play and medians only` : ''}.`
             : `${weeksShown} weeks of ${season}, each scored against the best lineup that manager could have started.`}
         </p>
       </div>
@@ -252,6 +261,11 @@ export default function CareerMetricsSection({ season = 'all-time' }: { season?:
                     <div className="flex items-center gap-2">
                       <Avatar avatarId={m.avatar} size={24} className="shrink-0" />
                       <span className="truncate font-semibold text-foreground">{m.username}</span>
+                      {season === 'all-time' && latest && lastSeason(m) !== latest && (
+                        <span title={`Last played ${lastSeason(m)}`} className="shrink-0 rounded border border-border bg-muted px-1 py-px text-[8px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Former
+                        </span>
+                      )}
                       {m.efficiencyRank === 1 && (
                         <span className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1 py-px text-[8px] font-bold uppercase tracking-wider text-primary">
                           #1
