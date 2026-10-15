@@ -138,9 +138,12 @@ const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 interface NavbarProps {
   logoUrl?: string | null;
   leagueName?: string | null;
+  /** Whether franchises exist: they are built from the league archive, which needs a database. */
+  franchises?: boolean;
 }
 
-export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
+export default function Navbar({ logoUrl, leagueName, franchises = true }: NavbarProps) {
+  const shown = (item: NavItem) => franchises || item.href !== '/franchises';
   const pathname  = usePathname();
   const [isOpen,    setIsOpen]    = useState(false);
   const [moreOpen,  setMoreOpen]  = useState(false);
@@ -325,7 +328,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                         rather than repeated a few pixels below itself. */}
                     {NAV_GROUPS.map(group => {
                       const items = group.items.filter(
-                        item => !PRIMARY_NAV.some(p => p.href === item.href),
+                        item => shown(item) && !PRIMARY_NAV.some(p => p.href === item.href),
                       );
                       if (!items.length) return null;
                       return (
@@ -376,7 +379,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
             {/* One index for the palette, built from the same nav lists so a
                 page can never be navigable but unsearchable. */}
             <SearchPalette
-              pages={ALL_NAV.map(n => ({
+              pages={ALL_NAV.filter(shown).map(n => ({
                 id: n.href,
                 label: n.name,
                 href: n.href,
@@ -449,7 +452,7 @@ export default function Navbar({ logoUrl, leagueName }: NavbarProps) {
                       {group.label}
                     </p>
                     <div className="space-y-0.5">
-                      {group.items.map((item, i) => {
+                      {group.items.filter(shown).map((item, i) => {
                         const isActive = pathname === item.href;
                         return (
                           <motion.div

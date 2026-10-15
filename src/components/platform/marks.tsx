@@ -168,6 +168,17 @@ export function PennantMark(p: P) {
   );
 }
 
+/** Franchise HQ: a stadium bowl, its field showing inside. */
+export function StadiumMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M3.5 13c0-3.9 5.6-7 12.5-7s12.5 3.1 12.5 7v6c0 3.9-5.6 7-12.5 7s-12.5-3.1-12.5-7Z" />
+      <path d="M3.5 13c0 3.9 5.6 7 12.5 7s12.5-3.1 12.5-7" />
+      <A d="M10.5 11.5h11.5l2 3.3H8.6Z" />
+    </Frame>
+  );
+}
+
 /** The app: a phone with a tile landing on its home screen. */
 export function PhoneMark(p: P) {
   return (

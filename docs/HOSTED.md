@@ -271,6 +271,15 @@ approves it, or it is approved at once for the league's own admins and for
 an email the admins invited. One franchise per account per league. See
 `src/lib/franchise/`.
 
+**Managing a franchise is a hosted perk.** Claims, the manage page and the
+game itself (prices, building) need a LeaguePulse account, and accounts exist
+only on the hosted product. A self-hosted copy with `DATABASE_URL` still gets
+the franchise pages, stadiums, crowds, the front office log and the value
+ranking, with every franchise on autopilot; its admin can edit a franchise's
+public face (logo, color, motto, bio, stadium look) at `/team/<id>/manage`
+but not set prices or build. Without `DATABASE_URL` there are no franchises,
+and the Franchises link is left out of the navigation.
+
 **Franchise HQ** (`src/lib/tycoon/`) runs each franchise as a business on real
 results. `economy.ts` is a pure, deterministic replay from the 2026 kickoff to
 now: daily merchandise, sponsors and upkeep; a game day each archived week
