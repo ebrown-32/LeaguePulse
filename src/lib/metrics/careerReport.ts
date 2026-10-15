@@ -25,6 +25,14 @@ export interface SeasonSlice {
   season: string;
   weeks: number;
   actual: number;
+  /**
+   * Weeks with lineup data (every player's points), and the points scored in
+   * them: what efficiency and bench points are measured over. Some seasons have
+   * none (ESPN keeps no player scores for its oldest seasons), and counting
+   * their points against no optimal lineup put efficiency far above 100%.
+   */
+  managedWeeks: number;
+  managedActual: number;
   optimal: number;
   efficiency: number | null;
   benchPoints: number;
@@ -55,6 +63,9 @@ export interface CareerMetrics {
 
   /** Career totals. */
   actual: number;
+  /** Weeks with lineup data, and their points (see SeasonSlice). */
+  managedWeeks: number;
+  managedActual: number;
   optimal: number;
   /** Career coaching efficiency: every point started over every point available. */
   efficiency: number | null;
@@ -176,7 +187,7 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
             username: u?.display_name ?? 'Unknown',
             avatar: teamAvatar(u),
             seasons: [], weeksPlayed: 0,
-            actual: 0, optimal: 0, efficiency: null, benchPoints: 0, benchPerWeek: 0,
+            actual: 0, managedWeeks: 0, managedActual: 0, optimal: 0, efficiency: null, benchPoints: 0, benchPerWeek: 0,
             allPlayWins: 0, allPlayLosses: 0, allPlayPct: 0, medianWins: 0, medianLosses: 0,
             pointsByPosition: [], bestManaged: null, worstManaged: null, efficiencyRank: 0,
           };
@@ -199,7 +210,11 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
             positions: players[id]?.fantasy_positions ?? [players[id]?.position].filter(Boolean),
           }));
         const opt = optimalLineup(candidates, rosterPositions);
-        const eff = coachingEfficiency(actual, opt.total);
+        // The best lineup can never score less than the one started. When it
+        // does, the week's player scores are incomplete (a starter missing from
+        // the data), so the week cannot judge a lineup: leave it out of the
+        // lineup measures rather than report over 100%.
+        const eff = opt.total + 0.05 < actual ? null : coachingEfficiency(actual, opt.total);
 
         const posMap = positionTotals.get(userId) ?? new Map<string, number>();
         for (const id of starters.filter(x => x && x !== '0')) {
@@ -211,7 +226,7 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
         let slice = entry.seasons.find(s => s.season === season);
         if (!slice) {
           slice = {
-            season, weeks: 0, actual: 0, optimal: 0, efficiency: null, benchPoints: 0,
+            season, weeks: 0, actual: 0, managedWeeks: 0, managedActual: 0, optimal: 0, efficiency: null, benchPoints: 0,
             allPlayWins: 0, allPlayLosses: 0, medianWins: 0, medianLosses: 0, averageScore: 0,
           };
           entry.seasons.push(slice);
@@ -221,18 +236,28 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
         const apL = scores.filter(s => actual < s).length;
         const bench = Math.max(0, opt.total - actual);
 
+        // Lineup measures only where there is lineup data to measure against.
+        const managedWeek = eff !== null;
         entry.weeksPlayed++;
         entry.actual = round(entry.actual + actual);
-        entry.optimal = round(entry.optimal + opt.total);
-        entry.benchPoints = round(entry.benchPoints + bench);
+        if (managedWeek) {
+          entry.managedWeeks++;
+          entry.managedActual = round(entry.managedActual + actual);
+          entry.optimal = round(entry.optimal + opt.total);
+          entry.benchPoints = round(entry.benchPoints + bench);
+        }
         entry.allPlayWins += apW;
         entry.allPlayLosses += apL;
         if (actual > med) entry.medianWins++; else entry.medianLosses++;
 
         slice.weeks++;
         slice.actual = round(slice.actual + actual);
-        slice.optimal = round(slice.optimal + opt.total);
-        slice.benchPoints = round(slice.benchPoints + bench);
+        if (managedWeek) {
+          slice.managedWeeks++;
+          slice.managedActual = round(slice.managedActual + actual);
+          slice.optimal = round(slice.optimal + opt.total);
+          slice.benchPoints = round(slice.benchPoints + bench);
+        }
         slice.allPlayWins += apW;
         slice.allPlayLosses += apL;
         if (actual > med) slice.medianWins++; else slice.medianLosses++;
@@ -252,13 +277,13 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
 
   const managers = [...byUser.values()];
   for (const m of managers) {
-    m.efficiency = coachingEfficiency(m.actual, m.optimal);
-    m.benchPerWeek = m.weeksPlayed ? round(m.benchPoints / m.weeksPlayed) : 0;
+    m.efficiency = coachingEfficiency(m.managedActual, m.optimal);
+    m.benchPerWeek = m.managedWeeks ? round(m.benchPoints / m.managedWeeks) : 0;
     const ap = m.allPlayWins + m.allPlayLosses;
     m.allPlayPct = ap ? round((m.allPlayWins / ap) * 100) : 0;
 
     for (const s of m.seasons) {
-      s.efficiency = coachingEfficiency(s.actual, s.optimal);
+      s.efficiency = coachingEfficiency(s.managedActual, s.optimal);
       s.averageScore = s.weeks ? round(s.actual / s.weeks) : 0;
     }
     m.seasons.sort((a, b) => a.season.localeCompare(b.season));
@@ -276,7 +301,7 @@ export async function buildCareerReport(initialLeagueId: string): Promise<Career
 
   // Rank only managers with a meaningful sample; everyone else sorts last.
   const rankable = managers
-    .filter(m => m.weeksPlayed >= MIN_WEEKS_TO_RANK && m.efficiency !== null)
+    .filter(m => m.managedWeeks >= MIN_WEEKS_TO_RANK && m.efficiency !== null)
     .sort((a, b) => (b.efficiency ?? 0) - (a.efficiency ?? 0));
   rankable.forEach((m, i) => { m.efficiencyRank = i + 1; });
 

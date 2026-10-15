@@ -1,17 +1,23 @@
 /**
  * The franchise economy: a pure, deterministic replay.
  *
- * Starting from the season's opening day with a head start set by the
- * franchise's history (legacy), it walks forward a day at a time to now:
+ * Every franchise starts the same (a small field, middling fans, a little
+ * VC) on opening day of its first season in the league, and walks forward a
+ * day at a time to now, through every archived season:
  *   every day     merchandise and sponsors pay a little, upkeep is paid
  *   game days     the week's real result: a crowd comes (or does not), buys
  *                 food, parks, and goes home happier or angrier
  *   decisions     the manager's price changes and purchases, at the moment
  *                 they were made
  *
+ * Until a manager takes over, the old front office runs it: fair prices, and
+ * each offseason a share of the season's earnings put back into the place
+ * (more after a winning season), the owner taking the rest. A manager's
+ * first decision of either kind ends that for good.
+ *
  * Fans follow the team. Interest (0 to 100) drifts toward a target set by
- * recent form, how the team scored against the league that week, the
- * stadium and the franchise's legacy; prices well above what fans think is
+ * recent form, how the team scored against the league that week and the
+ * stadium; prices well above what fans think is
  * fair breed resentment, which costs interest until prices come down.
  * Interest sets the fair price and how many come, so winning earns room to
  * charge more and losing punishes greed.
@@ -22,8 +28,6 @@
  */
 
 import { EMPTY_FACILITIES, TRACK, TRACKS, facilityStats, nextLevel, type Facilities, type FacilityStats, type TrackId } from './catalog.ts';
-
-export interface Legacy { titles: number; finals: number; winPct: number; seasons: number }
 
 export interface GameDay {
   key: string; season: number; week: number;
@@ -55,7 +59,7 @@ export interface GameReport {
   interest: number; interestChange: number;
 }
 
-export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start'; title: string; detail: string }
+export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title'; title: string; detail: string }
 
 export interface Day { at: number; vc: number; interest: number; merch: number; sponsors: number; upkeep: number }
 
@@ -69,38 +73,63 @@ export interface EconomyState {
   prices: Prices;
   /** True while prices follow the old front office's rule (no manager has set them). */
   autopilot: boolean;
+  /** True once a manager has made any decision: the old front office stops building. */
+  managed: boolean;
   games: GameReport[];
   days: Day[];
   story: StoryEvent[];
   /** Built cost of everything, in VC: part of the franchise's value. */
   invested: number;
+  /** Championships won: banners, a lasting draw for fans and merchandise, and value. */
+  titles: number;
 }
 
 export const DAY = 86_400_000;
 export const VC_PER_DOLLAR = 1 / 4_000;
+/** What a championship adds to a franchise's value, for good: the banner. */
+export const TITLE_VALUE = 30_000_000;
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const round5 = (x: number) => Math.max(5, Math.round(x / 5) * 5);
 
-/** How strong a franchise's history is, about 0 to 100. */
-export function legacyScore(l: Legacy): number {
-  return clamp(l.titles * 12 + l.finals * 4 + l.winPct * 40 + Math.min(l.seasons, 10) * 1.5, 0, 100);
-}
-
-/** Where a franchise starts: fan interest, a stadium and VC in proportion to its history. */
-export function startingState(l: Legacy): EconomyState {
-  const score = legacyScore(l);
-  const stadium = score >= 55 ? 2 : score >= 28 ? 1 : 0;
-  // An inherited stadium comes with the lots and restrooms a stadium that size would have.
-  const facilities: Facilities = { ...EMPTY_FACILITIES, stadium, parking: stadium, restrooms: stadium >= 2 ? 1 : 0 };
-  const interest = clamp(32 + score * 0.45, 25, 82);
+/** Where every franchise starts, on opening day of its first season. */
+export function startingState(): EconomyState {
   const state: EconomyState = {
-    vc: Math.round(150 + score * 10), interest, form: clamp(l.winPct, 0.2, 0.8), resentment: 0, facilities,
-    prices: { ticket: 0, concession: 0, parking: 0 }, autopilot: true, games: [], days: [], story: [], invested: 0,
+    vc: 150, interest: 40, form: 0.5, resentment: 0, facilities: { ...EMPTY_FACILITIES },
+    prices: { ticket: 0, concession: 0, parking: 0 }, autopilot: true, managed: false, games: [], days: [], story: [], invested: 0, titles: 0,
   };
   const { exact: _, ...fair } = fairPrices(state);
   state.prices = fair;
   return state;
+}
+
+/** Upgrades that add room for fans: the old front office only builds them when fans fill what is there. */
+const ROOM: ReadonlySet<TrackId> = new Set(['stadium', 'seating', 'parking']);
+/** What the old front office keeps in the bank each offseason; the owner takes the rest. */
+export const FRONT_OFFICE_RESERVE = 2_000;
+
+/**
+ * The old front office's offseason, before a manager takes over: it puts a
+ * share of what the season earned back into the place (more after a winning
+ * season), cheapest upgrades first, and more room for fans only when recent
+ * crowds filled nine seats in ten. The owner takes the rest, down to a
+ * working reserve, so years of unspent profit do not pile up as value.
+ */
+function frontOfficeOffseason(s: EconomyState, at: number, earned: number, winning: boolean) {
+  let budget = Math.max(0, earned) * (winning ? 0.6 : 0.3);
+  const recent = s.games.slice(-7);
+  const full = recent.length >= 4 && recent.reduce((a, g) => a + g.fill, 0) / recent.length >= 0.9;
+  for (;;) {
+    const pick = TRACKS.filter(t => full || !ROOM.has(t.id))
+      .map(t => ({ track: t.id, n: nextLevel(s.facilities, t.id) }))
+      .flatMap(o => (o.n && 'spec' in o.n ? [{ track: o.track, level: o.n.level, spec: o.n.spec }] : []))
+      .sort((a, b) => a.spec.cost - b.spec.cost)[0];
+    if (!pick || pick.spec.cost > budget || pick.spec.cost > s.vc) break;
+    budget -= pick.spec.cost; s.vc -= pick.spec.cost; s.invested += pick.spec.cost;
+    s.facilities = { ...s.facilities, [pick.track]: pick.level };
+    tell(s, { at, kind: 'build', title: `Built: ${pick.spec.name}`, detail: `${TRACK[pick.track].name}, by the old front office.` });
+  }
+  if (s.vc > FRONT_OFFICE_RESERVE) s.vc = FRONT_OFFICE_RESERVE;
 }
 
 /** What fans think is fair, given how keen they are and how good the place is. */
@@ -157,7 +186,8 @@ export function projectGame(
 
 /** Daily money between games: the store, sponsors on the board, and upkeep. */
 function dailyMoney(s: EconomyState, f: FacilityStats) {
-  const merch = Math.round((300 + 900 * f.store) * Math.pow(s.interest / 50, 1.6) * (0.8 + 0.4 * s.form));
+  // Champions sell more: each title adds 15% to merchandise, up to five.
+  const merch = Math.round((300 + 900 * f.store) * Math.pow(s.interest / 50, 1.6) * (0.8 + 0.4 * s.form) * (1 + 0.15 * Math.min(s.titles, 5)));
   const sponsors = Math.round(f.board * f.appeal * 30);
   const upkeep = Math.round(f.upkeep / 7);
   return { merch, sponsors, upkeep };
@@ -172,7 +202,7 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
   // Fans react to the result, the week, the stadium and the prices.
   s.form = s.form * 0.65 + (result === 'W' ? 1 : result === 'T' ? 0.5 : 0) * 0.35;
   const weekShare = g.teams > 1 ? 1 - (g.rank - 1) / (g.teams - 1) : 0.5;
-  const target = 20 + 45 * s.form + 15 * weekShare + 0.15 * f.appeal + 4 * f.atmosphere;
+  const target = 20 + 45 * s.form + 15 * weekShare + 0.08 * f.appeal + 2 * f.atmosphere;
   s.interest += (target - s.interest) * (0.3 - 0.04 * f.atmosphere * (target < s.interest ? 1 : 0));
   if (g.postseason && result === 'W') s.interest += 5;
   const overprice = s.prices.ticket / p.fairTicket;
@@ -194,19 +224,27 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
 
 function tell(s: EconomyState, e: StoryEvent) { s.story.push(e); }
 
-/** The whole replay. `start` is opening day (epoch ms); `now` is where it stops. */
-export function simulate(o: { legacy: Legacy; games: GameDay[]; decisions: Decision[]; start: number; now: number }): EconomyState {
-  const s = startingState(o.legacy);
-  tell(s, { at: o.start, kind: 'start', title: 'Opening day', detail: `${facilityStats(s.facilities).stadiumName}, ${Math.round(s.interest)} fan interest, ${Math.round(s.vc)} VC in the bank.` });
+/**
+ * The whole replay. `start` is opening day of the franchise's first season
+ * (epoch ms); `now` is where it stops: today, or the end of a former
+ * franchise's last season.
+ */
+export function simulate(o: { games: GameDay[]; decisions: Decision[]; start: number; now: number; titles?: number[] }): EconomyState {
+  const s = startingState();
   const games = [...o.games].sort((a, b) => a.at - b.at);
+  // A title is won with the season's last game.
+  const won = new Set(o.titles ?? []);
+  const seasonEnd = new Map<number, number>();
+  for (const g of games) seasonEnd.set(g.season, Math.max(seasonEnd.get(g.season) ?? 0, g.at));
   const decisions = [...o.decisions].sort((a, b) => a.at - b.at);
-  let gi = 0, di = 0, streak = 0, best = 0, milestone = 1_000;
+  let gi = 0, di = 0, streak = 0, best = 0, milestone = 1_000, season = 0, seasonStartVc = s.vc;
 
   for (let day = o.start; day <= o.now; day += DAY) {
     const end = Math.min(day + DAY, o.now + 1);
     // Decisions made today, in order.
     while (di < decisions.length && decisions[di].at < end) {
       const d = decisions[di++];
+      s.managed = true;
       if (d.kind === 'prices') {
         s.prices = { ...d.prices }; s.autopilot = false;
         tell(s, { at: d.at, kind: 'prices', title: 'New prices', detail: `Tickets $${d.prices.ticket}, food $${d.prices.concession}, parking $${d.prices.parking}.` });
@@ -227,8 +265,23 @@ export function simulate(o: { legacy: Legacy; games: GameDay[]; decisions: Decis
 
     while (gi < games.length && games[gi].at < end) {
       const g = games[gi++];
+      if (g.season !== season) {
+        if (season && !s.managed) {
+          const last = s.games.filter(x => x.season === season);
+          const wins = last.filter(x => x.result === 'W').length + last.filter(x => x.result === 'T').length / 2;
+          frontOfficeOffseason(s, g.at, s.vc - seasonStartVc, last.length > 0 && wins / last.length >= 0.5);
+        }
+        season = g.season;
+        seasonStartVc = s.vc;
+        tell(s, { at: g.at, kind: 'start', title: `The ${season} season`, detail: `${facilityStats(s.facilities).stadiumName}, ${Math.round(s.interest)} fan interest, ${Math.round(s.vc).toLocaleString('en-US')} VC in the bank.` });
+      }
       const r = playGame(s, g);
       s.games.push(r);
+      if (won.has(g.season) && g.at === seasonEnd.get(g.season)) {
+        s.titles += 1;
+        s.interest = clamp(s.interest + 12, 5, 100);
+        tell(s, { at: g.at, kind: 'title', title: `Champions, ${g.season}`, detail: s.titles === 1 ? 'The first banner goes up. The whole town is wearing the colors.' : `Banner number ${s.titles}. A dynasty sells itself.` });
+      }
       streak = r.result === 'W' ? Math.max(1, streak + 1) : r.result === 'L' ? Math.min(-1, streak - 1) : 0;
       if (r.fill >= 0.995) tell(s, { at: g.at, kind: 'sellout', title: 'Sold out', detail: `Every one of ${r.capacity.toLocaleString('en-US')} seats, week ${g.week}.` });
       else if (r.attendance > best && s.games.length > 1) tell(s, { at: g.at, kind: 'record', title: 'Record crowd', detail: `${r.attendance.toLocaleString('en-US')} came for week ${g.week}.` });
@@ -244,11 +297,11 @@ export function simulate(o: { legacy: Legacy; games: GameDay[]; decisions: Decis
   return s;
 }
 
-/** A franchise's worth, in dollars: what it has built, its war chest, its fans, and what it earns. */
+/** A franchise's worth, in dollars: what it has built, its war chest, its fans, what it earns, and its titles. */
 export function franchiseValue(s: EconomyState): number {
   const recent = s.games.slice(-4);
   const earning = recent.length ? recent.reduce((a, g) => a + g.profit, 0) / recent.length : 0;
-  return Math.round((s.invested + s.vc) * 4_000 + Math.max(0, earning) * 17 * 4 + s.interest * 400_000 + facilityStats(s.facilities).capacity * 1_500);
+  return Math.round((s.invested + s.vc) * 4_000 + Math.max(0, earning) * 17 * 4 + s.interest * 400_000 + facilityStats(s.facilities).capacity * 1_500 + s.titles * TITLE_VALUE);
 }
 
 /** What the next purchase on each track costs, and whether the franchise can afford it. */

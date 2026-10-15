@@ -12,6 +12,7 @@ import {
 import type { SleeperTransaction } from '@/types/sleeper';
 import { teamAvatar } from '@/lib/teamAvatar';
 import { seasonGamesPlayed } from '@/lib/games';
+import { weekPhase } from '@/lib/nflSchedule';
 
 // Enhanced types for better data accuracy
 export interface EnhancedHistoricalRecord {
@@ -56,6 +57,8 @@ export interface EnhancedUserStats {
   totalPoints: number;
   totalPointsAgainst: number;
   totalWeeksScored: number;
+  /** Games that had an opponent: what points against is averaged over. */
+  gamesWithOpponent: number;
   championships: number;
   playoffAppearances: number;
   regularSeasonChampionships: number;
@@ -278,6 +281,7 @@ async function processLeagueSeason(
         totalPoints: 0,
         totalPointsAgainst: 0,
         totalWeeksScored: 0,
+        gamesWithOpponent: 0,
         championships: 0,
         playoffAppearances: 0,
         regularSeasonChampionships: 0,
@@ -312,7 +316,7 @@ async function processLeagueSeason(
 
   // Get all matchups and transactions for the season in parallel
   const totalWeeks = await getLeagueWeeks(leagueId);
-  const [allMatchups, allTransactions] = await Promise.all([
+  const [weeklyMatchups, allTransactions] = await Promise.all([
     Promise.all(
       Array.from({ length: totalWeeks }, (_, i) =>
         getLeagueMatchups(leagueId, i + 1).catch(() => [])
@@ -320,6 +324,13 @@ async function processLeagueSeason(
     ),
     getSeasonTransactions(leagueId, totalWeeks).catch(() => [] as SleeperTransaction[])
   ]);
+
+  // This season's weeks count once they are final: a week still being played
+  // has partial scores, which are not a game's result (nor a record low).
+  const allMatchups = league.season === currentSeason
+    ? await Promise.all(weeklyMatchups.map(async (rows, i) =>
+        ((await weekPhase(String(league.season), i + 1).catch(() => 'upcoming')) === 'final' ? rows : [])))
+    : weeklyMatchups;
 
   // Process transaction activity per manager
   processTransactionsForSeason(allTransactions, users, rosters, userStatsMap);
@@ -399,13 +410,18 @@ async function processMatchupsForSeason(
 
     // Process individual scores for records and bench points
     weekMatchups.forEach(matchup => {
-      if (typeof matchup.points === 'number' && matchup.points > 0) {
+      // A game: the team had a matchup that week and scored. A week with no
+      // matchup (an eliminated team in the playoffs) is not one, the same rule
+      // the analytics tables use (lib/analytics/datasets.ts), so both pages
+      // agree on points a game.
+      if (typeof matchup.points === 'number' && matchup.points > 0 && matchup.matchup_id != null) {
         const user = findUserByRoster(matchup.roster_id, users, rosters);
         if (user) {
           userSeasonScores.get(user.user_id)?.push(matchup.points);
 
           const userStats = userStatsMap.get(user.user_id)!;
           userStats.totalWeeksScored += 1;
+          userStats.totalPoints += matchup.points;
           userStats.highestScore = Math.max(userStats.highestScore, matchup.points);
           userStats.lowestScore = Math.min(userStats.lowestScore, matchup.points);
 
@@ -479,9 +495,10 @@ async function processHeadToHeadMatchup(
     userStats2.headToHeadRecord[user1.user_id].ties++;
   }
 
-  // Update total points
-  userStats1.totalPoints += team1.points;
-  userStats2.totalPoints += team2.points;
+  // Points for are added in the weekly pass, over the same weeks the average
+  // divides by; points against belong to games that had an opponent.
+  userStats1.gamesWithOpponent += 1;
+  userStats2.gamesWithOpponent += 1;
   userStats1.totalPointsAgainst += team2.points;
   userStats2.totalPointsAgainst += team1.points;
 
@@ -1078,7 +1095,9 @@ async function calculateDerivedStats(
     // leagues (which double W/L counts but score only once per week) stay accurate
     if (userStats.totalWeeksScored > 0) {
       userStats.averagePointsPerGame = userStats.totalPoints / userStats.totalWeeksScored;
-      userStats.averagePointsAgainst = userStats.totalPointsAgainst / userStats.totalWeeksScored;
+    }
+    if (userStats.gamesWithOpponent > 0) {
+      userStats.averagePointsAgainst = userStats.totalPointsAgainst / userStats.gamesWithOpponent;
     }
 
     if (userStats.seasonsPlayed > 0) {

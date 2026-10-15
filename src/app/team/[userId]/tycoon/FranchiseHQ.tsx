@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, Flame, Layers, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy } from '@/components/icons';
+import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy } from '@/components/icons';
 import { Section, Sections } from '../Section';
 import { projectGame, type Prices } from '@/lib/tycoon/economy';
 import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
@@ -53,7 +53,7 @@ function Counter({ value, suffix = '' }: { value: number; suffix?: string }) {
 }
 
 const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
-  start: Trophy, build: Layers, sellout: Ticket, record: Megaphone, unrest: AlertTriangle, streak: Flame, milestone: Rocket, prices: Tag,
+  start: CalendarDays, title: Trophy, build: Layers, sellout: Ticket, record: Megaphone, unrest: AlertTriangle, streak: Flame, milestone: Rocket, prices: Tag,
 };
 
 /**
@@ -87,6 +87,11 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
   if (!t.available) return children ? <Sections>{children}</Sections> : null;
   const last = t.games.at(-1);
+  // The economy plays every archived season; the charts and the books show the latest one.
+  const seasonNow = last?.season ?? null;
+  const thisSeason = t.games.filter(g => g.season === seasonNow);
+  const seasons = new Set(t.games.map(g => g.season)).size;
+  const tSeason = { ...t, games: thisSeason };
   const hue = color ?? '#2a78d6';
   const scope = mode === 'manage' ? 'manage' : 'team';
   const shownName = (mode === 'manage' ? draftName : stadiumName) || t.stadium.stadiumName;
@@ -134,12 +139,12 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
       </motion.div>
 
       <Sections>
-        {mode === 'public' && t.games.length > 0 && (
+        {mode === 'public' && thisSeason.length > 0 && (
           <Section scope={scope} id="crowds" icon={BarChart3} title="Crowds and fans" index={0}
-            summary={`${t.games.length} game day${t.games.length === 1 ? '' : 's'}${last ? `, last crowd ${Math.round(100 * last.attendance / last.capacity)}% full` : ''}, fan interest ${Math.round(t.interest)}`}>
+            summary={`${seasonNow} season, ${thisSeason.length} game day${thisSeason.length === 1 ? '' : 's'}${last ? `, last crowd ${Math.round(100 * last.attendance / last.capacity)}% full` : ''}${seasons > 1 ? `, ${seasons} seasons in all` : ''}`}>
             <div className="grid gap-3 md:grid-cols-2">
-              <CrowdsChart games={t.games} />
-              <InterestChart games={t.games} />
+              <CrowdsChart games={thisSeason} />
+              <InterestChart games={thisSeason} />
             </div>
           </Section>
         )}
@@ -149,7 +154,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           </Section>
         )}
 
-        {mode === 'manage' && t.books && <ControlRoom t={t} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} />}
+        {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} />}
         {mode === 'manage' && (
           <Section scope={scope} id="look" icon={Sparkles} title="Stadium look" index={3}
             summary={`${shownName}: ${LOOK_LABELS.facade[draftLook.facade]}, ${LOOK_LABELS.seats[draftLook.seats].toLowerCase()} seats, ${LOOK_LABELS.turf[draftLook.turf].toLowerCase()} turf`}>
@@ -389,7 +394,7 @@ function Ledger({ games }: { games: Game[] }) {
   if (!rows.length) return null;
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-sm font-semibold">Game by game</p>
+      <p className="text-sm font-semibold">Game by game, {rows[0]?.season}</p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[640px] text-[12.5px] tabular-nums">
           <thead className="text-left text-muted-foreground">
