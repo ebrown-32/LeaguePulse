@@ -8,6 +8,8 @@ import TabSelector from '@/components/ui/TabSelector';
 import AppearanceEditor from './appearance/AppearanceEditor';
 import AIDeskAdmin from './ai-desk/AIDeskAdmin';
 import LeagueDataAdmin from './data/LeagueDataAdmin';
+import YourData from './export/YourData';
+import ManagersAdmin from './managers/ManagersAdmin';
 import BillingCard from '@/components/admin/BillingCard';
 import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 
@@ -24,6 +26,8 @@ const TABS = [
   { id: 'appearance', label: 'Appearance', blurb: 'Palette, fonts, background and motion.' },
   { id: 'ai',         label: 'AI Desk',    blurb: 'Personalities, publishing and diagnostics.' },
   { id: 'data',       label: 'League data', blurb: 'Fill in what the platform didn’t keep, and add older seasons.' },
+  { id: 'managers',   label: 'Managers',    blurb: 'Who runs each franchise, and claims waiting for your answer.' },
+  { id: 'export',     label: 'Your data',   blurb: 'Every season, kept for good. Download it any time.' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -51,6 +55,15 @@ export default function AdminShell() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('appearance');
+  // Claims waiting on the league's franchises, counted on the Managers tab.
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    if (!authed || !password) return;
+    fetch('/api/admin/franchises', { headers: { 'x-admin-password': password }, cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setPending(d.pending.length); })
+      .catch(() => {});
+  }, [authed, password]);
 
   // Remember the tab so a save-and-reload does not bounce you back.
   useEffect(() => {
@@ -170,7 +183,7 @@ export default function AdminShell() {
           aria-label="Admin section"
           value={tab}
           onChange={setTab}
-          options={TABS.map(t => ({ id: t.id, label: t.label }))}
+          options={TABS.map(t => ({ id: t.id, label: t.id === 'managers' && pending ? `${t.label} (${pending})` : t.label }))}
         />
       </div>
 
@@ -180,6 +193,8 @@ export default function AdminShell() {
       {tab === 'appearance' && <AppearanceEditor adminPassword={password} />}
       {tab === 'ai' && <AIDeskAdmin adminPassword={password} />}
       {tab === 'data' && <LeagueDataAdmin adminPassword={password} />}
+      {tab === 'managers' && <ManagersAdmin adminPassword={password} onChange={setPending} />}
+      {tab === 'export' && <YourData adminPassword={password} />}
       <BillingCard password={password} />
     </PageLayout>
   );

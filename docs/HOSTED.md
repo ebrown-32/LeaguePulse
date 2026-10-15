@@ -204,6 +204,90 @@ seconds before, about 50 requests and 3 seconds after.
 - One season again (a late stat correction): `dropBundle(leagueId)` in
   `store.ts`. No button for it yet.
 
+**Settled weeks of the current season** are kept the same way, one week at a
+time (`settled.ts`): two NFL weeks after a week is played (the archive's
+rule, `src/lib/archive/plan.ts`), its matchups and transactions are recorded
+the first time a server page asks and served from then on. A week that has
+not settled is always read live. Server side and Sleeper leagues only.
+Measured on a Sleeper league in week 6: a page that read 19 weeks from
+Sleeper now reads 15, and the saving grows every week of the season. Stored
+responses were compared with Sleeper's live answers: identical.
+
+## The league archive
+
+Every league's data is also kept in Postgres (Neon, through the Vercel
+Marketplace: `DATABASE_URL`), in one shape for Sleeper, ESPN and hand-entered
+seasons: seasons, managers, teams with final places, every game with
+lineups and player points, transactions, drafts and picks. Redis stays the
+fast cache; the archive is the record. See `src/lib/archive/`.
+
+- **Kept, not mirrored.** A season Sleeper or ESPN stops returning keeps
+  what the archive has. Only a season the commissioner entered and then
+  deleted is removed.
+- **Downloads.** Admin, Your data: Excel, CSV or JSON, one table or all, one
+  season or all. Games are listed once each, with both teams and the winner.
+- **The AI** reads the league's history (champions, all-time high, records
+  by manager) from the archive, falling back to reading every season when
+  it has none.
+- **Without `DATABASE_URL`** none of this runs; a self-hosted copy works as before.
+
+### Keeping it current within Sleeper's limit
+
+Sleeper asks apps to stay under 1,000 calls a minute. Three things keep the
+archive well inside it as leagues are added:
+
+1. **Read only what can change** (`plan.ts`). A finished season is read once.
+   In the current one a week settles two NFL weeks after it is played, once
+   stat corrections are in, and is never read again. A mid-season update is
+   about 8 Sleeper calls a league: league, users, rosters, drafts, and the
+   matchups and moves of the two weeks still open. ESPN leagues use none.
+2. **One count of Sleeper calls for the platform** (`sleeperBudget.ts`,
+   Redis key `lp_sleeper_rpm:<minute>`). Every server-side call is counted,
+   pages included. Before each batch the archive waits until the minute has
+   room under `LP_SLEEPER_JOB_RPM` (600), leaving at least 400 a minute for
+   pages. A league that runs out of room is left as it was and is first in
+   line on the next run.
+3. **Spread out** (`/api/archive/cron`, hourly). Each run takes leagues not
+   updated in `LP_ARCHIVE_EVERY_HOURS` (20), oldest first, for up to four
+   minutes. At 8 calls a league and 600 a minute, one run covers a few
+   hundred leagues and a day several thousand; past that, raise the share
+   or the interval, not the burst.
+
+Environment: `DATABASE_URL` (added by the Neon integration),
+`LP_DB_SCHEMA` (defaults to `public`; `npm run dev:hosted` uses `dev` so a
+laptop never writes over the real archive), `LP_SLEEPER_JOB_RPM`,
+`LP_ARCHIVE_EVERY_HOURS`.
+
+Operating: `POST /api/platform/operator/archive { slug, full? }` archives a
+league now (`full` re-reads every season, for example after a change to
+what is kept); `GET ?slug=` shows what it holds, season by season. Schema
+changes go in `schema.ts` as a new migration, never an edit to a shipped one.
+
+## Franchises and Franchise HQ
+
+Every manager in a league's history is a franchise (`/franchises`, built from
+the archive). Someone with an account claims one from its page; an admin
+approves it, or it is approved at once for the league's own admins and for
+an email the admins invited. One franchise per account per league. See
+`src/lib/franchise/`.
+
+**Franchise HQ** (`src/lib/tycoon/`) runs each franchise as a business on real
+results. `economy.ts` is a pure, deterministic replay from the 2026 kickoff to
+now: daily merchandise, sponsors and upkeep; a game day each archived week
+(crowds from fan interest against ticket price, then concessions, parking,
+suites and sponsors); and the manager's decisions (prices, upgrades) in order,
+from `tycoon_log:<franchiseId>` in the league's storage. Fan interest follows
+form, weekly scoring rank, the stadium and the franchise's history; prices
+well above fair breed resentment. Profit becomes VC (one per $4,000), spent in
+the shop (`catalog.ts`). History before 2026 sets a franchise's head start.
+Unclaimed franchises run on autopilot at fair prices. Stadiums, crowds and
+the league's value ranking are public; prices and books are the manager's.
+
+Balancing: the numbers live in `economy.ts` and `catalog.ts`, and
+`tests/tycoon.test.ts` pins the behaviour (winning helps, gouging hurts,
+no buying on credit, the replay is deterministic). A change to them reprices
+every franchise's history at once, since the replay is recomputed each time.
+
 ## Gaps, and what admins can fill in
 
 Old ESPN seasons (those ESPN only serves from `leagueHistory`) have scores,

@@ -121,6 +121,8 @@ export interface LeagueBrief {
   history: {
     seasons: number;
     champions: { season: string; teamName: string }[];
+    /** All-time records by manager, when the league archive has them. */
+    managers?: { manager: string; seasons: number; wins: number; losses: number; ties: number; titles: number }[];
     allTimeHigh: number;
   };
   /** Plain-text rendering handed to the model. */
@@ -374,7 +376,20 @@ export async function buildLeagueBrief(force = false): Promise<LeagueBrief> {
 
   // ── History ──────────────────────────────────────────────────────────────
   let history: LeagueBrief['history'] = { seasons: seasons.length, champions: [], allTimeHigh: 0 };
-  try {
+  // The league archive answers with a few queries and every season, where
+  // re-reading the history from the provider is slow and costs calls.
+  const archived = await (async () => {
+    const [{ archiveHistory }, { currentSite }] = await Promise.all([import('@/lib/archive/history'), import('@/lib/archive/ingest')]);
+    return archiveHistory(await currentSite());
+  })().catch(() => null);
+  if (archived?.champions.length) {
+    history = {
+      seasons: archived.seasons,
+      champions: archived.champions.map(c => ({ season: String(c.season), teamName: c.manager })),
+      allTimeHigh: archived.allTimeHigh?.points ?? 0,
+      managers: archived.managers,
+    };
+  } else try {
     const linked = await getAllLinkedLeagueIds(leagueId);
     const comp = await generateComprehensiveLeagueHistory(linked);
     history = {
@@ -634,6 +649,12 @@ export function renderBrief(b: LeagueBrief): string {
     if ([...titleCount.values()].every(n => n === 1)) {
       lines.push('  Nobody in this league has won more than one title. Never call anyone a');
       lines.push('  repeat, back to back, or multiple time champion.');
+    }
+    if (b.history.managers?.length) {
+      lines.push('  All-time records by manager, from every season\'s standings (wins, losses, ties; seasons; titles):');
+      for (const m of b.history.managers) {
+        lines.push(`    ${m.manager}: ${m.wins}-${m.losses}${m.ties ? `-${m.ties}` : ''} over ${m.seasons} season${m.seasons === 1 ? '' : 's'}, ${m.titles} title${m.titles === 1 ? '' : 's'}.`);
+      }
     }
   }
 

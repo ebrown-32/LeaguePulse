@@ -5,7 +5,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
 export interface LeagueRow {
-  slug: string; name: string; url: string; role: 'owner' | 'admin';
+  slug: string; name: string; url: string; role: 'owner' | 'admin' | 'manager';
+  /** The franchise you manage in this league, if any. */
+  franchise: { id: string; teamName: string | null; page: string; edit: string } | null;
   logo: string | null; provider: 'sleeper' | 'espn';
   status: 'trialing' | 'active' | 'past_due' | 'canceled'; plan: 'monthly' | 'season'; tier?: 'standard' | 'ai'; comp: boolean; canBill: boolean;
   members: { userId: string; email: string; role: 'owner' | 'admin'; you: boolean }[];

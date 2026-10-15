@@ -94,3 +94,17 @@ test('the kill switch turns bundles off', async () => {
     delete process.env.NEXT_PUBLIC_LP_BUNDLES;
   }
 });
+
+import { settledWeek } from '../src/lib/archive/plan.ts';
+
+test('a current season’s weeks settle two NFL weeks after they are played', () => {
+  assert.equal(settledWeek({ season: 2026, complete: false, nflSeason: 2026, nflWeek: 6 }), 4);
+  assert.equal(settledWeek({ season: 2026, complete: false, nflSeason: 2026, nflWeek: 1 }), 0);
+  assert.equal(settledWeek({ season: 2026, complete: false, nflSeason: 2026, nflWeek: 25 }), 18);
+});
+
+test('an earlier or finished season is settled whole; next season has nothing settled', () => {
+  assert.equal(settledWeek({ season: 2025, complete: false, nflSeason: 2026, nflWeek: 2 }), 18);
+  assert.equal(settledWeek({ season: 2026, complete: true, nflSeason: 2026, nflWeek: 17 }), 18);
+  assert.equal(settledWeek({ season: 2027, complete: false, nflSeason: 2026, nflWeek: 6 }), 0);
+});

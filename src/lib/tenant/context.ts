@@ -43,13 +43,21 @@ export function subdomainOf(host: string | null | undefined): string | null {
   return null;
 }
 
-let als: ALS<Tenant | null> | null = null;
+/**
+ * One store for the whole process, kept on globalThis. This module can be
+ * loaded more than once (the pieces instrumentation.ts registers at startup
+ * get their own copy), and a store per copy would leave those pieces unable
+ * to see the league `runAsTenant` set: the ESPN adapter, asked for a league's
+ * data from a job, would fall back to the request's host and refuse.
+ */
+const g = globalThis as { AsyncLocalStorage?: new () => ALS<Tenant | null>; __lpTenantStore?: ALS<Tenant | null> | null };
 function storage(): ALS<Tenant | null> | null {
-  if (als) return als;
+  if (g.__lpTenantStore !== undefined) return g.__lpTenantStore;
   // Next puts AsyncLocalStorage on globalThis in every server runtime.
-  const Ctor = (globalThis as { AsyncLocalStorage?: new () => ALS<Tenant | null> }).AsyncLocalStorage;
-  als = Ctor ? new Ctor() : null;
-  return als;
+  const Ctor = g.AsyncLocalStorage;
+  if (!Ctor) return null; // not yet: try again next time rather than remembering "none"
+  g.__lpTenantStore = new Ctor();
+  return g.__lpTenantStore;
 }
 
 /** Run `fn` as a specific league, for work that has no request. */

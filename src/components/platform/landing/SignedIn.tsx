@@ -109,12 +109,13 @@ export function WelcomeBack({ fallback }: { fallback: React.ReactNode }) {
                 <a href={siteUrl(l.slug, l.url)} target="_blank" rel="noreferrer" className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold">{l.name || l.slug}</p>
                   <p className="truncate text-[11.5px] text-muted-foreground">
-                    {STATUS[l.status].label}, {l.role === 'owner' ? 'Owner' : 'Admin'}
+                    {STATUS[l.status].label}, {l.role === 'owner' ? 'Owner' : l.role === 'manager' ? 'Manager' : 'Admin'}
                   </p>
                 </a>
-                <a href={openAdminHref(l.slug)}
+                {/* A manager has a franchise there, not the league's admin. */}
+                <a href={l.role === 'manager' && l.franchise ? l.franchise.edit : openAdminHref(l.slug)}
                   className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12px] font-semibold opacity-80 transition group-hover:opacity-100 hover:border-foreground/30">
-                  Admin
+                  {l.role === 'manager' ? 'Franchise' : 'Admin'}
                 </a>
               </motion.li>
             ))}

@@ -76,7 +76,10 @@ const serverLookup = async (ref: BundleRef): Promise<Recorded | undefined> => {
   const leagueId = ref.kind === 'league' ? ref.id : draftLeague.get(ref.id) ?? (ref.id.startsWith('espn-') ? ref.id : null);
   if (!leagueId) return undefined;
   const b = await getBundle(leagueId);
-  return b ? lookup(b, ref) : undefined;
+  if (b) return lookup(b, ref);
+  // The season is still being played: its settled weeks are kept too.
+  const { settledLookup } = await import('./settled');
+  return settledLookup(ref);
 };
 
 // Registered whenever this module loads (and at startup, by instrumentation).
