@@ -188,7 +188,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Analytics />
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
-              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} />
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} />
               <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
                 <PageTransition>{children}</PageTransition>
               </main>

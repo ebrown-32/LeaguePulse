@@ -25,7 +25,7 @@ import { PLATFORM, PLANS } from '@/lib/platform/config';
 import { productDisplay } from './fonts';
 import {
   Logomark, Lockup, PhoneMark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
-  PennantMark, FindMark, AddressMark, ChatMark, Tick, Route,
+  PennantMark, StadiumMark, FindMark, AddressMark, ChatMark, Tick, Route,
 } from './marks';
 import WinChance from './landing/WinChance';
 import InstallApp from './landing/InstallApp';
@@ -628,6 +628,7 @@ function InstallBand() {
 function AlsoInside() {
   const items = [
     { m: RingMark, t: 'Your whole history, kept', b: 'Champions, records, rivalries and trophy cases through every season you have played. Every score, lineup, trade and pick is stored for good, and yours to download.' },
+    { m: StadiumMark, t: 'Franchise HQ', b: 'Every manager claims their team and runs it as a business: ticket prices, upgrades and a 3D stadium that grows with real results. On League Pass.' },
     { m: PlayMark, t: 'The weekly report', b: 'Best and worst lineups, the luckiest win and the points left on the bench, every week.' },
     { m: PennantMark, t: 'Your colors, your address', b: 'Your league’s name, logo and colors on its own web address. Installs on phones like an app.' },
   ];
@@ -635,7 +636,7 @@ function AlsoInside() {
     <section id="more" className="scroll-mt-16 lg:scroll-mt-28 border-t border-border py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-5">
         <ChapterHead n="06" mark={RingMark} eyebrow="Also inside" />
-        <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 md:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-4">
           {items.map((it, i) => (
             <motion.div key={it.t} initial="hidden" whileInView="show" viewport={{ once: true }} variants={rise}
               transition={{ delay: i * 0.08 }}>
@@ -705,13 +706,13 @@ function Pricing() {
     {
       name: PLANS.free.name, short: 'Free', price: '$0', per: 'forever',
       blurb: 'The whole app, open source. You bring the server, the database and the patience.',
-      points: ['Every feature', 'Your own Vercel and Redis', 'Your own Anthropic key', 'Help from the community'],
+      points: ['Every feature but Franchise HQ', 'Your own Vercel and Redis', 'Your own Anthropic key', 'Help from the community'],
       cta: { label: 'Get the code', href: PLATFORM.github, external: true },
     },
     {
       name: PLANS.pro.name, short: 'Pass', price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
       blurb: 'Hosted on your league\u2019s own address. The AI writes on your own Anthropic key.',
-      points: ['Every feature, every season kept for good', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
+      points: ['Every feature, every season kept for good', 'Franchise HQ for every manager', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=standard` },
     },
     {
