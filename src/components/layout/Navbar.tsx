@@ -140,10 +140,12 @@ interface NavbarProps {
   leagueName?: string | null;
   /** Whether franchises exist: they are built from the league archive, which needs a database. */
   franchises?: boolean;
+  /** Whether expert rankings are connected (an admin added a FantasyPros key). */
+  rankings?: boolean;
 }
 
-export default function Navbar({ logoUrl, leagueName, franchises = true }: NavbarProps) {
-  const shown = (item: NavItem) => franchises || item.href !== '/franchises';
+export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true }: NavbarProps) {
+  const shown = (item: NavItem) => (franchises || item.href !== '/franchises') && (rankings || item.href !== '/rankings');
   const pathname  = usePathname();
   const [isOpen,    setIsOpen]    = useState(false);
   const [moreOpen,  setMoreOpen]  = useState(false);

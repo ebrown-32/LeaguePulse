@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSnapshot } from '@/lib/fantasyProsStore';
-import { isFantasyProsConfigured } from '@/lib/fantasypros';
+import { isFantasyProsConfigured } from '@/lib/fantasyProsRefresh';
 import { getLeagueRosters, getLeagueUsers } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
 import { getPlayersDirectory } from '@/lib/playerStats';
@@ -35,7 +35,7 @@ interface Owner {
 }
 
 export async function GET() {
-  if (!isFantasyProsConfigured()) {
+  if (!(await isFantasyProsConfigured())) {
     return NextResponse.json({ configured: false, snapshot: null });
   }
 

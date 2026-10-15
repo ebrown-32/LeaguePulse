@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, ChevronRight, BookOpen, Zap } from '@/components/icons';
+import Link from 'next/link';
+import { Search, X, ChevronRight, BookOpen, Zap, Pencil } from '@/components/icons';
 import type { ConstitutionMeta, ConstitutionSection, LeagueSettings } from '@/lib/constitution';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -297,7 +298,8 @@ function Chip({ label, value }: { label: string; value: string }) {
 // ── Markdown section block ────────────────────────────────────────────────────
 
 function SectionBlock({ section, query }: { section: ConstitutionSection; query: string }) {
-  const titleHtml   = highlight(section.title, query);
+  // The title is text an admin typed: escaped before it is set as HTML.
+  const titleHtml   = highlight(section.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'), query);
   const contentHtml = query.trim() ? highlight(section.html, query) : section.html;
 
   const headingClass =
@@ -354,6 +356,17 @@ interface Props {
   meta: ConstitutionMeta;
   markdownSections: ConstitutionSection[];
   leagueSettings: LeagueSettings | null;
+  /** False when the league has not written its rules yet. */
+  written: boolean;
+}
+
+const EDIT_HREF = '/admin?tab=constitution';
+
+/** Whether this visitor is signed in to the admin in this tab: the way into the editor. */
+function useIsAdmin() {
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => { try { setAdmin(Boolean(sessionStorage.getItem('lp_admin_seen') || sessionStorage.getItem('lp_admin_pass'))); } catch { /* none */ } }, []);
+  return admin;
 }
 
 function buildAutoToc(s: LeagueSettings): TocItem[] {
@@ -367,7 +380,8 @@ function buildAutoToc(s: LeagueSettings): TocItem[] {
   ];
 }
 
-export default function ConstitutionView({ meta, markdownSections, leagueSettings }: Props) {
+export default function ConstitutionView({ meta, markdownSections, leagueSettings, written }: Props) {
+  const admin = useIsAdmin();
   const [query,    setQuery]   = useState('');
   const [activeId, setActive]  = useState('');
   const [tocOpen,  setTocOpen] = useState(false);
@@ -423,17 +437,24 @@ export default function ConstitutionView({ meta, markdownSections, leagueSetting
 
         {/* Header */}
         <div className="mb-8 pb-6 border-b border-border">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>Official Document</span>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Official Document</span>
+            </div>
+            {admin && written && (
+              <Link href={EDIT_HREF} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </Link>
+            )}
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
             {leagueSettings?.name ?? 'League Constitution'}
           </h1>
           {meta.description && <p className="text-muted-foreground text-sm">{meta.description}</p>}
           <div className="flex flex-wrap gap-4 mt-4 text-xs text-muted-foreground">
-            <span>Version {meta.version}</span>
-            {meta.lastUpdated && (
+            {written && <span>Version {meta.version}</span>}
+            {written && meta.lastUpdated && (
               <span>Last updated {new Date(meta.lastUpdated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             )}
             {leagueSettings && <span>{leagueSettings.season} season</span>}
@@ -498,12 +519,27 @@ export default function ConstitutionView({ meta, markdownSections, leagueSetting
           {filteredMd.map(section => (
             <SectionBlock key={section.id} section={section} query={query} />
           ))}
+
+          {/* Nothing written yet: say so, and show the admin the way in. */}
+          {!written && !query.trim() && (
+            <section className="mt-10 rounded-2xl border border-dashed border-border bg-card/60 p-6 text-center sm:p-8">
+              <BookOpen className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-3 font-semibold text-foreground">The league&apos;s own rules aren&apos;t written yet</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                {leagueSettings ? 'The settings above come straight from the league. ' : ''}Fees, trades, conduct and how rules change appear here once an admin writes them.
+              </p>
+              {admin && (
+                <Link href={EDIT_HREF} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:bg-foreground/85">
+                  <Pencil className="h-3.5 w-3.5" /> Write the constitution
+                </Link>
+              )}
+            </section>
+          )}
         </div>
 
         {/* Footer */}
         <div className="mt-16 pt-6 border-t border-border text-center text-xs text-muted-foreground space-y-1">
-          <p>{leagueSettings?.name ?? 'League'}, Constitution v{meta.version}</p>
-          <p>Amendments require a 3/4 majority vote of the active membership.</p>
+          <p>{leagueSettings?.name ?? 'League'}, Constitution{written ? ` v${meta.version}` : ''}</p>
         </div>
       </div>
     </div>

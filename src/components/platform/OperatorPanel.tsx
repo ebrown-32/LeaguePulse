@@ -30,7 +30,7 @@ interface League {
 interface Conflict { session: string; slug: string; leagueId: string; takenBy: string; email: string | null; at: string }
 interface Inquiry { id: string; name: string; email: string; league: string; message: string; at: string }
 interface Data {
-  rootDomain: string; stripeMode: 'live' | 'test'; prices: { monthly: number; season: number }; conflicts: Conflict[]; inquiries: Inquiry[];
+  rootDomain: string; stripeMode: 'live' | 'test' | 'off'; prices: { monthly: number; season: number }; conflicts: Conflict[]; inquiries: Inquiry[];
   totals: { all: number; trialing: number; active: number; past_due: number; canceled: number; paying: number; comp: number; mrr: number; ai?: number; aiCost?: number };
   leagues: League[];
 }
@@ -106,11 +106,14 @@ export default function OperatorPanel() {
               <span className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Back office</span>
             </span>
           </a>
-          {data && (
-            <span className={cn('ml-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider',
-              data.stripeMode === 'live' ? 'bg-primary/15 text-primary' : 'bg-[hsl(var(--signal)/0.18)] text-[hsl(var(--signal))]')}>
-              <span className={cn('h-1.5 w-1.5 rounded-full', data.stripeMode === 'live' ? 'animate-pulse bg-primary' : 'bg-[hsl(var(--signal))]')} />
-              Stripe {data.stripeMode}
+          {/* Only when Stripe is not live: the one case worth a glance (live is the normal state). */}
+          {data && data.stripeMode !== 'live' && (
+            <span title={data.stripeMode === 'test'
+                ? 'STRIPE_SECRET_KEY is a test key: sign-ups and payments here are not real.'
+                : 'STRIPE_SECRET_KEY is not set: sign-ups cannot be billed.'}
+              className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--signal)/0.18)] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[hsl(var(--signal))]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--signal))]" />
+              {data.stripeMode === 'test' ? 'Stripe test mode' : 'Stripe not connected'}
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -513,7 +516,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
   const rows = data.leagues.filter(l =>
     (filter === 'all' || l.status === filter) &&
     (!q || `${l.name} ${l.slug} ${l.owner ?? ''} ${l.ownerAccount ?? ''}`.toLowerCase().includes(q.toLowerCase())));
-  const stripeBase = data.stripeMode === 'live' ? 'https://dashboard.stripe.com' : 'https://dashboard.stripe.com/test';
+  const stripeBase = data.stripeMode === 'test' ? 'https://dashboard.stripe.com/test' : 'https://dashboard.stripe.com';
   const counts = (f: 'all' | Status) => (f === 'all' ? data.leagues.length : data.leagues.filter(l => l.status === f).length);
 
   const recover = async (slug: string) => {

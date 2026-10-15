@@ -160,7 +160,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     tenantName = tenant.leagueName?.trim() || null;
   }
 
-  const theme = await getTheme();
+  const [theme, rankings] = await Promise.all([
+    getTheme(),
+    import('@/lib/fantasyProsRefresh').then(m => m.rankingsConnected()).catch(() => false),
+  ]);
 
   return (
     <html lang="en" data-bg={theme.background} data-motion={theme.motion} suppressHydrationWarning>
@@ -188,7 +191,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Analytics />
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
-              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} />
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
               <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
                 <PageTransition>{children}</PageTransition>
               </main>

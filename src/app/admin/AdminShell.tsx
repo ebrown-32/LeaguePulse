@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { PageLayout } from '@/components/layout/PageLayout';
 
@@ -10,6 +10,8 @@ import AIDeskAdmin from './ai-desk/AIDeskAdmin';
 import LeagueDataAdmin from './data/LeagueDataAdmin';
 import YourData from './export/YourData';
 import ManagersAdmin from './managers/ManagersAdmin';
+import ConstitutionAdmin from './constitution/ConstitutionAdmin';
+import RankingsAdmin from './rankings/RankingsAdmin';
 import BillingCard from '@/components/admin/BillingCard';
 import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 
@@ -27,12 +29,20 @@ const TABS = [
   { id: 'ai',         label: 'AI Desk',    blurb: 'Personalities, publishing and diagnostics.' },
   { id: 'data',       label: 'League data', blurb: 'Fill in what the platform didn’t keep, and add older seasons.' },
   { id: 'managers',   label: 'Managers',    blurb: 'Who runs each franchise, and claims waiting for your answer.' },
+  { id: 'constitution', label: 'Constitution', blurb: 'The league’s rules: write them, change them, and keep every version.' },
+  { id: 'rankings',   label: 'Rankings',    blurb: 'Expert player rankings from FantasyPros, on your league’s own key.' },
   { id: 'export',     label: 'Your data',   blurb: 'Every season, kept for good. Download it any time.' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
 const STORAGE_KEY = 'lp_admin_tab';
 const PASS_KEY = 'lp_admin_pass';
+/**
+ * Set for this tab once signed in, however: not a secret, only a hint for the
+ * league's pages to show their admin shortcuts (the constitution's Edit, the
+ * rankings' Connect). Every save is still checked by the server.
+ */
+export const ADMIN_HINT_KEY = 'lp_admin_seen';
 
 /**
  * On a hosted league, the product site's "open this league's admin" link, so
@@ -65,9 +75,11 @@ export default function AdminShell() {
       .catch(() => {});
   }, [authed, password]);
 
-  // Remember the tab so a save-and-reload does not bounce you back.
+  // Remember the tab so a save-and-reload does not bounce you back. A link
+  // can name one (/admin?tab=constitution), which wins.
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const asked = new URLSearchParams(window.location.search).get('tab');
+    const saved = asked ?? localStorage.getItem(STORAGE_KEY);
     if (TABS.some(t => t.id === saved)) setTab(saved as Tab);
   }, []);
   useEffect(() => { localStorage.setItem(STORAGE_KEY, tab); }, [tab]);
@@ -81,7 +93,10 @@ export default function AdminShell() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: given }),
       });
-      if (res.ok) { setPassword(given); setAuthed(true); }
+      if (res.ok) {
+        setPassword(given); setAuthed(true);
+        try { sessionStorage.setItem(ADMIN_HINT_KEY, '1'); } catch { /* ignore */ }
+      }
       else if (given.startsWith('lpt.')) {
         try { sessionStorage.removeItem(PASS_KEY); } catch { /* ignore */ }
         setPassword('');
@@ -116,7 +131,12 @@ export default function AdminShell() {
   // Worked out after mount: it depends on the address in the browser, and
   // computing it during render made the server and client HTML differ.
   const [account, setAccount] = useState<string | null>(null);
-  useEffect(() => { setAccount(productAccountLink()); }, []);
+  // Focus the password on desktop only, after mount so the server and browser render alike.
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    setAccount(productAccountLink());
+    if (window.matchMedia('(pointer: fine)').matches) field.current?.focus();
+  }, []);
 
   if (!authed) {
     return (
@@ -134,7 +154,7 @@ export default function AdminShell() {
             // Desktop only. Focusing a field on mount raises the keyboard
             // immediately on a phone, which is jarring and, on iOS, was
             // itself enough to trigger the viewport zoom.
-            autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
+            ref={field}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           {error && <p className="mt-2 text-xs text-rose-500">{error}</p>}
@@ -195,6 +215,8 @@ export default function AdminShell() {
       {tab === 'data' && <LeagueDataAdmin adminPassword={password} />}
       {tab === 'managers' && <ManagersAdmin adminPassword={password} onChange={setPending} />}
       {tab === 'export' && <YourData adminPassword={password} />}
+      {tab === 'constitution' && <ConstitutionAdmin adminPassword={password} />}
+      {tab === 'rankings' && <RankingsAdmin adminPassword={password} />}
       <BillingCard password={password} />
     </PageLayout>
   );

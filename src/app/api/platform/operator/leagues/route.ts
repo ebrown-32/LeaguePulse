@@ -61,6 +61,17 @@ async function health(t: Tenant) {
   });
 }
 
+/**
+ * Which Stripe the key reaches, from its prefix: secret (sk_) and restricted
+ * (rk_) keys alike, so a restricted live key, as Stripe recommends, reads as live.
+ */
+function stripeMode(key: string | undefined): 'live' | 'test' | 'off' {
+  const k = key?.trim() ?? '';
+  if (/^(sk|rk)_live_/.test(k)) return 'live';
+  if (/^(sk|rk)_test_/.test(k)) return 'test';
+  return 'off';
+}
+
 export async function GET(req: Request) {
   if (!(await isOperator(req))) return deny();
   const tenants = (await listTenants()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -89,7 +100,7 @@ export async function GET(req: Request) {
     rootDomain: PLATFORM.rootDomain,
     conflicts,
     inquiries: await listInquiries(),
-    stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'live' : 'test',
+    stripeMode: stripeMode(process.env.STRIPE_SECRET_KEY),
     prices: { monthly: PLANS.pro.monthly, season: PLANS.pro.season },
     totals: {
       all: leagues.length, trialing: count('trialing'), active: count('active'),

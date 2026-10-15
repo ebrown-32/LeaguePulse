@@ -210,9 +210,11 @@ Changes apply instantly for everyone.
 
 ### Write your constitution
 
-The rulebook lives in `content/constitution.md` as plain markdown. Roster, scoring,
-playoff, waiver and draft settings are pulled from Sleeper automatically, so they
-never go stale.
+Write it in the admin panel's **Constitution** tab: articles and rules, reordered
+freely, previewed as the league will read it, and every published version kept.
+Until you publish there, the page shows `content/constitution.md`, which the
+editor opens as its starting point. Roster, scoring, playoff, waiver and draft
+settings are pulled from the league automatically, so they never go stale.
 
 <br />
 
@@ -295,8 +297,10 @@ FANTASY_PROS=your_api_key
 ```
 
 Request a free key from
-[FantasyPros](https://secure.fantasypros.com/api-keys/request/). Rankings refresh once
-a day on their own.
+[FantasyPros](https://secure.fantasypros.com/api-keys/request/) (keys are for
+personal, non-commercial use). Rankings refresh once a day on their own; the admin
+panel's **Rankings** tab picks the boards and scoring, shows what is on hand, and
+refreshes by hand.
 
 <br />
 

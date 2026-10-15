@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Your LeaguePulse account, in a league site's footer: a way back to the
- * product and, once signed in, your name and picture with a short menu (your
- * leagues, this league's admin if you run it, your franchise if you manage one).
+ * Your LeaguePulse account, at the bottom left of a league site's footer: the
+ * way into the rest of LeaguePulse. Signed out, an invitation to sign in;
+ * signed in, your name and picture with a short menu (your leagues, this
+ * league's admin if you run it, your franchise if you manage one).
  *
  * The site never signs anyone in itself. "Sign in" goes to the product site,
  * which returns with a visitor pass (lib/platform/visitorPass) in the URL
@@ -60,10 +61,14 @@ export default function AccountChip() {
   if (!me.signedIn) {
     return (
       <a href={`${me.signIn}${encodeURIComponent(window.location.href.split('#')[0])}`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-foreground/30">
+        className="group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 pr-4 text-left transition hover:border-foreground/30 hover:bg-card">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/leaguepulse-icon.svg" alt="" className="h-3.5 w-3.5 rounded" />
-        Sign in with LeaguePulse
+        <img src="/brand/leaguepulse-icon.svg" alt="" className="h-8 w-8 rounded-lg" />
+        <span className="leading-tight">
+          <span className="block text-[13px] font-semibold text-foreground">Sign in with LeaguePulse</span>
+          <span className="block text-[11.5px] text-muted-foreground">Your leagues, franchise and admin, all in one place</span>
+        </span>
+        <span aria-hidden className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground">&rarr;</span>
       </a>
     );
   }
@@ -80,18 +85,26 @@ export default function AccountChip() {
   return (
     <div ref={box} className="relative">
       <button onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu"
-        className="inline-flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-xs font-semibold text-foreground transition hover:border-foreground/30">
-        {me.image
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={me.image} alt="" className="h-6 w-6 rounded-full object-cover" />
-          : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{me.name?.slice(0, 1)}</span>}
-        <span className="max-w-[10rem] truncate">{me.name}</span>
+        className="group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 pr-3.5 text-left transition hover:border-foreground/30 hover:bg-card">
+        <span className="relative shrink-0">
+          {me.image
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={me.image} alt="" className="h-8 w-8 rounded-full object-cover" />
+            : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-[13px] font-bold text-primary">{me.name?.slice(0, 1)}</span>}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/leaguepulse-icon.svg" alt="" className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded ring-2 ring-card" />
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="block max-w-[12rem] truncate text-[13px] font-semibold text-foreground">{me.name}</span>
+          <span className="block text-[11.5px] text-muted-foreground">Your LeaguePulse</span>
+        </span>
+        <motion.span aria-hidden animate={{ rotate: open ? 180 : 0 }} className="text-[11px] text-muted-foreground">&#9650;</motion.span>
       </button>
       <AnimatePresence>
         {open && (
           <motion.div role="menu" initial={{ opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 z-50 mb-2 w-56 sm:left-auto sm:right-0 overflow-hidden rounded-xl border border-border bg-card p-1.5 text-sm shadow-xl">
+            className="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-xl border border-border bg-card p-1.5 text-sm shadow-xl">
             <p className="truncate px-2.5 pb-1.5 pt-1 text-[11px] text-muted-foreground">Signed in as {me.name}{me.role ? `, ${me.role === 'owner' ? 'owner' : 'admin'}` : ''}</p>
             {items.map(it => (
               <a key={it.label} role="menuitem" href={it.href} className="block rounded-lg px-2.5 py-2 font-medium text-foreground hover:bg-muted">{it.label}</a>

@@ -3,66 +3,106 @@ import { unstable_noStore as noStore } from 'next/cache';
 import Logo from '@/components/ui/Logo';
 import { getTheme } from '@/lib/themeStorage';
 import { PLATFORM } from '@/lib/platform/config';
+import { LeaguePulseLockup } from '@/components/ui/LeaguePulseBrand';
 import InstallAppCard from './InstallAppCard';
 import AccountChip from './AccountChip';
 
 /**
- * A league site's footer: quiet, and the league's own.
+ * A league site's footer, the league's own: its name and badge, its pages in
+ * the same groups as the menu, and the fine print. LeaguePulse sits along the
+ * bottom: on the hosted product, your LeaguePulse account at the bottom left
+ * (AccountChip, the way to your other leagues, your franchise and admin), and
+ * "Powered by LeaguePulse" at the right, back to the product.
  *
- * The league's name and a short row of its pages, an install link on phones,
- * and the fine print. LeaguePulse appears once, as a small "Powered by" link
- * back to the product, so the site still reads as the league's; on the hosted
- * product, beside it, your LeaguePulse account (AccountChip).
+ * Pages that are not there (franchises without a database, rankings until an
+ * admin connects FantasyPros) are left out here too, as in the menu.
  */
 
-const LINKS: [string, string][] = [
-  ['Game Day', '/live'], ['Matchups', '/matchups'], ['Standings', '/standings'], ['History', '/history'],
-  ['The Feed', '/desk'], ['Rosters', '/rosters'], ['Drafts', '/drafts'], ['Constitution', '/constitution'],
+type Item = [label: string, href: string];
+const GROUPS: { label: string; items: Item[] }[] = [
+  { label: 'This week', items: [['Game Day', '/live'], ['Matchups', '/matchups'], ['Standings', '/standings'], ['Weekly Report', '/report']] },
+  { label: 'Dig in', items: [['History', '/history'], ['Franchises', '/franchises'], ['Rivalries', '/rivalries'], ['Next Gen', '/next-gen']] },
+  { label: 'Catch up', items: [['The Feed', '/desk'], ['Media', '/media'], ['Transactions', '/transactions']] },
+  { label: 'Look it up', items: [['Rosters', '/rosters'], ['Drafts', '/drafts'], ['Player Rankings', '/rankings'], ['Constitution', '/constitution']] },
 ];
 
 export default async function Footer() {
   // See RootLayout: admin-saved branding must not be served from a cached render.
   noStore();
-  const theme = await getTheme();
   const hosted = process.env.LP_HOSTED === '1';
-  const tenant = hosted ? await (await import('@/lib/tenant/context')).currentTenant().catch(() => null) : null;
+  const [theme, tenant, rankings, provider] = await Promise.all([
+    getTheme(),
+    hosted ? import('@/lib/tenant/context').then(m => m.currentTenant()).catch(() => null) : null,
+    import('@/lib/fantasyProsRefresh').then(m => m.rankingsConnected()).catch(() => false),
+    Promise.all([import('@/config/league'), import('@/lib/providers/ids')])
+      .then(async ([league, ids]) => ids.providerOf(await league.getCurrentLeagueId()))
+      .catch(() => 'sleeper' as const),
+  ]);
   const leagueName = theme.leagueName?.trim() || tenant?.leagueName?.trim() || 'Your league';
+  const franchises = Boolean(process.env.DATABASE_URL?.trim());
+  const shown = ([, href]: Item) => (franchises || href !== '/franchises') && (rankings || href !== '/rankings');
   const year = new Date().getFullYear();
   const product = `https://${PLATFORM.rootDomain}`;
+  const source = provider === 'espn' ? 'ESPN' : 'Sleeper';
   const quiet = 'transition-colors hover:text-foreground';
 
   return (
-    <footer className="mt-16 border-t border-border/50">
-      <div className="mx-auto max-w-7xl px-4 pb-24 pt-10 sm:px-6 sm:pb-10 lg:px-8">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex items-center gap-2.5">
-              <Logo src={theme.logoUrl} className="h-7 w-7 object-contain" />
-              <span className="font-display text-base font-semibold text-foreground">{leagueName}</span>
+    <footer className="relative mt-20 border-t border-border/60 bg-gradient-to-b from-transparent to-muted/30">
+      <div className="mx-auto max-w-7xl px-4 pb-24 pt-12 sm:px-6 sm:pb-10 lg:px-8">
+
+        {/* The league, and its pages */}
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] lg:gap-16">
+          <div className="space-y-4">
+            <Link href="/" className="group inline-flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-card shadow-sm transition-transform group-hover:-rotate-3 group-hover:scale-105">
+                <Logo src={theme.logoUrl} className="h-7 w-7 object-contain" />
+              </span>
+              <span className="font-display text-lg font-bold tracking-tight text-foreground">{leagueName}</span>
             </Link>
+            <p className="max-w-xs text-[13.5px] leading-relaxed text-muted-foreground">
+              Every season, rivalry and record of {leagueName}, in one place.
+            </p>
             <InstallAppCard />
           </div>
-          <nav aria-label="League pages" className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-            {LINKS.map(([label, href]) => <Link key={href} href={href} className={quiet}>{label}</Link>)}
+
+          <nav aria-label="League pages" className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
+            {GROUPS.map(g => {
+              const items = g.items.filter(shown);
+              if (!items.length) return null;
+              return (
+                <div key={g.label}>
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">{g.label}</p>
+                  <ul className="mt-3 space-y-2">
+                    {items.map(([label, href]) => (
+                      <li key={href}>
+                        <Link href={href} className="inline-block text-[14px] text-foreground/75 transition duration-200 hover:translate-x-0.5 hover:text-foreground">
+                          {label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </nav>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4 border-t border-border/40 pt-6 text-xs text-muted-foreground/80 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span>&copy; {year} {leagueName}</span>
-            <Link href="/admin" className={quiet}>Admin</Link>
-            {hosted && <a href={`${product}/legal/terms`} className={quiet}>Terms</a>}
-            {hosted && <a href={`${product}/legal/privacy`} className={quiet}>Privacy</a>}
-            <span>Data from Sleeper. Not affiliated with Sleeper or the NFL.</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-          {hosted && <AccountChip />}
-          <a href={product} className={`group inline-flex items-center gap-1.5 ${quiet}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/leaguepulse-icon.svg" alt="" className="h-4 w-4 rounded opacity-70 grayscale transition group-hover:opacity-100 group-hover:grayscale-0" />
-            Powered by <span className="font-semibold">LeaguePulse</span>
+        {/* The fine print */}
+        <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/50 pt-6 text-xs text-muted-foreground/80">
+          <span>&copy; {year} {leagueName}</span>
+          <Link href="/admin" className={quiet}>Admin</Link>
+          {hosted && <a href={`${product}/legal/terms`} className={quiet}>Terms</a>}
+          {hosted && <a href={`${product}/legal/privacy`} className={quiet}>Privacy</a>}
+          <span>Data from {source}. Not affiliated with {source} or the NFL.</span>
+        </div>
+
+        {/* LeaguePulse: your account at the bottom left, the product at the right */}
+        <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          {hosted && <div className="order-last sm:order-first"><AccountChip /></div>}
+          <a href={product} className="group inline-flex items-center gap-2.5 text-xs text-muted-foreground sm:ml-auto">
+            <span className="font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 transition-colors group-hover:text-muted-foreground">Powered by</span>
+            <LeaguePulseLockup size={20} text={15} className="opacity-80 transition-opacity group-hover:opacity-100" />
           </a>
-          </div>
         </div>
       </div>
     </footer>

@@ -36,18 +36,23 @@ export type RankedPosition = (typeof RANKED_POSITIONS)[number];
 export const RANKING_MODES = ['weekly', 'dynasty'] as const;
 export type RankingMode = (typeof RANKING_MODES)[number];
 
-/** One request per position per mode, so this is the daily request cost. */
-export const REQUESTS_PER_REFRESH = RANKED_POSITIONS.length * RANKING_MODES.length;
+/** One request per position per board: what a refresh of these boards costs. */
+export const requestsFor = (modes: readonly RankingMode[]) => RANKED_POSITIONS.length * modes.length;
+/** The free tier's allowance, per key per day. */
+export const DAILY_REQUESTS = 50;
 
-export class FantasyProsNotConfiguredError extends Error {
-  constructor() {
-    super('FANTASY_PROS is not set. Expert rankings are unavailable until a key is configured.');
-    this.name = 'FantasyProsNotConfiguredError';
-  }
-}
-
-export function isFantasyProsConfigured(): boolean {
-  return Boolean(process.env.FANTASY_PROS?.trim());
+/**
+ * Whether a key works: one small request (this week's QB board). It costs one
+ * of the key's daily requests. FantasyPros answers a bad key with 401 or 403.
+ */
+export async function testFantasyProsKey(key: string, season: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const params = new URLSearchParams({ position: 'QB', scoring: 'PPR', type: 'weekly', week: '1' });
+  const res = await fetch(`${BASE}/nfl/${season}/consensus-rankings?${params}`, { headers: { 'x-api-key': key }, cache: 'no-store' }).catch(() => null);
+  if (!res) return { ok: false, error: 'Could not reach FantasyPros. Try again in a minute.' };
+  if (res.ok) return { ok: true };
+  if (res.status === 401 || res.status === 403) return { ok: false, error: 'FantasyPros did not accept that key. Check it was copied in full.' };
+  if (res.status === 429) return { ok: false, error: 'This key has used its requests for today. Try again tomorrow.' };
+  return { ok: false, error: `FantasyPros answered ${res.status}. Try again in a minute.` };
 }
 
 /** One expert's individual take on a player. */
@@ -123,14 +128,14 @@ const num = (v: unknown): number | null => {
 };
 
 export async function fetchConsensusRankings(opts: {
+  key: string;
   season: string;
   week: number;
   position: RankedPosition;
   mode: RankingMode;
   scoring: 'PPR' | 'HALF' | 'STD';
 }): Promise<EcrBoard> {
-  const key = process.env.FANTASY_PROS?.trim();
-  if (!key) throw new FantasyProsNotConfiguredError();
+  const key = opts.key;
 
   const params = new URLSearchParams({
     position: opts.position,
