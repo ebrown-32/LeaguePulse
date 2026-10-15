@@ -86,7 +86,7 @@ Safari may not).
 | `LP_HOSTED` | `1` |
 | `LP_TENANCY` | `1` once you are ready to serve leagues (until then, league addresses show a holding page) |
 | `NEXT_PUBLIC_LP_ROOT_DOMAIN` | `yourdomain.com` |
-| `LP_SECRETS_KEY` | `openssl rand -base64 32`. Encrypts every league's API key. **Back it up**: losing it means every league re-enters its key |
+| `LP_SECRETS_KEY` | `openssl rand -base64 32`. Encrypts every league's API keys (Anthropic, FantasyPros). **Back it up**: losing it means every league re-enters its keys |
 | `CRON_SECRET` | any long random string; required in hosted mode |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
@@ -99,8 +99,10 @@ Safari may not).
 | `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
 | `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |
 
-Do **not** set `NEXT_PUBLIC_LEAGUE_ID` or `ANTHROPIC_API_KEY` on the hosted
-project. Public variables are baked into the build, and a platform Anthropic key
+Do **not** set `NEXT_PUBLIC_LEAGUE_ID`, `ANTHROPIC_API_KEY` or `FANTASY_PROS` on the hosted
+project. Each league connects its own FantasyPros key in its admin's Rankings tab
+(FantasyPros grants keys to people for their own use, and a free key's 50
+requests a day cover one league's daily refresh, not a platform's). Public variables are baked into the build, and a platform Anthropic key
 is never used for leagues anyway (League Pass + AI uses
 `LP_MANAGED_ANTHROPIC_API_KEY`, and only for that tier).
 
@@ -262,6 +264,21 @@ Operating: `POST /api/platform/operator/archive { slug, full? }` archives a
 league now (`full` re-reads every season, for example after a change to
 what is kept); `GET ?slug=` shows what it holds, season by season. Schema
 changes go in `schema.ts` as a new migration, never an edit to a shipped one.
+
+## Constitution and rankings
+
+**Constitution.** Each league's admin writes it in the admin panel
+(`/admin?tab=constitution`); it is stored under the league's own prefix as
+Markdown (`lp_constitution`, the last 30 published versions in
+`lp_constitution_history`). A hosted league with nothing published shows only
+its league settings: never the repository's `content/constitution.md`, which is
+one particular league's rules. Admin text is rendered with raw HTML escaped
+and script links removed (`safeMarkdown` in `src/lib/constitutionDoc.ts`).
+
+**Rankings.** `src/lib/fantasyProsRefresh.ts`. The league's key (encrypted in
+`lp_secrets`), its settings (`lp_fp_settings`: boards, scoring, daily on or
+off) and its last run (`lp_fp_last_run`). The daily cron fans out one request
+per live league, like the AI desk's; a league without a key returns at once.
 
 ## Franchises and Franchise HQ
 

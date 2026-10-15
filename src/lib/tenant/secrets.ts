@@ -2,8 +2,10 @@
  * A league's own API keys, on the hosted product.
  *
  * Each league brings its own Anthropic key and pays Anthropic directly for its
- * AI. Self-hosted copies keep using ANTHROPIC_API_KEY from the environment,
- * unchanged: secrets there stay env-only, deliberately.
+ * AI, and its own FantasyPros key for expert rankings (FantasyPros grants keys
+ * to people, for their own use, and a free key's 50 requests a day cover one
+ * league). Self-hosted copies keep using ANTHROPIC_API_KEY and FANTASY_PROS
+ * from the environment, unchanged: secrets there stay env-only, deliberately.
  *
  * ── How a key is kept ────────────────────────────────────────────────────────
  *
@@ -20,7 +22,8 @@ import { getRedis } from '@/lib/redisClient';
 
 const KEY = 'lp_secrets';
 
-interface Stored { anthropic?: string }
+interface Stored { anthropic?: string; fantasypros?: string }
+type Which = keyof Stored;
 
 function masterKey(): Buffer {
   const raw = process.env.LP_SECRETS_KEY?.trim();
@@ -55,17 +58,26 @@ async function read(): Promise<Stored> {
   return raw ? (JSON.parse(raw) as Stored) : {};
 }
 
-/** The league's Anthropic key, decrypted, or null. Server use only. */
-export async function tenantAnthropicKey(): Promise<string | null> {
-  const sealed = (await read()).anthropic;
+async function getKey(which: Which): Promise<string | null> {
+  const sealed = (await read())[which];
   if (!sealed) return null;
   try { return decrypt(sealed); } catch { return null; }
 }
 
-export async function setTenantAnthropicKey(key: string | null): Promise<void> {
+async function setKey(which: Which, key: string | null): Promise<void> {
   const r = getRedis().client;
   if (!r) throw new Error('Storage is not configured');
   const next = { ...(await read()) };
-  if (key) next.anthropic = encrypt(key); else delete next.anthropic;
+  if (key) next[which] = encrypt(key); else delete next[which];
   await r.set(KEY, JSON.stringify(next));
 }
+
+/** The league's Anthropic key, decrypted, or null. Server use only. */
+export const tenantAnthropicKey = () => getKey('anthropic');
+export const setTenantAnthropicKey = (key: string | null) => setKey('anthropic', key);
+
+/** The league's FantasyPros key, for its expert rankings. Server use only. */
+export const tenantFantasyProsKey = () => getKey('fantasypros');
+export const setTenantFantasyProsKey = (key: string | null) => setKey('fantasypros', key);
+/** Whether the league has a FantasyPros key, without decrypting it: cheap enough for every page. */
+export const hasTenantFantasyProsKey = async () => Boolean((await read()).fantasypros);

@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { marked } from 'marked';
+import { safeMarkdown } from './constitutionDoc';
+export { safeMarkdown };
 
 export interface ConstitutionMeta {
   version: string;
@@ -88,17 +89,76 @@ export function parseLeagueSettings(raw: any, draftType: string | null = null): 
   };
 }
 
-export function getMarkdownSections(): { meta: ConstitutionMeta; sections: ConstitutionSection[] } {
-  const filePath = path.join(process.cwd(), 'content', 'constitution.md');
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const { data, content } = matter(raw);
+/**
+ * Where a league's constitution comes from: what its admin saved (see
+ * saveConstitution); else, on a self-hosted copy, content/constitution.md in
+ * the repository, as before; else nothing. A hosted league never falls back to
+ * the repository's file: that is one particular league's rules, not theirs.
+ */
+export type ConstitutionSource = 'saved' | 'file' | 'none';
 
+export interface StoredConstitution {
+  markdown: string;
+  version: string;
+  description: string | null;
+  /** The date the rules last changed (YYYY-MM-DD), shown on the page. */
+  lastUpdated: string;
+  savedAt: string;
+}
+export interface ConstitutionRevision extends StoredConstitution { note: string | null }
+
+const KEY = 'lp_constitution';
+const HISTORY = 'lp_constitution_history';
+const HISTORY_MAX = 30;
+
+function fromFile(): StoredConstitution | null {
+  try {
+    const { data, content } = matter(fs.readFileSync(path.join(process.cwd(), 'content', 'constitution.md'), 'utf-8'));
+    return {
+      markdown: content.trim() + '\n', version: String(data.version ?? '1.0'), description: data.description ?? null,
+      lastUpdated: String(data.lastUpdated ?? ''), savedAt: '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getConstitution(): Promise<{ doc: StoredConstitution | null; source: ConstitutionSource }> {
+  const { readJson } = await import('./jsonStore');
+  const saved = await readJson<StoredConstitution | null>(KEY, 'constitution.json', null);
+  if (saved) return { doc: saved, source: 'saved' };
+  if (process.env.LP_HOSTED === '1') return { doc: null, source: 'none' };
+  const file = fromFile();
+  return file ? { doc: file, source: 'file' } : { doc: null, source: 'none' };
+}
+
+export async function constitutionHistory(): Promise<ConstitutionRevision[]> {
+  const { readJson } = await import('./jsonStore');
+  return readJson<ConstitutionRevision[]>(HISTORY, 'constitution-history.json', []);
+}
+
+/** Publishes a new version; the one it replaces goes into the history, newest first. */
+export async function saveConstitution(next: Omit<StoredConstitution, 'savedAt'>, note: string | null): Promise<StoredConstitution> {
+  const { writeJson } = await import('./jsonStore');
+  const saved: StoredConstitution = { ...next, savedAt: new Date().toISOString() };
+  const history = await constitutionHistory();
+  await writeJson(HISTORY, 'constitution-history.json', [{ ...saved, note }, ...history].slice(0, HISTORY_MAX));
+  await writeJson(KEY, 'constitution.json', saved);
+  return saved;
+}
+
+/** The constitution as the page shows it: its details and its sections. */
+export async function getMarkdownSections(): Promise<{ meta: ConstitutionMeta; sections: ConstitutionSection[]; source: ConstitutionSource }> {
+  const { doc, source } = await getConstitution();
   const meta: ConstitutionMeta = {
-    version:     data.version     ?? '1.0',
-    lastUpdated: data.lastUpdated ?? '',
-    description: data.description,
+    version: doc?.version ?? '1.0',
+    lastUpdated: doc?.lastUpdated ?? '',
+    description: doc?.description ?? undefined,
   };
+  return { meta, sections: doc ? sectionsOf(doc.markdown) : [], source };
+}
 
+export function sectionsOf(content: string): ConstitutionSection[] {
   const sections: ConstitutionSection[] = [];
   let currentHeading: { level: number; title: string } | null = null;
   let buffer: string[] = [];
@@ -106,7 +166,7 @@ export function getMarkdownSections(): { meta: ConstitutionMeta; sections: Const
   const flush = () => {
     if (!currentHeading) return;
     const bodyMd = buffer.join('\n').trim();
-    const html   = bodyMd ? (marked.parse(bodyMd, { async: false }) as string) : '';
+    const html   = bodyMd ? safeMarkdown(bodyMd) : '';
     sections.push({
       id:    slugify(currentHeading.title),
       level: currentHeading.level,
@@ -128,5 +188,5 @@ export function getMarkdownSections(): { meta: ConstitutionMeta; sections: Const
   }
   flush();
 
-  return { meta, sections };
+  return sections;
 }

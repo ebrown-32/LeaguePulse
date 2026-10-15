@@ -125,7 +125,7 @@ function ExpertPanel({ p }: { p: EcrPlayer }) {
 
 export default function RankingsView() {
   const [data, setData] = useState<{ configured: boolean; snapshot: Snapshot | null } | null>(null);
-  const [mode, setMode] = useState<Mode>('weekly');
+  const [chosenMode, setMode] = useState<Mode>('weekly');
   const [position, setPosition] = useState<Position>('ALL');
   const [open, setOpen] = useState<number | null>(null);
 
@@ -137,11 +137,14 @@ export default function RankingsView() {
   }, []);
 
   const snapshot = data?.snapshot;
+  // Only the boards the league keeps (its admin chooses them).
+  const available = MODES.filter(m => snapshot?.boards?.[m.id]);
+  const mode: Mode = available.some(m => m.id === chosenMode) ? chosenMode : available[0]?.id ?? 'weekly';
   const board = snapshot?.boards?.[mode]?.[position];
   const activeMode = MODES.find(m => m.id === mode)!;
 
   const subtitle = snapshot
-    ? `${activeMode.blurb} · ${snapshot.scoring} · ${snapshot.season}`
+    ? `${activeMode.blurb}, ${snapshot.scoring}, ${snapshot.season}`
     : 'FantasyPros expert consensus';
 
   return (
@@ -150,21 +153,19 @@ export default function RankingsView() {
         <LoadingBlock size={16} />
       ) : !data.configured ? (
         <div className="rounded-xl border border-border bg-card p-6">
-          <p className="text-sm font-semibold text-foreground">FantasyPros is not configured</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Set <code className="rounded bg-muted px-1 py-0.5">FANTASY_PROS</code> to enable expert rankings.
-          </p>
+          {/* Only if the key was removed while this page was open: the page itself is hidden until one is set. */}
+          <p className="text-sm font-semibold text-foreground">Expert rankings aren&apos;t available right now</p>
         </div>
       ) : !snapshot ? (
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="text-sm font-semibold text-foreground">No rankings pulled yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">Rankings refresh once a day on a schedule.</p>
+          <p className="mt-1 text-xs text-muted-foreground">The first rankings arrive with the next morning&apos;s refresh.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {/* Mode: the two boards are different questions, so this leads. */}
-          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
-            {MODES.map(m => (
+          <div className={cn('inline-flex rounded-lg border border-border bg-card p-0.5', available.length < 2 && 'hidden')}>
+            {available.map(m => (
               <button
                 key={m.id}
                 onClick={() => { setMode(m.id); setOpen(null); }}

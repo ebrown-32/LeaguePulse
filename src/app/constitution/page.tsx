@@ -9,7 +9,7 @@ import { leagueFetch } from '@/lib/providers/leagueFetch';
 export const dynamic = 'force-dynamic';
 
 export default async function ConstitutionPage() {
-  const { meta, sections } = getMarkdownSections();
+  const { meta, sections, source } = await getMarkdownSections();
 
   let leagueSettings = null;
   try {
@@ -41,6 +41,7 @@ export default async function ConstitutionPage() {
         meta={meta}
         markdownSections={sections}
         leagueSettings={leagueSettings}
+        written={source !== 'none'}
       />
     </PageLayout>
   );
