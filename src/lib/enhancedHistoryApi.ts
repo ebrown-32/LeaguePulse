@@ -727,14 +727,22 @@ async function determineChampionsAndPlayoffs(
     return aRank - bRank;
   });
 
-  // Determine playoff participants using league settings and roster rankings
+  // Who made the playoffs: the teams in the season's playoff bracket. That is
+  // the record of it; a team's final placement (poff) is not, because some
+  // sources (ESPN) place every team, playoffs or not, which made every team a
+  // playoff team every year. Only once the regular season is over (the league
+  // is in its postseason or finished): Sleeper sets the bracket up in advance.
+  // A finished season without a bracket falls back to final rank within the
+  // playoff spots.
+  const regularSeasonOver = league.status === 'complete' || league.status === 'post_season';
   const numPlayoffTeams = league.settings.playoff_teams || 6;
+  const bracket = await getPlayoffBracket(league.league_id).catch(() => null);
+  const inBracket = new Set<number>((bracket?.winners_bracket ?? [])
+    .flatMap((m: any) => [m?.t1, m?.t2])
+    .filter((t: unknown): t is number => typeof t === 'number'));
   const playoffTeams = sortedRosters.filter(roster => {
-    // Try poff first (for completed playoffs)
-    if (roster.settings?.poff && roster.settings.poff > 0) {
-      return true;
-    }
-    // Fallback to rank-based determination
+    if (!regularSeasonOver) return false;
+    if (inBracket.size) return inBracket.has(roster.roster_id);
     const rosterRank = roster.settings?.rank || 0;
     return rosterRank > 0 && rosterRank <= numPlayoffTeams;
   });
@@ -810,7 +818,8 @@ async function determineChampionsAndPlayoffs(
   }
   
   // Regular season champion is team with best regular season record
-  const regularSeasonChamp = [...rosters].sort((a, b) => {
+  // Only once the regular season is over: mid-season, the leader has not won anything yet.
+  const regularSeasonChamp = !regularSeasonOver ? undefined : [...rosters].sort((a, b) => {
     const aWins = a.settings?.wins || 0;
     const bWins = b.settings?.wins || 0;
     const aPointsFor = a.settings?.fpts || 0;

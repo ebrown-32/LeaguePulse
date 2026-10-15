@@ -627,7 +627,7 @@ function InstallBand() {
 
 function AlsoInside() {
   const items = [
-    { m: RingMark, t: 'Your whole history', b: 'Champions, records, rivalries and trophy cases, linked back through every season you have played.' },
+    { m: RingMark, t: 'Your whole history, kept', b: 'Champions, records, rivalries and trophy cases through every season you have played. Every score, lineup, trade and pick is stored for good, and yours to download.' },
     { m: PlayMark, t: 'The weekly report', b: 'Best and worst lineups, the luckiest win and the points left on the bench, every week.' },
     { m: PennantMark, t: 'Your colors, your address', b: 'Your league’s name, logo and colors on its own web address. Installs on phones like an app.' },
   ];
@@ -711,7 +711,7 @@ function Pricing() {
     {
       name: PLANS.pro.name, short: 'Pass', price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
       blurb: 'Hosted on your league\u2019s own address. The AI writes on your own Anthropic key.',
-      points: ['Every feature, every past season', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
+      points: ['Every feature, every season kept for good', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=standard` },
     },
     {
@@ -927,6 +927,7 @@ function Faq() {
     ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
     ['Why isn\u2019t it free?', `The code is free to host yourself. The paid plan is for convenience, because running a site that a dozen people refresh every thirty seconds on Sunday costs real money, and so does the person keeping it up. The code is free if you want to run it yourself. The hosted version costs about what your league spends on wings in one draft night, split ${'$'}${(PLANS.pro.season / 12).toFixed(2)} a head. I'm happy to handle it for you.`],
     ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper or ESPN league, any scoring. Every season is linked together, so dynasty and keeper history carries through.'],
+    ['Is our league\u2019s data ours?', 'Yes. Every season LeaguePulse reads, every score, lineup, trade and draft pick, is kept in your league\u2019s own archive, even if Sleeper or ESPN later lets it go. Admins can download all of it as Excel, CSV or JSON whenever they like, so you are never locked in.'],
     ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it\u2019s included: we run it, within generous daily limits. Everything that isn\u2019t AI works either way.'],
     ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
     ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],

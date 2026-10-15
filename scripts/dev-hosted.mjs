@@ -28,6 +28,8 @@ const env = {
   // Local leagues live under "dev:" in whatever database .env.local points
   // at, so they never mix with a real site's data in the same database.
   LP_REDIS_NAMESPACE: process.env.LP_REDIS_NAMESPACE ?? 'dev:',
+  // The archive's tables for local runs live in their own Postgres schema.
+  LP_DB_SCHEMA: process.env.LP_DB_SCHEMA ?? 'dev',
 };
 
 const child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--turbopack', '-p', process.env.PORT || '3001'], { env, stdio: 'inherit' });

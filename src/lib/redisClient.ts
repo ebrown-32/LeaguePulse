@@ -38,6 +38,8 @@ export interface RedisLike {
   /** Atomic counters, for values many readers change at once. Same reasoning
    *  as the list operations: a read-modify-write would drop concurrent taps. */
   incrby(key: string, by: number): Promise<number>;
+  /** Expire a key after `seconds`, leaving its value alone (unlike set with a ttl). */
+  expire(key: string, seconds: number): Promise<void>;
   mget(keys: string[]): Promise<(string | null)[]>;
 }
 
@@ -76,6 +78,8 @@ let scoped: RedisResolution | null = null;
 const SHARED_PREFIXES = [
   'lp_tenant', 'lp_slug_hold', 'lp_storage_probe',
   'lp_espn_xwalk', 'lp_espn_creds', 'lp_fp_snapshot', 'lp_calib_v', 'lp_gotw_v',
+  // One count of Sleeper calls for the whole platform (src/lib/providers/sleeperBudget.ts).
+  'lp_sleeper_rpm',
 ];
 
 /**
@@ -109,6 +113,7 @@ function scopeClient(c: RedisLike): RedisLike {
     lrem: async (k, n, v) => c.lrem(await scopeKey(k), n, v),
     llen: async k => c.llen(await scopeKey(k)),
     incrby: async (k, by) => c.incrby(await scopeKey(k), by),
+    expire: async (k, s) => c.expire(await scopeKey(k), s),
     mget: async keys => c.mget(await Promise.all(keys.map(scopeKey))),
   };
 }
@@ -153,6 +158,7 @@ function resolveRedis(): RedisResolution {
           lrem: (k, n, v) => c.lrem(k, n, v) as Promise<number>,
           llen: (k) => c.llen(k) as Promise<number>,
           incrby: (k, by) => c.incrby(k, by) as Promise<number>,
+          expire: async (k, s) => { await c.expire(k, s); },
           mget: async (keys) =>
             keys.length ? (await c.mget(...keys)) as (string | null)[] : [],
         },
@@ -188,6 +194,7 @@ function resolveRedis(): RedisResolution {
           lrem: async (k, n, v) => { await ready(); return c.lRem(k, n, v); },
           llen: async (k) => { await ready(); return c.lLen(k); },
           incrby: async (k, by) => { await ready(); return c.incrBy(k, by); },
+          expire: async (k, s) => { await ready(); await c.expire(k, s); },
           mget: async (keys) => {
             if (!keys.length) return [];
             await ready();

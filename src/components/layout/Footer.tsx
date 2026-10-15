@@ -4,13 +4,15 @@ import Logo from '@/components/ui/Logo';
 import { getTheme } from '@/lib/themeStorage';
 import { PLATFORM } from '@/lib/platform/config';
 import InstallAppCard from './InstallAppCard';
+import AccountChip from './AccountChip';
 
 /**
  * A league site's footer: quiet, and the league's own.
  *
  * The league's name and a short row of its pages, an install link on phones,
  * and the fine print. LeaguePulse appears once, as a small "Powered by" link
- * back to the product, so the site still reads as the league's.
+ * back to the product, so the site still reads as the league's; on the hosted
+ * product, beside it, your LeaguePulse account (AccountChip).
  */
 
 const LINKS: [string, string][] = [
@@ -53,11 +55,14 @@ export default async function Footer() {
             {hosted && <a href={`${product}/legal/privacy`} className={quiet}>Privacy</a>}
             <span>Data from Sleeper. Not affiliated with Sleeper or the NFL.</span>
           </div>
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+          {hosted && <AccountChip />}
           <a href={product} className={`group inline-flex items-center gap-1.5 ${quiet}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/leaguepulse-icon.svg" alt="" className="h-4 w-4 rounded opacity-70 grayscale transition group-hover:opacity-100 group-hover:grayscale-0" />
             Powered by <span className="font-semibold">LeaguePulse</span>
           </a>
+          </div>
         </div>
       </div>
     </footer>

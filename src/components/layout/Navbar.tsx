@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Scroll,
   Sword,
+  Users,
   Shuffle,
   Shirt,
   ListOrdered,
@@ -57,6 +58,7 @@ const MORE_NAV: NavItem[] = [
   { name: 'Home',         href: '/',             icon: LayoutDashboard },
   { name: 'Game Day',     href: '/live',         icon: Radio        },
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
+  { name: 'Franchises',   href: '/franchises',   icon: Users        },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
   { name: 'Standings',    href: '/standings',    icon: ListOrdered  },
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
@@ -105,6 +107,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'Next Gen',      href: '/next-gen',     icon: Activity       },
       // Somewhere you go to explore, not to look one thing up.
       { name: 'History',       href: '/history',      icon: Database       },
+      { name: 'Franchises',    href: '/franchises',   icon: Users          },
       { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
       { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
       { name: 'Simulator',     href: '/simulator',    icon: FlaskConical   },

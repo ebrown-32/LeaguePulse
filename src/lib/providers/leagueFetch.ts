@@ -39,6 +39,8 @@ declare global {
   var __lpBundleLookup: BundleLookup | undefined;
   // eslint-disable-next-line no-var
   var __lpManual: (() => Promise<ManualData>) | undefined;
+  // eslint-disable-next-line no-var
+  var __lpNoteSleeper: ((n?: number) => void) | undefined;
 }
 
 const browser = () => typeof window !== 'undefined';
@@ -100,7 +102,12 @@ const SHARE_MS = 1500;
 
 function sharedFetch(url: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? 'GET').toUpperCase();
-  if (!browser() || method !== 'GET' || init?.body) return fetch(url, init);
+  if (!browser()) {
+    // Our servers' calls are what Sleeper's per-minute limit counts (see sleeperBudget.ts).
+    if (url.startsWith('https://api.sleeper.app/')) globalThis.__lpNoteSleeper?.();
+    return fetch(url, init);
+  }
+  if (method !== 'GET' || init?.body) return fetch(url, init);
   let p = inflight.get(url);
   if (!p) {
     p = fetch(url, init).then(async r => ({

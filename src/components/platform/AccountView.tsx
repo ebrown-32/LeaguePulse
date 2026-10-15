@@ -154,11 +154,27 @@ function LeagueCard({ l, i, onChange }: { l: LeagueRow; i: number; onChange: () 
         </div>
       </div>
 
+      {l.franchise && (
+        <div className="mx-4 mb-3 flex items-center justify-between gap-3 rounded-xl bg-muted/60 px-3.5 py-2.5 sm:mx-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Your franchise</p>
+            <a href={localize(l.franchise.page, l.slug, site)} className="block truncate text-[14px] font-semibold hover:text-primary">{l.franchise.teamName ?? 'Your team'}</a>
+          </div>
+          <a href={l.franchise.edit} className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[12.5px] font-semibold hover:bg-muted">Edit</a>
+        </div>
+      )}
       <div className="mt-auto grid grid-cols-2 gap-2 px-4 pb-4 sm:px-5">
-        <a href={openAdminHref(l.slug)}
-          className="flex h-11 items-center justify-center rounded-xl bg-foreground text-[14px] font-semibold text-background transition hover:bg-foreground/85">
-          Open admin
-        </a>
+        {l.role === 'manager' ? (
+          <a href={l.franchise ? localize(l.franchise.page, l.slug, site) : site}
+            className="flex h-11 items-center justify-center rounded-xl bg-foreground text-[14px] font-semibold text-background transition hover:bg-foreground/85">
+            Your franchise
+          </a>
+        ) : (
+          <a href={openAdminHref(l.slug)}
+            className="flex h-11 items-center justify-center rounded-xl bg-foreground text-[14px] font-semibold text-background transition hover:bg-foreground/85">
+            Open admin
+          </a>
+        )}
         <a href={site} target="_blank" rel="noreferrer"
           className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border text-[14px] font-semibold transition hover:bg-muted">
           View site <span aria-hidden className="text-muted-foreground">↗</span>
@@ -192,6 +208,11 @@ function LeagueCard({ l, i, onChange }: { l: LeagueRow; i: number; onChange: () 
       </AnimatePresence>
     </motion.section>
   );
+}
+
+/** A link on the league's real address, made local when running locally (see siteUrl). */
+function localize(href: string, slug: string, site: string): string {
+  return href.replace(/^https:\/\/[^/]+/, site);
 }
 
 function People({ l, onChange }: { l: LeagueRow; onChange: () => void }) {

@@ -18,6 +18,7 @@ import ProductAuth from '@/components/platform/ProductAuth';
 import { appIconUrl } from '@/lib/appIconUrl';
 import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
+import NavMemory from '@/components/layout/NavMemory';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
 
 const displayFont = Space_Grotesk({
@@ -179,6 +180,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AppLoader leagueName={theme.leagueName ?? theme.siteTitle} />
         <RouteProgress />
         <ThemeInjector />
+        <NavMemory />
         {theme.background === 'particles' && <ParticleField />}
         <ThemeProvider>
           {/* The install prompt previews the very icon the phone will get. */}

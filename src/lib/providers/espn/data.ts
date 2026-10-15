@@ -242,6 +242,9 @@ export async function seasonWeek(lid: string, season: number, week: number, forc
 async function seasonMoves(lid: string, season: number, week: number, force = false): Promise<any[]> {
   const base = await seasonBase(lid, season);
   if (week < 1 || week > base.finalWeek) return [];
+  // ESPN answers a week that has not started with the current week's moves,
+  // which would count them again for every week left in the season.
+  if (!base.final && week > base.currentWeek) return [];
   const entry = await cached(k(lid, season, `tx${week}`), async () => {
     const creds = await getEspnCredentials(lid);
     const [raw, pairs] = await Promise.all([fetchTransactions(lid, season, week, creds), playerPairs(season)]);

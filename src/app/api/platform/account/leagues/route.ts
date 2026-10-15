@@ -32,13 +32,22 @@ export async function GET() {
   const me = await signedInAccount();
   if (!me) return NextResponse.json({ error: 'Sign in first' }, { status: 401 });
 
-  const slugs = await claimForUser(me.userId, me.email);
+  // Leagues you run, and leagues where you manage a franchise.
+  const { franchisesOf, getClaims } = await import('@/lib/franchise/store');
+  const managed = await franchisesOf(me.userId).catch(() => []);
+  const slugs = [...new Set([...(await claimForUser(me.userId, me.email)), ...managed.map(m => m.slug)])];
   const leagues = (await Promise.all(slugs.map(async slug => {
     const t = await getTenant(slug);
     if (!t) return null;
     const members = await getMembers(slug);
-    const role = members.find(m => m.userId === me.userId)?.role ?? null;
-    if (!role) return null;
+    const memberRole = members.find(m => m.userId === me.userId)?.role ?? null;
+    const franchiseId = managed.find(m => m.slug === slug)?.franchiseId ?? null;
+    if (!memberRole && !franchiseId) return null;
+    const role = memberRole ?? 'manager';
+    const teamName = franchiseId
+      ? (await getClaims(slug).catch(() => [])).find(c => c.franchiseId === franchiseId && c.userId === me.userId && c.status === 'approved')?.teamName ?? null
+      : null;
+    const { openPath } = await import('@/lib/franchise/links');
     const url = `https://${slug}.${PLATFORM.rootDomain}`;
     const theme = await runAsTenant(t, () => getTheme()).catch(() => null);
     return {
@@ -47,6 +56,7 @@ export async function GET() {
       provider: providerOf(t.leagueId),
       role, status: t.status, plan: t.plan, tier: t.tier ?? 'standard', comp: !t.stripeSubscriptionId,
       canBill: role === 'owner' && Boolean(t.stripeCustomerId),
+      franchise: franchiseId ? { id: franchiseId, teamName, page: `${url}/team/${encodeURIComponent(franchiseId)}`, edit: openPath(slug, franchiseId) } : null,
       // People are shown to the owner, who manages them.
       members: role === 'owner' ? members.map(m => ({ userId: m.userId, email: m.email, role: m.role, you: m.userId === me.userId })) : [],
       invites: role === 'owner' ? (await getInvites(slug)).map(i => ({ email: i.email, role: i.role })) : [],

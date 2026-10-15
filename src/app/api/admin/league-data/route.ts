@@ -152,6 +152,7 @@ export async function POST(req: Request) {
       manual.moves = [...manual.moves.filter(m => m.id !== move.id), move];
     }
     await saveManual(manual);
+    await (await import('@/lib/archive/ingest')).rearchiveSoon();
     return NextResponse.json({ ok: true, manual });
   }
 
@@ -169,6 +170,7 @@ export async function POST(req: Request) {
       manual.seasons = [...manual.seasons.filter(s => s.season !== season.season), season].sort((a, b) => b.season - a.season);
     }
     await saveManual(manual);
+    await (await import('@/lib/archive/ingest')).rearchiveSoon();
     await forgetLinkedLeagueIds();
     return NextResponse.json({ ok: true, manual });
   }

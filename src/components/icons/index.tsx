@@ -38,7 +38,7 @@ import {
   Thermometer as PThermometer, Ticket as PTicket, Trash, TrendDown, TrendUp, Trophy as PTrophy,
   UploadSimple, User as PUser, UserPlus as PUserPlus, Users as PUsers, Wind as PWind, X as PX,
   Lightning, Eye, WarningCircle, FootballHelmet, Football, Crown, Handshake, Fire as PFire,
-  CheckCircle, Lightbulb,
+  CheckCircle, Lightbulb, DownloadSimple, FileCsv, FileXls, BracketsCurly, PencilSimple, Tag as PTag,
 } from '@phosphor-icons/react/dist/ssr';
 
 export type IconProps = Omit<PhosphorProps, 'ref'> & { weight?: IconWeight };
@@ -104,10 +104,14 @@ export const Sword           = duo(PSword, 'Sword');
 export const Swords          = duo(FootballHelmet, 'Swords');
 export const Target          = duo(PTarget, 'Target');
 export const Thermometer     = duo(PThermometer, 'Thermometer');
+export const Tag             = duo(PTag, 'Tag');
 export const Ticket          = duo(PTicket, 'Ticket');
 export const TrendingDown    = duo(TrendDown, 'TrendingDown');
 export const TrendingUp      = duo(TrendUp, 'TrendingUp');
 export const Trophy          = duo(PTrophy, 'Trophy');
+export const FileCsvIcon     = duo(FileCsv, 'FileCsv');
+export const FileExcel       = duo(FileXls, 'FileExcel');
+export const FileJson        = duo(BracketsCurly, 'FileJson');
 export const User            = duo(PUser, 'User');
 export const UserPlus        = duo(PUserPlus, 'UserPlus');
 export const Users           = duo(PUsers, 'Users');
@@ -124,6 +128,8 @@ export const Verified        = duo(CheckCircle, 'Verified');
 
 // ── Controls ─────────────────────────────────────────────────────────────────
 export const ArrowDown       = bold(PArrowDown, 'ArrowDown');
+export const Download        = bold(DownloadSimple, 'Download');
+export const Pencil          = bold(PencilSimple, 'Pencil');
 export const ArrowLeft       = bold(PArrowLeft, 'ArrowLeft');
 export const ArrowLeftRight  = bold(ArrowsLeftRight, 'ArrowLeftRight');
 export const ArrowRight      = bold(PArrowRight, 'ArrowRight');
