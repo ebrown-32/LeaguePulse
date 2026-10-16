@@ -6,9 +6,10 @@
  * Every team, writer and number on this page is invented sample data, drawn
  * as live UI rather than screenshots: screenshots of a real league would put
  * real people's names on a public page, and live UI stays sharp and can move.
- * Every feature shown is one the product has. The one exception is Featured
- * leagues (landing/Featured.tsx): real sites, linked, with screenshots
- * cropped to show no one's name.
+ * Every feature shown is one the product has. The exceptions: Featured
+ * leagues (landing/Featured.tsx), real sites, linked, with screenshots
+ * cropped to show no one's name; and the hero's trailer (landing/Trailer.tsx),
+ * filmed in the app with every team, manager and photo replaced.
  *
  * Design: paper, ink, turf green and one signal orange; Archivo, slightly
  * condensed, for display and numbers; a small icon set drawn for the product
@@ -20,7 +21,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { lockScroll } from '@/lib/scrollLock';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence, useReducedMotion, useScroll, useSpring, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, useScroll, useSpring } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { PLATFORM, PLANS } from '@/lib/platform/config';
 import { productDisplay } from './fonts';
@@ -30,7 +31,7 @@ import {
   BracketMark, VersusMark, RadarMark, CharterMark, QuillMark,
 } from './marks';
 import Stadiums from './landing/Stadiums';
-import WinChance from './landing/WinChance';
+import Trailer from './landing/Trailer';
 import InstallApp from './landing/InstallApp';
 import InquirySheet from './landing/Inquiry';
 import FeaturedLeagues from './landing/Featured';
@@ -341,24 +342,6 @@ function Words({ text, delay = 0 }: { text: string; delay?: number }) {
   );
 }
 
-/** A card that leans toward the pointer, a few degrees at most. Mouse and trackpad only. */
-function Tilt({ children }: { children: ReactNode }) {
-  const reduce = useReducedMotion();
-  const x = useMotionValue(0), y = useMotionValue(0);
-  const rx = useSpring(useTransform(y, [-0.5, 0.5], [3.5, -3.5]), { stiffness: 150, damping: 18 });
-  const ry = useSpring(useTransform(x, [-0.5, 0.5], [-4.5, 4.5]), { stiffness: 150, damping: 18 });
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (reduce || e.pointerType !== 'mouse') return;
-    const r = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - r.left) / r.width - 0.5); y.set((e.clientY - r.top) / r.height - 0.5);
-  };
-  return (
-    <div style={{ perspective: 1400 }} onPointerMove={onMove} onPointerLeave={() => { x.set(0); y.set(0); }}>
-      <motion.div style={{ rotateX: rx, rotateY: ry, transformStyle: 'preserve-3d' }}>{children}</motion.div>
-    </div>
-  );
-}
-
 // ── Hero ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
@@ -397,8 +380,7 @@ function Hero() {
           </motion.div>
 
           <motion.div className="min-w-0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
-            <Tilt><WinChance /></Tilt>
-            <p className="mt-3 text-[11.5px] text-muted-foreground">Live chance to win across a Sunday. Sample league; hover the chart.</p>
+            <Trailer />
           </motion.div>
         </div>
       </div>
@@ -422,7 +404,10 @@ function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
             </motion.form>
             <motion.p initial="hidden" animate="show" variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
               {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.{' '}
-              <Link href="/start?provider=espn" className="font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">On ESPN?</Link>
+              <Link href="/start?provider=espn" className="font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">On ESPN?</Link>{' '}
+              <a href="#trailer" className="ml-1 inline-flex items-center gap-1 font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">
+                <svg viewBox="0 0 24 24" className="h-3 w-3 text-[hsl(var(--signal))]" fill="currentColor" aria-hidden><path d="M7 4.5v15l12.5-7.5Z" /></svg>Watch the trailer
+              </a>
             </motion.p>
     </>
   );
