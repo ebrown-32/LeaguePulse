@@ -463,9 +463,12 @@ function Berm({ bp, setting }: { bp: Blueprint; setting: StadiumLook['setting'] 
   );
 }
 
+/** The colonnade's stone, to go with the facade. */
+const stoneOf = (look: StadiumLook) => (look.facade === 'brick' ? '#b9654a' : look.facade === 'glass' || look.facade === 'steel' ? '#d6dadf' : '#e3d7bd');
+
 function Colonnade({ bp, look, p }: { bp: Blueprint; look: StadiumLook; p: Palette }) {
   const c = bp.colonnade!, o = bp.outline;
-  const stone = look.facade === 'brick' ? '#b9654a' : look.facade === 'glass' || look.facade === 'steel' ? '#d6dadf' : '#e3d7bd';
+  const stone = stoneOf(look);
   const columns = useMemo(() => along(o, c.from, c.to, () => c.r, 0.3).map(pt => ({ x: pt.x, y: c.base + c.h / 2, z: pt.z, sy: c.h })), [o, c]);
   const k = `col${c.r}${c.h}${c.base}`;
   const [ax, az] = o.around(0, c.r);
@@ -535,60 +538,111 @@ function useScreen(team: string, accent: string, text: string) {
   return tex;
 }
 
+/**
+ * The video boards, each held up the way its blueprint says (posts, a tower,
+ * a truss on the stands, cables from the roof, stone piers on the colonnade)
+ * and framed in its style's own way. Their backs carry the team's name too,
+ * for everyone outside.
+ */
 function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook }) {
   const screen = useScreen(p.team, p.accent, text);
   const mats = useRef<MeshStandardMaterial[]>([]);
   useFrame(({ clock }) => { for (const m of mats.current) if (m) m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2; });
-  const wall = FACADE[look.facade].wall;
+  const wall = FACADE[look.facade].wall, stone = stoneOf(look);
+  const FRAME: Record<Board['frame'], string> = { steel: '#2a2e33', team: mix(p.team, '#15181c', 0.35), classic: '#1f3b2d', glass: '#e4e9ee', stone };
+  const steel = <meshStandardMaterial color="#8d949b" roughness={0.5} />;
   let n = 0;
-  const face = (w: number, h: number, z: number, ry = 0, key?: string) => {
+  const face = (w: number, h: number, z: number, ry = 0, key?: string, dim = false) => {
     const i = n++;
     return (
       <mesh key={key} position={[Math.sin(ry) * z, 0, Math.cos(ry) * z]} rotation-y={ry}>
         <planeGeometry args={[w, h]} />
-        <meshStandardMaterial ref={m => { if (m) mats.current[i] = m; }} map={screen} emissiveMap={screen} emissive="#ffffff" emissiveIntensity={0.9} />
+        <meshStandardMaterial ref={m => { if (m && !dim) mats.current[i] = m; }} map={screen} emissiveMap={screen} emissive="#ffffff" emissiveIntensity={dim ? 0.35 : 0.9} />
       </mesh>
     );
   };
+
+  /** What holds a board up. */
+  const mount = (b: Board) => {
+    const { w, h, reach } = b, below = -h / 2 - reach / 2;
+    switch (b.mount) {
+      case 'posts':
+        return [-0.3, 0.3].map(x => (
+          <group key={x}>
+            <mesh position={[x * w, below, -0.04]} castShadow><boxGeometry args={[0.1, reach, 0.1]} /><meshStandardMaterial color="#5c6168" roughness={0.6} /></mesh>
+            <mesh position={[x * w, -h / 2 - reach + 0.04, -0.04]}><boxGeometry args={[0.22, 0.08, 0.22]} /><meshStandardMaterial color="#b7b1a6" /></mesh>
+          </group>
+        ));
+      case 'tower':
+        return (
+          <group>
+            <mesh position={[0, below, -0.18]} castShadow><boxGeometry args={[w * 0.55, reach, 0.5]} /><meshStandardMaterial color={wall} /></mesh>
+            <mesh position={[0, below, 0.075]}><boxGeometry args={[0.08, reach * 0.9, 0.02]} /><meshStandardMaterial color={p.team} /></mesh>
+          </group>
+        );
+      case 'truss':
+        // Two legs down onto the stands, a beam under the board and braces between.
+        return (
+          <group position={[0, 0, -0.08]}>
+            {[-0.32, 0.32].map(x => <mesh key={x} position={[x * w, below, 0]} castShadow><boxGeometry args={[0.06, reach, 0.06]} />{steel}</mesh>)}
+            <mesh position={[0, -h / 2 - 0.03, 0]}><boxGeometry args={[w * 0.8, 0.05, 0.06]} />{steel}</mesh>
+            {[-1, 1].map(sx => (
+              <mesh key={sx} position={[sx * w * 0.16, below, 0]} rotation-z={sx * Math.atan2(w * 0.32, reach)}>
+                <boxGeometry args={[0.03, Math.hypot(w * 0.32, reach), 0.03]} />{steel}
+              </mesh>
+            ))}
+          </group>
+        );
+      case 'cables':
+        return [-0.35, 0.35].map(x => <mesh key={x} position={[x * w, h / 2 + reach / 2, 0]}><cylinderGeometry args={[0.008, 0.008, reach, 4]} /><meshStandardMaterial color="#555" /></mesh>);
+      case 'piers':
+        return [-0.42, 0.42].map(x => <mesh key={x} position={[x * w, below, -0.02]} castShadow><boxGeometry args={[0.14, reach, 0.16]} /><meshStandardMaterial color={stone} /></mesh>);
+    }
+  };
+
   const one = (b: Board, i: number) => {
     const { w, h } = b;
     if (b.kind === 'cube') {
-      const cable = bp.roof?.kind === 'dome' ? (bp.footprint + 0.05) * bp.roof.rise - (b.y - bp.top) - h / 2 : 1;
       return (
         <group key={i} position={[b.x, b.y, b.z]}>
           <mesh><boxGeometry args={[w + 0.08, h + 0.08, w + 0.08]} /><meshStandardMaterial color="#1b1d21" /></mesh>
           {[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((ry, j) => face(w, h, w / 2 + 0.045, ry, `f${j}`))}
+          {/* A ring of team color under it, and the cables up to the crown. */}
+          <mesh position={[0, -h / 2 - 0.06, 0]}><boxGeometry args={[w * 0.8, 0.08, w * 0.8]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.6} /></mesh>
           {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, z], j) => (
-            <mesh key={j} position={[x * w * 0.35, h / 2 + cable / 2, z * w * 0.35]}><cylinderGeometry args={[0.008, 0.008, cable, 4]} /><meshStandardMaterial color="#555" /></mesh>
+            <mesh key={j} position={[x * w * 0.35, h / 2 + b.reach / 2, z * w * 0.35]}><cylinderGeometry args={[0.008, 0.008, b.reach, 4]} /><meshStandardMaterial color="#555" /></mesh>
           ))}
         </group>
       );
     }
-    const legs = b.legs > 0 && (
-      b.tower
-        ? <mesh position={[0, -h / 2 - b.legs / 2, -0.15]} castShadow><boxGeometry args={[w * 0.55, b.legs, 0.5]} /><meshStandardMaterial color={wall} /></mesh>
-        : [-0.3, 0.3].map(x => <mesh key={x} position={[x * w, -h / 2 - b.legs / 2, -0.04]} castShadow><boxGeometry args={[0.07, b.legs, 0.07]} /><meshStandardMaterial color="#5c6168" /></mesh>)
-    );
     if (b.kind === 'scoreboard') {
+      // An old-school board: amber scores, a name plate, a little pitched roof and a clock on top.
+      const roof = mix(p.team, '#2b2f33', 0.5);
       return (
         <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
-          {legs}
-          <mesh castShadow><boxGeometry args={[w, h, 0.14]} /><meshStandardMaterial color="#1f3b2d" /></mesh>
-          <mesh position={[0, h / 2 + 0.03, 0]}><boxGeometry args={[w + 0.06, 0.05, 0.18]} /><meshStandardMaterial color={p.accent} /></mesh>
+          {mount(b)}
+          <mesh castShadow><boxGeometry args={[w, h, 0.14]} /><meshStandardMaterial color={FRAME.classic} /></mesh>
           {[-0.26, 0.26].map(x => (
             <mesh key={x} position={[x * w, -0.04 * h, 0.075]}><planeGeometry args={[w * 0.3, h * 0.42]} /><meshStandardMaterial color="#2a1a05" emissive="#ffb43a" emissiveIntensity={1.1} /></mesh>
           ))}
           <mesh position={[0, h * 0.32, 0.075]}><planeGeometry args={[w * 0.7, h * 0.18]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.4} /></mesh>
-          <mesh position={[0, h / 2 + 0.2, 0]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.13, 0.05, 20]} /><meshStandardMaterial color="#f4f1e8" /></mesh>
+          {[-1, 1].map(sz => (
+            <mesh key={sz} position={[0, h / 2 + 0.07, sz * 0.07]} rotation-x={sz * 0.6} castShadow><boxGeometry args={[w + 0.16, 0.03, 0.2]} /><meshStandardMaterial color={roof} /></mesh>
+          ))}
+          <mesh position={[0, h / 2 + 0.32, 0]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.13, 0.05, 20]} /><meshStandardMaterial color="#f4f1e8" /></mesh>
+          <mesh position={[0, h / 2 + 0.17, 0]}><boxGeometry args={[0.04, 0.12, 0.04]} /><meshStandardMaterial color="#5c6168" /></mesh>
         </group>
       );
     }
+    const pad = b.frame === 'glass' ? 0.05 : b.frame === 'stone' ? 0.28 : 0.12;
     return (
       <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
-        {legs}
-        {b.hung && [-0.35, 0.35].map(x => <mesh key={x} position={[x * w, h / 2 + b.hung! / 2, 0]}><cylinderGeometry args={[0.008, 0.008, b.hung!, 4]} /><meshStandardMaterial color="#555" /></mesh>)}
-        <mesh castShadow><boxGeometry args={[w + 0.12, h + 0.12, 0.12]} /><meshStandardMaterial color="#1b1d21" /></mesh>
+        {mount(b)}
+        <mesh castShadow><boxGeometry args={[w + pad, h + pad, b.frame === 'stone' ? 0.16 : 0.12]} /><meshStandardMaterial color={FRAME[b.frame]} roughness={b.frame === 'glass' ? 0.2 : 0.7} /></mesh>
+        {b.frame === 'team' && <mesh position={[0, h / 2 + pad / 2 + 0.02, 0]}><boxGeometry args={[w + pad, 0.04, 0.13]} /><meshStandardMaterial color={p.accent} /></mesh>}
+        {b.frame === 'stone' && <mesh position={[0, h / 2 + pad / 2 + 0.03, 0]}><boxGeometry args={[w + pad + 0.14, 0.06, 0.24]} /><meshStandardMaterial color={stone} /></mesh>}
         {face(w, h, 0.065)}
+        {face(w * 0.9, h * 0.9, b.frame === 'stone' ? 0.085 : 0.065, Math.PI, undefined, true)}
       </group>
     );
   };

@@ -210,7 +210,9 @@ function Mountains() {
       const d = 44 + r() * 10, h = 7 + r() * 11, w = 6 + r() * 6;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       peaks.push({ x, y: h / 2, z, sx: w, sy: h, sz: w, c: mix('#4d5c58', '#6d7a72', r()) });
-      if (h > 10) caps.push({ x, y: h - (h * 0.22) / 2, z, sx: w * 0.22, sy: h * 0.22, sz: w * 0.22, c: '#eef3f5' });
+      // A little proud of the slope: drawn exactly on it, the cap and the peak fight over the same pixels and flicker.
+      const cap = h * 0.24;
+      if (h > 10) caps.push({ x, y: h - cap / 2 + h * 0.012, z, sx: w * 0.24 * 1.12, sy: cap, sz: w * 0.24 * 1.12, c: '#eef3f5' });
     }
     return { peaks, caps };
   }, []);
