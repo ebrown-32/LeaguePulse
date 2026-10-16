@@ -235,7 +235,10 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    // Never wider than the screen: anything that needs more room (the tabs, the
+    // stat strip, a playoff bracket) scrolls sideways inside itself, so a swipe
+    // across it moves that row, not the whole page.
+    <div className="min-w-0 space-y-6 overflow-x-clip">
 
       {/* ── Overview strip ─────────────────────────────────────────────── */}
       <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-5 md:overflow-visible md:pb-0">
@@ -257,12 +260,17 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
-      <div className="flex border-b border-border">
+      {/* Scrolls sideways within itself on a phone: five tabs are wider than
+          the screen, and letting them push the page wider made mobile
+          browsers zoom and resize the whole page as you swiped. */}
+      <div role="tablist" className="flex touch-pan-x overflow-x-auto overscroll-x-contain border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map(({ id, label, Icon }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-5 py-3 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors ${
+            role="tab"
+            aria-selected={activeTab === id}
+            onClick={e => { setActiveTab(id); e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }}
+            className={`flex shrink-0 sm:flex-1 items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
               activeTab === id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
