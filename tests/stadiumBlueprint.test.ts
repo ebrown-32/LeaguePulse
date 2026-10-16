@@ -37,7 +37,7 @@ test('the same upgrades are built differently by style', () => {
   assert.equal(blueprint('grandstand', at(2, { videoboard: 1 })).boards[0].kind, 'scoreboard');
   assert.ok(blueprint('grandstand', at(2, { suites: 1 })).pressBox);
   assert.equal(blueprint('bowl', at(2, { suites: 1 })).suites[0].to - blueprint('bowl', at(2, { suites: 1 })).suites[0].from, TAU);
-  assert.ok(blueprint('horseshoe', MAX).boards[0].tower);
+  assert.equal(blueprint('horseshoe', MAX).boards[0].mount, 'tower');
   assert.ok(blueprint('coliseum', MAX).torch && blueprint('coliseum', MAX).colonnade);
   assert.deepEqual(blueprint('cantilever', at(3)).roof, { kind: 'membrane', moving: true });
   assert.deepEqual(blueprint('cantilever', at(2)).roof, { kind: 'membrane', moving: false });
@@ -93,5 +93,19 @@ test('seats are spaced evenly along every row, the 50-yard line as close as the 
     const near = (lo: number, hi: number) => front.filter(s => Math.abs(s.x) >= lo * xMax && Math.abs(s.x) < hi * xMax).length / (hi - lo);
     const ratio = near(0, 0.25) / near(0.4, 0.65);
     assert.ok(ratio > 0.8 && ratio < 1.25, `${style}: midfield density ${ratio.toFixed(2)} of the corners`);
+  }
+});
+
+test('every board is held up by something that reaches what it stands on', () => {
+  for (const style of LOOK_OPTIONS.style) for (const f of [at(0, { videoboard: 1 }), at(2, { videoboard: 2 }), MAX]) {
+    const bp = blueprint(style, f);
+    for (const b of bp.boards) {
+      assert.ok(b.reach > 0, `${style} ${b.mount} reach`);
+      const bottom = b.y - b.h / 2;
+      if (b.mount === 'posts' || b.mount === 'tower') assert.ok(Math.abs(bottom - b.reach) < 1e-9, `${style} stands on the ground`);
+      if (b.mount === 'truss') assert.ok(Math.abs(bottom - b.reach - (bp.top - 0.04)) < 1e-9, `${style} truss lands on the stands`);
+      if (b.mount === 'piers') assert.ok(Math.abs(bottom - b.reach - (bp.colonnade!.base + bp.colonnade!.h + 0.22)) < 1e-9, `${style} piers land on the colonnade`);
+      if (b.mount === 'cables' && bp.roof?.kind === 'dome') assert.ok(Math.abs(b.y + b.h / 2 + b.reach - (bp.top + (bp.footprint + 0.05) * bp.roof.rise)) < 1e-9, 'cables reach the crown');
+    }
   }
 });

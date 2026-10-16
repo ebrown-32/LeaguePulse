@@ -71,11 +71,16 @@ export interface Board {
   ry: number;
   w: number; h: number;
   kind: 'screen' | 'scoreboard' | 'cube';
-  /** Posts under it this tall, or a tower when `tower`. */
-  legs: number;
-  tower?: boolean;
-  /** Hung from the roof on cables this long, instead of standing. */
-  hung?: number;
+  /**
+   * What holds it up, reaching `reach` from its bottom edge (its top, for
+   * cables) to what it stands on: posts or a tower down to the ground, a truss
+   * down onto the top of the stands, cables up to the roof, stone piers down
+   * onto the colonnade.
+   */
+  mount: 'posts' | 'tower' | 'truss' | 'cables' | 'piers';
+  reach: number;
+  /** Its frame, each style's own. */
+  frame: 'steel' | 'team' | 'classic' | 'glass' | 'stone';
 }
 
 export type Roof =
@@ -165,10 +170,11 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
     const [x, z] = outline.around(a, bp.footprint + 0.5);
     return [x, z, bp.top + 1.4] as [number, number, number];
   });
-  // A board above the stands at angle a, or standing in an open end.
-  const boardOver = (a: number, scale = 1): Board => {
-    const [x, z] = outline.around(a, bp.footprint - 0.6);
-    return { x, y: bp.top + (bh * scale) / 2 + 0.25, z, ry: facing(x, z), w: bw * scale, h: bh * scale, kind: 'screen', legs: 0.5 };
+  // A board over an end, on a steel truss bolted to the top of the stands (clear of a canopy).
+  const boardOver = (a: number, clear: number): Board => {
+    const [x, z] = outline.around(a, bp.footprint - 0.12);
+    const bottom = bp.top + clear;
+    return { x, y: bottom + bh / 2, z, ry: facing(x, z), w: bw, h: bh, kind: 'screen', mount: 'truss', reach: bottom - bp.top + 0.04, frame: 'steel' };
   };
 
   switch (style) {
@@ -177,8 +183,9 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       measure(bp);
       if (level >= 3) bp.roof = { kind: 'canopy', span: 0.9 + 0.4 * (level - 3) };
       bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
-      if (f.videoboard > 0) bp.boards.push(boardOver(0));
-      if (f.videoboard >= 3) bp.boards.push(boardOver(Math.PI));
+      const clear = level >= 3 ? 0.62 : 0.3;
+      if (f.videoboard > 0) bp.boards.push(boardOver(0, clear));
+      if (f.videoboard >= 3) bp.boards.push(boardOver(Math.PI, clear));
       if (f.suites > 0 && n > 1) bp.suites.push({ stand: 'bowl', deck: 1, from: 0, to: TAU });
       break;
     }
@@ -191,8 +198,8 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
         // In the open end, on legs, then on a tower of its own.
         const [x] = outline.around(0, inner + 0.9);
         const scale = 1.5, h = bh * scale, tower = level >= 4 || f.videoboard >= 3;
-        const legs = tower ? bp.top * 0.8 : 0.5;
-        bp.boards.push({ x, y: legs + h / 2, z: 0, ry: facing(x, 0), w: bw * scale, h, kind: 'screen', legs, tower });
+        const reach = tower ? bp.top * 0.8 : 0.55;
+        bp.boards.push({ x, y: reach + h / 2, z: 0, ry: facing(x, 0), w: bw * scale, h, kind: 'screen', mount: tower ? 'tower' : 'posts', reach, frame: 'team' });
       }
       if (f.suites > 0 && n > 1) for (const c of [Math.PI / 2, 1.5 * Math.PI]) bp.suites.push({ stand: 'shoe', deck: 1, from: c - 0.75, to: c + 0.75 });
       break;
@@ -216,8 +223,8 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       bp.roof = { kind: 'gable', stands: ['home', 'away'], lift: 0.3 + pressBox };
       if (f.videoboard > 0) {
         const [x] = outline.around(0, inner + (f.seating > 0 ? 0.9 + 0.12 * f.seating : 0.5));
-        const h = bh * 1.1, legs = 0.55 + 0.1 * f.videoboard;
-        bp.boards.push({ x, y: legs + h / 2, z: 0, ry: facing(x, 0), w: bw * 1.1, h, kind: f.videoboard >= 2 ? 'screen' : 'scoreboard', legs });
+        const h = bh * 1.1, reach = 0.55 + 0.1 * f.videoboard;
+        bp.boards.push({ x, y: reach + h / 2, z: 0, ry: facing(x, 0), w: bw * 1.1, h, kind: f.videoboard >= 2 ? 'screen' : 'scoreboard', mount: 'posts', reach, frame: 'classic' });
       }
       break;
     }
@@ -225,7 +232,12 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       bp.stands.push(ring('dome', () => stack(inner, heights, 1, gaps)));
       measure(bp);
       bp.roof = { kind: 'dome', rise: 0.3 + 0.04 * level };
-      if (f.videoboard > 0) bp.boards.push({ x: 0, y: bp.top + 0.6 + bh / 2, z: 0, ry: 0, w: bw * 0.8, h: bh, kind: 'cube', legs: 0 });
+      if (f.videoboard > 0) {
+        // Hung over midfield from the crown of the dome.
+        const crown = bp.top + (bp.footprint + 0.05) * (bp.roof as { rise: number }).rise;
+        const y = Math.min(bp.top + 0.6 + bh / 2, crown - 0.3 - bh / 2); // under a low dome it hangs lower
+        bp.boards.push({ x: 0, y, z: 0, ry: 0, w: bw * 0.8, h: bh, kind: 'cube', mount: 'cables', reach: crown - y - bh / 2, frame: 'team' });
+      }
       if (f.suites > 0 && n > 1) bp.suites.push({ stand: 'dome', deck: 1, from: 0, to: TAU });
       break;
     }
@@ -239,7 +251,7 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       // Hung under the roof's edge over each end zone.
       const hang = (a: number): Board => {
         const [x, z] = outline.around(a, inner + 0.6), h = bh * 0.9, y = bp.top + 0.6 - 0.25 - h / 2;
-        return { x, y, z, ry: facing(x, z), w: bw * 0.9, h, kind: 'screen', legs: 0, hung: 0.25 };
+        return { x, y, z, ry: facing(x, z), w: bw * 0.9, h, kind: 'screen', mount: 'cables', reach: 0.25, frame: 'glass' };
       };
       if (f.videoboard > 0) bp.boards.push(hang(0));
       if (f.videoboard >= 2) bp.boards.push(hang(Math.PI));
@@ -266,11 +278,13 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       bp.colonnade = { from: -gap + 0.06, to: gap - 0.06, r: o0 + 0.25, base: t0, h: colTop - t0 };
       bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
       const [cx] = outline.around(0, o0 + 0.25);
-      if (f.atmosphere > 0) bp.torch = [cx, colTop + 0.18, 0];
+      const beam = colTop + 0.22; // the top of the colonnade's beam
       if (f.videoboard > 0) {
-        const y = colTop + 0.45 + (f.atmosphere > 0 ? 0.5 : 0) + bh / 2;
-        bp.boards.push({ x: cx + 0.15, y, z: 0, ry: facing(cx, 0), w: bw, h: bh, kind: 'screen', legs: y - bh / 2 - colTop });
-      }
+        // In a stone surround on piers standing on the colonnade, the torch on top of it.
+        const reach = 0.3, y = beam + reach + bh / 2 + 0.14;
+        bp.boards.push({ x: cx, y, z: 0, ry: facing(cx, 0), w: bw, h: bh, kind: 'screen', mount: 'piers', reach: reach + 0.14, frame: 'stone' });
+        if (f.atmosphere > 0) bp.torch = [cx, y + bh / 2 + 0.24, 0];
+      } else if (f.atmosphere > 0) bp.torch = [cx, beam + 0.08, 0];
       if (f.suites > 0 && n > 1) for (const c of [Math.PI / 2, 1.5 * Math.PI]) bp.suites.push({ stand: 'upper', deck: 0, from: c - 0.8, to: c + 0.8 });
       break;
     }
