@@ -170,7 +170,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
       .finally(() => setLoading(false));
   }, [userId]);
 
-  const { info: identity, mine } = useFranchise(userId);
+  const { info: identity, mine, me } = useFranchise(userId);
 
   if (loading) return <Skeleton />;
 
@@ -233,14 +233,19 @@ export default function TeamProfileView({ userId }: { userId: string }) {
               {/* Claiming and editing both go through a LeaguePulse account, so say so. */}
               {identity.claimUrl && (
                 <a href={identity.claimUrl} className="rounded-full bg-foreground px-3 py-1 text-[11.5px] font-semibold text-background transition hover:bg-foreground/85">
-                  Sign up / log in with LeaguePulse to claim
+                  {me ? 'Claim this team' : 'Sign up / log in with LeaguePulse to claim'}
                 </a>
               )}
-              {identity.manager && !mine && identity.editUrl && (
+              {/* Signed in already: say so, rather than asking them to log in. */}
+              {identity.manager && !mine && (me ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Signed in as {me.name}
+                </span>
+              ) : identity.editUrl && (
                 <a href={identity.editUrl} className="rounded-full border border-border px-3 py-0.5 text-[11.5px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
                   Your team? Log in with LeaguePulse to edit
                 </a>
-              )}
+              ))}
             </div>
           )}
         </div>

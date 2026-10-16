@@ -31,6 +31,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
 import PoweredBy from '@/components/ui/PoweredBy';
+import AccountChip from './AccountChip';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
 import { AddSquareIcon } from '@/components/icons/AppIcons';
 import SearchPalette from './SearchPalette';
@@ -323,7 +324,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                     animate={{ opacity: 1, y: 0,  scale: 1    }}
                     exit={{    opacity: 0, y: -4, scale: 0.97 }}
                     transition={{ duration: 0.12 }}
-                    className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-border bg-card/95 p-2 shadow-lg backdrop-blur-xl"
+                    className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-6.5rem)] w-60 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card/95 p-2 shadow-lg backdrop-blur-xl"
                   >
                     {/* The same four groups, in the same order, as the mobile
                         sheet. Anything already in the top bar is left out
@@ -367,7 +368,9 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                     {/* Signed at the bottom of the menu, below a divider, so
                         it reads as a mark on the drawer rather than another
                         thing to navigate to. */}
-                    <div className="mt-1 border-t border-border pt-1.5">
+                    <div className="mt-1 space-y-1.5 border-t border-border pt-2">
+                      {/* Your LeaguePulse account: the way to your other leagues, your franchise and admin. */}
+                      <AccountChip compact className="w-full" />
                       <PoweredBy onNavigate={() => setMoreOpen(false)} />
                     </div>
                   </motion.div>
@@ -515,7 +518,8 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                 {/* Closes the sheet. On a phone this is the one screen that is
                     entirely ours, so it is the natural place to say what the
                     app is. */}
-                <div className="mt-5 flex justify-center border-t border-border pt-4">
+                <div className="mt-5 flex flex-col items-center gap-3 border-t border-border pt-4">
+                  <AccountChip compact className="w-full" />
                   <PoweredBy size="md" onNavigate={() => setIsOpen(false)} />
                 </div>
               </nav>
