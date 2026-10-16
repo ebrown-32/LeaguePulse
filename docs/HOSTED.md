@@ -293,9 +293,18 @@ game itself (prices, building) need a LeaguePulse account, and accounts exist
 only on the hosted product. A self-hosted copy with `DATABASE_URL` still gets
 the franchise pages, stadiums, crowds, the front office log and the value
 ranking, with every franchise on autopilot; its admin can edit a franchise's
-public face (logo, color, motto, bio, stadium look) at `/team/<id>/manage`
+public face (logo, color, motto, bio, and the stadium's style and look) at `/team/<id>/manage`
 but not set prices or build. Without `DATABASE_URL` there are no franchises,
 and the Franchises link is left out of the navigation.
+
+**Stadium styles** (`src/lib/franchise/stadiumStyles.ts`,
+`stadiumBlueprint.ts`) are cosmetic: a manager picks one of six (Classic Bowl,
+Horseshoe, Grandstand, Dome, Cantilever, Coliseum) and dresses it (accent
+color, seats, facade, lights, crowd, field, end zones, surroundings). Every
+style buys the same upgrades for the same money and numbers; the blueprint
+decides how each upgrade is built into that style, and the 3D view and the
+studio's plan drawings both draw from it. Looks saved before styles existed
+load as a Classic Bowl with their old choices kept (`normalizeLook`).
 
 **Franchise HQ** (`src/lib/tycoon/`) runs each franchise as a business on real
 results. `economy.ts` is a pure, deterministic replay of the franchise's whole

@@ -21,18 +21,66 @@ export interface Claim {
   decidedBy: string | null;
 }
 
-/** How a franchise's stadium looks: cosmetic only, it never touches the economy. */
+/**
+ * How a franchise's stadium looks: cosmetic only, it never touches the economy.
+ * The style is the building itself (lib/franchise/stadiumStyles says how each
+ * one grows with the upgrades); the rest dresses it.
+ */
 export interface StadiumLook {
-  facade: 'concrete' | 'brick' | 'glass' | 'steel';
-  seats: 'team' | 'classic' | 'mono';
-  turf: 'stripes' | 'checker' | 'classic';
+  style: 'bowl' | 'horseshoe' | 'grandstand' | 'dome' | 'cantilever' | 'coliseum';
+  facade: 'concrete' | 'brick' | 'glass' | 'steel' | 'stone';
+  /** The second team color, for trim, split seats, flags and the end zone lettering. Null picks white or black to suit. */
+  accent: string | null;
+  seats: 'team' | 'split' | 'classic' | 'mono';
+  /** How the grass is mowed. */
+  turf: 'stripes' | 'checker' | 'plain';
+  field: 'green' | 'blue' | 'black' | 'team';
+  endZone: 'color' | 'argyle' | 'plain';
+  /** Painted in both end zones; the team's name when null. */
+  endZoneText: string | null;
+  /** For styles with a roof that moves: open, closed, or closed at night and in winter. */
+  roof: 'auto' | 'open' | 'closed';
+  lights: 'warm' | 'white' | 'team';
+  crowd: 'mixed' | 'colorout' | 'whiteout' | 'blackout';
+  setting: 'city' | 'park' | 'waterfront' | 'mountains' | 'desert';
 }
 export const LOOK_OPTIONS = {
-  facade: ['concrete', 'brick', 'glass', 'steel'],
-  seats: ['team', 'classic', 'mono'],
-  turf: ['stripes', 'checker', 'classic'],
+  style: ['bowl', 'horseshoe', 'grandstand', 'dome', 'cantilever', 'coliseum'],
+  facade: ['concrete', 'brick', 'glass', 'steel', 'stone'],
+  seats: ['team', 'split', 'classic', 'mono'],
+  turf: ['stripes', 'checker', 'plain'],
+  field: ['green', 'blue', 'black', 'team'],
+  endZone: ['color', 'argyle', 'plain'],
+  roof: ['auto', 'open', 'closed'],
+  lights: ['warm', 'white', 'team'],
+  crowd: ['mixed', 'colorout', 'whiteout', 'blackout'],
+  setting: ['city', 'park', 'waterfront', 'mountains', 'desert'],
 } as const;
-export const DEFAULT_LOOK: StadiumLook = { facade: 'concrete', seats: 'team', turf: 'stripes' };
+type Choice = keyof typeof LOOK_OPTIONS;
+export const DEFAULT_LOOK: StadiumLook = {
+  style: 'bowl', facade: 'concrete', accent: null, seats: 'team', turf: 'stripes', field: 'green', endZone: 'color',
+  endZoneText: null, roof: 'auto', lights: 'warm', crowd: 'mixed', setting: 'city',
+};
+
+/**
+ * A stored look, whatever it was saved as, made whole: looks saved before a
+ * choice existed get its default (the first looks had a facade, seats and a
+ * turf of 'stripes', 'checker' or 'classic', the last meaning grass end zones
+ * with diagonals). Unknown values fall back too, so a look never breaks a page.
+ */
+export function normalizeLook(input: unknown): StadiumLook {
+  const l = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const out = { ...DEFAULT_LOOK };
+  for (const k of Object.keys(LOOK_OPTIONS) as Choice[]) {
+    if ((LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) (out as Record<string, unknown>)[k] = l[k];
+  }
+  if (l.turf === 'classic') { out.turf = 'plain'; if (!l.endZone) out.endZone = 'argyle'; }
+  if (typeof l.accent === 'string' && HEX.test(l.accent)) out.accent = l.accent.toLowerCase();
+  if (typeof l.endZoneText === 'string') out.endZoneText = cleanEndZone(l.endZoneText);
+  return out;
+}
+
+const cleanEndZone = (s: string) => s.replace(/[^\p{L}\p{N} '&.!-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, LIMITS.endZoneText) || null;
 
 /** What a manager sets on their franchise. Null means unset. */
 export interface FranchiseIdentity {
@@ -44,7 +92,7 @@ export interface FranchiseIdentity {
   look: StadiumLook | null;
 }
 
-export const LIMITS = { motto: 80, bio: 600, stadiumName: 40 } as const;
+export const LIMITS = { motto: 80, bio: 600, stadiumName: 40, endZoneText: 24 } as const;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -89,11 +137,14 @@ export function checkIdentity(input: unknown): Partial<FranchiseIdentity> | stri
     if (o.look === null) out.look = null;
     else {
       const l = (o.look ?? {}) as Record<string, unknown>;
-      const pick = <K extends keyof typeof LOOK_OPTIONS>(k: K) =>
-        (LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k])) ? l[k] as StadiumLook[K] : null;
-      const look = { facade: pick('facade'), seats: pick('seats'), turf: pick('turf') };
-      if (!look.facade || !look.seats || !look.turf) return 'Pick a facade, seats and turf.';
-      out.look = look as StadiumLook;
+      // Every choice it names must be a known one; what it leaves out takes the default.
+      for (const k of Object.keys(LOOK_OPTIONS) as Choice[]) {
+        if (l[k] !== undefined && !(LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) return `Pick a ${k === 'endZone' ? 'end zone' : k} from the list.`;
+      }
+      if (l.accent !== undefined && l.accent !== null && l.accent !== '' && !HEX.test(String(l.accent))) return 'Pick an accent color.';
+      if (l.endZoneText !== undefined && l.endZoneText !== null && typeof l.endZoneText !== 'string') return 'The end zone text must be text.';
+      if (typeof l.endZoneText === 'string' && l.endZoneText.trim().length > LIMITS.endZoneText) return `Keep the end zone text under ${LIMITS.endZoneText} characters.`;
+      out.look = normalizeLook(l);
     }
   }
   return out;

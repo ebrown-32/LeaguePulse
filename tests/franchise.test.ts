@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkIdentity, LIMITS } from '../src/lib/franchise/model.ts';
+import { checkIdentity, DEFAULT_LOOK, LIMITS } from '../src/lib/franchise/model.ts';
 
 test('a manager’s identity is tidied and kept', () => {
   assert.deepEqual(checkIdentity({ color: '#0D9488', motto: '  Defense   wins nothing  ', bio: 'Line one.\r\n\r\n\r\n\r\nLine two.' }),
@@ -25,7 +25,7 @@ test('an edit only touches the fields it names', () => {
 });
 
 test('a stadium look must be a known one', () => {
-  assert.deepEqual(checkIdentity({ look: { facade: 'brick', seats: 'team', turf: 'checker' } }), { look: { facade: 'brick', seats: 'team', turf: 'checker' } });
+  assert.deepEqual(checkIdentity({ look: { facade: 'brick', seats: 'team', turf: 'checker' } }), { look: { ...DEFAULT_LOOK, facade: 'brick', seats: 'team', turf: 'checker' } });
   assert.match(String(checkIdentity({ look: { facade: 'marble', seats: 'team', turf: 'checker' } })), /facade/);
   assert.match(String(checkIdentity({ stadiumName: 'x'.repeat(41) })), /stadium name/);
 });
