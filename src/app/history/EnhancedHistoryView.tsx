@@ -13,7 +13,9 @@ import {
   ShieldCheck,
   Users,
   Activity,
+  GitBranch,
 } from '@/components/icons';
+import PlayoffsTab from './PlayoffsTab';
 import dynamic from 'next/dynamic';
 import TransactionActivity from './TransactionActivity';
 import { getCurrentLeagueId } from '@/config/league';
@@ -31,7 +33,7 @@ import { LEGACY_WEIGHTS, rankByLegacy } from '@/lib/legacy';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 
-type Tab = 'managers' | 'champions' | 'records' | 'activity';
+type Tab = 'managers' | 'champions' | 'playoffs' | 'records' | 'activity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -116,6 +118,8 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
   const [processingStatus, setProcessingStatus]     = useState('');
   const [processingProgress, setProcessingProgress] = useState(0);
   const [activeTab, setActiveTab]                   = useState<Tab>('managers');
+  const [playoffsSeen, setPlayoffsSeen]             = useState(false);
+  useEffect(() => { if (activeTab === 'playoffs') setPlayoffsSeen(true); }, [activeTab]);
   const [activeRecord, setActiveRecord]             = useState('highScore');
   const lastUpdateRef                               = useRef(0);
 
@@ -223,6 +227,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
   const tabs: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'managers',  label: 'Managers',    Icon: Users     },
     { id: 'champions', label: 'Champions',   Icon: Trophy    },
+    { id: 'playoffs',  label: 'Playoffs',    Icon: GitBranch },
     { id: 'records',   label: 'Record Book', Icon: BarChart3 },
     { id: 'activity',  label: 'Activity',    Icon: Activity  },
   ];
@@ -410,6 +415,13 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
               </div>
               <LegacyNote />
           </div>
+
+          {/* ══ Playoffs: loaded the first time it is opened, then kept ═══ */}
+          {playoffsSeen && (
+            <div className={activeTab !== 'playoffs' ? 'hidden' : ''}>
+              <PlayoffsTab />
+            </div>
+          )}
 
           {/* ══ Champions ════════════════════════════════════════════════ */}
           <div className={activeTab !== 'champions' ? 'hidden' : ''}>
