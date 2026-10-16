@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
 import { X, ArrowUp, Sparkles, Maximize2, Minimize2, GripHorizontal, Eraser } from '@/components/icons';
 import { Streamdown } from 'streamdown';
@@ -143,9 +144,7 @@ export default function ChatWidget() {
   // The page behind a full-height sheet must not scroll with it.
   useEffect(() => {
     if (!open || isDesktop) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return lockScroll();
   }, [open, isDesktop]);
 
   // A dragged-away panel that reappears in the same odd spot next time feels

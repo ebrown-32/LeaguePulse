@@ -8,13 +8,15 @@
  * sections follow in the same list (children).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy, X } from '@/components/icons';
+import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Tag, Ticket, Trophy, X } from '@/components/icons';
 import { Section, Sections } from '../Section';
+import { StadiumMark } from '@/components/platform/marks';
 import { projectGame, type Prices } from '@/lib/tycoon/economy';
 import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
 import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
@@ -89,14 +91,26 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const [hint, setHint] = useState(true);
   // Fullscreen: the stadium fills the screen, with the studio beside it (below it on a phone) for its manager.
   const [full, setFull] = useState(false);
+  // Closing, the overlay fades out over the page; it lets clicks through from the start.
+  const overlay = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => { overlay.current?.style.setProperty('pointer-events', 'none'); setFull(false); }, []);
+  // The one 3D stadium, mounted once into a node of its own that moves between
+  // the page and fullscreen (StadiumSlot). Remounting it on every toggle built a
+  // new WebGL context each time, which stalls the browser and, a few toggles
+  // in, runs into the browser's limit on contexts.
+  const [host] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const el = document.createElement('div');
+    el.className = 'h-full w-full';
+    return el;
+  });
   useEffect(() => {
     if (!full) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false); };
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const unlock = lockScroll();
     window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', onKey); };
-  }, [full]);
+    return () => { unlock(); window.removeEventListener('keydown', onKey); };
+  }, [full, close]);
   useEffect(() => { const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, []);
 
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
@@ -131,7 +145,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
       <motion.div initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
         className="relative h-[440px] overflow-hidden rounded-3xl border border-border bg-muted/40 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.45)] sm:h-[540px]">
         {/* One stadium at a time: while fullscreen has it, this spot holds still. */}
-        {full ? <div className="h-full w-full bg-muted/40" /> : stadium}
+        <StadiumSlot host={host} active={!full} />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/55 via-black/25 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/45 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 text-white sm:p-5">
@@ -193,7 +207,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         )}
 
         {mode === 'manage' && (
-          <Section scope={scope} id="look" icon={Sparkles} title="Stadium studio" index={0} defaultOpen
+          <Section scope={scope} id="look" icon={StadiumMark} title="Stadium studio" index={0} defaultOpen
             summary={`${shownName}: ${lookSummary(draftLook)}`}>
             {full ? <p className="text-[12.5px] text-muted-foreground">Open in fullscreen.</p> : studio(false)}
           </Section>
@@ -203,20 +217,22 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         {children}
       </Sections>
 
+      {host && createPortal(stadium, host)}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {full && (
             <motion.div key="full" role="dialog" aria-modal="true" aria-label={`${shownName}, fullscreen`}
+              ref={overlay} style={{ pointerEvents: 'auto' }}
               initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.3, ease: EASE }}
               className={cn('fixed inset-0 z-[100] flex flex-col bg-background lg:flex-row', CHART_VARS)}>
               <div className={cn('relative shrink-0 lg:h-auto lg:flex-1', mode === 'manage' ? 'h-[46dvh]' : 'h-full')}>
-                {stadium}
+                <StadiumSlot host={host} active />
                 <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/55 to-transparent p-4 pb-10 text-white">
                   <div className="min-w-0">
                     <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">{teamName}</p>
                     <p className="truncate font-display text-lg font-bold leading-tight drop-shadow sm:text-xl">{shownName}</p>
                   </div>
-                  <button onClick={() => setFull(false)} aria-label="Close fullscreen" autoFocus
+                  <button onClick={close} aria-label="Close fullscreen" autoFocus
                     className="pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/60">
                     <X className="h-5 w-5" />
                   </button>
@@ -240,6 +256,15 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
       )}
     </div>
   );
+}
+
+/** A place the stadium can show: while active, it holds the stadium's node (see `host` in FranchiseHQ). */
+function StadiumSlot({ host, active }: { host: HTMLDivElement | null; active: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (active && host && ref.current && host.parentElement !== ref.current) ref.current.appendChild(host);
+  }, [active, host]);
+  return <div ref={ref} className="h-full w-full" />;
 }
 
 function Gauge({ label, value }: { label: string; value: number }) {

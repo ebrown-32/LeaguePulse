@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ArrowLeftRight, Check, Info, UserPlus, Trophy, CalendarDays } from '@/components/icons';
@@ -226,8 +227,8 @@ function Sheet({ title, subtitle, onClose, children, footer, wide }: {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+    const unlock = lockScroll();
+    return () => { window.removeEventListener('keydown', onKey); unlock(); };
   }, [onClose]);
   return (
     <motion.div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

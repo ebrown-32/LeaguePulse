@@ -10,6 +10,7 @@ import Avatar from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
 import { POSITION_STYLE } from './positions';
 import type { PlayerCard } from '@/lib/playerStats';
+import { lockScroll } from '@/lib/scrollLock';
 
 interface PlayerMove {
   transactionId: string;
@@ -100,11 +101,10 @@ export default function PlayerDetailModal({
     if (!playerId) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockScroll();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      unlock();
     };
   }, [playerId, onClose]);
 

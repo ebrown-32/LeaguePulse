@@ -635,14 +635,16 @@ function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string
       );
     }
     const pad = b.frame === 'glass' ? 0.05 : b.frame === 'stone' ? 0.28 : 0.12;
+    const depth = b.frame === 'stone' ? 0.16 : 0.12;
     return (
       <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
         {mount(b)}
-        <mesh castShadow><boxGeometry args={[w + pad, h + pad, b.frame === 'stone' ? 0.16 : 0.12]} /><meshStandardMaterial color={FRAME[b.frame]} roughness={b.frame === 'glass' ? 0.2 : 0.7} /></mesh>
+        <mesh castShadow><boxGeometry args={[w + pad, h + pad, depth]} /><meshStandardMaterial color={FRAME[b.frame]} roughness={b.frame === 'glass' ? 0.2 : 0.7} /></mesh>
         {b.frame === 'team' && <mesh position={[0, h / 2 + pad / 2 + 0.02, 0]}><boxGeometry args={[w + pad, 0.04, 0.13]} /><meshStandardMaterial color={p.accent} /></mesh>}
         {b.frame === 'stone' && <mesh position={[0, h / 2 + pad / 2 + 0.03, 0]}><boxGeometry args={[w + pad + 0.14, 0.06, 0.24]} /><meshStandardMaterial color={stone} /></mesh>}
-        {face(w, h, 0.065)}
-        {face(w * 0.9, h * 0.9, b.frame === 'stone' ? 0.085 : 0.065, Math.PI, undefined, true)}
+        {/* The screen sits just proud of its frame, which is deeper in stone than in steel. */}
+        {face(w, h, depth / 2 + 0.005)}
+        {face(w * 0.9, h * 0.9, depth / 2 + 0.005, Math.PI, undefined, true)}
       </group>
     );
   };
@@ -800,8 +802,14 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
   );
 }
 
+/** Whether the browser can draw WebGL; the test context is released at once, so it never counts against the browser's limit. */
 function webglOk(): boolean {
-  try { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') || c.getContext('webgl');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
+  } catch { return false; }
 }
 
 export default function Stadium3D(props: StadiumProps) {

@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
@@ -129,9 +130,8 @@ export default function MatchupDetailModal({
     if (!target) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    const unlock = lockScroll();
+    return () => { document.removeEventListener('keydown', onKey); unlock(); };
   }, [target, onClose]);
 
   // Swipe the sheet down to dismiss it, as a native sheet would.
