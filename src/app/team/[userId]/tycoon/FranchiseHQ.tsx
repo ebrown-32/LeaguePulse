@@ -89,11 +89,19 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   useEffect(load, [load]);
 
   const [hint, setHint] = useState(true);
+  // A link to the franchise's #stadium (the franchises list) opens the stadium fullscreen.
+  const available = t?.available ?? false;
+  useEffect(() => { if (available && window.location.hash === '#stadium') setFull(true); }, [available]);
   // Fullscreen: the stadium fills the screen, with the studio beside it (below it on a phone) for its manager.
   const [full, setFull] = useState(false);
   // Closing, the overlay fades out over the page; it lets clicks through from the start.
   const overlay = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => { overlay.current?.style.setProperty('pointer-events', 'none'); setFull(false); }, []);
+  const close = useCallback(() => {
+    overlay.current?.style.setProperty('pointer-events', 'none');
+    setFull(false);
+    // Opened from a link to #stadium: closing leaves the page, not the link.
+    if (window.location.hash === '#stadium') history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, []);
   // The one 3D stadium, mounted once into a node of its own that moves between
   // the page and fullscreen (StadiumSlot). Remounting it on every toggle built a
   // new WebGL context each time, which stalls the browser and, a few toggles

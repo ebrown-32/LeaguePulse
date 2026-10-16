@@ -179,6 +179,62 @@ export function StadiumMark(p: P) {
   );
 }
 
+/** Playoffs: a bracket closing on a trophy. */
+export function BracketMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M3.5 5h5v5h4M3.5 15h5v-5M3.5 17h5v5h4M3.5 27h5v-5M12.5 10h3v6h4M12.5 22h3v-6" />
+      <A d="M21 11.5h7v3a3.5 3.5 0 0 1-7 0Z" />
+      <path d="M24.5 18v3M22 21.5h5" />
+    </Frame>
+  );
+}
+
+/** Rivalries: two sides and the spark between them. */
+export function VersusMark(p: P) {
+  return (
+    <Frame {...p}>
+      <circle cx="8.5" cy="16" r="5.5" />
+      <A d="M23.5 10.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z" />
+      <path d="M17.2 8.5 14.6 16h3.2l-2.6 7.5" />
+    </Frame>
+  );
+}
+
+/** Next Gen stats: a radar of a team's strengths. */
+export function RadarMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M16 4 26.4 10v12L16 28 5.6 22V10Z" />
+      <path d="M16 4v24M5.6 10l20.8 12M26.4 10 5.6 22" strokeWidth={1} opacity={0.45} />
+      <A d="M16 8.5 22.5 13 20.5 20.5 16 23 10.8 18.8 11.6 12Z" opacity={0.9} />
+    </Frame>
+  );
+}
+
+/** The constitution: a page of rules with a seal. */
+export function CharterMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M7.5 4.5h12l4.5 4.5v18.5H7.5Z" />
+      <path d="M19.5 4.5V9H24M11 13h9M11 17h9M11 21h4.5" />
+      <A d="M21 19.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z" />
+    </Frame>
+  );
+}
+
+/** The writer studio: a quill, and a spark for the assistant. */
+export function QuillMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M5.5 27.5 19 14" />
+      <path d="M19 14c1.6-5.2 5.6-8.6 9-9.5-.6 3.6-3.8 7.7-9 9.5Z" />
+      <path d="M8.5 21.5l3 3M12.5 18.5h4" />
+      <A d="M8.5 4.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1Z" />
+    </Frame>
+  );
+}
+
 /** The app: a phone with a tile landing on its home screen. */
 export function PhoneMark(p: P) {
   return (

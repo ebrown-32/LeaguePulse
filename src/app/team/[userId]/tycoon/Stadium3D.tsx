@@ -48,6 +48,8 @@ export interface StadiumProps {
   look?: Partial<StadiumLook> | null;
   /** Hour of day, 0 to 24; the visitor's clock when left out. */
   hour?: number;
+  /** Where the camera starts and looks, and whether it holds still (for a picture) rather than circling. */
+  view?: { position: [number, number, number]; target?: [number, number, number]; fov?: number; still?: boolean };
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -732,8 +734,9 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
   const fascia = look.style === 'cantilever' ? mix(color, '#1b1d21', 0.2) : p.trim;
   const plaza = bp.footprint;
 
+  // A fragment, not a group: the sky color and the fog attach to their parent, and only the scene draws them.
   return (
-    <group>
+    <>
       <color attach="background" args={[sky.sky]} />
       <fog attach="fog" args={[sky.sky, 30, 66]} />
       <hemisphereLight args={['#ffffff', mix(GROUND[look.setting].grass, '#b9b4a8', 0.45), sky.ambient]} />
@@ -798,7 +801,7 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
       )}
       <People bp={bp} fill={fill} colors={p.crowd} />
       {f.atmosphere >= 3 && <Pyro bp={bp} />}
-    </group>
+    </>
   );
 }
 
@@ -833,9 +836,9 @@ export default function Stadium3D(props: StadiumProps) {
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
         </div>
       ) : ok ? (
-        <Canvas shadows dpr={[1, 2]} frameloop={visible ? 'always' : 'never'} camera={{ position: [19, 7, 19], fov: 38 }}>
+        <Canvas shadows dpr={[1, 2]} frameloop={visible ? 'always' : 'never'} camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38 }}>
           <Scene {...props} hour={hour} />
-          <OrbitControls autoRotate autoRotateSpeed={0.4} enablePan={false} minDistance={9} maxDistance={42} maxPolarAngle={Math.PI / 2.15} target={[0, 0.8, 0]} />
+          <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={42} maxPolarAngle={Math.PI / 2.15} target={props.view?.target ?? [0, 0.8, 0]} />
         </Canvas>
       ) : null}
     </div>

@@ -27,7 +27,9 @@ import { productDisplay } from './fonts';
 import {
   Logomark, Lockup, PhoneMark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
   PennantMark, StadiumMark, FindMark, AddressMark, ChatMark, Tick, Route,
+  BracketMark, VersusMark, RadarMark, CharterMark, QuillMark,
 } from './marks';
+import Stadiums from './landing/Stadiums';
 import WinChance from './landing/WinChance';
 import InstallApp from './landing/InstallApp';
 import InquirySheet from './landing/Inquiry';
@@ -77,6 +79,7 @@ export default function Landing() {
         body="Playoff odds from simulating the rest of the season ten thousand times, fitted to how your league actually scores. Then the what-ifs: alternate schedules, and the trades that really changed who won."
         points={['Odds fitted to your league, not a generic one', 'Schedule luck and trade trees', 'Live win chances on every matchup']}
         visual={<PlayoffSim />} />
+      <FranchiseBand />
       <AlsoInside />
       <Setup />
       <FeaturedLeagues />
@@ -437,6 +440,7 @@ function Ticker() {
     ['Game of the Week', 'Ghosts vs Long Shots scores 84 out of 100'],
     ['Simulator', 'Ghosts make the playoffs in 97% of 10,000 seasons'],
     ['Waivers', 'Bench Mob claims a kicker. Again.'],
+    ['Franchise HQ', 'Ghosts put up a halo board. Crowds up 6%'],
     ['Report', 'Punt Intended left 41.6 points on the bench'],
   ];
   const row = (hidden?: boolean) => (
@@ -468,7 +472,8 @@ function Contents() {
     { n: '03', t: 'Game of the Week', m: GameBallMark, href: '#gotw' },
     { n: '04', t: 'Analytics', m: SheetMark, href: '#analytics' },
     { n: '05', t: 'Simulator', m: BranchMark, href: '#simulator' },
-    { n: '06', t: 'History & more', m: RingMark, href: '#more' },
+    { n: '06', t: 'Franchise HQ', m: StadiumMark, href: '#franchise' },
+    { n: '07', t: 'History & more', m: RingMark, href: '#more' },
   ];
   // Which chapter is being read: the one crossing a line a third of the way down the screen.
   const [active, setActive] = useState<string | null>(null);
@@ -485,21 +490,21 @@ function Contents() {
   }, []);
   return (
     <section className="border-y border-border bg-card">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-6">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:grid-cols-4 sm:px-5 lg:grid-cols-7">
         {items.map((it, i) => {
           const on = active === it.href;
           return (
             <a key={it.n} href={it.href}
               className={cn('group relative flex items-center gap-3 border-border py-5 pr-3 transition-colors hover:text-primary lg:py-4',
                 on && 'text-primary',
-                i % 2 === 1 && 'pl-4 sm:pl-0', 'sm:[&:not(:nth-child(3n+1))]:pl-4 lg:[&:not(:first-child)]:border-l lg:[&:not(:first-child)]:pl-4')}>
+                i % 2 === 1 && 'pl-4 sm:pl-0', 'sm:[&:not(:nth-child(4n+1))]:pl-4 lg:[&:not(:first-child)]:border-l lg:[&:not(:first-child)]:pl-4')}>
               <motion.span animate={on ? { y: -2, scale: 1.08 } : { y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 style={on ? { ['--mark-accent' as string]: 'hsl(var(--primary))' } : undefined}>
                 <it.m size={26} className="shrink-0 transition-transform group-hover:-translate-y-0.5" />
               </motion.span>
               <span className="min-w-0">
                 <span className="block text-[10.5px] font-semibold tabular-nums text-muted-foreground">{it.n}</span>
-                <span className="lp-display block truncate text-[14.5px] font-bold">{it.t}</span>
+                <span className="lp-display block truncate text-[14.5px] font-bold lg:whitespace-normal lg:leading-tight">{it.t}</span>
               </span>
               {on && <motion.span layoutId="contents-active" className="absolute inset-x-0 bottom-0 hidden h-[3px] rounded-t-full bg-primary lg:block"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
@@ -627,21 +632,62 @@ function InstallBand() {
   );
 }
 
+/**
+ * Franchise HQ, on a dark band like Game Day: the stadiums are the picture,
+ * so they get the width. The text sits above them, in two columns on a wide
+ * screen.
+ */
+function FranchiseBand() {
+  return (
+    <section id="franchise" className="lp-ink scroll-mt-16 overflow-hidden py-20 lg:scroll-mt-28 sm:py-28">
+      <div className="mx-auto max-w-6xl px-4 sm:px-5">
+        <motion.div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end lg:gap-16"
+          initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
+          <div className="min-w-0">
+            <motion.div variants={rise} style={{ ['--mark-accent' as string]: 'hsl(var(--primary))' }}>
+              <ChapterHead n="06" mark={StadiumMark} eyebrow="Franchise HQ" />
+            </motion.div>
+            <motion.h2 variants={rise} className="lp-display mt-6 text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">
+              Every manager gets a stadium. <span className="lp-brand-text">Built on real results.</span>
+            </motion.h2>
+            <motion.p variants={rise} className="mt-5 max-w-xl text-[16px] leading-relaxed text-muted-foreground">
+              Each manager claims their team and runs it as a business on your league&apos;s actual games: set ticket prices,
+              fill the seats, and spend what you make on upgrades. Pick one of six stadium styles and make it home, from the
+              seats and the lights to the end zones and the skyline. Every upgrade goes up in 3D, built your style&apos;s way.
+            </motion.p>
+          </div>
+          <motion.div variants={rise} className="min-w-0">
+            <Points items={['Six styles, from a sunken coliseum to a domed arena', 'Your colors on the seats, the field, the crowd and the lights', 'Crowds and franchise values from every season you have played', 'Included with League Pass']} />
+          </motion.div>
+        </motion.div>
+        <motion.div className="mt-12" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-80px' }} transition={{ duration: 0.8, ease }}>
+          <Stadiums />
+          <p className="mt-4 text-[11.5px] text-muted-foreground">Invented teams, every stadium fully built. Pictures from the app&apos;s own 3D view.</p>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 function AlsoInside() {
   const items = [
-    { m: RingMark, t: 'Your whole history, kept', b: 'Champions, records, rivalries and trophy cases through every season you have played. Every score, lineup, trade and pick is stored for good, and yours to download.' },
-    { m: StadiumMark, t: 'Franchise HQ', b: 'Every manager claims their team and runs it as a business: ticket prices, upgrades and a 3D stadium that grows with real results. On League Pass.' },
+    { m: RingMark, t: 'Your whole history, kept', b: 'Champions, records and trophy cases through every season you have played. Every score, lineup, trade and pick is stored for good, and yours to download.' },
+    { m: BracketMark, t: 'Every playoff bracket', b: 'Each season\u2019s bracket, round by round, the way your league\u2019s own settings played it: byes, two-week finals, consolation games. Tap any game for both lineups.' },
+    { m: VersusMark, t: 'Rivalries', b: 'The head-to-head record between every pair of managers, regular season and playoffs counted apart, with every game they have played.' },
+    { m: RadarMark, t: 'Next Gen stats', b: 'Luck, lineup efficiency, consistency and clutch, for one season or a whole career, charted for every team.' },
     { m: PlayMark, t: 'The weekly report', b: 'Best and worst lineups, the luckiest win and the points left on the bench, every week.' },
-    { m: PennantMark, t: 'Your colors, your address', b: 'Your league’s name, logo and colors on its own web address. Installs on phones like an app.' },
+    { m: QuillMark, t: 'Write your own writers', b: 'Describe a character in a sentence. An assistant drafts their voice, handle and sample posts, and tweaks them until they sound right.' },
+    { m: CharterMark, t: 'The rules, written down', b: 'Your league\u2019s constitution, kept by its admins with every version saved. And FantasyPros rankings, once you connect a key.' },
+    { m: PennantMark, t: 'Your colors, your address', b: 'Your league\u2019s name, logo and colors on its own web address. Installs on phones like an app.' },
   ];
   return (
     <section id="more" className="scroll-mt-16 lg:scroll-mt-28 border-t border-border py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-5">
-        <ChapterHead n="06" mark={RingMark} eyebrow="Also inside" />
-        <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-4">
+        <ChapterHead n="07" mark={RingMark} eyebrow="Also inside" />
+        <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((it, i) => (
             <motion.div key={it.t} initial="hidden" whileInView="show" viewport={{ once: true }} variants={rise}
-              transition={{ delay: i * 0.08 }}>
+              transition={{ delay: (i % 4) * 0.08 }}>
               <it.m size={34} />
               <h3 className="lp-display mt-4 text-[22px] font-bold tracking-[-0.02em]">{it.t}</h3>
               <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">{it.b}</p>
@@ -933,6 +979,7 @@ function Faq() {
     ['Is our league\u2019s data ours?', 'Yes. Every season LeaguePulse reads, every score, lineup, trade and draft pick, is kept in your league\u2019s own archive, even if Sleeper or ESPN later lets it go. Admins can download all of it as Excel, CSV or JSON whenever they like, so you are never locked in.'],
     ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it\u2019s included: we run it, within generous daily limits. Everything that isn\u2019t AI works either way.'],
     ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
+    ['What is Franchise HQ?', 'A game inside the app, included with League Pass. Each manager claims their team and runs it as a business on your league\u2019s real results: ticket prices, crowds, upgrades, and a 3D stadium in one of six styles, dressed in their own colors. Franchise values count every season you have played, championships included.'],
     ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
     ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],
   ];

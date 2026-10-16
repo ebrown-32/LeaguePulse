@@ -3,13 +3,15 @@
 /**
  * Every franchise in the league's history, from the archive: the ones playing
  * now first, then the ones that have left, each by franchise value (Franchise
- * HQ), most valuable first. Each card opens the franchise's page.
+ * HQ), most valuable first. Each card opens the franchise's page; a franchise
+ * with a stadium also gets a button straight to it, fullscreen.
  */
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Trophy } from '@/components/icons';
+import { ArrowRight, ChevronDown, Trophy } from '@/components/icons';
+import { StadiumMark } from '@/components/platform/marks';
 import { cn } from '@/lib/utils';
 import type { FranchiseSummary } from '@/lib/archive/franchises';
 
@@ -68,13 +70,16 @@ function Grid({ rows, values, muted }: { rows: Row[]; values: Map<string, number
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((f, i) => (
         <motion.div key={f.franchiseId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03, duration: 0.35 }}>
-          <Link href={`/team/${encodeURIComponent(f.franchiseId)}`}
-            className={cn('group relative block overflow-hidden rounded-2xl border border-border bg-card p-4 transition hover:border-foreground/25 hover:shadow-sm sm:p-5', muted && 'opacity-80')}>
+          {/* The name is the link, stretched over the whole card; the stadium button sits above it. */}
+          <div className={cn('group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 transition hover:border-foreground/25 hover:shadow-sm sm:p-5', muted && 'opacity-80')}>
             {f.color && <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: f.color }} />}
             <div className="flex items-center gap-3.5">
               <Crest f={f} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[16px] font-bold leading-tight tracking-tight">{f.teamName || f.manager}</p>
+                <Link href={`/team/${encodeURIComponent(f.franchiseId)}`}
+                  className="block truncate text-[16px] font-bold leading-tight tracking-tight outline-none before:absolute before:inset-0 before:rounded-2xl focus-visible:before:ring-2 focus-visible:before:ring-foreground/40">
+                  {f.teamName || f.manager}
+                </Link>
                 <p className="truncate text-[13px] text-muted-foreground">{f.manager}</p>
               </div>
               {values.has(f.franchiseId) && (
@@ -99,7 +104,16 @@ function Grid({ rows, values, muted }: { rows: Row[]; values: Map<string, number
                 ))}
               </div>
             )}
-          </Link>
+            {values.has(f.franchiseId) && (
+              <Link href={`/team/${encodeURIComponent(f.franchiseId)}#stadium`}
+                className="relative z-10 mt-4 flex items-center gap-2.5 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-[13.5px] font-semibold transition hover:border-foreground/30 hover:bg-muted"
+                style={f.color ? { ['--mark-accent' as string]: f.color } : undefined}>
+                <StadiumMark size={22} className="shrink-0" />
+                <span className="flex-1">View stadium</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5" />
+              </Link>
+            )}
+          </div>
         </motion.div>
       ))}
     </div>
