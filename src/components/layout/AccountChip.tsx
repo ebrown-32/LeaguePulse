@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Your LeaguePulse account, at the bottom left of a league site's footer: the
- * way into the rest of LeaguePulse. Signed out, an invitation to sign in;
+ * Your LeaguePulse account, at the bottom left of a league site's footer and
+ * at the foot of its menus (`compact`): the way into the rest of LeaguePulse. Signed out, an invitation to sign in;
  * signed in, your name and picture with a short menu (your leagues, this
  * league's admin if you run it, your franchise if you manage one).
  *
@@ -22,7 +22,7 @@ interface Me {
   links?: { account: string; admin: string | null; franchise: string | null; editFranchise: string | null };
 }
 
-export default function AccountChip() {
+export default function AccountChip({ compact = false, className }: { compact?: boolean; className?: string }) {
   const [me, setMe] = useState<Me | null>(null);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -61,12 +61,12 @@ export default function AccountChip() {
   if (!me.signedIn) {
     return (
       <a href={`${me.signIn}${encodeURIComponent(window.location.href.split('#')[0])}`}
-        className="group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 pr-4 text-left transition hover:border-foreground/30 hover:bg-card">
+        className={`group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 text-left transition hover:border-foreground/30 hover:bg-card ${compact ? 'pr-3' : 'pr-4'} ${className ?? ''}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/leaguepulse-icon.svg" alt="" className="h-8 w-8 rounded-lg" />
-        <span className="leading-tight">
+        <img src="/brand/leaguepulse-icon.svg" alt="" className={compact ? 'h-7 w-7 rounded-lg' : 'h-8 w-8 rounded-lg'} />
+        <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-[13px] font-semibold text-foreground">Sign in with LeaguePulse</span>
-          <span className="block text-[11.5px] text-muted-foreground">Your leagues, franchise and admin, all in one place</span>
+          {!compact && <span className="block text-[11.5px] text-muted-foreground">Your leagues, franchise and admin, all in one place</span>}
         </span>
         <span aria-hidden className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground">&rarr;</span>
       </a>
@@ -83,9 +83,9 @@ export default function AccountChip() {
   ].filter(Boolean) as { label: string; href: string }[];
 
   return (
-    <div ref={box} className="relative">
+    <div ref={box} className={`relative ${className ?? ''}`}>
       <button onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu"
-        className="group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 pr-3.5 text-left transition hover:border-foreground/30 hover:bg-card">
+        className={`group inline-flex items-center gap-3 rounded-2xl border border-border bg-card/60 py-2 pl-2 pr-3.5 text-left transition hover:border-foreground/30 hover:bg-card ${className ? 'w-full' : ''}`}>
         <span className="relative shrink-0">
           {me.image
             // eslint-disable-next-line @next/next/no-img-element
@@ -94,7 +94,7 @@ export default function AccountChip() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/leaguepulse-icon.svg" alt="" className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded ring-2 ring-card" />
         </span>
-        <span className="min-w-0 leading-tight">
+        <span className="min-w-0 flex-1 leading-tight">
           <span className="block max-w-[12rem] truncate text-[13px] font-semibold text-foreground">{me.name}</span>
           <span className="block text-[11.5px] text-muted-foreground">Your LeaguePulse</span>
         </span>

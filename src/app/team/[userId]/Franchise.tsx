@@ -52,6 +52,8 @@ export function useFranchise(franchiseId: string) {
   const [info, setInfo] = useState<FranchiseInfo | null>(null);
   const [auth, setAuth] = useState<Record<string, string> | null>(null);
   const [mine, setMine] = useState(false);
+  /** Signed in to LeaguePulse here (the footer's account), whoever manages this franchise. */
+  const [me, setMe] = useState<{ name: string } | null>(null);
 
   useEffect(() => {
     // A manager's pass arrives in the fragment; move it into this tab's storage and out of the address bar.
@@ -69,7 +71,10 @@ export function useFranchise(franchiseId: string) {
     if (!visitor) return;
     fetch('/api/account/me', { headers: { 'x-visitor-pass': visitor }, cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setMine(d?.links?.franchise === `/team/${encodeURIComponent(franchiseId)}`))
+      .then(d => {
+        setMine(d?.links?.franchise === `/team/${encodeURIComponent(franchiseId)}`);
+        if (d?.signedIn) setMe({ name: d.name ?? 'you' });
+      })
       .catch(() => {});
   }, [franchiseId]);
 
@@ -81,7 +86,7 @@ export function useFranchise(franchiseId: string) {
   }, [franchiseId]);
   useEffect(load, [load]);
 
-  return { info, auth, mine, reload: load };
+  return { info, auth, mine, me, reload: load };
 }
 
 export const managePath = (franchiseId: string) => `/team/${encodeURIComponent(franchiseId)}/manage`;
