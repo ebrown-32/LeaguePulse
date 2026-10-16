@@ -65,11 +65,13 @@ const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
  * `public`: the stadium, crowds, fans and log, on the franchise page.
  * `manage`: the stadium and the control room, on the manager's page (auth required for the books).
  */
-export default function FranchiseHQ({ franchiseId, mode, auth = null, color, teamName, logo = null, look = null, stadiumName = null, onLookSaved, children }: {
+export default function FranchiseHQ({ franchiseId, mode, auth = null, color, teamName, logo = null, look = null, stadiumName = null, onLookSaved, identity, children }: {
   franchiseId: string; mode: 'public' | 'manage'; auth?: Record<string, string> | null; color: string | null; teamName: string;
   /** For midfield; same-origin (see fieldLogo). */
   logo?: string | null;
   look?: StadiumLook | null; stadiumName?: string | null; onLookSaved?: () => void;
+  /** The franchise's identity editor, right under the stadium studio (manage). */
+  identity?: React.ReactNode;
   /** The page's own sections, after these. */
   children?: React.ReactNode;
 }) {
@@ -122,7 +124,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   useEffect(() => { const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, []);
 
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
-  if (!t.available) return children ? <Sections>{children}</Sections> : null;
+  if (!t.available) return identity || children ? <Sections>{identity}{children}</Sections> : null;
   const last = t.games.at(-1);
   // The economy plays every archived season; the charts and the books show the latest one.
   const seasonNow = last?.season ?? null;
@@ -220,6 +222,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
             {full ? <p className="text-[12.5px] text-muted-foreground">Open in fullscreen.</p> : studio(false)}
           </Section>
         )}
+        {identity}
         {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} style={draftLook.style} />}
 
         {children}

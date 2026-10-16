@@ -230,9 +230,15 @@ export default function TeamProfileView({ userId }: { userId: string }) {
                   Managed by {identity.manager.name}
                 </span>
               )}
+              {/* Claiming and editing both go through a LeaguePulse account, so say so. */}
               {identity.claimUrl && (
-                <a href={identity.claimUrl} className="rounded-full border border-border px-3 py-0.5 text-[11.5px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
-                  This is my team
+                <a href={identity.claimUrl} className="rounded-full bg-foreground px-3 py-1 text-[11.5px] font-semibold text-background transition hover:bg-foreground/85">
+                  Sign up / log in with LeaguePulse to claim
+                </a>
+              )}
+              {identity.manager && !mine && identity.editUrl && (
+                <a href={identity.editUrl} className="rounded-full border border-border px-3 py-0.5 text-[11.5px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
+                  Your team? Log in with LeaguePulse to edit
                 </a>
               )}
             </div>
