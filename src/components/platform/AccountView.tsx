@@ -63,7 +63,10 @@ export default function AccountView() {
         )}
         {error && <p className="mt-6 text-[14px] text-[hsl(var(--signal))]">{error}</p>}
 
-        <div className="mt-7 grid grid-cols-1 gap-4 sm:mt-9 md:grid-cols-2 md:gap-5">
+        {/* Cards match heights side by side, except while one has its admins
+            open: then each keeps its own height, so opening admins grows that
+            card downward without stretching its neighbour or moving it. */}
+        <div className="mt-7 grid grid-cols-1 gap-4 sm:mt-9 md:grid-cols-2 md:gap-5 md:has-[[data-admins-open]]:items-start">
           {!data && !error && [0, 1].map(i => <Skeleton key={i} />)}
           {data && data.leagues.length === 0 && <Empty />}
           {data?.leagues.map((l, i) => <LeagueCard key={l.slug} l={l} i={i} onChange={load} />)}
@@ -135,7 +138,8 @@ function LeagueCard({ l, i, onChange }: { l: LeagueRow; i: number; onChange: () 
     <motion.section
       initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: Math.min(i, 6) * 0.05, ease: [0.22, 1, 0.36, 1] }}
-      className={cn('flex min-w-0 flex-col rounded-[24px] border border-border bg-card shadow-[0_1px_0_hsl(var(--border)),0_18px_40px_-32px_hsl(var(--foreground)/0.35)]', open && 'md:col-span-2')}>
+      data-admins-open={open || undefined}
+      className="flex min-w-0 flex-col rounded-[24px] border border-border bg-card shadow-[0_1px_0_hsl(var(--border)),0_18px_40px_-32px_hsl(var(--foreground)/0.35)]">
       <div className="flex items-start gap-3.5 p-4 sm:p-5">
         <LeagueIcon l={l} />
         <div className="min-w-0 flex-1">
@@ -177,7 +181,7 @@ function LeagueCard({ l, i, onChange }: { l: LeagueRow; i: number; onChange: () 
         )}
         <a href={site} target="_blank" rel="noreferrer"
           className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border text-[14px] font-semibold transition hover:bg-muted">
-          View site <span aria-hidden className="text-muted-foreground">↗</span>
+          View site
         </a>
       </div>
 
