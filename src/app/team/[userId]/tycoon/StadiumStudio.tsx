@@ -151,7 +151,7 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
               </div>
               <BuildsIn style={look.style} facilities={facilities} compact={compact} />
               {STYLES[look.style].movingRoof && (
-                <Field label="Roof" hint={facilities.stadium >= 3 || fullBuild ? 'Automatic closes it at night and in the cold months.' : 'Your roof opens and closes from the Premier level. Preview it fully built to try it.'}>
+                <Field label="Roof" hint={facilities.stadium >= 3 || fullBuild ? 'Automatic closes it at night and in the cold months.' : 'Your roof opens and closes once you reach the Cathedral. Preview it fully built to try it.'}>
                   <Chips options={LOOK_OPTIONS.roof} labels={LOOK_LABELS.roof} value={look.roof} onPick={v => set('roof', v)} />
                 </Field>
               )}

@@ -124,7 +124,7 @@ function GetStarted() {
 /** The sections the nav links to, in page order. */
 const NAV_LINKS = [
   { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' }, { label: 'The App', href: '#app' },
-  { label: 'Analytics', href: '#analytics' }, { label: 'Leagues', href: '#leagues' }, { label: 'Pricing', href: '#pricing' },
+  { label: 'Analytics', href: '#analytics' }, { label: 'Stadiums', href: '#franchise' }, { label: 'Leagues', href: '#leagues' }, { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
 ];
 
@@ -184,7 +184,7 @@ function Nav() {
               const on = active === l.href;
               return (
                 <a key={l.href} href={l.href} onPointerEnter={() => setHover(l.href)}
-                  className={cn('relative rounded-full px-3.5 py-2 text-[13.5px] font-semibold transition-colors duration-200',
+                  className={cn('relative whitespace-nowrap rounded-full px-2.5 py-2 text-[13px] font-semibold transition-colors duration-200 xl:px-3.5 xl:text-[13.5px]',
                     on ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
                   {hover === l.href && !on && (
                     <motion.span layoutId="nav-hover" className="absolute inset-0 rounded-full bg-foreground/[0.07]"
@@ -253,6 +253,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
     { t: 'The Desk', href: '#desk', m: DeskMark }, { t: 'Game Day', href: '#gameday', m: GameDayMark },
     { t: 'Install as an App', href: '#app', m: PhoneMark }, { t: 'Game of the Week', href: '#gotw', m: GameBallMark },
     { t: 'Analytics', href: '#analytics', m: SheetMark }, { t: 'Simulator', href: '#simulator', m: BranchMark },
+    { t: 'Stadiums', href: '#franchise', m: StadiumMark },
     { t: 'Featured leagues', href: '#leagues', m: PennantMark }, { t: 'Pricing', href: '#pricing', m: RingMark },
   ];
 

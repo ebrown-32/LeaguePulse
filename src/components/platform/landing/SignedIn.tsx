@@ -41,7 +41,7 @@ export function NavAccount({ getStarted }: { getStarted: React.ReactNode }) {
   if (!isSignedIn) {
     return (
       <div className="flex items-center gap-4">
-        <Link href="/account" className="hidden text-[13.5px] font-semibold text-muted-foreground hover:text-foreground sm:inline">Sign in</Link>
+        <Link href="/account" className="hidden whitespace-nowrap text-[13.5px] font-semibold text-muted-foreground hover:text-foreground sm:inline">Sign in</Link>
         {getStarted}
       </div>
     );
