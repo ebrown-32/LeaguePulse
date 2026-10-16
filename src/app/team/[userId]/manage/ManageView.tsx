@@ -57,10 +57,10 @@ export default function ManageView({ franchiseId }: { franchiseId: string }) {
       <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
         <h1 className="font-display text-2xl font-bold tracking-tight">Only this franchise&apos;s manager can manage it.</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {info.manager ? 'Sign in to LeaguePulse with the account that manages it, then open it again.' : 'Nobody manages it yet. If it is your team, claim it first.'}
+          {info.manager ? 'Log in to LeaguePulse with the account that manages it, then open it again.' : 'Nobody manages it yet. If it is your team, sign up or log in with LeaguePulse to claim it.'}
         </p>
         <div className="mt-6 flex justify-center gap-2">
-          {info.claimUrl && <a href={info.claimUrl} className="rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background">This is my team</a>}
+          {info.claimUrl && <a href={info.claimUrl} className="rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background">Sign up / log in with LeaguePulse to claim</a>}
           <a href={publicPath} className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold">View the franchise</a>
         </div>
       </div>
@@ -80,12 +80,13 @@ export default function ManageView({ franchiseId }: { franchiseId: string }) {
         <a href={publicPath} className="rounded-full border border-border px-4 py-2 text-[13px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">View public page</a>
       </motion.div>
       <FranchiseHQ franchiseId={franchiseId} mode="manage" auth={auth} color={color} teamName={teamName}
-        logo={fieldLogo(info.identity.logoUrl, avatar)} look={info.identity.look} stadiumName={info.identity.stadiumName} onLookSaved={reload}>
-        <Section scope="manage" id="identity" icon={Pencil} title="Identity" index={4}
-          summary={[info.identity.logoUrl ? 'Logo' : 'No logo', info.identity.motto ? `"${info.identity.motto}"` : 'no motto'].join(', ')}>
-          <IdentityEditor info={info} auth={auth} teamName={teamName} onSaved={reload} />
-        </Section>
-      </FranchiseHQ>
+        logo={fieldLogo(info.identity.logoUrl, avatar)} look={info.identity.look} stadiumName={info.identity.stadiumName} onLookSaved={reload}
+        identity={
+          <Section scope="manage" id="identity" icon={Pencil} title="Identity" index={1}
+            summary={[info.identity.logoUrl ? 'Logo' : 'No logo', info.identity.motto ? `"${info.identity.motto}"` : 'no motto'].join(', ')}>
+            <IdentityEditor info={info} auth={auth} teamName={teamName} onSaved={reload} />
+          </Section>
+        } />
     </div>
   );
 }
