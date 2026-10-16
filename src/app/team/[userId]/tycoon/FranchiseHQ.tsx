@@ -9,14 +9,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy } from '@/components/icons';
+import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy, X } from '@/components/icons';
 import { Section, Sections } from '../Section';
 import { projectGame, type Prices } from '@/lib/tycoon/economy';
 import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
-import { DEFAULT_LOOK, LIMITS, type StadiumLook } from '@/lib/franchise/model';
+import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
+import { STYLES, styleBuild, type StadiumStyle } from '@/lib/franchise/stadiumStyles';
+import { FULLY_BUILT, lookSummary, PreviewControls, StadiumStudio } from './StadiumStudio';
 import { CHART_VARS, CrowdsChart, DemandCharts, InterestChart, RevenueChart, VCChart } from './charts';
 
 const Stadium3D = dynamic(() => import('./Stadium3D'), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-muted/40" /> });
@@ -69,10 +72,12 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   children?: React.ReactNode;
 }) {
   // On the manage page the studio below the stadium changes these live, before saving.
-  const [draftLook, setDraftLook] = useState<StadiumLook>(look ?? DEFAULT_LOOK);
+  const savedLook = useMemo(() => normalizeLook(look), [look]);
+  const [draftLook, setDraftLook] = useState<StadiumLook>(savedLook);
+  const [fullBuild, setFullBuild] = useState(false);
   const [draftName, setDraftName] = useState(stadiumName ?? '');
   const [hour, setHour] = useState<number | undefined>(undefined);
-  useEffect(() => { setDraftLook(look ?? DEFAULT_LOOK); }, [look]);
+  useEffect(() => { setDraftLook(savedLook); }, [savedLook]);
   useEffect(() => { setDraftName(stadiumName ?? ''); }, [stadiumName]);
   const [t, setT] = useState<Tycoon | null>(null);
   const url = `/api/tycoon/${encodeURIComponent(franchiseId)}`;
@@ -82,6 +87,16 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   useEffect(load, [load]);
 
   const [hint, setHint] = useState(true);
+  // Fullscreen: the stadium fills the screen, with the studio beside it (below it on a phone) for its manager.
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false); };
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', onKey); };
+  }, [full]);
   useEffect(() => { const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, []);
 
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
@@ -96,15 +111,27 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const scope = mode === 'manage' ? 'manage' : 'team';
   const shownName = (mode === 'manage' ? draftName : stadiumName) || t.stadium.stadiumName;
   const custom = shownName !== t.stadium.stadiumName;
-  const lookNow = mode === 'manage' ? draftLook : look ?? DEFAULT_LOOK;
+  const lookNow = mode === 'manage' ? draftLook : savedLook;
+  const previewing = mode === 'manage' && fullBuild;
+  const stadium = (
+    <Stadium3D facilities={previewing ? FULLY_BUILT : t.stadium.facilities} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
+      teamName={teamName} logo={logo} look={lookNow} hour={hour} />
+  );
+  const studio = (compact: boolean) => (
+    <StadiumStudio franchiseId={franchiseId} auth={auth} look={draftLook} name={draftName} hour={hour}
+      color={hue} teamName={teamName} facilities={t.stadium.facilities} fullBuild={fullBuild} compact={compact}
+      onLook={setDraftLook} onName={setDraftName} onHour={setHour} onFullBuild={setFullBuild}
+      onFullscreen={compact ? undefined : () => setFull(true)}
+      saved={{ look: savedLook, name: stadiumName ?? '' }} onSaved={onLookSaved} />
+  );
 
   return (
     <div className={cn('space-y-3', CHART_VARS)}>
       {/* The stadium */}
       <motion.div initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
         className="relative h-[440px] overflow-hidden rounded-3xl border border-border bg-muted/40 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.45)] sm:h-[540px]">
-        <Stadium3D facilities={t.stadium.facilities} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
-          teamName={teamName} logo={logo} look={lookNow} hour={hour} />
+        {/* One stadium at a time: while fullscreen has it, this spot holds still. */}
+        {full ? <div className="h-full w-full bg-muted/40" /> : stadium}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/55 via-black/25 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/45 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 text-white sm:p-5">
@@ -127,14 +154,25 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
               <p className="text-[15px] font-bold tabular-nums">{last ? `${last.attendance.toLocaleString('en-US')}, ${Math.round(100 * last.attendance / last.capacity)}% full` : 'No games yet'}</p>
             </div>
           </motion.div>
+          <div className="flex items-center gap-2">
           <AnimatePresence>
-            {hint && (
+            {previewing ? (
+              <motion.p key="preview" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="rounded-full bg-black/45 px-3 py-1.5 text-[12px] font-semibold backdrop-blur-md">
+                Preview: fully built
+              </motion.p>
+            ) : hint && (
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}
                 className="hidden rounded-full bg-black/40 px-3 py-1.5 text-[12px] font-semibold backdrop-blur-md sm:block">
                 Drag to look around
               </motion.p>
             )}
           </AnimatePresence>
+          <button onClick={() => setFull(true)} aria-label="Open the stadium fullscreen" title="Fullscreen"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/60">
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          </div>
         </div>
       </motion.div>
 
@@ -154,16 +192,52 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           </Section>
         )}
 
-        {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} />}
         {mode === 'manage' && (
-          <Section scope={scope} id="look" icon={Sparkles} title="Stadium look" index={3}
-            summary={`${shownName}: ${LOOK_LABELS.facade[draftLook.facade]}, ${LOOK_LABELS.seats[draftLook.seats].toLowerCase()} seats, ${LOOK_LABELS.turf[draftLook.turf].toLowerCase()} turf`}>
-            <StadiumStudio franchiseId={franchiseId} auth={auth} look={draftLook} name={draftName} hour={hour}
-              onLook={setDraftLook} onName={setDraftName} onHour={setHour} saved={{ look: look ?? DEFAULT_LOOK, name: stadiumName ?? '' }} onSaved={onLookSaved} />
+          <Section scope={scope} id="look" icon={Sparkles} title="Stadium studio" index={0} defaultOpen
+            summary={`${shownName}: ${lookSummary(draftLook)}`}>
+            {full ? <p className="text-[12.5px] text-muted-foreground">Open in fullscreen.</p> : studio(false)}
           </Section>
         )}
+        {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} style={draftLook.style} />}
+
         {children}
       </Sections>
+
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {full && (
+            <motion.div key="full" role="dialog" aria-modal="true" aria-label={`${shownName}, fullscreen`}
+              initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.3, ease: EASE }}
+              className={cn('fixed inset-0 z-[100] flex flex-col bg-background lg:flex-row', CHART_VARS)}>
+              <div className={cn('relative shrink-0 lg:h-auto lg:flex-1', mode === 'manage' ? 'h-[46dvh]' : 'h-full')}>
+                {stadium}
+                <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/55 to-transparent p-4 pb-10 text-white">
+                  <div className="min-w-0">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">{teamName}</p>
+                    <p className="truncate font-display text-lg font-bold leading-tight drop-shadow sm:text-xl">{shownName}</p>
+                  </div>
+                  <button onClick={() => setFull(false)} aria-label="Close fullscreen" autoFocus
+                    className="pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/60">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {mode === 'manage' && (
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent p-3 pt-8">
+                    <PreviewControls overlay hour={hour} fullBuild={fullBuild} onHour={setHour} onFullBuild={setFullBuild} />
+                  </div>
+                )}
+              </div>
+              {mode === 'manage' && (
+                <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1, duration: 0.4, ease: EASE }}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border lg:w-[460px] lg:flex-none lg:border-l lg:border-t-0">
+                  <div className="px-4 pt-4 sm:px-5">{studio(true)}</div>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -205,7 +279,7 @@ function Story({ events }: { events: Tycoon['story'] }) {
 }
 
 /** The manager's sections: prices, building, and the books. */
-function ControlRoom({ t, url, auth, reload, canManage, scope }: { t: Tycoon; url: string; auth: Record<string, string> | null; reload: () => void; canManage: boolean; scope: string }) {
+function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tycoon; url: string; auth: Record<string, string> | null; reload: () => void; canManage: boolean; scope: string; style: StadiumStyle }) {
   const b = t.books!;
   const [prices, setPrices] = useState<Prices>(b.prices);
   const [busy, setBusy] = useState<string | null>(null);
@@ -298,7 +372,7 @@ function ControlRoom({ t, url, auth, reload, canManage, scope }: { t: Tycoon; ur
           </div>
           {note('build')}
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {b.shop.map(item => <ShopCard key={item.track} item={item} vc={b.vc} busy={busy === item.track} canManage={canManage}
+            {b.shop.map(item => <ShopCard key={item.track} item={item} vc={b.vc} busy={busy === item.track} canManage={canManage} style={style}
               onBuild={() => post(item.track, 'build', { action: 'build', track: item.track }, 'Built.')} />)}
           </div>
         </div>
@@ -348,8 +422,9 @@ function Forecast({ label, now, next, fmt }: { label: string; now: number; next:
   );
 }
 
-function ShopCard({ item, vc, busy, canManage, onBuild }: { item: ShopItem; vc: number; busy: boolean; canManage: boolean; onBuild: () => void }) {
+function ShopCard({ item, vc, busy, canManage, style, onBuild }: { item: ShopItem; vc: number; busy: boolean; canManage: boolean; style: StadiumStyle; onBuild: () => void }) {
   const next = item.next;
+  const build = styleBuild(style, item.track);
   const progress = next ? Math.min(1, vc / next.cost) : 1;
   return (
     <motion.div layout className="flex flex-col rounded-xl border border-border bg-card p-3.5">
@@ -368,6 +443,7 @@ function ShopCard({ item, vc, busy, canManage, onBuild }: { item: ShopItem; vc: 
         <div className="mt-3">
           <p className="text-[13px] font-semibold">{next.name}</p>
           <p className="text-[11.5px] text-muted-foreground">{next.blurb} Upkeep {money(next.upkeep)} a week.</p>
+          {build && <p className="mt-1 text-[11.5px] leading-snug text-primary/90">On your {STYLES[style].name}: {build.charAt(0).toLowerCase() + build.slice(1)}</p>}
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
             <motion.div className="h-full rounded-full bg-primary" initial={{ width: 0 }} animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.8 }} />
           </div>
@@ -415,83 +491,6 @@ function Ledger({ games }: { games: Game[] }) {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-
-const LOOK_LABELS = {
-  facade: { concrete: 'Concrete', brick: 'Brick', glass: 'Glass', steel: 'Steel' },
-  seats: { team: 'Team colors', classic: 'Classic', mono: 'Blackout' },
-  turf: { stripes: 'Stripes', checker: 'Checkerboard', classic: 'Classic' },
-} as const;
-
-const PREVIEW_HOURS: [string, number | undefined][] = [['Now', undefined], ['Day', 13], ['Sunset', 17.4], ['Night', 22]];
-
-/** The stadium's name and look: picked here, previewed live above, saved together. */
-function StadiumStudio({ franchiseId, auth, look, name, hour, onLook, onName, onHour, saved, onSaved }: {
-  franchiseId: string; auth: Record<string, string> | null; look: StadiumLook; name: string; hour: number | undefined;
-  onLook: (l: StadiumLook) => void; onName: (n: string) => void; onHour: (h: number | undefined) => void;
-  saved: { look: StadiumLook; name: string }; onSaved?: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const changed = name.trim() !== saved.name || (Object.keys(look) as (keyof StadiumLook)[]).some(k => look[k] !== saved.look[k]);
-
-  const save = async () => {
-    setBusy(true); setMsg(null);
-    const r = await fetch(`/api/franchises/${encodeURIComponent(franchiseId)}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json', ...(auth ?? {}) },
-      body: JSON.stringify({ stadiumName: name, look }),
-    }).catch(() => null);
-    const d = await r?.json().catch(() => null);
-    if (r?.ok) { setMsg({ ok: true, text: 'Saved. Everyone sees it now.' }); onSaved?.(); }
-    else setMsg({ ok: false, text: r?.status === 401 ? 'Your editing pass has expired. Open the franchise again from your LeaguePulse account.' : d?.error ?? 'That did not save.' });
-    setBusy(false);
-  };
-
-  return (
-    <div>
-      <p className="text-[12.5px] text-muted-foreground">Free, and only for show. The stadium above previews it as you choose.</p>
-      <label className="mt-4 block text-[12.5px] font-medium text-muted-foreground" htmlFor="stadium-name">Name</label>
-      <input id="stadium-name" value={name} onChange={e => onName(e.target.value)} maxLength={LIMITS.stadiumName} placeholder="Fight Milk Coliseum"
-        className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-[15px] outline-none focus:border-foreground/40 sm:max-w-sm" />
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        {(Object.keys(LOOK_LABELS) as (keyof StadiumLook)[]).map(k => (
-          <div key={k}>
-            <p className="text-[12.5px] font-medium capitalize text-muted-foreground">{k}</p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {Object.entries(LOOK_LABELS[k]).map(([v, label]) => (
-                <button key={v} onClick={() => onLook({ ...look, [k]: v } as StadiumLook)} aria-pressed={look[k] === v}
-                  className={cn('rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition',
-                    look[k] === v ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground')}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[12.5px] text-muted-foreground">Preview</span>
-          <div className="inline-flex rounded-full border border-border p-0.5">
-            {PREVIEW_HOURS.map(([label, h]) => (
-              <button key={label} onClick={() => onHour(h)} aria-pressed={hour === h}
-                className={cn('rounded-full px-2.5 py-1 text-[12px] font-semibold transition', hour === h ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {msg && <span className={cn('text-[12.5px]', msg.ok ? 'text-primary' : 'text-destructive')}>{msg.text}</span>}
-          <button onClick={save} disabled={!changed || busy}
-            className="rounded-full bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background hover:bg-foreground/85 disabled:opacity-50">
-            {busy ? 'Saving' : 'Save look'}
-          </button>
-        </div>
       </div>
     </div>
   );

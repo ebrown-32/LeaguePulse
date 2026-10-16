@@ -1,35 +1,43 @@
 'use client';
 
 /**
- * A franchise's stadium in 3D, drawn from what it has built (lib/tycoon/catalog)
- * and how its manager has styled it (lib/franchise/model, StadiumLook), set in
- * the world at the visitor's own time of day.
+ * A franchise's stadium in 3D: the style its manager picked, built out to what
+ * the franchise has bought (lib/franchise/stadiumBlueprint turns the two into
+ * stands, roofs, boards and lights), dressed in the manager's look
+ * (lib/franchise/model, StadiumLook), and set in the world at the visitor's
+ * own time of day.
  *
- *   The bowl     a rounded rectangle around a regulation field (Gridiron),
- *                tiers by stadium level and seating, seats in the chosen
- *                colors, the crowd filled to the last game's attendance
- *   The outside  a facade in the chosen material, columns, four gates with
- *                banners, a canopy, a dome at the top levels
- *   The grounds  a plaza with people, a ring road, parking lots laid out in
- *                stalls and filled to the crowd, a garage and a transit
- *                station when built, trees, a pond, a skyline
+ *   The stands   decks of stepped seats in the chosen seat colors, the crowd
+ *                filled to the last game's attendance and doing the wave
+ *   The building a facade in the chosen material, columns, gates and flags;
+ *                the style's own roof (a canopy, a dome, pitched roofs, a
+ *                floating roof that opens and closes), its berm and colonnade
+ *   The upgrades suites, a press box, boards and ribbon boards, light towers
+ *                or roof lights, concessions, restrooms and the store
+ *   The grounds  the plaza, roads, parking and the setting (Grounds)
  *   The sky      sun, light and color from the local hour; at night the
- *                stadium lights, the gates and the skyline come on, and stars
+ *                stadium lights come on in the chosen color, and the stars
  *
- * Everything is made from primitives here (no model files), repeated things
- * are instanced, and nothing renders while off screen.
+ * Everything is made from primitives (no model files), repeated things are
+ * instanced, and nothing renders while off screen.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import {
-  CircleGeometry, Color, CylinderGeometry, DoubleSide, Object3D, RingGeometry, SphereGeometry,
-  type BufferGeometry, type Group, type InstancedMesh, type Mesh, type MeshStandardMaterial,
+  BoxGeometry, CanvasTexture, Color, DoubleSide, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
+  type Group, type InstancedMesh, type Mesh,
 } from 'three';
 import type { Facilities } from '@/lib/tycoon/catalog';
-import { DEFAULT_LOOK, type StadiumLook } from '@/lib/franchise/model';
-import { APRON, Gridiron } from './Gridiron';
+import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
+import {
+  blueprint, outerOf, PODIUM, roofClosed, seatsFilled, seatSpots, topOf, OVAL, TAU, type Blueprint, type Board, type Stand,
+} from '@/lib/franchise/stadiumBlueprint';
+import { fieldColors, Gridiron, inkOn } from './Gridiron';
+import { Grounds, GROUND } from './Grounds';
+import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
+import { along, Boxes, Ribbon, Rise, luminance, mix, rng, type Item } from './stadiumParts';
 
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
@@ -37,57 +45,9 @@ export interface StadiumProps {
   teamName?: string;
   /** The team's logo for midfield, same-origin (see Gridiron). */
   logo?: string | null;
-  look?: StadiumLook | null;
+  look?: Partial<StadiumLook> | null;
   /** Hour of day, 0 to 24; the visitor's clock when left out. */
   hour?: number;
-}
-
-const OVAL = 1.45; // stadiums are longer than they are wide
-/** How square the bowl is: 2 would be an ellipse; 4 hugs the rectangular field with rounded corners. */
-const SQUARE = 4;
-
-/** The point of the bowl's outline at angle a and size r (x is the long axis). */
-function around(a: number, r: number): [number, number] {
-  const c = Math.cos(a), s = Math.sin(a), e = 2 / SQUARE;
-  return [Math.sign(c) * Math.abs(c) ** e * r * OVAL, Math.sign(s) * Math.abs(s) ** e * r];
-}
-/** The outline size that passes through (x, z): around()'s inverse. */
-const reach = (x: number, z: number) => ((Math.abs(x) / OVAL) ** SQUARE + Math.abs(z) ** SQUARE) ** (1 / SQUARE);
-
-/** Bends a round geometry (round in x and `axis`) to the bowl's outline. */
-function bowlShape<G extends BufferGeometry>(g: G, axis: 'z' | 'y'): G {
-  const p = g.attributes.position, j = axis === 'z' ? 2 : 1;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), w = p.getComponent(i, j), r = Math.hypot(x, w);
-    if (!r) continue;
-    const [nx, nw] = around(Math.atan2(w, x), r);
-    p.setX(i, nx); p.setComponent(i, j, nw);
-  }
-  p.needsUpdate = true;
-  g.computeVertexNormals();
-  return g;
-}
-function useBowl(make: () => BufferGeometry, deps: unknown[], axis: 'z' | 'y' = 'z') {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const g = useMemo(() => bowlShape(make(), axis), deps);
-  useEffect(() => () => g.dispose(), [g]);
-  return g;
-}
-/** A flat disc (inner 0) or ring in the bowl's outline. */
-function BowlFlat({ inner = 0, outer, y, children }: { inner?: number; outer: number; y: number; children: React.ReactNode }) {
-  const g = useBowl(() => inner ? new RingGeometry(inner, outer, 128) : new CircleGeometry(outer, 128), [inner, outer], 'y');
-  return <mesh geometry={g} rotation-x={-Math.PI / 2} position={[0, y, 0]} receiveShadow>{children}</mesh>;
-}
-/** An open band of the bowl's outline: a wall, or a raked tier when the radii differ. */
-function BowlBand({ top, bottom, height, y, cast = false, children }: { top: number; bottom: number; height: number; y: number; cast?: boolean; children: React.ReactNode }) {
-  const g = useBowl(() => new CylinderGeometry(top, bottom, height, 128, 1, true), [top, bottom, height]);
-  return <mesh geometry={g} position={[0, y, 0]} castShadow={cast} receiveShadow>{children}</mesh>;
-}
-
-/** A repeatable random sequence, so the same stadium always looks the same. */
-function rng(seed: number) {
-  let s = seed >>> 0 || 1;
-  return () => { s = (Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9) >>> 0; return (s >>> 8) / 16777216; };
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -104,8 +64,6 @@ function useLocalHour(override?: number) {
   return hour;
 }
 
-const mix = (a: string, b: string, t: number) => '#' + new Color(a).lerp(new Color(b), Math.max(0, Math.min(1, t))).getHexString();
-
 /** Sky, sun and light for an hour: noon is high and white, sunset low and orange, night dark blue. */
 function skyFor(hour: number) {
   const angle = ((hour - 6) / 12) * Math.PI; // sunrise at 6, sunset at 18
@@ -119,384 +77,558 @@ function skyFor(hour: number) {
     sun: [Math.cos(angle) * 30, Math.max(2, elevation * 30), -12] as [number, number, number],
     sunColor: mix('#ffffff', '#ffb070', golden),
     sunIntensity: Math.max(0, elevation) * 1.7 + 0.08,
-    ambient: 0.25 + Math.max(0, elevation) * 0.6,
+    ambient: 0.35 + Math.max(0, elevation) * 0.75,
     lightsOn: night > 0.35 || golden > 0.6,
   };
 }
 
-/** Autumn and winter show in the trees. */
-function treePalette(): string[] {
-  const m = new Date().getMonth();
-  if (m >= 8 && m <= 10) return ['#3f7d32', '#c46a1c', '#d99b2b', '#a63f1f', '#5d8a2e'];
-  if (m === 11 || m <= 1) return ['#2f5d34', '#3a6b3d', '#7a6a55'];
-  return ['#3f7d32', '#4f8f3a', '#2f6b2a', '#5d9a3e'];
-}
-
-// ── Pieces ──────────────────────────────────────────────────────────────────
-
-/** Grows a child from nothing to full size when it first appears. */
-function Rise({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
-  const g = useRef<Group>(null);
-  const born = useRef<number | null>(null);
-  useFrame(({ clock }) => {
-    if (!g.current) return;
-    born.current ??= clock.elapsedTime + delay;
-    const t = Math.min(1, Math.max(0, (clock.elapsedTime - born.current) / 0.9));
-    g.current.scale.set(1, Math.max(0.001, 1 - Math.pow(1 - t, 3)), 1);
-  });
-  return <group ref={g} scale={[1, 0.001, 1]}>{children}</group>;
-}
-
-/** Instanced boxes from a list of placements. */
-function Boxes({ items, size, color, emissive, emissiveIntensity = 0, cast = true }: {
-  items: { x: number; y: number; z: number; ry?: number; sx?: number; sy?: number; sz?: number; c?: string }[];
-  size: [number, number, number]; color?: string; emissive?: string; emissiveIntensity?: number; cast?: boolean;
-}) {
-  const mesh = useRef<InstancedMesh>(null);
-  useEffect(() => {
-    const m = mesh.current;
-    if (!m) return;
-    const d = new Object3D();
-    items.forEach((it, i) => {
-      d.position.set(it.x, it.y, it.z); d.rotation.set(0, it.ry ?? 0, 0); d.scale.set(it.sx ?? 1, it.sy ?? 1, it.sz ?? 1);
-      d.updateMatrix(); m.setMatrixAt(i, d.matrix);
-      if (it.c) m.setColorAt(i, new Color(it.c));
-    });
-    m.instanceMatrix.needsUpdate = true;
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [items]);
-  if (!items.length) return null;
-  return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, items.length]} key={items.length} castShadow={cast} receiveShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial color={items[0].c ? undefined : color} emissive={emissive} emissiveIntensity={emissiveIntensity} roughness={0.8} />
-    </instancedMesh>
-  );
-}
+// ── Colors ──────────────────────────────────────────────────────────────────
 
 const FACADE: Record<StadiumLook['facade'], { wall: string; trim: string; metal: number; rough: number; glass?: boolean }> = {
   concrete: { wall: '#cfcac0', trim: '#9e978a', metal: 0, rough: 0.9 },
   brick: { wall: '#9c4a32', trim: '#e6dccb', metal: 0, rough: 0.95 },
-  glass: { wall: '#7fb6db', trim: '#d8e4ec', metal: 0.3, rough: 0.1, glass: true },
-  // Kept mostly matte: with nothing in the scene to reflect, real metalness renders black.
-  steel: { wall: '#8d98a3', trim: '#d3d9de', metal: 0.3, rough: 0.45 },
+  // Kept matte: with nothing in the scene to reflect, any real metalness renders near black.
+  glass: { wall: '#8cc2e3', trim: '#d8e4ec', metal: 0.05, rough: 0.15, glass: true },
+  steel: { wall: '#a3adb7', trim: '#d3d9de', metal: 0.05, rough: 0.5 },
+  stone: { wall: '#d8ccb2', trim: '#b5a586', metal: 0, rough: 0.92 },
 };
 
-function seatColors(look: StadiumLook, team: string): [string, string] {
-  if (look.seats === 'team') return [mix(team, '#9aa0a6', 0.25), mix(team, '#ffffff', 0.25)];
-  if (look.seats === 'mono') return ['#2f3338', '#3a3f45'];
-  return ['#8d939b', '#3d6fa8'];
+const LIGHT: Record<Exclude<StadiumLook['lights'], 'team'>, string> = { warm: '#fff1cf', white: '#eef5ff' };
+
+interface Palette {
+  team: string; accent: string; trim: string; light: string;
+  seat: (a: number, deck: number) => Color;
+  crowd: Color[];
 }
 
-function Tier({ inner, height, base, color }: { inner: number; height: number; base: number; color: string }) {
+function palette(look: StadiumLook, team: string): Palette {
+  const accent = look.accent ?? (luminance(team) > 0.6 ? '#1b1d21' : '#f4f4f2');
+  const c = (hex: string) => new Color(hex);
+  const A = c(mix(team, '#9aa0a6', 0.2)), B = c(mix(team, '#ffffff', 0.22)), X = c(mix(accent, '#9aa0a6', 0.15));
+  const blue = c('#3d6fa8'), gray = c('#8d939b'), dark = c('#2f3338'), dark2 = c('#3a3f45');
+  const section = (a: number) => Math.floor((((a % TAU) + TAU) % TAU) / (TAU / 36)) % 2;
+  const seat = (a: number, deck: number) => {
+    if (look.seats === 'split') return section(a) ? X : A;
+    if (look.seats === 'classic') return deck === 0 ? blue : gray;
+    if (look.seats === 'mono') return deck % 2 ? dark2 : dark;
+    return deck % 2 ? B : A;
+  };
+  const crowd = {
+    mixed: [team, team, mix(team, '#ffffff', 0.55), accent, '#f2f2f2', '#2b2b2b'],
+    colorout: [team, team, team, mix(team, '#000000', 0.25), accent],
+    whiteout: ['#f6f6f4', '#f6f6f4', '#e9e9e6', '#ffffff', team],
+    blackout: ['#1b1c1e', '#232427', '#2b2c30', '#1b1c1e', team],
+  }[look.crowd].map(c);
+  return { team, accent, trim: FACADE[look.facade].trim, light: look.lights === 'team' ? mix(team, '#ffffff', 0.25) : LIGHT[look.lights], seat, crowd };
+}
+
+// ── The stands ──────────────────────────────────────────────────────────────
+
+const CONCOURSE = new Color('#9d998f'), CAP = new Color('#8d877c');
+
+function Stands({ bp, p, fascia, wall }: { bp: Blueprint; p: Palette; fascia: string; wall: string }) {
+  const fasciaColor = useMemo(() => new Color(fascia), [fascia]);
+  const capColor = useMemo(() => new Color(wall), [wall]);
   return (
-    <BowlBand top={inner + height * 0.9} bottom={inner} height={height} y={base + height / 2} cast>
-      <meshStandardMaterial color={color} side={DoubleSide} roughness={0.85} />
-    </BowlBand>
+    <group>
+      {bp.stands.map(s => {
+        const count = s.decks((s.from + s.to) / 2).length;
+        return Array.from({ length: count }, (_, d) => (
+          <Ribbon key={`${s.id}${d}`} o={bp.outline} from={s.from} to={s.to} cast
+            profile={a => deckProfile(s.decks(a)[d], s.rows)}
+            k={`${bp.style}${s.id}${d}${s.decks(s.from)[d]?.height}${s.decks(s.from)[d]?.floor}${fascia}${wall}${p.seat(0.1, d).getHexString()}${p.seat(0.3, d).getHexString()}`}
+            opts={{
+              caps: true,
+              color: (a, k) => {
+                const deck = s.decks(a)[d];
+                switch (deckStrip(deck, k)) {
+                  case 'tread': return p.seat(a, d);
+                  case 'riser': return p.seat(a, d).clone().lerp(CAP, 0.55).multiplyScalar(0.8);
+                  case 'concourse': return CONCOURSE;
+                  case 'fascia': return fasciaColor;
+                  default: return capColor;
+                }
+              },
+            }}>
+            <meshStandardMaterial vertexColors side={DoubleSide} roughness={0.85} />
+          </Ribbon>
+        ));
+      })}
+    </group>
   );
 }
 
-function Crowd({ tiers, fill, color }: { tiers: { inner: number; height: number; base: number }[]; fill: number; color: string }) {
+/**
+ * The crowd, one figure a seat sold: as full as the last game's attendance,
+ * the best seats taken first (seatsFilled). The wave runs in the shader, so a
+ * full house costs nothing extra.
+ */
+function Crowd({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Color[] }) {
+  const spots = useMemo(() => seatSpots(bp), [bp]);
+  const shown = useMemo(() => seatsFilled(bp, spots, Math.max(0.03, fill)), [bp, spots, fill]);
+  const time = useMemo(() => ({ value: 0 }), []);
+  const material = useMemo(() => {
+    const m = new MeshStandardMaterial({ roughness: 0.7 });
+    m.onBeforeCompile = shader => {
+      shader.uniforms.uTime = time;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aAngle;\nuniform float uTime;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y += pow(max(0.0, cos(aAngle - uTime * 1.6)), 12.0) * 0.12;');
+    };
+    m.customProgramCacheKey = () => 'lp-crowd-wave';
+    return m;
+  }, [time]);
+  const geometry = useMemo(() => {
+    const g = new BoxGeometry(0.05, 0.09, 0.05);
+    g.setAttribute('aAngle', new InstancedBufferAttribute(new Float32Array(shown.map(s => s.a)), 1));
+    return g;
+  }, [shown]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
   const mesh = useRef<InstancedMesh>(null);
-  const seats = useMemo(() => {
-    const out: { x: number; y: number; z: number; a: number }[] = [];
-    for (const t of tiers) for (let row = 0; row < 5; row++) {
-      const f = (row + 0.5) / 5, radius = t.inner + 0.08 + f * t.height * 0.9, per = Math.round(radius * 34);
-      for (let i = 0; i < per; i++) {
-        const a = (i / per) * Math.PI * 2;
-        const [x, z] = around(a, radius);
-        out.push({ x, y: t.base + 0.06 + f * t.height, z, a });
-      }
-    }
-    return out;
-  }, [tiers]);
-  const shown = useMemo(() => { const r = rng(11); return seats.filter(() => r() < Math.max(0.03, fill)); }, [seats, fill]);
-  const palette = useMemo(() => [new Color(color), new Color(color).lerp(new Color('#ffffff'), 0.55), new Color('#f2f2f2'), new Color('#2b2b2b')], [color]);
-  const dummy = useMemo(() => new Object3D(), []);
   useEffect(() => {
     const m = mesh.current;
     if (!m) return;
-    const r = rng(3);
-    shown.forEach((_, i) => m.setColorAt(i, palette[r() < 0.62 ? 0 : r() < 0.5 ? 1 : r() < 0.7 ? 2 : 3]));
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [shown, palette]);
-  useFrame(({ clock }) => {
-    const m = mesh.current;
-    if (!m) return;
-    const t = clock.elapsedTime;
+    const d = new Object3D(), r = rng(3);
     shown.forEach((s, i) => {
-      const lift = Math.max(0, Math.cos((s.a - t * 1.6) % (Math.PI * 2))) ** 12 * 0.12; // the wave
-      dummy.position.set(s.x, s.y + lift, s.z); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
+      d.position.set(s.x, s.y, s.z); d.updateMatrix(); m.setMatrixAt(i, d.matrix);
+      m.setColorAt(i, colors[Math.floor(r() * colors.length)]);
     });
     m.instanceMatrix.needsUpdate = true;
-  });
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }, [shown, colors]);
+  useFrame(({ clock }) => { time.value = clock.elapsedTime; });
+  if (!shown.length) return null;
+  return <instancedMesh ref={mesh} args={[geometry, material, shown.length]} key={shown.length} />;
+}
+
+// ── The building ────────────────────────────────────────────────────────────
+
+const outerAt = (s: Stand, a: number) => outerOf(s.decks(a));
+const topAt = (s: Stand, a: number) => topOf(s.decks(a));
+
+function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: Palette; night: number }) {
+  const f = FACADE[look.facade];
+  const o = bp.outline;
+  const walled = bp.stands.filter(s => s.wallFrom !== null);
+  const { columns, poles, flags } = useMemo(() => {
+    const columns: Item[] = [], poles: Item[] = [], flags: Item[] = [];
+    for (const s of walled) {
+      const from = s.wallFrom ?? 0;
+      for (const pt of along(o, s.from, s.to, a => outerAt(s, a) + 0.08, 0.42)) {
+        const h = topAt(s, pt.a) - from;
+        columns.push({ x: pt.x, y: from + h / 2, z: pt.z, ry: -pt.a, sy: h });
+      }
+      if (look.style === 'dome') continue;
+      along(o, s.from, s.to, a => outerAt(s, a) + 0.02, 1.1).forEach((pt, i) => {
+        const t = topAt(s, pt.a);
+        poles.push({ x: pt.x, y: t + 0.22, z: pt.z });
+        flags.push({ x: pt.x + Math.cos(pt.a) * 0.001, y: t + 0.37, z: pt.z, ry: -pt.a + Math.PI / 2, c: i % 2 ? p.accent : p.team });
+      });
+    }
+    return { columns, poles, flags };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bp, look.style, p.team, p.accent]);
+  const gates = useMemo(() => {
+    if (bp.berm) return [];
+    const out: { x: number; z: number; ry: number }[] = [];
+    for (const s of walled) for (const a of [0, Math.PI / 2, Math.PI, 1.5 * Math.PI, TAU]) {
+      if (a < s.from + 0.1 || a > s.to - 0.1 || topAt(s, a) < 0.95 || (a === TAU && s.from < 0.1)) continue;
+      const [x, z] = o.around(a, outerAt(s, a) + 0.2);
+      out.push({ x, z, ry: -a + Math.PI / 2 });
+    }
+    return out;
+  }, [bp, walled, o]);
+
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, Math.max(1, shown.length)]} key={shown.length}>
-      <boxGeometry args={[0.05, 0.09, 0.05]} />
-      <meshStandardMaterial roughness={0.7} />
-    </instancedMesh>
+    <group>
+      {walled.map(s => (
+        <group key={s.id}>
+          <Ribbon o={o} from={s.from} to={s.to} cast k={`${bp.style}${s.id}${topAt(s, s.from)}${outerAt(s, s.from)}`}
+            profile={a => [[outerAt(s, a) + 0.04, s.wallFrom ?? 0], [outerAt(s, a) + 0.04, topAt(s, a)]]}>
+            {f.glass
+              ? <meshPhysicalMaterial color={f.wall} metalness={f.metal} roughness={f.rough} transparent opacity={0.72} side={DoubleSide} emissive="#ffd99a" emissiveIntensity={night * 0.35} />
+              : <meshStandardMaterial color={f.wall} metalness={f.metal} roughness={f.rough} side={DoubleSide} />}
+          </Ribbon>
+          {/* A lit band of windows near the top. */}
+          <Ribbon o={o} from={s.from} to={s.to} k={`win${bp.style}${s.id}${topAt(s, s.from)}${outerAt(s, s.from)}`}
+            profile={a => { const t = topAt(s, a), y = (s.wallFrom ?? 0) + (t - (s.wallFrom ?? 0)) * 0.76; return [[outerAt(s, a) + 0.05, y], [outerAt(s, a) + 0.05, y + 0.1]]; }}>
+            <meshStandardMaterial color="#1e2a36" emissive="#ffd28a" emissiveIntensity={0.15 + night * 1.2} side={DoubleSide} />
+          </Ribbon>
+        </group>
+      ))}
+      <Boxes items={columns} size={[0.1, 1, 0.1]} color={f.trim} />
+      <Boxes items={poles} size={[0.02, 0.44, 0.02]} color="#c9ced3" cast={false} />
+      <Boxes items={flags} size={[0.22, 0.13, 0.01]} cast={false} />
+      {gates.map((g, i) => (
+        <group key={i} position={[g.x, 0, g.z]} rotation-y={g.ry}>
+          <mesh position={[0, 0.45, 0]} castShadow><boxGeometry args={[1.3, 0.9, 0.35]} /><meshStandardMaterial color={f.trim} /></mesh>
+          <mesh position={[0, 0.32, 0.18]}><boxGeometry args={[0.7, 0.62, 0.02]} /><meshStandardMaterial color="#1b1d21" emissive="#ffe2a8" emissiveIntensity={night * 0.8} /></mesh>
+          <mesh position={[0, 1.05, 0.18]}><boxGeometry args={[1.1, 0.28, 0.03]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.25 + night * 0.6} /></mesh>
+          <mesh position={[0, 1.05, 0.196]}><boxGeometry args={[1.1, 0.04, 0.005]} /><meshStandardMaterial color={p.accent} /></mesh>
+        </group>
+      ))}
+    </group>
   );
 }
 
-/** The outside of the bowl: wall, columns, four gates with banners, and a canopy. */
-function Exterior({ outer, top, look, color, night, canopy }: { outer: number; top: number; look: StadiumLook; color: string; night: number; canopy: boolean }) {
-  const f = FACADE[look.facade];
-  const columns = useMemo(() => Array.from({ length: 56 }, (_, i) => {
-    const a = (i / 56) * Math.PI * 2;
-    const [x, z] = around(a, outer + 0.06);
-    return { x, y: top / 2, z, ry: -a };
-  }), [outer, top]);
-  const gates = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+function Suites({ bp, night }: { bp: Blueprint; night: number }) {
   return (
     <group>
-      <BowlBand top={outer + 0.04} bottom={outer + 0.04} height={top} y={top / 2} cast>
-        {f.glass
-          ? <meshPhysicalMaterial color={f.wall} metalness={f.metal} roughness={f.rough} transparent opacity={0.72} side={DoubleSide} emissive="#ffd99a" emissiveIntensity={night * 0.35} />
-          : <meshStandardMaterial color={f.wall} metalness={f.metal} roughness={f.rough} side={DoubleSide} />}
-      </BowlBand>
-      {/* A lit band of windows near the top. */}
-      <BowlBand top={outer + 0.05} bottom={outer + 0.05} height={0.12} y={top * 0.78}>
-        <meshStandardMaterial color="#1e2a36" emissive="#ffd28a" emissiveIntensity={0.15 + night * 1.2} side={DoubleSide} />
-      </BowlBand>
-      <Boxes items={columns} size={[0.1, top, 0.1]} color={f.trim} />
-      {gates.map((a, i) => (
-        <group key={i} position={[Math.cos(a) * (outer + 0.2) * OVAL, 0, Math.sin(a) * (outer + 0.2)]} rotation-y={-a + Math.PI / 2}>
-          <mesh position={[0, 0.45, 0]} castShadow><boxGeometry args={[1.3, 0.9, 0.35]} /><meshStandardMaterial color={f.trim} /></mesh>
-          <mesh position={[0, 0.32, 0.18]}><boxGeometry args={[0.7, 0.62, 0.02]} /><meshStandardMaterial color="#1b1d21" emissive="#ffe2a8" emissiveIntensity={night * 0.8} /></mesh>
-          <mesh position={[0, 1.05, 0.18]}><boxGeometry args={[1.1, 0.28, 0.03]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25 + night * 0.6} /></mesh>
+      {bp.suites.map((su, i) => {
+        const s = bp.stands.find(x => x.id === su.stand);
+        if (!s) return null;
+        return (
+          <Ribbon key={i} o={bp.outline} from={Math.max(s.from, su.from)} to={Math.min(s.to, su.to)} k={`suite${bp.style}${i}${s.decks(su.from)[su.deck]?.base}`}
+            profile={a => { const d = s.decks(a)[su.deck]; return [[d.inner - 0.012, (d.floor ?? d.base - 0.1) + 0.012], [d.inner - 0.012, d.base - 0.006]]; }}>
+            <meshPhysicalMaterial color="#9fd4ff" transparent opacity={0.6} roughness={0.05} side={DoubleSide} emissive="#3a7bd5" emissiveIntensity={0.35 + night} />
+          </Ribbon>
+        );
+      })}
+    </group>
+  );
+}
+
+function PressBox({ bp, p, night }: { bp: Blueprint; p: Palette; night: number }) {
+  const pb = bp.pressBox, s = pb && bp.stands.find(x => x.id === pb.stand);
+  if (!pb || !s) return null;
+  const from = s.from + 0.12, to = s.to - 0.12, H = pb.height, o = bp.outline;
+  const k = `pb${H}${topAt(s, from)}`;
+  return (
+    <group>
+      <Ribbon o={o} from={from} to={to} k={k} profile={a => [[outerAt(s, a) - 0.42, topAt(s, a)], [outerAt(s, a) - 0.42, topAt(s, a) + H]]}>
+        <meshPhysicalMaterial color="#a8d8ff" transparent opacity={0.65} roughness={0.05} side={DoubleSide} emissive="#ffd89a" emissiveIntensity={0.2 + night * 0.9} />
+      </Ribbon>
+      <Ribbon o={o} from={from} to={to} k={`${k}s`} cast profile={a => [[outerAt(s, a) - 0.48, topAt(s, a) + H], [outerAt(s, a) + 0.06, topAt(s, a) + H]]}>
+        <meshStandardMaterial color={p.trim} side={DoubleSide} />
+      </Ribbon>
+      <Ribbon o={o} from={from} to={to} k={`${k}b`} profile={a => [[outerAt(s, a) + 0.04, topAt(s, a)], [outerAt(s, a) + 0.04, topAt(s, a) + H]]}>
+        <meshStandardMaterial color={p.trim} side={DoubleSide} />
+      </Ribbon>
+    </group>
+  );
+}
+
+// ── Roofs ───────────────────────────────────────────────────────────────────
+
+function Canopy({ bp, span, p, lightsOn }: { bp: Blueprint; span: number; p: Palette; lightsOn: boolean }) {
+  const s = bp.stands[0], o = bp.outline;
+  const masts = useMemo(() => along(o, 0, TAU, a => outerAt(s, a) + 0.05, 1.5).map(pt => ({ x: pt.x, y: topAt(s, pt.a) + 0.2, z: pt.z })), [o, s]);
+  const k = `canopy${span}${topAt(s, 0)}`;
+  return (
+    <group>
+      <Ribbon o={o} k={k} cast profile={a => [[outerAt(s, a) + 0.06, topAt(s, a) + 0.3], [outerAt(s, a) - span, topAt(s, a) + 0.44]]}>
+        <meshStandardMaterial color="#eef1f4" side={DoubleSide} transparent opacity={0.92} />
+      </Ribbon>
+      <Ribbon o={o} k={`${k}e`} profile={a => [[outerAt(s, a) - span, topAt(s, a) + 0.38], [outerAt(s, a) - span, topAt(s, a) + 0.46]]}>
+        <meshStandardMaterial color={lightsOn ? p.light : p.trim} emissive={p.light} emissiveIntensity={lightsOn ? 2 : 0} side={DoubleSide} />
+      </Ribbon>
+      <Boxes items={masts} size={[0.06, 0.4, 0.06]} color="#c9ced3" />
+    </group>
+  );
+}
+
+function Dome({ bp, rise, p, night }: { bp: Blueprint; rise: number; p: Palette; night: number }) {
+  const R = bp.footprint + 0.05;
+  const shell = useMemo(() => bendToOutline(new SphereGeometry(R, 96, 24, 0, TAU, 0, Math.PI / 2), bp.outline), [R, bp.outline]);
+  const ribs = useMemo(() => bendToOutline(new SphereGeometry(R + 0.01, 24, 7, 0, TAU, 0, Math.PI / 2), bp.outline), [R, bp.outline]);
+  useEffect(() => () => { shell.dispose(); ribs.dispose(); }, [shell, ribs]);
+  return (
+    <group position={[0, bp.top, 0]} scale={[1, rise, 1]}>
+      <mesh geometry={shell}>
+        <meshPhysicalMaterial color="#e9f2ff" transparent opacity={0.3} roughness={0.15} side={DoubleSide} emissive={p.light} emissiveIntensity={night * 0.35} depthWrite={false} />
+      </mesh>
+      <mesh geometry={ribs}><meshBasicMaterial color={mix(p.trim, '#ffffff', 0.3)} wireframe transparent opacity={0.55} /></mesh>
+    </group>
+  );
+}
+
+function Gables({ bp, stands, lift, p, lightsOn }: { bp: Blueprint; stands: string[]; lift: number; p: Palette; lightsOn: boolean }) {
+  const o = bp.outline;
+  const roofColor = mix(p.team, '#2b2f33', 0.5);
+  const { posts, masts, glows } = useMemo(() => {
+    const posts: Item[] = [], glows: [number, number, number][] = [];
+    const masts: { x: number; y: number; z: number; ry: number; h: number }[] = [];
+    for (const id of stands) {
+      const s = bp.stands.find(x => x.id === id);
+      if (!s) continue;
+      // Posts hold up the roof's front edge, from the top deck's concourse to the underside of the roof.
+      for (const pt of along(o, s.from + 0.03, s.to - 0.03, a => s.decks(a).at(-1)!.inner - 0.1, 0.75)) {
+        const last = s.decks(pt.a).at(-1)!, front = last.inner - 0.2, back = outerAt(s, pt.a) + 0.12, Y = topAt(s, pt.a) + lift;
+        const under = Y + 0.3 - (0.3 * (last.inner - 0.1 - front)) / (back - front) - 0.02;
+        const foot = last.floor ?? last.base;
+        posts.push({ x: pt.x, y: (foot + under) / 2, z: pt.z, sy: under - foot });
+      }
+      // Floodlight masts rise from the back of the roof, three along each stand, their lamps tilted at the field.
+      for (const f of [0.18, 0.5, 0.82]) {
+        const a = s.from + (s.to - s.from) * f;
+        const [x, z] = o.around(a, outerAt(s, a) + 0.05);
+        masts.push({ x, z, y: topAt(s, a) + lift, ry: Math.atan2(-x, -z), h: 0.95 });
+      }
+      const mid = (s.from + s.to) / 2, [gx, gz] = o.around(mid, s.decks(mid)[0].inner);
+      glows.push([gx, topAt(s, mid) + lift + 0.9, gz]);
+    }
+    return { posts, masts, glows };
+  }, [bp, stands, lift, o]);
+  const lamp = lightsOn ? p.light : '#000000';
+  return (
+    <group>
+      {stands.map(id => {
+        const s = bp.stands.find(x => x.id === id);
+        if (!s) return null;
+        return (
+          <Ribbon key={id} o={o} from={s.from - 0.02} to={s.to + 0.02} cast k={`gable${id}${lift}${topAt(s, s.from)}`} opts={{ caps: false }}
+            profile={a => { const last = s.decks(a).at(-1)!, Y = topAt(s, a) + lift; return [[last.inner - 0.2, Y + 0.3], [outerAt(s, a) + 0.12, Y]]; }}>
+            <meshStandardMaterial color={roofColor} side={DoubleSide} roughness={0.7} />
+          </Ribbon>
+        );
+      })}
+      <Boxes items={posts} size={[0.05, 1, 0.05]} color="#d9dcdf" />
+      {masts.map((m, i) => (
+        <group key={i} position={[m.x, m.y, m.z]} rotation-y={m.ry}>
+          <mesh position={[0, m.h / 2, 0]} castShadow><cylinderGeometry args={[0.025, 0.035, m.h, 8]} /><meshStandardMaterial color="#9aa1a8" roughness={0.5} /></mesh>
+          {/* The bank: a frame of lamps in two rows, aimed down at the field. */}
+          <group position={[0, m.h, 0.04]} rotation-x={0.42}>
+            <mesh castShadow><boxGeometry args={[0.66, 0.3, 0.05]} /><meshStandardMaterial color="#3a3f45" roughness={0.6} /></mesh>
+            {[-0.24, -0.08, 0.08, 0.24].flatMap(x => [-0.065, 0.065].map(y => (
+              <mesh key={`${x}${y}`} position={[x, y, 0.028]}>
+                <planeGeometry args={[0.12, 0.1]} />
+                <meshStandardMaterial color="#fffbe6" emissive={lamp} emissiveIntensity={lightsOn ? 2.4 : 0} />
+              </mesh>
+            )))}
+          </group>
         </group>
       ))}
-      {canopy && (
-        <BowlFlat inner={outer - 1.3} outer={outer + 0.18} y={top + 0.04}>
-          <meshStandardMaterial color="#eef1f4" side={DoubleSide} transparent opacity={0.9} />
-        </BowlFlat>
+      {lightsOn && glows.map((g, i) => <pointLight key={i} position={g} intensity={6} distance={13} color={p.light} />)}
+    </group>
+  );
+}
+
+/** A roof over every seat, open over the field; panels slide over the opening when it closes. */
+function Membrane({ bp, moving, closed, p, lightsOn }: { bp: Blueprint; moving: boolean; closed: boolean; p: Palette; lightsOn: boolean }) {
+  const s = bp.stands[0], o = bp.outline;
+  const Y = bp.top + 0.6, edge = bp.inner + 0.35;
+  const X = edge * OVAL, Z = edge;
+  const left = useRef<Group>(null), right = useRef<Group>(null);
+  useFrame((_, dt) => {
+    const want = closed ? X / 2 : X / 2 + X * 0.92;
+    for (const [g, side] of [[left.current, -1], [right.current, 1]] as const) {
+      if (g) g.position.x += (side * want - g.position.x) * Math.min(1, dt * 1.6);
+    }
+  });
+  const k = `mem${Y}${edge}${topAt(s, 0)}`;
+  // Steel ribs from the back of the stands out to the roof's edge.
+  const ribs = useMemo(() => along(o, 0, TAU, a => outerAt(s, a), 0.75).map(pt => {
+    const [bx, bz] = o.around(pt.a, outerAt(s, pt.a) + 0.1), [ex, ez] = o.around(pt.a, edge);
+    const back = new Vector3(bx, topAt(s, pt.a) + 0.33, bz), front = new Vector3(ex, Y + 0.03, ez), d = new Object3D();
+    d.position.copy(back).add(front).multiplyScalar(0.5); d.lookAt(front);
+    return { position: d.position.toArray() as [number, number, number], quaternion: d.quaternion.toArray() as [number, number, number, number], length: back.distanceTo(front) };
+  }), [o, s, edge, Y]);
+  return (
+    <group>
+      <Ribbon o={o} k={k} cast profile={a => [[outerAt(s, a) + 0.1, topAt(s, a) + 0.3], [edge, Y]]}>
+        <meshStandardMaterial color="#f2f4f6" side={DoubleSide} transparent opacity={0.62} roughness={0.4} depthWrite={false} />
+      </Ribbon>
+      {ribs.map((r, i) => (
+        <mesh key={i} position={r.position} quaternion={r.quaternion} castShadow>
+          <boxGeometry args={[0.04, 0.05, r.length]} /><meshStandardMaterial color="#c9ced3" roughness={0.5} />
+        </mesh>
+      ))}
+      <Ribbon o={o} k={`${k}e`} profile={() => [[edge, Y - 0.08], [edge, Y]]}>
+        <meshStandardMaterial color={lightsOn ? p.light : p.trim} emissive={p.light} emissiveIntensity={lightsOn ? 2.2 : 0} side={DoubleSide} />
+      </Ribbon>
+      {moving && (
+        <group>
+          {[-1, 1].map(z => <mesh key={z} position={[0, Y + 0.07, z * (Z + 0.12)]} castShadow><boxGeometry args={[X * 4.1, 0.1, 0.08]} /><meshStandardMaterial color="#c9ced3" /></mesh>)}
+          {[left, right].map((ref, i) => (
+            <group key={i} ref={ref} position={[(i ? 1 : -1) * X / 2, Y + 0.04, 0]}>
+              <mesh castShadow><boxGeometry args={[X, 0.04, 2 * Z + 0.2]} /><meshStandardMaterial color="#e7eef4" transparent opacity={0.82} roughness={0.2} /></mesh>
+              {[-0.3, 0, 0.3].map(f => <mesh key={f} position={[f * X, 0.03, 0]}><boxGeometry args={[0.05, 0.03, 2 * Z + 0.2]} /><meshStandardMaterial color="#aeb5bc" /></mesh>)}
+            </group>
+          ))}
+        </group>
       )}
     </group>
   );
 }
 
-function LightTowers({ radius, height, on }: { radius: number; height: number; on: boolean }) {
+// ── Coliseum pieces ─────────────────────────────────────────────────────────
+
+function Berm({ bp, setting }: { bp: Blueprint; setting: StadiumLook['setting'] }) {
+  const b = bp.berm!;
+  return (
+    <Ribbon o={bp.outline} k={`berm${b.r}${b.h}`} profile={() => [[b.r - 0.02, b.h], [b.r + 0.12, b.h], [b.r + b.run, 0.004]]}>
+      <meshStandardMaterial color={mix(GROUND[setting].grass, '#2f4a25', 0.15)} roughness={1} side={DoubleSide} />
+    </Ribbon>
+  );
+}
+
+function Colonnade({ bp, look, p }: { bp: Blueprint; look: StadiumLook; p: Palette }) {
+  const c = bp.colonnade!, o = bp.outline;
+  const stone = look.facade === 'brick' ? '#b9654a' : look.facade === 'glass' || look.facade === 'steel' ? '#d6dadf' : '#e3d7bd';
+  const columns = useMemo(() => along(o, c.from, c.to, () => c.r, 0.3).map(pt => ({ x: pt.x, y: c.base + c.h / 2, z: pt.z, sy: c.h })), [o, c]);
+  const k = `col${c.r}${c.h}${c.base}`;
+  const [ax, az] = o.around(0, c.r);
+  return (
+    <group>
+      <Ribbon o={o} from={c.from - 0.02} to={c.to + 0.02} k={`${k}p`} cast opts={{ caps: true }}
+        profile={() => [[c.r - 0.18, c.base], [c.r + 0.18, c.base]]}>
+        <meshStandardMaterial color={stone} side={DoubleSide} />
+      </Ribbon>
+      <Boxes items={columns} size={[0.11, 1, 0.11]} color={stone} />
+      <Ribbon o={o} from={c.from - 0.02} to={c.to + 0.02} k={`${k}b`} cast opts={{ caps: true }}
+        profile={() => [[c.r - 0.13, c.base + c.h], [c.r - 0.13, c.base + c.h + 0.22], [c.r + 0.13, c.base + c.h + 0.22], [c.r + 0.13, c.base + c.h]]}>
+        <meshStandardMaterial color={stone} side={DoubleSide} />
+      </Ribbon>
+      <Ribbon o={o} from={c.from} to={c.to} k={`${k}s`} profile={() => [[c.r - 0.135, c.base + c.h + 0.05], [c.r - 0.135, c.base + c.h + 0.15]]}>
+        <meshStandardMaterial color={p.team} side={DoubleSide} />
+      </Ribbon>
+      {/* The great arch at the center. */}
+      <mesh position={[ax, c.base + c.h - 0.02, az]} rotation-y={Math.PI / 2}>
+        <torusGeometry args={[c.h * 0.36, 0.08, 8, 24, Math.PI]} />
+        <meshStandardMaterial color={stone} />
+      </mesh>
+    </group>
+  );
+}
+
+function Torch({ at }: { at: [number, number, number] }) {
+  const flame = useRef<Mesh>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    flame.current?.scale.set(1 + Math.sin(t * 9) * 0.08, 1 + Math.sin(t * 13) * 0.18, 1 + Math.cos(t * 11) * 0.08);
+  });
+  return (
+    <group position={at}>
+      <mesh><cylinderGeometry args={[0.16, 0.07, 0.16, 16]} /><meshStandardMaterial color="#8c6a3a" metalness={0.4} roughness={0.5} /></mesh>
+      <mesh ref={flame} position={[0, 0.24, 0]}><coneGeometry args={[0.12, 0.38, 10]} /><meshStandardMaterial color="#ffb347" emissive="#ff7b00" emissiveIntensity={3} transparent opacity={0.9} /></mesh>
+      <pointLight position={[0, 0.4, 0]} intensity={2.5} distance={7} color="#ff9a3c" />
+    </group>
+  );
+}
+
+// ── Boards and lights ───────────────────────────────────────────────────────
+
+/** What the screens show: the team's name on its colors. */
+function useScreen(team: string, accent: string, text: string) {
+  const tex = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 200;
+    const g = c.getContext('2d')!;
+    const grad = g.createLinearGradient(0, 0, 0, 200);
+    grad.addColorStop(0, mix(team, '#ffffff', 0.12)); grad.addColorStop(1, mix(team, '#000000', 0.35));
+    g.fillStyle = grad; g.fillRect(0, 0, 512, 200);
+    g.fillStyle = accent; g.fillRect(0, 168, 512, 10); g.fillRect(0, 22, 512, 4);
+    const word = text.toUpperCase();
+    let size = 92;
+    g.font = `900 ${size}px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
+    const w = g.measureText(word).width;
+    if (w > 470) { size *= 470 / w; g.font = `900 ${size}px "Arial Black", "Helvetica Neue", Arial, sans-serif`; }
+    g.fillStyle = inkOn(team); g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(word, 256, 100);
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  }, [team, accent, text]);
+  useEffect(() => () => tex?.dispose(), [tex]);
+  return tex;
+}
+
+function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook }) {
+  const screen = useScreen(p.team, p.accent, text);
+  const mats = useRef<MeshStandardMaterial[]>([]);
+  useFrame(({ clock }) => { for (const m of mats.current) if (m) m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2; });
+  const wall = FACADE[look.facade].wall;
+  let n = 0;
+  const face = (w: number, h: number, z: number, ry = 0, key?: string) => {
+    const i = n++;
+    return (
+      <mesh key={key} position={[Math.sin(ry) * z, 0, Math.cos(ry) * z]} rotation-y={ry}>
+        <planeGeometry args={[w, h]} />
+        <meshStandardMaterial ref={m => { if (m) mats.current[i] = m; }} map={screen} emissiveMap={screen} emissive="#ffffff" emissiveIntensity={0.9} />
+      </mesh>
+    );
+  };
+  const one = (b: Board, i: number) => {
+    const { w, h } = b;
+    if (b.kind === 'cube') {
+      const cable = bp.roof?.kind === 'dome' ? (bp.footprint + 0.05) * bp.roof.rise - (b.y - bp.top) - h / 2 : 1;
+      return (
+        <group key={i} position={[b.x, b.y, b.z]}>
+          <mesh><boxGeometry args={[w + 0.08, h + 0.08, w + 0.08]} /><meshStandardMaterial color="#1b1d21" /></mesh>
+          {[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((ry, j) => face(w, h, w / 2 + 0.045, ry, `f${j}`))}
+          {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, z], j) => (
+            <mesh key={j} position={[x * w * 0.35, h / 2 + cable / 2, z * w * 0.35]}><cylinderGeometry args={[0.008, 0.008, cable, 4]} /><meshStandardMaterial color="#555" /></mesh>
+          ))}
+        </group>
+      );
+    }
+    const legs = b.legs > 0 && (
+      b.tower
+        ? <mesh position={[0, -h / 2 - b.legs / 2, -0.15]} castShadow><boxGeometry args={[w * 0.55, b.legs, 0.5]} /><meshStandardMaterial color={wall} /></mesh>
+        : [-0.3, 0.3].map(x => <mesh key={x} position={[x * w, -h / 2 - b.legs / 2, -0.04]} castShadow><boxGeometry args={[0.07, b.legs, 0.07]} /><meshStandardMaterial color="#5c6168" /></mesh>)
+    );
+    if (b.kind === 'scoreboard') {
+      return (
+        <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
+          {legs}
+          <mesh castShadow><boxGeometry args={[w, h, 0.14]} /><meshStandardMaterial color="#1f3b2d" /></mesh>
+          <mesh position={[0, h / 2 + 0.03, 0]}><boxGeometry args={[w + 0.06, 0.05, 0.18]} /><meshStandardMaterial color={p.accent} /></mesh>
+          {[-0.26, 0.26].map(x => (
+            <mesh key={x} position={[x * w, -0.04 * h, 0.075]}><planeGeometry args={[w * 0.3, h * 0.42]} /><meshStandardMaterial color="#2a1a05" emissive="#ffb43a" emissiveIntensity={1.1} /></mesh>
+          ))}
+          <mesh position={[0, h * 0.32, 0.075]}><planeGeometry args={[w * 0.7, h * 0.18]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.4} /></mesh>
+          <mesh position={[0, h / 2 + 0.2, 0]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.13, 0.05, 20]} /><meshStandardMaterial color="#f4f1e8" /></mesh>
+        </group>
+      );
+    }
+    return (
+      <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
+        {legs}
+        {b.hung && [-0.35, 0.35].map(x => <mesh key={x} position={[x * w, h / 2 + b.hung! / 2, 0]}><cylinderGeometry args={[0.008, 0.008, b.hung!, 4]} /><meshStandardMaterial color="#555" /></mesh>)}
+        <mesh castShadow><boxGeometry args={[w + 0.12, h + 0.12, 0.12]} /><meshStandardMaterial color="#1b1d21" /></mesh>
+        {face(w, h, 0.065)}
+      </group>
+    );
+  };
+  return <group>{bp.boards.map(one)}</group>;
+}
+
+function LightTowers({ at, color, on }: { at: [number, number, number][]; color: string; on: boolean }) {
   return (
     <>
-      {[1, 3, 5, 7].map(k => around((k * Math.PI) / 4, radius)).map(([x, z]) => (
-        <group key={`${x}${z}`} position={[x, 0, z]}>
-          <mesh position={[0, height / 2, 0]} castShadow><cylinderGeometry args={[0.04, 0.06, height, 8]} /><meshStandardMaterial color="#9aa1a8" metalness={0.6} roughness={0.4} /></mesh>
-          <mesh position={[0, height, 0]}><boxGeometry args={[0.45, 0.25, 0.08]} /><meshStandardMaterial color="#fffbe6" emissive={on ? '#fff3c4' : '#000000'} emissiveIntensity={on ? 2 : 0} /></mesh>
-          {on && <pointLight position={[0, height, 0]} intensity={3} distance={12} color="#fff3d1" />}
+      {at.map(([x, z, h]) => (
+        <group key={`${x}${z}`} position={[x, 0, z]} rotation-y={Math.atan2(-x, -z)}>
+          <mesh position={[0, h / 2, 0]} castShadow><cylinderGeometry args={[0.04, 0.06, h, 8]} /><meshStandardMaterial color="#9aa1a8" metalness={0.6} roughness={0.4} /></mesh>
+          <mesh position={[0, h, 0]}><boxGeometry args={[0.45, 0.25, 0.08]} /><meshStandardMaterial color="#fffbe6" emissive={on ? color : '#000000'} emissiveIntensity={on ? 2 : 0} /></mesh>
+          {on && <pointLight position={[0, h, 0]} intensity={3} distance={12} color={color} />}
         </group>
       ))}
     </>
   );
 }
 
-function VideoBoard({ level, radius, height, color }: { level: number; radius: number; height: number; color: string }) {
-  const screen = useRef<Mesh>(null);
-  const w = [0.9, 1.4, 2.2, 3.2][level], h = [0.35, 0.55, 0.85, 1.15][level];
-  useFrame(({ clock }) => {
-    const mat = screen.current?.material as MeshStandardMaterial | undefined;
-    if (mat) mat.emissiveIntensity = 0.9 + Math.sin(clock.elapsedTime * 2.4) * 0.25;
-  });
-  return (
-    <group position={[radius * OVAL - 0.6, height + h / 2 + 0.25, 0]} rotation-y={-Math.PI / 2}>
-      <mesh position={[0, -h / 2 - 0.2, 0]}><boxGeometry args={[0.08, 0.5, 0.08]} /><meshStandardMaterial color="#5c6168" /></mesh>
-      <mesh><boxGeometry args={[w + 0.12, h + 0.12, 0.12]} /><meshStandardMaterial color="#1b1d21" /></mesh>
-      <mesh ref={screen} position={[0, 0, 0.065]}><planeGeometry args={[w, h]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} /></mesh>
-    </group>
-  );
-}
-
-// ── The grounds ─────────────────────────────────────────────────────────────
-
-interface Lot { x: number; z: number; w: number; d: number; rot: number }
-
-/** Where lots go, in the order they are built: north, south, then east and west. */
-function lotsFor(level: number, ring: number): Lot[] {
-  const at = ring + 2.8;
-  const all: Lot[] = [
-    { x: 0, z: -at, w: 9, d: 3.2, rot: 0 },
-    { x: 0, z: at, w: 9, d: 3.2, rot: 0 },
-    { x: at * OVAL + 0.6, z: 0, w: 3.2, d: 7, rot: 0 },
-    { x: -(at * OVAL + 0.6), z: 0, w: 3.2, d: 7, rot: 0 },
-  ];
-  return all.slice(0, Math.min(4, level + 1));
-}
-
-/** A lot: asphalt (gravel while small), painted stalls in pairs of rows facing an aisle, cars in them. */
-function ParkingLot({ lot, paved, fill, seed }: { lot: Lot; paved: boolean; fill: number; seed: number }) {
-  const { stalls, lines, cars, cabins } = useMemo(() => {
-    const r = rng(seed);
-    const long = lot.w >= lot.d;
-    const length = long ? lot.w : lot.d, depth = long ? lot.d : lot.w;
-    const sw = 0.34, sd = 0.6, aisle = 0.55;
-    const perRow = Math.floor((length - 0.4) / sw);
-    const pairs = Math.max(1, Math.floor((depth - 0.2) / (2 * sd + aisle)));
-    const stalls: { x: number; z: number; flip: boolean }[] = [];
-    for (let p = 0; p < pairs; p++) {
-      const band = -depth / 2 + 0.2 + p * (2 * sd + aisle);
-      for (const [row, flip] of [[band + sd / 2, false], [band + sd * 1.5 + aisle, true]] as const) {
-        for (let i = 0; i < perRow; i++) {
-          const a = -length / 2 + 0.2 + sw / 2 + i * sw;
-          stalls.push(long ? { x: lot.x + a, z: lot.z + row, flip } : { x: lot.x + row, z: lot.z + a, flip });
-        }
-      }
-    }
-    const palette = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#f1c40f', '#1e1e1e', '#16a085', '#8e44ad'];
-    const lines = stalls.map(s => ({ x: s.x + (long ? sw / 2 : 0), y: 0.012, z: s.z + (long ? 0 : sw / 2), ry: long ? 0 : Math.PI / 2 }));
-    const parked = stalls.filter(() => r() < Math.min(0.97, 0.15 + fill * 0.9));
-    const cars = parked.map(s => ({ x: s.x, y: 0.06, z: s.z, ry: long ? Math.PI / 2 : 0, c: palette[Math.floor(r() * palette.length)] }));
-    const cabins = cars.map(c => ({ ...c, y: 0.14, c: '#1d2733' }));
-    return { stalls, lines, cars, cabins };
-  }, [lot, fill, seed]);
-  void stalls;
-  return (
-    <group>
-      <mesh rotation-x={-Math.PI / 2} position={[lot.x, 0.008, lot.z]} receiveShadow>
-        <planeGeometry args={[lot.w, lot.d]} />
-        <meshStandardMaterial color={paved ? '#34383d' : '#9a907c'} roughness={0.95} />
-      </mesh>
-      <Boxes items={lines} size={[0.012, 0.004, 0.55]} color="#e9e6dc" cast={false} />
-      <Boxes items={cars} size={[0.5, 0.1, 0.24]} />
-      <Boxes items={cabins} size={[0.26, 0.08, 0.2]} />
-    </group>
-  );
-}
-
-function Roads({ ring, lots }: { ring: number; lots: Lot[] }) {
-  return (
-    <group>
-      <BowlFlat inner={ring} outer={ring + 0.7} y={0.006}>
-        <meshStandardMaterial color="#3b3f44" roughness={0.95} />
-      </BowlFlat>
-      {/* Avenues out to the edge of town, past the lots. */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0.007, -(ring + 16)]} receiveShadow><planeGeometry args={[0.8, 30]} /><meshStandardMaterial color="#3b3f44" /></mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[ring * OVAL + 16, 0.007, 0]} receiveShadow><planeGeometry args={[30, 0.8]} /><meshStandardMaterial color="#3b3f44" /></mesh>
-      {Array.from({ length: 14 }, (_, i) => (
-        <mesh key={i} rotation-x={-Math.PI / 2} position={[0, 0.01, -(ring + 2 + i * 2)]}><planeGeometry args={[0.05, 0.8]} /><meshStandardMaterial color="#e8c547" /></mesh>
-      ))}
-      {lots.map((l, i) => <ParkingAccess key={i} lot={l} ring={ring} />)}
-    </group>
-  );
-}
-
-function ParkingAccess({ lot, ring }: { lot: Lot; ring: number }) {
-  // A short drive from the ring road to each lot.
-  const dx = lot.x, dz = lot.z;
-  const len = Math.hypot(dx, dz) - ring - 0.4;
-  const a = Math.atan2(dz, dx);
-  const mid = ring + 0.35 + len / 2;
-  return (
-    <mesh rotation-x={-Math.PI / 2} rotation-z={-a} position={[Math.cos(a) * mid * (Math.abs(Math.cos(a)) > 0.5 ? OVAL : 1), 0.007, Math.sin(a) * mid]}>
-      <planeGeometry args={[Math.max(0.5, len), 0.6]} />
-      <meshStandardMaterial color="#3b3f44" />
-    </mesh>
-  );
-}
-
-function Garage({ ring }: { ring: number }) {
-  return (
-    <group position={[(ring + 3) * 0.9, 0, -(ring + 3)]}>
-      {[0, 1, 2].map(l => (
-        <group key={l}>
-          <mesh position={[0, 0.25 + l * 0.45, 0]} castShadow receiveShadow><boxGeometry args={[3, 0.08, 2]} /><meshStandardMaterial color="#a7abb0" /></mesh>
-          {[[-1.4, -0.9], [1.4, -0.9], [-1.4, 0.9], [1.4, 0.9]].map(([x, z], i) => (
-            <mesh key={i} position={[x, l * 0.45 + 0.02, z]}><boxGeometry args={[0.1, 0.45, 0.1]} /><meshStandardMaterial color="#8f9398" /></mesh>
-          ))}
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function Transit({ ring }: { ring: number }) {
-  const z = ring + 6.5;
-  return (
-    <group>
-      <mesh position={[0, 0.06, z]}><boxGeometry args={[40, 0.08, 0.5]} /><meshStandardMaterial color="#6d6d6d" /></mesh>
-      {[-0.12, 0.12].map(o => <mesh key={o} position={[0, 0.12, z + o]}><boxGeometry args={[40, 0.03, 0.04]} /><meshStandardMaterial color="#b9b9b9" metalness={0.7} /></mesh>)}
-      <mesh position={[2, 0.4, z - 0.6]} castShadow><boxGeometry args={[3, 0.6, 0.6]} /><meshStandardMaterial color="#e8e8e8" /></mesh>
-      <mesh position={[2, 0.75, z - 0.6]}><boxGeometry args={[3.3, 0.06, 0.9]} /><meshStandardMaterial color="#c0392b" /></mesh>
-    </group>
-  );
-}
-
-/** Trees around the grounds, kept off the roads, lots and pond. */
-function Trees({ ring, lots, pond }: { ring: number; lots: Lot[]; pond: { x: number; z: number; r: number } }) {
-  const { trunks, crowns, cones } = useMemo(() => {
-    const r = rng(77);
-    const colors = treePalette();
-    const trunks: { x: number; y: number; z: number; sy?: number }[] = [];
-    const crowns: { x: number; y: number; z: number; sx: number; sy: number; sz: number; c: string }[] = [];
-    const cones: { x: number; y: number; z: number; sx: number; sy: number; sz: number; c: string }[] = [];
-    const blocked = (x: number, z: number) =>
-      reach(x, z) < ring + 1.4
-      || Math.abs(x) < 0.9 && z < 0
-      || Math.abs(z) < 0.9 && x > 0
-      || lots.some(l => Math.abs(x - l.x) < l.w / 2 + 0.6 && Math.abs(z - l.z) < l.d / 2 + 0.6)
-      || Math.hypot(x - pond.x, z - pond.z) < pond.r + 0.6
-      || Math.abs(z - (ring + 6.5)) < 1 && lots.length >= 4;
-    for (let tries = 0; trunks.length < 220 && tries < 3000; tries++) {
-      const a = r() * Math.PI * 2, d = ring + 3 + r() * 20;
-      const x = Math.cos(a) * d * OVAL * 0.9, z = Math.sin(a) * d;
-      if (blocked(x, z)) continue;
-      const s = 0.7 + r() * 0.7;
-      trunks.push({ x, y: 0.2 * s, z, sy: s });
-      if (r() < 0.35) cones.push({ x, y: 0.75 * s, z, sx: s, sy: s, sz: s, c: '#2f5d34' });
-      else crowns.push({ x, y: 0.6 * s, z, sx: s, sy: s * 0.9, sz: s, c: colors[Math.floor(r() * colors.length)] });
-    }
-    return { trunks, crowns, cones };
-  }, [ring, lots, pond]);
-  return (
-    <group>
-      <Boxes items={trunks} size={[0.08, 0.4, 0.08]} color="#6b4a2f" />
-      <Spheres items={crowns} />
-      <Cones items={cones} />
-    </group>
-  );
-}
-
-function Spheres({ items }: { items: { x: number; y: number; z: number; sx: number; sy: number; sz: number; c: string }[] }) {
-  const mesh = useRef<InstancedMesh>(null);
-  useEffect(() => {
-    const m = mesh.current; if (!m) return;
-    const d = new Object3D();
-    items.forEach((it, i) => { d.position.set(it.x, it.y, it.z); d.scale.set(it.sx, it.sy, it.sz); d.updateMatrix(); m.setMatrixAt(i, d.matrix); m.setColorAt(i, new Color(it.c)); });
-    m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [items]);
-  return <instancedMesh ref={mesh} args={[undefined, undefined, Math.max(1, items.length)]} key={items.length} castShadow><icosahedronGeometry args={[0.35, 1]} /><meshStandardMaterial roughness={0.9} flatShading /></instancedMesh>;
-}
-
-function Cones({ items }: { items: { x: number; y: number; z: number; sx: number; sy: number; sz: number; c: string }[] }) {
-  const mesh = useRef<InstancedMesh>(null);
-  useEffect(() => {
-    const m = mesh.current; if (!m) return;
-    const d = new Object3D();
-    items.forEach((it, i) => { d.position.set(it.x, it.y, it.z); d.scale.set(it.sx, it.sy, it.sz); d.updateMatrix(); m.setMatrixAt(i, d.matrix); m.setColorAt(i, new Color(it.c)); });
-    m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [items]);
-  return <instancedMesh ref={mesh} args={[undefined, undefined, Math.max(1, items.length)]} key={items.length} castShadow><coneGeometry args={[0.3, 0.9, 7]} /><meshStandardMaterial roughness={0.9} flatShading /></instancedMesh>;
-}
-
 /** People strolling the plaza: more of them the bigger the crowd. */
-function People({ radius, fill, color }: { radius: number; fill: number; color: string }) {
+function People({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Color[] }) {
   const mesh = useRef<InstancedMesh>(null);
+  const radius = bp.footprint + 0.2, o = bp.outline;
   const folk = useMemo(() => {
     const r = rng(41);
     const n = Math.round(40 + fill * 120);
-    const palette = [color, '#f2f2f2', '#2b2b2b', '#c0392b', '#2980b9', mix(color, '#ffffff', 0.5)];
-    return Array.from({ length: n }, () => ({ a: r() * Math.PI * 2, d: radius + 0.2 + r() * 0.9, speed: (r() - 0.5) * 0.12, c: palette[Math.floor(r() * palette.length)] }));
-  }, [radius, fill, color]);
+    return Array.from({ length: n }, () => ({ a: r() * TAU, d: radius + 0.2 + r() * 0.9, speed: (r() - 0.5) * 0.12, c: colors[Math.floor(r() * colors.length)] }));
+  }, [radius, fill, colors]);
   const dummy = useMemo(() => new Object3D(), []);
   useEffect(() => {
     const m = mesh.current; if (!m) return;
-    folk.forEach((p, i) => m.setColorAt(i, new Color(p.c)));
+    folk.forEach((f, i) => m.setColorAt(i, f.c));
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }, [folk]);
   useFrame(({ clock }) => {
     const m = mesh.current; if (!m) return;
     const t = clock.elapsedTime;
-    folk.forEach((p, i) => {
-      const a = p.a + t * p.speed;
-      const [x, z] = around(a, p.d);
+    folk.forEach((f, i) => {
+      const [x, z] = o.around(f.a + t * f.speed, f.d);
       dummy.position.set(x, 0.09 + Math.abs(Math.sin(t * 6 + i)) * 0.01, z);
       dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
     });
@@ -505,20 +637,7 @@ function People({ radius, fill, color }: { radius: number; fill: number; color: 
   return <instancedMesh ref={mesh} args={[undefined, undefined, folk.length]} key={folk.length}><capsuleGeometry args={[0.035, 0.1, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
 }
 
-/** A skyline on the horizon; its windows come on at dusk. */
-function Skyline({ night }: { night: number }) {
-  const items = useMemo(() => {
-    const r = rng(5);
-    return Array.from({ length: 44 }, (_, i) => {
-      const a = Math.PI * 1.05 + (i / 44) * Math.PI * 0.9 + (r() - 0.5) * 0.04;
-      const d = 34 + r() * 6, h = 1.5 + r() * r() * 9;
-      return { x: Math.cos(a) * d, y: h / 2, z: Math.sin(a) * d, sy: h, sx: 1 + r() * 1.6, sz: 1 + r(), c: mix('#5b6573', '#8a95a3', r()) };
-    });
-  }, []);
-  return <Boxes items={items} size={[1, 1, 1]} emissive="#ffcf7a" emissiveIntensity={night * 0.28} cast={false} />;
-}
-
-function Pyro({ radius }: { radius: number }) {
+function Pyro({ bp }: { bp: Blueprint }) {
   const g = useRef<Group>(null);
   useFrame(({ clock }) => {
     if (!g.current) return;
@@ -532,120 +651,97 @@ function Pyro({ radius }: { radius: number }) {
   return (
     <group ref={g}>
       {Array.from({ length: 8 }, (_, i) => {
-        const a = (i / 8) * Math.PI * 2;
-        const [x, z] = around(a, radius * 0.95);
+        const [x, z] = bp.outline.around((i / 8) * TAU, bp.inner + 0.3);
         return <mesh key={i} position={[x, 0.5, z]}><sphereGeometry args={[0.06, 8, 8]} /><meshStandardMaterial color="#ffb347" emissive="#ff7b00" emissiveIntensity={3} /></mesh>;
       })}
     </group>
   );
 }
 
-function Dome({ radius, y, rise, children }: { radius: number; y: number; rise: number; children: React.ReactNode }) {
-  const g = useBowl(() => new SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, Math.PI / 2), [radius]);
-  return <mesh geometry={g} position={[0, y, 0]} scale={[1, rise, 1]}>{children}</mesh>;
-}
-
 // ── The scene ───────────────────────────────────────────────────────────────
 
-/** Where the stands begin: the field and its surround fit inside, corners and all. */
-const INNER = 2.9;
-/** The wall between the field and the first row. */
-const PODIUM = 0.12;
-
 function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen, hour }: StadiumProps & { hour: number }) {
-  const look = chosen ?? DEFAULT_LOOK;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
   const sky = skyFor(hour);
-  const tiers = useMemo(() => {
-    const out: { inner: number; height: number; base: number }[] = [];
-    let inner = INNER, base = PODIUM;
-    for (let i = 0; i < 1 + Math.min(3, f.stadium); i++) {
-      const height = 0.55 + 0.12 * f.seating + (i === 0 ? 0.1 : 0);
-      out.push({ inner, height, base });
-      inner += height * 0.9 + 0.05; base += height + 0.08;
-    }
-    return out;
-  }, [f.stadium, f.seating]);
-  const outer = tiers.at(-1)!.inner + tiers.at(-1)!.height * 0.9;
-  const top = tiers.at(-1)!.base + tiers.at(-1)!.height;
-  const plaza = outer + 1.4;
-  const ring = plaza + 0.2;
-  const lots = useMemo(() => lotsFor(f.parking, ring), [f.parking, ring]);
-  const pond = { x: -(ring + 8) * OVAL * 0.7, z: ring + 5, r: 2.6 };
-  const [seatA, seatB] = seatColors(look, color);
+  const bp = useMemo(() => blueprint(look.style, f), [look.style, f]);
+  const p = useMemo(() => palette(look, color), [look, color]);
+  const o = bp.outline;
+  const team = teamName || name;
+  const build = `${look.style}-${f.stadium}-${f.seating}-${f.suites}`;
+  const apron = fieldColors(look, color).apron;
+  const closed = roofClosed(look.roof, sky.night);
+  const indoors = bp.roof?.kind === 'dome' || (bp.roof?.kind === 'membrane' && bp.roof.moving && closed);
+  const lightsOn = sky.lightsOn || indoors;
+  const fascia = look.style === 'cantilever' ? mix(color, '#1b1d21', 0.2) : p.trim;
+  const plaza = bp.footprint;
 
   return (
     <group>
       <color attach="background" args={[sky.sky]} />
-      <fog attach="fog" args={[sky.sky, 30, 62]} />
-      <hemisphereLight args={['#ffffff', '#4a6b3c', sky.ambient]} />
+      <fog attach="fog" args={[sky.sky, 30, 66]} />
+      <hemisphereLight args={['#ffffff', mix(GROUND[look.setting].grass, '#b9b4a8', 0.45), sky.ambient]} />
       <directionalLight position={sky.sun} intensity={sky.sunIntensity} color={sky.sunColor} castShadow
         shadow-mapSize={[2048, 2048]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
       {sky.night > 0.4 && <Stars radius={80} depth={30} count={2500} factor={3} fade speed={0.4} />}
 
-      <mesh rotation-x={-Math.PI / 2} receiveShadow><circleGeometry args={[70, 64]} /><meshStandardMaterial color="#5f8a4c" /></mesh>
-      <BowlFlat outer={plaza} y={0.004}><meshStandardMaterial color="#d5cfc2" /></BowlFlat>
-      <mesh rotation-x={-Math.PI / 2} position={[pond.x, 0.01, pond.z]}><circleGeometry args={[pond.r, 48]} /><meshStandardMaterial color="#4f8fb8" roughness={0.15} metalness={0.2} /></mesh>
+      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={fill} night={sky.night} setting={look.setting} />
 
-      <BowlFlat outer={INNER + 0.02} y={0.008}><meshStandardMaterial color={APRON} roughness={0.95} /></BowlFlat>
-      <BowlBand top={INNER} bottom={INNER} height={PODIUM} y={PODIUM / 2}><meshStandardMaterial color="#1d2733" side={DoubleSide} roughness={0.7} /></BowlBand>
-      <BowlBand top={INNER - 0.005} bottom={INNER - 0.005} height={0.025} y={PODIUM - 0.02}><meshStandardMaterial color={color} side={DoubleSide} /></BowlBand>
-      <Gridiron look={look} color={color} team={teamName || name} logo={logo} />
-      {tiers.map((t, i) => (
-        <Rise key={`${f.stadium}-${f.seating}-${i}`} delay={i * 0.12}><Tier {...t} color={i % 2 ? seatB : seatA} /></Rise>
-      ))}
-      <Crowd key={`${f.stadium}-${f.seating}`} tiers={tiers} fill={fill} color={color} />
-      <Rise key={`ext-${f.stadium}`}><Exterior outer={outer} top={top} look={look} color={color} night={sky.night} canopy={f.stadium === 2} /></Rise>
-      {f.suites > 0 && tiers.length > 1 && (
-        <Rise key={`s${f.suites}`}>
-          <BowlBand top={tiers[1].inner + 0.02} bottom={tiers[1].inner + 0.02} height={0.12 + 0.05 * f.suites} y={tiers[1].base - 0.04}>
-            <meshPhysicalMaterial color="#9fd4ff" transparent opacity={0.55} roughness={0.05} side={DoubleSide} emissive="#3a7bd5" emissiveIntensity={0.35 + sky.night} />
-          </BowlBand>
-        </Rise>
+      {/* The floor of the bowl, the wall around the field with a stripe, and the field. */}
+      <Ribbon o={o} k={`floor${bp.inner}${apron}`} profile={() => [[0, 0.008], [bp.inner + 0.02, 0.008]]}><meshStandardMaterial color={apron} roughness={0.95} /></Ribbon>
+      <Ribbon o={o} k={`podium${bp.inner}`} profile={() => [[bp.inner, 0], [bp.inner, PODIUM]]}><meshStandardMaterial color="#1d2733" side={DoubleSide} roughness={0.7} /></Ribbon>
+      <Ribbon o={o} k={`stripe${bp.inner}`} profile={() => [[bp.inner - 0.005, PODIUM - 0.025], [bp.inner - 0.005, PODIUM - 0.005]]}><meshStandardMaterial color={p.team} side={DoubleSide} /></Ribbon>
+      {bp.ribbon && (
+        <Ribbon o={o} k={`ribbon${bp.inner}`} profile={() => [[bp.inner - 0.006, 0.02], [bp.inner - 0.006, PODIUM - 0.035]]}>
+          <meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.9} side={DoubleSide} />
+        </Ribbon>
       )}
-      {f.stadium >= 3 && (
-        <Rise key="dome" delay={0.3}>
-          <Dome radius={outer + 0.05} y={top} rise={f.stadium >= 4 ? 0.42 : 0.32}>
-            <meshPhysicalMaterial color="#e9f2ff" transparent opacity={f.stadium >= 4 ? 0.28 : 0.38} roughness={0.15} side={DoubleSide} emissive="#ffe7b0" emissiveIntensity={sky.night * 0.3} />
-          </Dome>
-        </Rise>
-      )}
-      <LightTowers radius={outer + 0.5} height={top + 1.4} on={sky.lightsOn} />
+      <Gridiron look={look} color={color} team={team} logo={logo} />
+
+      {bp.berm && <Berm bp={bp} setting={look.setting} />}
+      <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={FACADE[look.facade].wall} /></Rise>
+      <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={p.crowd} />
+      <Rise key={`ext${build}`} delay={0.1}><Facades bp={bp} look={look} p={p} night={sky.night} /></Rise>
+      {bp.suites.length > 0 && <Rise key={`s${build}`}><Suites bp={bp} night={sky.night} /></Rise>}
+      {bp.pressBox && <Rise key={`pb${build}`}><PressBox bp={bp} p={p} night={sky.night} /></Rise>}
+      {bp.colonnade && <Rise key={`col${build}`} delay={0.2}><Colonnade bp={bp} look={look} p={p} /></Rise>}
+      {bp.torch && <Torch at={bp.torch} />}
+
+      {bp.roof?.kind === 'canopy' && <Rise key={`roof${build}`} delay={0.3}><Canopy bp={bp} span={bp.roof.span} p={p} lightsOn={lightsOn} /></Rise>}
+      {bp.roof?.kind === 'dome' && <Rise key={`roof${build}`} delay={0.3}><Dome bp={bp} rise={bp.roof.rise} p={p} night={sky.night} /></Rise>}
+      {bp.roof?.kind === 'gable' && <Rise key={`roof${build}`} delay={0.3}><Gables bp={bp} stands={bp.roof.stands} lift={bp.roof.lift} p={p} lightsOn={lightsOn} /></Rise>}
+      {bp.roof?.kind === 'membrane' && <Rise key={`roof${build}`} delay={0.3}><Membrane bp={bp} moving={bp.roof.moving} closed={closed} p={p} lightsOn={lightsOn} /></Rise>}
+
+      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} /></Rise>}
+      <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
       {/* With the lights on, the bowl glows. */}
-      {sky.lightsOn && <pointLight position={[0, top + 2.5, 0]} intensity={6 + sky.night * 10} distance={14} color="#fff1cf" />}
-      {f.videoboard > 0 && <Rise key={`v${f.videoboard}`}><VideoBoard level={f.videoboard} radius={outer} height={top} color={color} /></Rise>}
+      {lightsOn && <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={6 + sky.night * 10} distance={14} color={p.light} />}
 
       {/* Concessions and restrooms line the plaza; the store sits by the west gate. */}
-      <Rise key={`c${f.concessions}`}>
+      <Rise key={`c${f.concessions}${build}`}>
         <Boxes items={Array.from({ length: f.concessions * 6 }, (_, i) => {
-          const a = (i / Math.max(1, f.concessions * 6)) * Math.PI * 2 + 0.2;
-          const [x, z] = around(a, outer + 0.75);
-          return { x, y: 0.14, z, ry: -a, c: i % 2 ? '#e4572e' : color };
+          const a = (i / Math.max(1, f.concessions * 6)) * TAU + 0.2;
+          const [x, z] = o.around(a, plaza + 0.75);
+          return { x, y: 0.14, z, ry: -a, c: i % 2 ? p.accent : color };
         })} size={[0.3, 0.28, 0.22]} />
       </Rise>
-      <Rise key={`r${f.restrooms}`}>
+      <Rise key={`r${f.restrooms}${build}`}>
         <Boxes items={Array.from({ length: f.restrooms * 4 }, (_, i) => {
-          const a = (i / Math.max(1, f.restrooms * 4)) * Math.PI * 2 + 0.6;
-          const [x, z] = around(a, outer + 1.05);
+          const a = (i / Math.max(1, f.restrooms * 4)) * TAU + 0.6;
+          const [x, z] = o.around(a, plaza + 1.05);
           return { x, y: 0.12, z, ry: -a };
         })} size={[0.24, 0.24, 0.24]} color="#4a90d9" />
       </Rise>
       {f.store > 0 && (
-        <Rise key={`st${f.store}`}>
-          <group position={[-(outer + 0.95) * OVAL, 0, 0.9]}>
+        <Rise key={`st${f.store}${build}`}>
+          <group position={[-(plaza + 0.95) * OVAL, 0, 0.9]}>
             <mesh position={[0, 0.18 * f.store, 0]} castShadow><boxGeometry args={[0.7 + 0.25 * f.store, 0.36 * f.store, 0.6]} /><meshStandardMaterial color="#f7f3ec" /></mesh>
             <mesh position={[0.36 + 0.13 * f.store, 0.22 * f.store, 0]}><boxGeometry args={[0.02, 0.16, 0.45]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.4 + sky.night} /></mesh>
           </group>
         </Rise>
       )}
-
-      <People radius={outer + 0.2} fill={fill} color={color} />
-      <Roads ring={ring} lots={lots} />
-      {lots.map((l, i) => <Rise key={`lot${i}`} delay={i * 0.1}><ParkingLot lot={l} paved={f.parking >= 2} fill={fill} seed={13 + i} /></Rise>)}
-      {f.parking >= 3 && <Rise key="garage"><Garage ring={ring} /></Rise>}
-      {f.parking >= 4 && <Rise key="transit"><Transit ring={ring} /></Rise>}
-      <Trees ring={ring} lots={lots} pond={pond} />
-      <Skyline night={sky.night} />
-      {f.atmosphere >= 3 && <Pyro radius={outer} />}
+      <People bp={bp} fill={fill} colors={p.crowd} />
+      {f.atmosphere >= 3 && <Pyro bp={bp} />}
     </group>
   );
 }

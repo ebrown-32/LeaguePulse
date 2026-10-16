@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
+import { normalizeLook } from '@/lib/franchise/model';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const accounts = accountsEnabled() && site !== 'self';
     return NextResponse.json({
       franchiseId,
-      identity: { color: f.color, motto: f.motto, bio: f.bio, stadiumName: f.stadiumName, look: f.look, logoUrl: f.logoVersion ? `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${f.logoVersion}` : null },
+      identity: { color: f.color, motto: f.motto, bio: f.bio, stadiumName: f.stadiumName, look: f.look ? normalizeLook(f.look) : null, logoUrl: f.logoVersion ? `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${f.logoVersion}` : null },
       manager: f.manager ? { name: f.manager.name } : null,
       pendingClaims: claims.filter(c => c.franchiseId === franchiseId).length,
       claimUrl: accounts && !f.manager ? product + links.claimPath(site, franchiseId) : null,

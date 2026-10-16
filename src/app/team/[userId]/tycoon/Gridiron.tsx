@@ -6,7 +6,7 @@
  * border, goal lines, yard lines, hash marks, the try lines, yard numbers with
  * their arrows, end zones with the team's name, the team's logo at midfield
  * (its initials until the logo loads, or when it has none), and the team
- * areas. What stands on it is 3D: pylons, goalposts, benches, both sidelines,
+ * areas, all in the colors and patterns the manager picked (StadiumLook). What stands on it is 3D: pylons, goalposts, benches, both sidelines,
  * both teams lined up at the line of scrimmage, the officials and the chain crew.
  */
 
@@ -19,8 +19,20 @@ import type { StadiumLook } from '@/lib/franchise/model';
 export const U = 0.058;
 /** The painted ground in yards: the field (120 by 53⅓) and room around it for the team areas. */
 export const PAINTED = { long: 126, wide: 68 };
-/** The turf around the field, shared with the bowl's floor so the two meet without a seam. */
-export const APRON = '#2f6f35';
+/**
+ * The field's colors for a look: the playing surface, the mowing stripe, and
+ * the apron around the field, which the bowl's floor shares so the two meet
+ * without a seam.
+ */
+export function fieldColors(look: Pick<StadiumLook, 'field'>, team: string) {
+  const shade = (hex: string, k: number) => `#${new Color(hex).multiplyScalar(k).getHexString()}`;
+  const base = look.field === 'blue' ? '#2a62b5' : look.field === 'black' ? '#23272b' : look.field === 'team' ? shade(team, 0.85) : '#3a8a3e';
+  const alt = look.field === 'black' ? '#1b1e21' : shade(base, 0.86);
+  return { base, alt, apron: look.field === 'green' ? '#2f6f35' : shade(base, 0.72) };
+}
+
+/** Black or white, whichever reads on a color. */
+export const inkOn = (hex: string) => (luminance(hex) > 0.55 ? '#15181c' : '#ffffff');
 
 const HALF = 160 / 6; // half the field's width, 26⅔ yards
 const PX = 20; // canvas pixels per yard
@@ -34,19 +46,22 @@ const luminance = (hex: string) => { const c = new Color(hex); return 0.2126 * c
 const initials = (name: string) => name.split(/\s+/).filter(w => /^[A-Za-z0-9]/.test(w)).slice(0, 3).map(w => w[0].toUpperCase()).join('') || 'LP';
 
 /** Paints the ground. x runs goal to goal, z sideline to sideline; (0, 0) is midfield. */
-function paint(turf: StadiumLook['turf'], color: string, team: string, logo: HTMLImageElement | null): HTMLCanvasElement {
+function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageElement | null): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = PAINTED.long * PX; canvas.height = PAINTED.wide * PX;
   const g = canvas.getContext('2d')!;
   const X = (x: number) => (x + PAINTED.long / 2) * PX, Z = (z: number) => (z + PAINTED.wide / 2) * PX;
   const rect = (x0: number, z0: number, x1: number, z1: number, fill: string) => { g.fillStyle = fill; g.fillRect(X(x0), Z(z0), (x1 - x0) * PX, (z1 - z0) * PX); };
   const line = (x: number, z0: number, z1: number, w: number) => rect(x - w / 2, z0, x + w / 2, z1, WHITE);
-  const ink = luminance(color) > 0.55 ? '#15181c' : '#ffffff';
+  const ink = inkOn(color);
+  // The lettering: the accent when it reads on the team color, otherwise black or white.
+  const letter = look.accent && Math.abs(luminance(look.accent) - luminance(color)) > 0.25 ? look.accent : ink;
+  const { base, alt, apron } = fieldColors(look, color);
+  const turf = look.turf;
 
-  // Turf: mowed in five-yard bands, checks, or plain grass.
-  rect(-PAINTED.long / 2, -PAINTED.wide / 2, PAINTED.long / 2, PAINTED.wide / 2, APRON);
-  rect(-60, -HALF, 60, HALF, '#3a8a3e');
-  const alt = '#317a36';
+  // Turf: mowed in five-yard bands, checks, or plain.
+  rect(-PAINTED.long / 2, -PAINTED.wide / 2, PAINTED.long / 2, PAINTED.wide / 2, apron);
+  rect(-60, -HALF, 60, HALF, base);
   for (let k = 0; k < 20; k++) {
     if (turf === 'stripes' && k % 2) rect(-50 + k * 5, -HALF, -45 + k * 5, HALF, alt);
     if (turf === 'checker') for (let j = 0; j < 6; j++) if ((k + j) % 2) rect(-50 + k * 5, -HALF + (j * HALF) / 3, -45 + k * 5, -HALF + ((j + 1) * HALF) / 3, alt);
@@ -57,14 +72,17 @@ function paint(turf: StadiumLook['turf'], color: string, team: string, logo: HTM
     g.fillRect(r() * canvas.width, r() * canvas.height, 2, 2);
   }
 
-  // End zones: the team's color with its name, or grass with old-school diagonals.
+  // End zones: the team's color with its name, the field with old-school diagonals, or the field plain.
+  const sameAsField = look.field === 'team';
   for (const s of [-1, 1]) {
     const x0 = s < 0 ? -60 : 50;
     g.save();
     g.beginPath(); g.rect(X(x0), Z(-HALF), 10 * PX, 2 * HALF * PX); g.clip();
-    if (turf !== 'classic') rect(x0, -HALF, x0 + 10, HALF, color);
+    if (look.endZone === 'color') rect(x0, -HALF, x0 + 10, HALF, sameAsField ? (look.accent ?? ink) : color);
+    else if (look.endZone === 'plain') rect(x0, -HALF, x0 + 10, HALF, base);
     else {
-      g.strokeStyle = color; g.lineWidth = 0.7 * PX;
+      rect(x0, -HALF, x0 + 10, HALF, base);
+      g.strokeStyle = sameAsField ? (look.accent ?? ink) : color; g.lineWidth = 0.7 * PX;
       for (let t = -HALF - 12; t < HALF + 12; t += 3.2) {
         g.beginPath(); g.moveTo(X(x0), Z(t)); g.lineTo(X(x0 + 10), Z(t + 10 * s)); g.stroke();
       }
@@ -73,17 +91,20 @@ function paint(turf: StadiumLook['turf'], color: string, team: string, logo: HTM
     // The name reads upright from the field, its tops toward the end line.
     g.save();
     g.translate(X(x0 + 5), Z(0)); g.rotate((s * Math.PI) / 2);
-    const word = team.toUpperCase();
+    const word = (look.endZoneText || team).toUpperCase();
     let size = 6.4 * PX;
     const font = () => `900 ${size}px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
     g.font = font();
     const w = g.measureText(word).width;
     if (w > 46 * PX) { size *= (46 * PX) / w; g.font = font(); }
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    if (turf === 'classic') {
-      g.lineWidth = 0.45 * PX; g.strokeStyle = WHITE; g.lineJoin = 'round';
-      g.strokeText(word, 0, 0); g.fillStyle = color; g.fillText(word, 0, 0);
-    } else { g.fillStyle = ink; g.fillText(word, 0, 0); }
+    if (look.endZone !== 'color') {
+      g.lineWidth = 0.45 * PX; g.strokeStyle = look.accent ?? WHITE; g.lineJoin = 'round';
+      g.strokeText(word, 0, 0); g.fillStyle = sameAsField ? ink : color; g.fillText(word, 0, 0);
+    } else {
+      const fill = sameAsField ? inkOn(look.accent ?? ink) : letter;
+      g.fillStyle = fill; g.fillText(word, 0, 0);
+    }
     g.restore();
   }
 
@@ -117,7 +138,7 @@ function paint(turf: StadiumLook['turf'], color: string, team: string, logo: HTM
     g.fillText(mark, X(0), Z(0) + 0.2 * PX);
   }
   g.beginPath(); g.arc(X(0), Z(0), R, 0, Math.PI * 2);
-  g.lineWidth = 0.5 * PX; g.strokeStyle = WHITE; g.stroke();
+  g.lineWidth = 0.5 * PX; g.strokeStyle = look.accent ?? WHITE; g.stroke();
 
   // Yard numbers, 12 yards in from each sideline, read from that sideline, with arrows toward the nearer goal.
   g.font = `700 ${2.7 * PX}px "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;
@@ -216,10 +237,11 @@ export function Gridiron({ look, color, team, logo }: { look: StadiumLook; color
     return () => { img.onload = null; };
   }, [logo]);
   const texture = useMemo(() => {
-    const t = new CanvasTexture(paint(look.turf, color, team, image));
+    const t = new CanvasTexture(paint(look, color, team, image));
     t.colorSpace = SRGBColorSpace; t.anisotropy = aniso;
     return t;
-  }, [look.turf, color, team, image, aniso]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [look.turf, look.field, look.endZone, look.endZoneText, look.accent, color, team, image, aniso]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   const { bodies, helmets, pylons, sticks, benches } = useMemo(() => {

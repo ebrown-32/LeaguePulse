@@ -33,12 +33,15 @@ export interface Track {
   needsStadium?: number;
 }
 
-/** The bowl. Each level is a new stadium: capacity and appeal come mostly from here. */
+/**
+ * The bowl. Each level is a bigger stadium: capacity and appeal come mostly
+ * from here. How it looks is the manager's pick (lib/franchise/stadiumStyles).
+ */
 export const STADIUMS = [
   { name: 'Community Field', capacity: 9_000, appeal: 10 },
   { name: 'Municipal Stadium', capacity: 24_000, appeal: 26 },
   { name: 'Modern Stadium', capacity: 46_000, appeal: 46 },
-  { name: 'Domed Arena', capacity: 64_000, appeal: 66 },
+  { name: 'Premier Stadium', capacity: 64_000, appeal: 66 },
   { name: 'Megaplex', capacity: 82_000, appeal: 88 },
 ] as const;
 
@@ -48,7 +51,7 @@ export const TRACKS: Track[] = [
     levels: [
       { name: 'Municipal Stadium', cost: 900, upkeep: 60_000, blurb: '24,000 seats, a real press box.' },
       { name: 'Modern Stadium', cost: 4_200, upkeep: 180_000, blurb: '46,000 seats and wide concourses.' },
-      { name: 'Domed Arena', cost: 12_500, upkeep: 420_000, blurb: '64,000 seats, weatherproof, loud.' },
+      { name: 'Premier Stadium', cost: 12_500, upkeep: 420_000, blurb: '64,000 seats and a roar you feel.' },
       { name: 'Megaplex', cost: 30_000, upkeep: 900_000, blurb: '82,000 seats. A destination.' },
     ],
   },
