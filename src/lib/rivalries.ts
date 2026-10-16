@@ -5,7 +5,12 @@ import {
   getLeagueRosters,
   getLeagueMatchups,
   getSeasonTransactions,
+  getLeagueWeeks,
+  getNFLState,
+  getPlayoffBracket,
 } from '@/lib/api';
+import { playoffRoundWeeks } from '@/lib/sim/playoffs';
+import { weekPhase } from '@/lib/nflSchedule';
 import { configuredRootLeagueId } from '@/config/league';
 import { teamAvatar } from '@/lib/teamAvatar';
 
@@ -18,15 +23,41 @@ export interface Manager {
 
 export interface GameRecord {
   season: string;
+  /** The week it was decided: a round over two weeks is one game, on its last week. */
   week: number;
+  /** Every week it was played over (two for a two week playoff round). */
+  weeks?: number[];
   score: number;
   opponentScore: number;
+  /** A game in the title bracket (not a consolation game). */
   isPlayoff: boolean;
+  /** Regular season, title bracket playoffs, or a consolation game after the regular season. */
+  stage: Stage;
 }
 
+export type { Stage, StageRecord } from './rivalryStages';
+import type { Stage, StageRecord } from './rivalryStages';
+export { stageBreakdown } from './rivalryStages';
+
+/**
+ * Two managers' head to head record. The one record of it: the rivalries page,
+ * franchise pages, matchup previews and the AI all read this.
+ *
+ *   A meeting      the two teams in the same matchup, once its weeks are final
+ *                  (a week still being played is not a result). Every week the
+ *                  season was played, through the league's last scored week.
+ *   Two week round one meeting, decided on the combined score of both weeks:
+ *                  that is how the playoff round itself is decided.
+ *   Ties           counted as ties, neither a win nor a loss.
+ *   Stages         the record covers every game; `byStage` splits it into the
+ *                  regular season, the playoffs and consolation games, since a
+ *                  provider's own head to head (ESPN's) is the regular season only.
+ */
 export interface H2HEntry {
   wins: number;
   losses: number;
+  ties: number;
+  byStage: Record<Stage, StageRecord>;
   pointsFor: number;
   pointsAgainst: number;
   games: GameRecord[];
@@ -58,11 +89,16 @@ export interface RivalriesResponse {
 }
 
 function emptyEntry(): H2HEntry {
-  return { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: [] };
+  const z = () => ({ wins: 0, losses: 0, ties: 0 });
+  return { wins: 0, losses: 0, ties: 0, byStage: { regular: z(), playoff: z(), consolation: z() }, pointsFor: 0, pointsAgainst: 0, games: [] };
 }
 
 export async function fetchRivalriesData(): Promise<RivalriesResponse> {
-  const allLeagueIds = await getAllLinkedLeagueIds((await configuredRootLeagueId())!);
+  const [allLeagueIds, nflState] = await Promise.all([
+    getAllLinkedLeagueIds((await configuredRootLeagueId())!),
+    getNFLState().catch(() => null as any),
+  ]);
+  const currentSeason = String(nflState?.season ?? '');
 
   const managerMap = new Map<string, Manager>();
   const h2h: Record<string, Record<string, H2HEntry>> = {};
@@ -116,16 +152,22 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
       }
     }
 
-    const totalWeeks = Math.min(playoffWeekStart + 4, 17);
-    const [allMatchups, allTransactions] = await Promise.all([
+    // Every week of the season, through the league's last scored week; this
+    // season's only once final. (A fixed playoff start + 4, capped at week 17,
+    // dropped the final week of leagues whose playoffs run to week 18.)
+    const totalWeeks = await getLeagueWeeks(leagueId);
+    const [weekly, allTransactions, bracket] = await Promise.all([
       Promise.all(
         Array.from({ length: totalWeeks }, (_, i) =>
           getLeagueMatchups(leagueId, i + 1).catch(() => [])
         )
       ),
       getSeasonTransactions(leagueId, totalWeeks).catch(() => []),
+      getPlayoffBracket(leagueId).catch(() => null),
     ]);
-
+    const final = String(season) === currentSeason
+      ? await Promise.all(weekly.map(async (_, i) => (await weekPhase(String(season), i + 1).catch(() => 'upcoming')) === 'final'))
+      : weekly.map(() => true);
     for (const tx of allTransactions) {
       if (tx.type !== 'trade') continue;
       const tradeUserIds = tx.roster_ids
@@ -162,17 +204,34 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
       }
     }
 
-    allMatchups.forEach((weekMatchups, wi) => {
-      const week = wi + 1;
-      const isPlayoff = week >= playoffWeekStart;
+    // The games: a week each in the regular season; a playoff round over two
+    // weeks is one game, on the combined score, recorded on its last week.
+    const roundWeeks = playoffRoundWeeks(
+      playoffWeekStart - 1, Number(leagueInfo.settings?.playoff_teams ?? 4), Number(leagueInfo.settings?.playoff_round_type ?? 0));
+    const units: number[][] = [];
+    for (let w = 1; w <= totalWeeks; w++) {
+      const round = roundWeeks.find(r => r.includes(w));
+      if (!round) units.push([w]);
+      else if (round[0] === w) units.push(round.filter(x => x <= totalWeeks));
+    }
+    const titleGames: any[] = Array.isArray(bracket?.winners_bracket) ? bracket.winners_bracket.filter(Boolean) : [];
+    const inTitleBracket = (week: number, r1: number, r2: number) => {
+      if (!titleGames.length) return week >= playoffWeekStart;
+      const round = roundWeeks.findIndex(r => r.includes(week)) + 1;
+      return round > 0 && titleGames.some(m => Number(m.r) === round && [m.t1, m.t2].includes(r1) && [m.t1, m.t2].includes(r2));
+    };
 
+    for (const unit of units) {
+      if (!unit.length || !unit.every(w => final[w - 1])) continue;
+      const last = unit[unit.length - 1];
+      // Who played whom: the pairing in the round's last week.
       const byMatchup = new Map<number, any[]>();
-      for (const m of (weekMatchups ?? [])) {
-        if (!m.matchup_id) continue;
-        const arr = byMatchup.get(m.matchup_id) ?? [];
-        arr.push(m);
-        byMatchup.set(m.matchup_id, arr);
+      for (const m of (weekly[last - 1] ?? [])) {
+        if (m.matchup_id == null) continue;
+        byMatchup.set(m.matchup_id, [...(byMatchup.get(m.matchup_id) ?? []), m]);
       }
+      const total = (rosterId: number) => unit.reduce((sum, w) =>
+        sum + Number((weekly[w - 1] ?? []).find((m: any) => m.roster_id === rosterId)?.points ?? 0), 0);
 
       for (const pair of byMatchup.values()) {
         if (pair.length !== 2) continue;
@@ -181,13 +240,9 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
         const u2 = rosterToUser.get(b.roster_id);
         if (!u1 || !u2 || u1 === u2) continue;
 
-        const s1 = a.points ?? 0;
-        const s2 = b.points ?? 0;
-
-        // Sleeper returns scheduled-but-unplayed fixtures for the current
-        // season as 0-0. They must not count: they inflated every record (the
-        // else branch below awarded u2 a phantom win) and a zero margin reads
-        // as a maximally close game to anything scoring rivalry intensity.
+        const s1 = Math.round(total(a.roster_id) * 100) / 100;
+        const s2 = Math.round(total(b.roster_id) * 100) / 100;
+        // Scheduled but unplayed fixtures come back 0-0: not a game.
         if (s1 === 0 && s2 === 0) continue;
 
         ensure(u1, u2);
@@ -198,14 +253,19 @@ export async function fetchRivalriesData(): Promise<RivalriesResponse> {
         h2h[u2][u1].pointsFor     += s2;
         h2h[u2][u1].pointsAgainst += s1;
 
-        // A genuine tie is neither a win nor a loss for either side.
-        if (s1 > s2)      { h2h[u1][u2].wins++;   h2h[u2][u1].losses++; }
-        else if (s2 > s1) { h2h[u1][u2].losses++; h2h[u2][u1].wins++; }
+        const isPlayoff = inTitleBracket(last, a.roster_id, b.roster_id);
+        const stage: Stage = last < playoffWeekStart ? 'regular' : isPlayoff ? 'playoff' : 'consolation';
+        const s12 = h2h[u1][u2].byStage[stage], s21 = h2h[u2][u1].byStage[stage];
 
-        h2h[u1][u2].games.push({ season, week, score: s1, opponentScore: s2, isPlayoff });
-        h2h[u2][u1].games.push({ season, week, score: s2, opponentScore: s1, isPlayoff });
+        if (s1 > s2)      { h2h[u1][u2].wins++;   h2h[u2][u1].losses++; s12.wins++;   s21.losses++; }
+        else if (s2 > s1) { h2h[u1][u2].losses++; h2h[u2][u1].wins++;   s12.losses++; s21.wins++; }
+        else              { h2h[u1][u2].ties++;   h2h[u2][u1].ties++;   s12.ties++;   s21.ties++; }
+
+        const weeks = unit.length > 1 ? unit : undefined;
+        h2h[u1][u2].games.push({ season, week: last, weeks, score: s1, opponentScore: s2, isPlayoff, stage });
+        h2h[u2][u1].games.push({ season, week: last, weeks, score: s2, opponentScore: s1, isPlayoff, stage });
       }
-    });
+    }
   }
 
   const uniqueSeasons = [...new Set(seasons)].sort((a, b) => Number(b) - Number(a));
@@ -285,3 +345,4 @@ export async function finishedSeries(
   const { score, label } = rivalryScore(games, aWins, bWins);
   return { games, aWins, bWins, rivalryScore: score, rivalryLabel: label };
 }
+

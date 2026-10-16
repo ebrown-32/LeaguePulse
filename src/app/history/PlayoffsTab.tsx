@@ -204,13 +204,18 @@ function Bracket({ season: s, teams, onOpen }: { season: PlayoffSeason; teams: M
   const rounds = useMemo(() => Array.from({ length: s.settings.rounds }, (_, i) => main.filter(m => m.round === i + 1)), [s, main]);
   const box = useRef<HTMLDivElement>(null);
   const cards = useRef(new Map<number, HTMLDivElement>());
-  const [paths, setPaths] = useState<string[]>([]);
+  /** One connector per link, keyed by the games it joins (coordinates can repeat). */
+  const [paths, setPaths] = useState<{ key: string; d: string }[]>([]);
 
   const measure = useCallback(() => {
     const root = box.current;
     if (!root) return;
     const base = root.getBoundingClientRect();
-    const out: string[] = [];
+    // Hidden (the history page keeps this tab mounted behind the others):
+    // everything measures zero. Keep what was drawn; the resize observer
+    // measures again once the tab is shown.
+    if (!base.width || !base.height) return;
+    const out: { key: string; d: string }[] = [];
     for (const m of main) for (const side of ['t1', 't2'] as const) {
       const src = sourceOf(m, side, main);
       const a = src != null ? cards.current.get(src) : null, b = cards.current.get(m.id);
@@ -219,10 +224,11 @@ function Bracket({ season: s, teams, onOpen }: { season: PlayoffSeason; teams: M
       const x1 = ra.right - base.left + root.scrollLeft, y1 = ra.top + ra.height / 2 - base.top;
       const x2 = rb.left - base.left + root.scrollLeft, y2 = rb.top + rb.height * (side === 't1' ? 0.32 : 0.68) - base.top;
       const mid = x1 + (x2 - x1) / 2;
-      out.push(`M${x1},${y1} H${mid} V${y2} H${x2}`);
+      out.push({ key: `${src}-${m.id}-${side}`, d: `M${x1},${y1} H${mid} V${y2} H${x2}` });
     }
     // Only when something moved: setting the same paths again would render forever.
-    setPaths(prev => (prev.join('|') === out.join('|') ? prev : out));
+    const sig = (list: { key: string; d: string }[]) => list.map(p => `${p.key}:${p.d}`).join('|');
+    setPaths(prev => (sig(prev) === sig(out) ? prev : out));
   }, [main]);
   useLayoutEffect(() => {
     measure();
@@ -235,8 +241,8 @@ function Bracket({ season: s, teams, onOpen }: { season: PlayoffSeason; teams: M
     <section>
       <div ref={box} className="relative -mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
         <svg className="pointer-events-none absolute left-0 top-0 h-full overflow-visible" style={{ width: box.current?.scrollWidth ?? '100%' }} aria-hidden>
-          {paths.map((d, i) => (
-            <motion.path key={d} d={d} fill="none" className="stroke-border" strokeWidth={2} strokeLinejoin="round"
+          {paths.map(({ key, d }, i) => (
+            <motion.path key={key} d={d} fill="none" className="stroke-border" strokeWidth={2} strokeLinejoin="round"
               initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.6, delay: 0.3 + i * 0.08, ease: EASE }} />
           ))}
         </svg>

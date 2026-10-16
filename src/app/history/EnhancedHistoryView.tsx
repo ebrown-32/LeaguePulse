@@ -16,6 +16,7 @@ import {
   GitBranch,
 } from '@/components/icons';
 import PlayoffsTab from './PlayoffsTab';
+import { playoffRecords, recordNotes } from '@/lib/playoffsCore';
 import dynamic from 'next/dynamic';
 import TransactionActivity from './TransactionActivity';
 import { getCurrentLeagueId } from '@/config/league';
@@ -119,6 +120,14 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
   const [processingProgress, setProcessingProgress] = useState(0);
   const [activeTab, setActiveTab]                   = useState<Tab>('managers');
   const [playoffsSeen, setPlayoffsSeen]             = useState(false);
+  // Playoff records come from the brackets (lib/playoffsCore), the same count
+  // every page uses; the History record itself is the regular season.
+  const [playoffs, setPlayoffs] = useState<{ records: Map<string, { wins: number; losses: number }>; notes: { medianGame: boolean; seasonInProgress: string | null } } | null>(null);
+  useEffect(() => {
+    fetch('/api/history/playoffs').then(r => (r.ok ? r.json() : null)).then(d => {
+      if (d?.seasons) setPlayoffs({ records: playoffRecords(d.seasons), notes: recordNotes(d.seasons) });
+    }).catch(() => {});
+  }, []);
   useEffect(() => { if (activeTab === 'playoffs') setPlayoffsSeen(true); }, [activeTab]);
   const [activeRecord, setActiveRecord]             = useState('highScore');
   const lastUpdateRef                               = useRef(0);
@@ -292,9 +301,11 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
               <div className="hidden md:flex items-center gap-3 px-4 py-2 mb-1">
                 <span className="w-7 shrink-0" />
                 <span className="flex-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Manager</span>
-                <span className="w-24 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Record</span>
+                <span className="w-24 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground" title="Regular season">Reg. season</span>
                 <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Win %</span>
                 <span className="w-16 text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Titles</span>
+                <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground" title="Playoff berths">Berths</span>
+                <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Playoffs</span>
                 <span className="w-20 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Avg Pts</span>
                 <span className="w-14 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Seasons</span>
               </div>
@@ -365,6 +376,12 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                           )}
                         </div>
 
+                        <span className="w-16 text-right text-sm tabular-nums text-foreground">
+                          {manager.playoffAppearances || <span className="text-muted-foreground/30">-</span>}
+                        </span>
+                        <span className="w-16 text-right font-mono text-sm text-foreground">
+                          {(() => { const p = playoffs?.records.get(manager.userId); return p && p.wins + p.losses ? `${p.wins}-${p.losses}` : playoffs ? '-' : ''; })()}
+                        </span>
                         <span className="w-20 text-right text-sm text-foreground tabular-nums">
                           {formatPoints(manager.averagePointsPerGame)}
                         </span>
@@ -409,11 +426,12 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <StatPill
                             label="Titles"
                             value={manager.championships > 0 ? String(manager.championships) : '-'}
                           />
+                          <StatPill label="Playoff berths" value={manager.playoffAppearances > 0 ? String(manager.playoffAppearances) : '-'} />
                           <StatPill label="Avg Pts" value={formatPoints(manager.averagePointsPerGame)} />
                         </div>
                       </div>
@@ -422,6 +440,14 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                 })}
               </div>
               <LegacyNote />
+              {playoffs && (
+                <p className="mt-2 px-1 text-xs leading-relaxed text-muted-foreground">
+                  Records are the regular season{playoffs.notes.medianGame ? ', including the weekly median game (a second result each week)' : ''}{playoffs.notes.seasonInProgress ? ` and the ${playoffs.notes.seasonInProgress} season so far` : ''}.
+                  Playoffs counts title bracket games, third place included, with a two week round as one game.
+                  Average points count every game played, playoff and consolation games included.
+                  {playoffs.notes.seasonInProgress ? ' Your league app may leave a season in progress out of its all-time record, so its totals can differ until the season ends.' : ''}
+                </p>
+              )}
           </div>
 
           {/* ══ Playoffs: loaded the first time it is opened, then kept ═══ */}

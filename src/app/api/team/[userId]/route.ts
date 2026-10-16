@@ -6,6 +6,9 @@ import {
 import { getCurrentLeagueId, configuredRootLeagueId } from '@/config/league';
 import { generateEnhancedLeagueHistory, type EnhancedLeagueHistory, type EnhancedHistoricalRecord } from '@/lib/enhancedHistoryApi';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { fetchRivalriesData, stageBreakdown } from '@/lib/rivalries';
+import { playoffHistory } from '@/lib/playoffs';
+import { playoffRecords, recordNotes } from '@/lib/playoffsCore';
 import { perLeague } from '@/lib/tenant/perLeague';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +86,8 @@ export interface RivalEntry {
   losses: number;
   ties: number;
   gamesPlayed: number;
+  /** "12-3 regular season, 1-0 playoffs": what the record is made of. */
+  breakdown: string;
 }
 
 export interface AdvancedProfile {
@@ -95,6 +100,12 @@ export interface AdvancedProfile {
 }
 
 export interface TeamProfileResponse {
+  /**
+   * What the regular season record includes: the weekly median game where the
+   * league plays one (ESPN counts it too), and the season in progress, if any.
+   * Providers' own all time records often leave the season in progress out.
+   */
+  recordNotes: { medianGame: boolean; seasonInProgress: string | null };
   userId: string;
   teamName: string;
   displayName: string;
@@ -116,6 +127,9 @@ export interface TeamProfileResponse {
     runnerUps: number;
     regularSeasonTitles: number;
     playoffAppearances: number;
+    /** Decided title bracket games (lib/playoffsCore, playoffRecords). */
+    playoffWins: number;
+    playoffLosses: number;
     bestFinish: number;
     worstFinish: number;
     totalTrades: number;
@@ -146,7 +160,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   if (!initialId) return NextResponse.json({ error: 'No league configured' }, { status: 400 });
 
   try {
-    const { history, advanced, identities } = await loadShared();
+    const [{ history, advanced, identities }, rivalries, playoffs] = await Promise.all([
+      loadShared(), fetchRivalriesData(), playoffHistory((await getCurrentLeagueId())).catch(() => []),
+    ]);
+    const myPlayoffs = playoffRecords(playoffs).get(userId) ?? { wins: 0, losses: 0 };
     const stats = history.allTimeStats.find(u => u.userId === userId);
     if (!stats) return NextResponse.json({ error: 'Manager not found' }, { status: 404 });
 
@@ -204,8 +221,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
       luck: Math.round(advancedEntry.luck.score),
     } : null;
 
-    // Rivals: every opponent faced, ranked by games played (most storied first)
-    const rivals: RivalEntry[] = Object.entries(stats.headToHeadRecord)
+    // Rivals: every opponent faced, ranked by games played (most storied
+    // first). The same head to head record the rivalries page shows
+    // (lib/rivalries), so the two always agree.
+    const rivals: RivalEntry[] = Object.entries(rivalries.h2h[userId] ?? {})
       .map(([oppId, rec]) => {
         const oppIdentity = identities.get(oppId);
         const oppStats = history.allTimeStats.find(u => u.userId === oppId);
@@ -215,6 +234,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
           avatar: oppIdentity?.avatar || oppStats?.avatar || '',
           wins: rec.wins, losses: rec.losses, ties: rec.ties,
           gamesPlayed: rec.wins + rec.losses + rec.ties,
+          breakdown: stageBreakdown(rec),
         };
       })
       .filter(r => r.gamesPlayed > 0)
@@ -244,6 +264,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
         // Recomputed from the corrected per-season flags above, not the raw
         // (sometimes-broken) career counter.
         playoffAppearances: seasons.filter(s => s.playoffAppearance).length,
+        playoffWins: myPlayoffs.wins,
+        playoffLosses: myPlayoffs.losses,
         bestFinish: stats.bestFinish === Infinity ? 0 : stats.bestFinish,
         worstFinish: Math.max(0, ...seasons.map(s => s.finish).filter(f => f > 0)),
         totalTrades: stats.totalTrades,
@@ -255,6 +277,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
       })),
       seasons,
       rivals,
+      recordNotes: recordNotes(playoffs),
     };
 
     return NextResponse.json(payload);

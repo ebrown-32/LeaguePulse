@@ -37,3 +37,44 @@ export function seedsAgreeWithByes(seeds: Map<number, number>, byeTeams: number[
   return byeTeams.every(t => (seeds.get(t) ?? 99) <= byeTeams.length);
 }
 
+
+interface SeasonLike {
+  season: string;
+  status: string;
+  teams: { rosterId: number; userId: string }[];
+  winners: { winner: number | null; loser: number | null; status: string }[];
+  settings: { medianGame: boolean };
+}
+
+/**
+ * Each manager's playoff record: decided games in the title bracket, the
+ * placement games (third place and so on) included and the consolation games
+ * not. A two week round is one game, as the bracket records it.
+ */
+export function playoffRecords(seasons: SeasonLike[]): Map<string, { wins: number; losses: number }> {
+  const out = new Map<string, { wins: number; losses: number }>();
+  const add = (userId: string | undefined, won: boolean) => {
+    if (!userId) return;
+    const r = out.get(userId) ?? { wins: 0, losses: 0 };
+    if (won) r.wins++; else r.losses++;
+    out.set(userId, r);
+  };
+  for (const s of seasons) {
+    const owner = new Map(s.teams.map(t => [t.rosterId, t.userId]));
+    for (const m of s.winners) {
+      if (m.winner == null || m.loser == null) continue;
+      add(owner.get(m.winner), true);
+      add(owner.get(m.loser), false);
+    }
+  }
+  return out;
+}
+
+/** What a league's regular season records include, to say so beside them. */
+export function recordNotes(seasons: SeasonLike[]): { medianGame: boolean; seasonInProgress: string | null } {
+  const latest = [...seasons].sort((a, b) => Number(b.season) - Number(a.season))[0];
+  return {
+    medianGame: seasons.some(s => s.settings.medianGame),
+    seasonInProgress: latest && latest.status !== 'complete' ? latest.season : null,
+  };
+}
