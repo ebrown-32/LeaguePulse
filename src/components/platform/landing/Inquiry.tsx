@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Tick } from '../marks';
@@ -22,8 +23,8 @@ export default function InquirySheet({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+    const unlock = lockScroll();
+    return () => { window.removeEventListener('keydown', onKey); unlock(); };
   }, [onClose]);
 
   const send = async () => {

@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { lockScroll } from '@/lib/scrollLock';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useReducedMotion, useScroll, useSpring, useMotionValue, useTransform } from 'framer-motion';
@@ -153,10 +154,11 @@ function Nav() {
   }, []);
   // The open menu covers the page: the page underneath stays put, and Escape closes it.
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
+    if (!open) return;
+    const unlock = lockScroll();
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    if (open) window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+    window.addEventListener('keydown', onKey);
+    return () => { unlock(); window.removeEventListener('keydown', onKey); };
   }, [open]);
   return (
     <>
