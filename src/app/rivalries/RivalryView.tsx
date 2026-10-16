@@ -6,17 +6,19 @@ import Avatar from '@/components/ui/Avatar';
 import TeamLink from '@/components/ui/TeamLink';
 import type { Manager, H2HEntry, GameRecord, TradeRecord, RivalriesResponse } from '@/app/api/rivalries/route';
 import { track } from '@/lib/mixpanel';
+import { stageBreakdown } from '@/lib/rivalryStages';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function winPctLabel(wins: number, losses: number) {
-  const total = wins + losses;
+/** A tie counts half a win, as in the standings. */
+function winPctLabel(wins: number, losses: number, ties = 0) {
+  const total = wins + losses + ties;
   if (total === 0) return '-';
-  return `${((wins / total) * 100).toFixed(0)}%`;
+  return `${(((wins + ties / 2) / total) * 100).toFixed(0)}%`;
 }
 
-function recordLabel(wins: number, losses: number) {
-  return `${wins}-${losses}`;
+function recordLabel(wins: number, losses: number, ties = 0) {
+  return ties ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
 }
 
 function avg(pts: number, games: number) {
@@ -54,9 +56,14 @@ function GameRow({ g, myName, theirName }: { g: GameRecord; myName: string; thei
     <div className={`py-2 border-b border-border/40 last:border-0 ${g.isPlayoff ? 'bg-amber-500/4' : ''}`}>
       <div className="flex items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-muted-foreground tabular-nums text-xs w-14">{g.season} W{g.week}</span>
-          {g.isPlayoff && (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 border border-amber-500/30 px-1 py-0.5 rounded">PO</span>
+          <span className="text-muted-foreground tabular-nums text-xs w-14" title={g.weeks ? `Weeks ${g.weeks.join(' and ')}, combined` : undefined}>
+            {g.season} W{g.weeks ? `${g.weeks[0]}-${g.weeks.at(-1)}` : g.week}
+          </span>
+          {g.stage === 'playoff' && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 border border-amber-500/30 px-1 py-0.5 rounded" title="Playoffs">PO</span>
+          )}
+          {g.stage === 'consolation' && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border px-1 py-0.5 rounded" title="Consolation game">CON</span>
           )}
         </div>
         <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
@@ -91,7 +98,7 @@ function DetailPanel({
   tradeHistory: TradeRecord[];
   onClose: () => void;
 }) {
-  const total  = entry.wins + entry.losses;
+  const total  = entry.wins + entry.losses + entry.ties;
   const margin = total > 0 ? (entry.pointsFor - entry.pointsAgainst) / total : 0;
 
   return (
@@ -115,8 +122,8 @@ function DetailPanel({
         {/* Stats strip */}
         <div className="grid grid-cols-3 divide-x divide-border border-b border-border shrink-0">
           {[
-            { label: 'Record',     value: recordLabel(entry.wins, entry.losses) },
-            { label: 'Win %',      value: winPctLabel(entry.wins, entry.losses) },
+            { label: 'Record',     value: recordLabel(entry.wins, entry.losses, entry.ties) },
+            { label: 'Win %',      value: winPctLabel(entry.wins, entry.losses, entry.ties) },
             { label: 'Avg Margin', value: `${margin >= 0 ? '+' : ''}${margin.toFixed(1)}` },
           ].map(s => (
             <div key={s.label} className="px-4 py-3 text-center">
@@ -125,6 +132,11 @@ function DetailPanel({
             </div>
           ))}
         </div>
+
+        {/* What the record is made of: providers' own head to head (ESPN's) is often the regular season alone. */}
+        <p className="border-b border-border px-5 py-2.5 text-center text-[12px] text-muted-foreground shrink-0">
+          {stageBreakdown(entry)}
+        </p>
 
         {/* Points comparison */}
         <div className="grid grid-cols-2 divide-x divide-border border-b border-border shrink-0">
@@ -216,7 +228,7 @@ function MatrixCell({
   if (isSelf) {
     return <td className="border border-border/30 w-20 h-14 bg-muted/20" />;
   }
-  if (!entry || entry.wins + entry.losses === 0) {
+  if (!entry || entry.wins + entry.losses + entry.ties === 0) {
     return <td className="border border-border/30 w-20 h-14 text-center text-muted-foreground/30 text-xs">-</td>;
   }
   const { bg, text } = cellStyle(entry.wins, entry.losses);
@@ -229,7 +241,7 @@ function MatrixCell({
       onClick={onClick}
     >
       <div className="font-bold text-sm tabular-nums leading-tight">
-        {recordLabel(entry.wins, entry.losses)}
+        {recordLabel(entry.wins, entry.losses, entry.ties)}
       </div>
       {isEven ? (
         <div className="text-[10px] opacity-50 mt-0.5">Even</div>
@@ -266,7 +278,7 @@ function RivalryCard({
           <div className="min-w-0">
             <div className="font-semibold text-sm text-foreground truncate">{m1.teamName}</div>
             <div className={`text-xs font-mono font-bold ${e1.wins >= e1.losses ? 'text-emerald-500' : 'text-red-500'}`}>
-              {recordLabel(e1.wins, e1.losses)}
+              {recordLabel(e1.wins, e1.losses, e1.ties)}
             </div>
           </div>
         </div>
@@ -285,7 +297,7 @@ function RivalryCard({
           <div className="text-right min-w-0">
             <div className="font-semibold text-sm text-foreground truncate">{m2.teamName}</div>
             <div className={`text-xs font-mono font-bold ${e2.wins >= e2.losses ? 'text-emerald-500' : 'text-red-500'}`}>
-              {recordLabel(e2.wins, e2.losses)}
+              {recordLabel(e2.wins, e2.losses, e2.ties)}
             </div>
           </div>
           <Avatar avatarId={m2.avatar} size={32} className="rounded-lg shrink-0" />
@@ -363,8 +375,8 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
     track('rivalry_drilldown_opened', {
       team_a: me.teamName,
       team_b: them.teamName,
-      record: `${entry.wins}-${entry.losses}`,
-      total_games: entry.wins + entry.losses,
+      record: recordLabel(entry.wins, entry.losses, entry.ties),
+      total_games: entry.wins + entry.losses + entry.ties,
     });
     setDetail({ me, them, entry, tradeHistory: trades?.[me.userId]?.[them.userId] ?? [] });
   };
@@ -382,12 +394,12 @@ export default function RivalryView({ data }: { data: RivalriesResponse }) {
           { label: 'Most Dominant', pair: mostLopsided, desc: (p: typeof mostLopsided) => {
             const leaderEntry = p.e1.wins > p.e1.losses ? p.e1 : p.e2;
             const leader      = p.e1.wins > p.e1.losses ? p.m1 : p.m2;
-            const record      = recordLabel(leaderEntry.wins, leaderEntry.losses);
-            return `${leader.teamName} leads ${record} · ${leaderEntry.pointsFor.toFixed(1)} pts scored`;
+            const record      = recordLabel(leaderEntry.wins, leaderEntry.losses, leaderEntry.ties);
+            return `${leader.teamName} leads ${record}, ${leaderEntry.pointsFor.toFixed(1)} pts scored`;
           }},
           { label: 'Most Even', pair: mostEvenly, desc: (p: typeof mostEvenly) => {
             const total = p.e1.pointsFor + p.e1.pointsAgainst;
-            return `${p.e1.wins}-${p.e1.losses} · ${total.toFixed(1)} combined pts`;
+            return `${recordLabel(p.e1.wins, p.e1.losses, p.e1.ties)}, ${total.toFixed(1)} combined pts`;
           }},
         ].map(({ label, pair, desc }) => pair && (
           <button

@@ -6,7 +6,7 @@ import {
   getAdvancedTeamMetrics, generateComprehensiveLeagueHistory,
 } from '@/lib/api';
 import { getCurrentLeagueId } from '@/config/league';
-import { fetchRivalriesData } from '@/lib/rivalries';
+import { fetchRivalriesData, stageBreakdown } from '@/lib/rivalries';
 import {
   getPlayersDirectory, getSeasonStats, resolveStatsSeason, buildPlayerCard,
 } from '@/lib/playerStats';
@@ -191,7 +191,10 @@ export async function buildChatTools() {
         return {
           teamA: a.teamName,
           teamB: b.teamName,
-          record: `${entry.wins}-${entry.losses}`,
+          record: entry.ties ? `${entry.wins}-${entry.losses}-${entry.ties}` : `${entry.wins}-${entry.losses}`,
+          // The record is every game; this is its split. A provider's own head to
+          // head (ESPN's) is the regular season alone, so quote the split when asked.
+          recordByStage: stageBreakdown(entry),
           pointsFor: Number(entry.pointsFor.toFixed(1)),
           pointsAgainst: Number(entry.pointsAgainst.toFixed(1)),
           // Label each game explicitly. Handing over a raw isPlayoff flag had
@@ -199,9 +202,10 @@ export async function buildChatTools() {
           games: (entry.games ?? []).map((g: any) => ({
             season: g.season,
             week: g.week,
-            stage: g.isPlayoff ? 'playoffs' : 'regular season',
+            stage: g.stage === 'playoff' ? 'playoffs' : g.stage === 'consolation' ? 'consolation game' : 'regular season',
+            ...(g.weeks ? { weeks: `${g.weeks.join(' and ')}, combined score` } : {}),
             score: `${g.score} to ${g.opponentScore}`,
-            winner: g.score > g.opponentScore ? a.teamName : b.teamName,
+            winner: g.score > g.opponentScore ? a.teamName : g.score < g.opponentScore ? b.teamName : 'tie',
           })),
         };
       },

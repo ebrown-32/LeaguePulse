@@ -36,6 +36,20 @@ const RECORD_LABELS: Record<string, string> = {
 };
 
 
+/** What the records on this page count, in a sentence or three. */
+function recordNote(n: { medianGame: boolean; seasonInProgress: string | null }): string {
+  const includes = [
+    n.medianGame && 'the weekly median game, a second result each week',
+    n.seasonInProgress && `the ${n.seasonInProgress} season so far`,
+  ].filter(Boolean);
+  return [
+    `The regular season record covers every season played${includes.length ? `, including ${includes.join(', and ')}` : ''}.`,
+    'The playoff record counts title bracket games, third place included, with a two week round as one game.',
+    'Points per game count every game played, playoff and consolation games included.',
+    n.seasonInProgress ? 'Your league app may leave a season in progress out of its all-time record, so its totals can differ until the season ends.' : '',
+  ].filter(Boolean).join(' ');
+}
+
 // ── Micro-components ─────────────────────────────────────────────────────────
 
 function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -108,6 +122,10 @@ function RivalCard({ rival }: { rival: RivalEntry }) {
       <div className="h-1 w-full overflow-hidden rounded-full bg-rose-400/20">
         <div className="h-full rounded-full bg-primary/70" style={{ width: `${winShare}%` }} />
       </div>
+      {/* Every game they played; providers' own head to head is often the regular season alone. */}
+      {rival.breakdown && rival.breakdown !== `${fmtRecord(rival.wins, rival.losses, rival.ties)} regular season` && (
+        <p className="mt-1.5 text-[10.5px] leading-snug text-muted-foreground">{rival.breakdown}</p>
+      )}
     </Link>
   );
 }
@@ -200,7 +218,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
             {mine && <ManageLink franchiseId={userId} />}
           </div>
           <p className="mt-0.5 text-[13.5px] text-muted-foreground">
-            {fmtRecord(career.wins, career.losses, career.ties)} all-time, {data.seasonsPlayed} season{data.seasonsPlayed !== 1 ? 's' : ''} ({seasonRange})
+            {fmtRecord(career.wins, career.losses, career.ties)} in the regular season{career.playoffWins + career.playoffLosses > 0 ? `, ${career.playoffWins}-${career.playoffLosses} in the playoffs` : ''}, {data.seasonsPlayed} season{data.seasonsPlayed !== 1 ? 's' : ''} ({seasonRange})
             {career.championships > 0 && <span className="font-semibold text-foreground">, {career.championships}&times; champion</span>}
           </p>
           {motto && <p className="mt-1 truncate text-[14px] italic text-foreground/80">&ldquo;{motto}&rdquo;</p>}
@@ -249,9 +267,10 @@ export default function TeamProfileView({ userId }: { userId: string }) {
         logo={fieldLogo(identity?.identity.logoUrl, data.avatar)} look={identity?.identity.look ?? null} stadiumName={identity?.identity.stadiumName ?? null}>
 
         <Section scope="team" id="career" icon={TrendingUp} title="Career" index={2}
-          summary={`${fmtRecord(career.wins, career.losses, career.ties)}, ${career.winPct}% wins, ${career.playoffAppearances} playoff berth${career.playoffAppearances === 1 ? '' : 's'}`}>
+          summary={`${fmtRecord(career.wins, career.losses, career.ties)} regular season, ${career.playoffWins}-${career.playoffLosses} playoffs, ${career.playoffAppearances} playoff berth${career.playoffAppearances === 1 ? '' : 's'}`}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCell label="Record" value={fmtRecord(career.wins, career.losses, career.ties)} sub={`${career.winPct}% win rate`} />
+            <StatCell label="Regular season" value={fmtRecord(career.wins, career.losses, career.ties)} sub={`${career.winPct}% win rate`} />
+            <StatCell label="Playoffs" value={`${career.playoffWins}-${career.playoffLosses}`} sub="title bracket games" />
             <StatCell label="Points For" value={career.ppg.toFixed(1)} sub="per game" />
             <StatCell label="Points Against" value={career.ppgAgainst.toFixed(1)} sub="per game" />
             <StatCell label="Playoff Berths" value={String(career.playoffAppearances)} sub={`of ${data.seasonsPlayed} seasons`} />
@@ -259,6 +278,8 @@ export default function TeamProfileView({ userId }: { userId: string }) {
             {career.worstFinish > 0 && <StatCell label="Worst Finish" value={ordinal(career.worstFinish)} />}
             <StatCell label="Trades Made" value={String(career.totalTrades)} />
           </div>
+          {/* Say what the records count, so they can be checked against the league app's. */}
+          <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{recordNote(data.recordNotes)}</p>
         </Section>
 
         {bio && (

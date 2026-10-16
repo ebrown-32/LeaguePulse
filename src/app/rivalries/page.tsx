@@ -39,7 +39,7 @@ export default async function RivalriesPage() {
   return (
     <PageLayout
       title="Rivalry Tracker"
-      subtitle="All-time head-to-head records across every season."
+      subtitle="All-time head-to-head records across every season: regular season, playoff and consolation games. Open a rivalry to see the split."
     >
       <RivalryView data={data} />
     </PageLayout>
