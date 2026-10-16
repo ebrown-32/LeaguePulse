@@ -76,7 +76,7 @@ export const STYLES: Record<StadiumStyle, StyleInfo> = {
     tagline: 'Glass, steel and a floating roof. The home side towers.',
     movingRoof: true,
     builds: {
-      stadium: 'Adds a deck, tallest on the home side; a roof that opens and closes from the Premier level.',
+      stadium: 'Adds a deck, tallest on the home side; a roof that opens and closes from the Cathedral up.',
       seating: 'Deeper decks, steepest on the home side.',
       suites: 'Suites stacked in the home side tower.',
       videoboard: 'Boards over both end zones and a ribbon board around the bowl.',

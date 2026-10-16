@@ -102,7 +102,7 @@ test('upgrades cost VC once, are built in order, and can not be bought on credit
 });
 
 test('suites need a big enough stadium first', () => {
-  assert.deepEqual(nextLevel(EMPTY_FACILITIES, 'suites'), { blocked: 'Needs a Modern Stadium first.' });
+  assert.deepEqual(nextLevel(EMPTY_FACILITIES, 'suites'), { blocked: 'Build up to the Fortress first.' });
   assert.ok(shop(startingState()).every(t => t.next === null || t.next.cost > 0));
 });
 

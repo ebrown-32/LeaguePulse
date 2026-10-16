@@ -38,21 +38,21 @@ export interface Track {
  * from here. How it looks is the manager's pick (lib/franchise/stadiumStyles).
  */
 export const STADIUMS = [
-  { name: 'Community Field', capacity: 9_000, appeal: 10 },
-  { name: 'Municipal Stadium', capacity: 24_000, appeal: 26 },
-  { name: 'Modern Stadium', capacity: 46_000, appeal: 46 },
-  { name: 'Premier Stadium', capacity: 64_000, appeal: 66 },
-  { name: 'Megaplex', capacity: 82_000, appeal: 88 },
+  { name: 'Sandlot', capacity: 9_000, appeal: 10 },
+  { name: 'Proving Ground', capacity: 24_000, appeal: 26 },
+  { name: 'Fortress', capacity: 46_000, appeal: 46 },
+  { name: 'Cathedral', capacity: 64_000, appeal: 66 },
+  { name: 'Monolith', capacity: 82_000, appeal: 88 },
 ] as const;
 
 export const TRACKS: Track[] = [
   {
     id: 'stadium', name: 'Stadium', about: 'A bigger, better bowl. The biggest lever on capacity and appeal.',
     levels: [
-      { name: 'Municipal Stadium', cost: 900, upkeep: 60_000, blurb: '24,000 seats, a real press box.' },
-      { name: 'Modern Stadium', cost: 4_200, upkeep: 180_000, blurb: '46,000 seats and wide concourses.' },
-      { name: 'Premier Stadium', cost: 12_500, upkeep: 420_000, blurb: '64,000 seats and a roar you feel.' },
-      { name: 'Megaplex', cost: 30_000, upkeep: 900_000, blurb: '82,000 seats. A destination.' },
+      { name: 'Proving Ground', cost: 900, upkeep: 60_000, blurb: '24,000 seats and a real press box. You have arrived.' },
+      { name: 'Fortress', cost: 4_200, upkeep: 180_000, blurb: '46,000 seats. Visitors hate it here.' },
+      { name: 'Cathedral', cost: 12_500, upkeep: 420_000, blurb: '64,000 seats and a roar you feel in your chest.' },
+      { name: 'Monolith', cost: 30_000, upkeep: 900_000, blurb: '82,000 seats. People plan trips around it.' },
     ],
   },
   {
@@ -161,6 +161,6 @@ export function nextLevel(f: Facilities, id: TrackId): { level: number; spec: Le
   const t = TRACK[id];
   const at = f[id];
   if (at >= t.levels.length) return null;
-  if (t.needsStadium && at === 0 && f.stadium < t.needsStadium) return { blocked: `Needs a ${STADIUMS[t.needsStadium].name} first.` };
+  if (t.needsStadium && at === 0 && f.stadium < t.needsStadium) return { blocked: `Build up to the ${STADIUMS[t.needsStadium].name} first.` };
   return { level: at + 1, spec: t.levels[at] };
 }
