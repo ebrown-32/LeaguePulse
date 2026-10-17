@@ -4,7 +4,10 @@
  * The stadium studio, on the manager's page: the stadium's name, its style
  * and how it is dressed, previewed live in the 3D view above as each choice is
  * made and saved together. Free, and only for show: the economy never sees it.
+ * Except Build, which is the economy: the upgrades, each shown on the stadium
+ * before it's bought and built from the same place (FranchiseHQ builds it).
  *
+ *   Build         the upgrades, with the VC to buy them
  *   Stadium       the style, with a plan of each one drawn at the franchise's
  *                 own build, how the upgrades build out in it, and its roof
  *   Colors        the accent, seats, facade, lights and crowd, and any part
@@ -18,12 +21,15 @@ import { defaultStadiumName } from '@/lib/franchise/stadiumName';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Check, Layers, Maximize2, Moon, RotateCcw, Shuffle, Sun } from '@/components/icons';
+import { Check, EyeIcon, Layers, Lock, Maximize2, Moon, Rocket, RotateCcw, Shuffle, Sun } from '@/components/icons';
+import { styleBuild } from '@/lib/franchise/stadiumStyles';
+import type { ShopItem } from './FranchiseHQ';
 import { COLOR_SLOTS, FEATURES, LIMITS, LOOK_OPTIONS, type ColorSlot, type Feature, type StadiumLook } from '@/lib/franchise/model';
 import { accentOf, autoColors, mixHex } from '@/lib/franchise/stadiumColors';
 import { STYLE_ORDER, STYLES, type StadiumStyle } from '@/lib/franchise/stadiumStyles';
 import { blueprint, outerOf, OVAL, type Blueprint } from '@/lib/franchise/stadiumBlueprint';
 import { TRACK, type Facilities, type TrackId } from '@/lib/tycoon/catalog';
+import { cash } from '@/lib/tycoon/economy';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -74,6 +80,7 @@ const PREVIEW_HOURS: { label: string; hour: number | undefined; icon?: typeof Su
   { label: 'Now', hour: undefined }, { label: 'Day', hour: 13, icon: Sun }, { label: 'Sunset', hour: 17.4 }, { label: 'Night', hour: 22, icon: Moon },
 ];
 const TABS = [
+  { id: 'build', label: 'Build' },
   { id: 'stadium', label: 'Stadium' },
   { id: 'colors', label: 'Colors' },
   { id: 'field', label: 'Field' },
@@ -87,7 +94,7 @@ export function lookSummary(look: StadiumLook): string {
   return `${STYLES[look.style].name}, ${LOOK_LABELS.facade[look.facade].toLowerCase()}, ${LOOK_LABELS.setting[look.setting].toLowerCase()}`;
 }
 
-export function StadiumStudio({ franchiseId, auth, look, name, hour, color, teamName, facilities, fullBuild, compact = false, onLook, onName, onHour, onFullBuild, onFullscreen, saved, onSaved }: {
+export function StadiumStudio({ franchiseId, auth, look, name, hour, color, teamName, facilities, fullBuild, compact = false, onLook, onName, onHour, onFullBuild, onFullscreen, saved, onSaved, build }: {
   franchiseId: string; auth: Record<string, string> | null; look: StadiumLook; name: string; hour: number | undefined;
   color: string; teamName: string; facilities: Facilities; fullBuild: boolean;
   /** In a narrow panel (fullscreen): one column, and the save bar stays in view. */
@@ -96,8 +103,11 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
   onFullscreen?: () => void;
   onLook: (l: StadiumLook) => void; onName: (n: string) => void; onHour: (h: number | undefined) => void; onFullBuild: (v: boolean) => void;
   saved: { look: StadiumLook; name: string }; onSaved?: () => void;
+  /** The franchise's manager: the upgrades, previewed on the stadium and built from here. */
+  build?: { shop: ShopItem[]; vc: number; preview: TrackId | null; building: TrackId | null; error: string; onPreview: (t: TrackId | null) => void; onBuild: (i: ShopItem) => void };
 }) {
-  const [tab, setTab] = useState<Tab>('stadium');
+  const [tab, setTab] = useState<Tab>(build ? 'build' : 'stadium');
+  const tabs = TABS.filter(t => t.id !== 'build' || build);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const changed = name.trim() !== saved.name || JSON.stringify(look) !== JSON.stringify(saved.look);
@@ -155,8 +165,8 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
 
       {/* Tabs */}
       <div role="tablist" className="mt-5 flex gap-1 overflow-x-auto rounded-full border border-border bg-muted/40 p-1 [scrollbar-width:none]">
-        {TABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+        {tabs.map(t => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); if (t.id !== 'build') build?.onPreview(null); }}
             className={cn('relative shrink-0 flex-1 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors', tab === t.id ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
             {tab === t.id && <motion.span layoutId="studio-tab" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
             <span className="relative">{t.label}</span>
@@ -166,6 +176,8 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22, ease: EASE }} className="mt-5">
+          {tab === 'build' && build && <BuildTab build={build} style={look.style} compact={compact} />}
+
           {tab === 'stadium' && (
             <div className="space-y-5">
               <div className={cn('grid grid-cols-2 gap-2.5', !compact && 'lg:grid-cols-3')}>
@@ -774,6 +786,77 @@ function plan(bp: Blueprint) {
   if (bp.colonnade) for (let i = 0; i <= 8; i++) cols.push(o.around(bp.colonnade.from + ((bp.colonnade.to - bp.colonnade.from) * i) / 8, bp.colonnade.r));
   const reach = (bp.berm ? bp.berm.r + 0.3 : bp.footprint) + 0.25;
   return { paths, roof, cols, size: [reach * OVAL, reach] as [number, number] };
+}
+
+/**
+ * The upgrades, one line each: tap to see the next level on the stadium above, build it from the
+ * same row. The economy behind it is unchanged (lib/tycoon/catalog); this is just where it lives now.
+ */
+function BuildTab({ build, style, compact }: { build: NonNullable<Parameters<typeof StadiumStudio>[0]['build']>; style: StadiumStyle; compact: boolean }) {
+  const { shop, vc, preview, building, error, onPreview, onBuild } = build;
+  const ready = shop.filter(i => i.next?.affordable).length;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <p className="font-display text-[28px] font-extrabold leading-none tabular-nums">{cash(vc)} <span className="text-[14px] font-bold text-muted-foreground">in the bank</span></p>
+        <p className="text-[12px] text-muted-foreground">{ready ? `${ready} upgrade${ready === 1 ? '' : 's'} ready to build. ` : ''}Tap one to see it on your stadium.</p>
+      </div>
+      {error && <p className="text-[13px] font-medium text-destructive">{error}</p>}
+      <ul className={cn('grid gap-2', !compact && 'md:grid-cols-2')}>
+        {shop.map((item, i) => {
+          const n = item.next, on = preview === item.track, pct = n ? Math.min(1, vc / n.cost) : 1;
+          const how = n ? styleBuild(style, item.track) : null;
+          return (
+            <motion.li key={item.track} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 * i }}
+              className={cn('rounded-2xl border p-3 transition', on ? 'border-primary bg-primary/[0.06] shadow-[0_10px_30px_-18px_hsl(var(--primary)/0.8)]' : 'border-border bg-card')}>
+              <button onClick={() => n && !item.blocked && onPreview(on ? null : item.track)} disabled={!n || Boolean(item.blocked)} aria-pressed={on}
+                className="flex w-full items-start gap-3 text-left disabled:cursor-default">
+                <span className="mt-0.5 flex flex-col items-center gap-1">
+                  <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl', on ? 'bg-primary text-primary-foreground' : n?.affordable ? 'bg-primary/12 text-primary' : 'bg-muted text-muted-foreground')}>
+                    {!n ? <Check className="h-4 w-4" /> : item.blocked ? <Lock className="h-4 w-4" /> : on ? <EyeIcon className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+                  </span>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-[13.5px] font-semibold">{item.name}</span>
+                    <span className="flex gap-0.5" aria-label={`Level ${item.level} of ${item.max}`}>
+                      {Array.from({ length: item.max }, (_, k) => (
+                        <motion.span key={k} initial={false} animate={{ scale: k < item.level ? 1 : 0.8 }}
+                          className={cn('h-2 w-2 rounded-full', k < item.level ? 'bg-primary' : on && k === item.level ? 'bg-primary/45 ring-2 ring-primary/40' : 'bg-muted')} />
+                      ))}
+                    </span>
+                  </span>
+                  {n ? (
+                    <>
+                      <span className="block text-[12.5px] font-medium">{n.name} <span className="text-muted-foreground">· {n.blurb}</span></span>
+                      {item.blocked
+                        ? <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{item.blocked}</span>
+                        : how && <span className="mt-0.5 block text-[11.5px] leading-snug text-primary/90">{how}</span>}
+                    </>
+                  ) : <span className="block text-[12px] text-muted-foreground">Fully built.</span>}
+                </span>
+              </button>
+              {n && !item.blocked && (
+                <div className="mt-2.5 flex items-center gap-2.5 pl-12">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <motion.span className="block h-full rounded-full bg-primary" initial={{ width: 0 }} animate={{ width: `${pct * 100}%` }} transition={{ duration: 0.8, ease: EASE }} />
+                  </span>
+                  {n.affordable ? (
+                    <button onClick={() => onBuild(item)} disabled={building !== null}
+                      className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12.5px] font-semibold text-background transition active:scale-[0.97] disabled:opacity-60">
+                      <Rocket className="h-3.5 w-3.5" /> {building === item.track ? 'Building…' : `Build, ${cash(n.cost)}`}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-[12px] font-semibold tabular-nums text-muted-foreground">{cash(n.cost)}</span>
+                  )}
+                </div>
+              )}
+            </motion.li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 /** How each upgrade builds out in the chosen style, with what the franchise has built of it. */

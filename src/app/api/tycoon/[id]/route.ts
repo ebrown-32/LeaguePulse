@@ -26,7 +26,7 @@ async function context(req: Request, rawId: string) {
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const c = await context(req, (await params).id);
-  const [{ economyOf }, { franchiseValue, fairPrices, shop }, { facilityStats }] = await Promise.all([
+  const [{ economyOf }, { franchiseValue, fairPrices, shop, PROMO_COOLDOWN, PROMO_MAX }, { facilityStats }] = await Promise.all([
     import('@/lib/tycoon/service'), import('@/lib/tycoon/economy'), import('@/lib/tycoon/catalog'),
   ]);
   const s = await economyOf(c.site, c.franchiseId).catch(err => { console.error('[api/tycoon]', err); return null; });
@@ -40,11 +40,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     interest: Math.round(s.interest * 10) / 10,
     value: franchiseValue(s),
     // Crowds are public: everyone saw them. Money is not.
-    games: s.games.map(g => ({ key: g.key, season: g.season, week: g.week, result: g.result, points: g.points, oppPoints: g.oppPoints, opponent: g.opponent, postseason: g.postseason, home: g.home, attendance: g.attendance, capacity: g.capacity, interest: g.interest, ...(open ? { prices: g.prices, fairTicket: g.fairTicket, revenue: g.revenue, costs: g.costs, profit: g.profit, interestChange: g.interestChange } : {}) })),
+    games: s.games.map(g => ({ key: g.key, at: g.at, season: g.season, week: g.week, result: g.result, points: g.points, oppPoints: g.oppPoints, opponent: g.opponent, postseason: g.postseason, home: g.home, attendance: g.attendance, capacity: g.capacity, interest: g.interest, ...(open ? { prices: g.prices, fairTicket: g.fairTicket, revenue: g.revenue, costs: g.costs, profit: g.profit, interestChange: g.interestChange } : {}) })),
     story: s.story.filter(e => open || e.kind !== 'prices').slice(-40),
     books: open ? {
       vc: s.vc, prices: s.prices, fair: fairPrices(s), autopilot: s.autopilot, form: s.form, resentment: s.resentment,
       days: s.days.filter((_, i) => i % 1 === 0).slice(-120), shop: shop(s),
+      // Promotion night: the one booked for the next home game, and when the next can be.
+      promo: { pending: s.promo ? { id: s.promo.id, score: s.promo.score } : null, nextAt: s.lastPromoAt ? s.lastPromoAt + PROMO_COOLDOWN : 0, max: PROMO_MAX },
+      covered: Math.round(s.covered),
     } : null,
   }, { headers: { 'cache-control': 'no-store' } });
 }
@@ -57,8 +60,8 @@ const num = (v: unknown, lo: number, hi: number) => {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const c = await context(req, (await params).id);
   if (!c.manager) return NextResponse.json({ error: 'Only this franchise’s manager can run it.' }, { status: 401 });
-  const body = await req.json().catch(() => ({})) as { action?: string; prices?: Record<string, unknown>; track?: string };
-  const [{ economyOf, recordDecision }, { shop }, { TRACK }] = await Promise.all([
+  const body = await req.json().catch(() => ({})) as { action?: string; prices?: Record<string, unknown>; track?: string; score?: unknown; promo?: unknown };
+  const [{ economyOf, recordDecision }, { shop, cash }, { TRACK }] = await Promise.all([
     import('@/lib/tycoon/service'), import('@/lib/tycoon/economy'), import('@/lib/tycoon/catalog'),
   ]);
   const now = Date.now();
@@ -70,13 +73,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === 'promo') {
+    const { PROMOS, PROMO_MAX, PROMO_COOLDOWN, isPromo } = await import('@/lib/tycoon/economy');
+    const score = Number(body.score);
+    if (!isPromo(body.promo)) return NextResponse.json({ error: 'Pick a promotion.' }, { status: 400 });
+    if (!Number.isInteger(score) || score < 0 || score > PROMO_MAX) return NextResponse.json({ error: `A score is 0 to ${PROMO_MAX}.` }, { status: 400 });
+    const { decisionsOf } = await import('@/lib/tycoon/service');
+    const last = (await decisionsOf(c.franchiseId)).filter(d => d.kind === 'promo').at(-1);
+    if (last && now - last.at < PROMO_COOLDOWN) return NextResponse.json({ error: 'There is already a promotion this week.', nextAt: last.at + PROMO_COOLDOWN }, { status: 429 });
+    const p = PROMOS[body.promo];
+    if (p.cost) {
+      const s = await economyOf(c.site, c.franchiseId, now);
+      if (!s) return NextResponse.json({ error: 'The league’s history is not ready yet.' }, { status: 503 });
+      if (s.vc < p.cost) return NextResponse.json({ error: `${p.name} costs ${cash(p.cost)}. You have ${cash(s.vc)}.` }, { status: 400 });
+    }
+    await recordDecision(c.franchiseId, { at: now, kind: 'promo', promo: body.promo, score });
+    return NextResponse.json({ ok: true, promo: body.promo, score });
+  }
+
   if (body.action === 'build' && body.track && body.track in TRACK) {
     const s = await economyOf(c.site, c.franchiseId, now);
     if (!s) return NextResponse.json({ error: 'The league’s history is not ready yet.' }, { status: 503 });
     const item = shop(s).find(t => t.track === body.track)!;
     if (item.blocked) return NextResponse.json({ error: item.blocked }, { status: 400 });
     if (!item.next) return NextResponse.json({ error: `${item.name} is fully built.` }, { status: 400 });
-    if (!item.next.affordable) return NextResponse.json({ error: `That costs ${item.next.cost.toLocaleString('en-US')} VC. You have ${s.vc.toLocaleString('en-US')}.` }, { status: 400 });
+    if (!item.next.affordable) return NextResponse.json({ error: `That costs ${cash(item.next.cost)}. You have ${cash(s.vc)}.` }, { status: 400 });
     await recordDecision(c.franchiseId, { at: now, kind: 'build', track: body.track as TrackId });
     return NextResponse.json({ ok: true, built: item.next.name });
   }

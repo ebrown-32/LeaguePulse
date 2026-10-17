@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { simulate, projectGame, startingState, fairPrices, franchiseValue, shop, DAY, type GameDay, type Decision } from '../src/lib/tycoon/economy.ts';
+import { simulate, projectGame, startingState, fairPrices, franchiseValue, shop, DAY, PROMOS, PROMO_MAX, type GameDay, type Decision } from '../src/lib/tycoon/economy.ts';
 import { facilityStats, nextLevel, EMPTY_FACILITIES } from '../src/lib/tycoon/catalog.ts';
 
 const start = Date.UTC(2026, 8, 9);
@@ -122,4 +122,63 @@ test('until a manager sets prices, the old front office keeps them fair', () => 
   const managed = run('WWWW', [{ at: start, kind: 'prices', prices: { ticket: 50, concession: 8, parking: 15 } }]);
   assert.equal(managed.autopilot, false);
   assert.ok(managed.games.every(g => g.prices.ticket === 50));
+});
+
+test('the bank never goes below zero: the owner covers builds honored from before the rebalance', () => {
+  // Three stadium builds on day one, far beyond the 150 VC every franchise starts with, all made
+  // before the economy was rebalanced: they happen, and the bank sits at zero, not in the red.
+  const builds: Decision[] = [0, 1, 2].map(() => ({ at: start, kind: 'build', track: 'stadium' }));
+  const s = simulate({ games: [], decisions: builds, start, now: start, grandfatherBefore: start + DAY });
+  assert.equal(s.facilities.stadium, 3);
+  assert.equal(s.vc, 0);
+  assert.ok(s.covered > 0);
+  assert.equal(s.story.filter(e => e.kind === 'covered').length, 1);
+});
+
+test('the bank never goes below zero: upkeep through a long offseason', () => {
+  // A big stadium honored on credit, then a whole year with no games: upkeep every day, nothing coming in.
+  const builds: Decision[] = [0, 1, 2, 3].map(() => ({ at: start, kind: 'build', track: 'stadium' }));
+  const s = simulate({ games: [], decisions: builds, start, now: start + 365 * DAY, grandfatherBefore: start + DAY });
+  assert.ok(s.days.every(d => d.vc >= 0), `lowest ${Math.min(...s.days.map(d => d.vc))}`);
+  assert.ok(s.vc >= 0);
+});
+
+test('a promotion doesn’t take the franchise over from the old front office, and only one runs a week', () => {
+  const games = history(3, true);
+  const auto = replay(games);
+  const ran = replay(games, [{ at: games[3].at - DAY, kind: 'promo', promo: 'bobblehead', score: 2 }]);
+  assert.deepEqual(ran.facilities, auto.facilities);
+  assert.equal(ran.managed, false);
+  const twice = replay(games, [
+    { at: games[3].at - DAY, kind: 'promo', promo: 'bobblehead', score: 2 },
+    { at: games[3].at - DAY + 3_600_000, kind: 'promo', promo: 'beer', score: PROMO_MAX },
+  ]);
+  assert.equal(twice.story.filter(e => e.kind === 'promo').length, 1);
+});
+
+test('entries from a retired feature in the log change nothing', () => {
+  const games = history(2, true);
+  const old = { at: games[5].at - DAY, kind: 'hype', score: 5 } as unknown as Decision;
+  assert.deepEqual(replay(games, [old]), replay(games));
+});
+
+test('promotion nights: dollar beer trades the night’s food money for fans; the others cost VC up front', () => {
+  const games = history(2, true);
+  const g = games[18], before = g.at - DAY;
+  const at = (s: ReturnType<typeof replay>) => s.games.find(x => x.key === g.key)!;
+  const plain = replay(games);
+  const beer = replay(games, [{ at: before, kind: 'promo', promo: 'beer', score: PROMO_MAX }]);
+  assert.deepEqual(at(beer).promo, { id: 'beer', score: PROMO_MAX });
+  assert.ok(at(beer).interest > at(plain).interest);
+  assert.ok(at(beer).revenue.concessions < at(plain).revenue.concessions, 'food at a dollar earns less');
+  assert.ok(at(beer).attendance >= at(plain).attendance);
+
+  // Fireworks are paid for when booked; with no VC to pay, they don't happen.
+  const fireworks = replay(games, [{ at: before, kind: 'promo', promo: 'fireworks', score: 3 }]);
+  assert.ok(fireworks.story.some(e => e.kind === 'promo'));
+  // Builds honored from before the rebalance empty the bank; fireworks booked the next day can't be paid for.
+  const drained: Decision[] = [0, 1, 2].map(() => ({ at: start, kind: 'build', track: 'stadium' }));
+  const broke = simulate({ games: [], decisions: [...drained, { at: start + DAY, kind: 'promo', promo: 'fireworks', score: 6 }], start, now: start + DAY, grandfatherBefore: start + DAY / 2 });
+  assert.equal(broke.vc < PROMOS.fireworks.cost, true);
+  assert.equal(broke.story.filter(e => e.kind === 'promo').length, 0);
 });

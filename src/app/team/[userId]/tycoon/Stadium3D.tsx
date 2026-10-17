@@ -99,7 +99,8 @@ function skyFor(hour: number) {
     sunColor: mix('#ffffff', '#ffb070', golden),
     sunIntensity: Math.max(0, elevation) * 1.7 + 0.08,
     ambient: 0.35 + Math.max(0, elevation) * 0.75,
-    lightsOn: night > 0.35 || golden > 0.6,
+    // On while the sun is low: from late afternoon, well before sunset, until after sunrise.
+    lightsOn: elevation < 0.35,
   };
 }
 
