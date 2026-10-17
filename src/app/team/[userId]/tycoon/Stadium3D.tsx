@@ -743,6 +743,35 @@ function ShadowRig({ dirty }: { dirty: string }) {
   return null;
 }
 
+/**
+ * Development only: a camera on rails, for filming (the trailer's stadium shots).
+ * When the page sets `window.__lpCam` to { from, to, dur, start } (each pose an
+ * orbit around a target: radius, azimuth and elevation in radians, the target,
+ * a field of view), the camera eases from one pose to the other instead of
+ * following the orbit controls. Never in production builds.
+ */
+type CamPose = { r: number; az: number; el: number; target: [number, number, number]; fov?: number };
+type CamShot = { from: CamPose; to: CamPose; dur: number; start: number };
+const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && !!(window as unknown as { __lpCam?: CamShot }).__lpCam;
+
+function ScriptedCamera() {
+  useFrame(({ camera }) => {
+    const shot = (window as unknown as { __lpCam?: CamShot }).__lpCam;
+    if (!shot) return;
+    const k = Math.min(1, Math.max(0, (performance.now() - shot.start) / (shot.dur * 1000)));
+    const t = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // ease in and out
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    const { from: a, to: b } = shot;
+    const r = lerp(a.r, b.r), az = lerp(a.az, b.az), el = lerp(a.el, b.el);
+    const target = [0, 1, 2].map(i => lerp(a.target[i], b.target[i])) as [number, number, number];
+    camera.position.set(target[0] + r * Math.cos(el) * Math.cos(az), target[1] + r * Math.sin(el), target[2] + r * Math.cos(el) * Math.sin(az));
+    camera.lookAt(...target);
+    const fov = lerp(a.fov ?? 38, b.fov ?? 38);
+    if ('fov' in camera && Math.abs((camera as unknown as { fov: number }).fov - fov) > 1e-3) { (camera as unknown as { fov: number }).fov = fov; camera.updateProjectionMatrix(); }
+  });
+  return null;
+}
+
 function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen, hour, quality }: StadiumProps & { hour: number; quality: Quality }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
@@ -876,10 +905,10 @@ export default function Stadium3D(props: StadiumProps) {
           gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false }}
           camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
-          <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
-            onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />
+          {!scripted() && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
+            onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
-          <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />
+          {scripted() ? <ScriptedCamera /> : <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
         </Canvas>
       ) : null}
     </div>
