@@ -7,16 +7,19 @@
  *
  *   Stadium       the style, with a plan of each one drawn at the franchise's
  *                 own build, how the upgrades build out in it, and its roof
- *   Colors        the accent, seats, facade, lights and crowd
+ *   Colors        the accent, seats, facade, lights and crowd, and any part
+ *                 painted any color (StadiumLook.colors)
  *   Field         the surface, the mowing, the end zones and their lettering
- *   Surroundings  where the stadium stands
+ *   Surroundings  where the stadium stands, the neighborhood around it, the
+ *                 tailgate in the lots, the plaza's paving and the extras
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Check, Layers, Maximize2, Moon, RotateCcw, Shuffle, Sun } from '@/components/icons';
-import { LIMITS, LOOK_OPTIONS, type StadiumLook } from '@/lib/franchise/model';
+import { COLOR_SLOTS, FEATURES, LIMITS, LOOK_OPTIONS, type ColorSlot, type Feature, type StadiumLook } from '@/lib/franchise/model';
+import { accentOf, autoColors, mixHex } from '@/lib/franchise/stadiumColors';
 import { STYLE_ORDER, STYLES, type StadiumStyle } from '@/lib/franchise/stadiumStyles';
 import { blueprint, outerOf, OVAL, type Blueprint } from '@/lib/franchise/stadiumBlueprint';
 import { TRACK, type Facilities, type TrackId } from '@/lib/tycoon/catalog';
@@ -25,7 +28,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 export const LOOK_LABELS = {
   facade: { concrete: 'Concrete', brick: 'Brick', glass: 'Glass', steel: 'Steel', stone: 'Limestone' },
-  seats: { team: 'Team colors', split: 'Two-tone', classic: 'Classic', mono: 'Blackout' },
+  seats: { team: 'Team colors', split: 'Two-tone', classic: 'Classic', mono: 'Blackout', ombre: 'Fade', checker: 'Checkered' },
   turf: { stripes: 'Stripes', checker: 'Checkerboard', plain: 'Plain' },
   field: { green: 'Green', blue: 'Blue', black: 'Black', team: 'Team color' },
   endZone: { color: 'Painted', argyle: 'Diagonals', plain: 'Plain' },
@@ -33,14 +36,30 @@ export const LOOK_LABELS = {
   lights: { warm: 'Warm', white: 'Daylight', team: 'Team color' },
   crowd: { mixed: 'Mixed', colorout: 'Color out', whiteout: 'Whiteout', blackout: 'Blackout' },
   setting: { city: 'City', park: 'Park', waterfront: 'Waterfront', mountains: 'Mountains', desert: 'Desert' },
+  district: { downtown: 'Downtown', college: 'College town', suburbs: 'Suburbs', countryside: 'Countryside' },
+  tailgate: { off: 'No tailgating', chill: 'Laid back', rowdy: 'Rowdy' },
+  plaza: { concrete: 'Concrete', brick: 'Brick', garden: 'Garden' },
+  features: { statue: 'Legend statue', fountain: 'Fountain', foodtrucks: 'Food trucks', banners: 'Street banners', ferriswheel: 'Ferris wheel' },
 } as const;
+
+const DISTRICT_NOTES: Record<StadiumLook['district'], string> = {
+  downtown: 'Office towers and city blocks, lit after dark.',
+  college: 'Brick halls, quads and a clock tower.',
+  suburbs: 'Streets of houses with yards and driveways.',
+  countryside: 'Farms, barns, crop fields and a water tower.',
+};
+const TAILGATE_NOTES: Record<StadiumLook['tailgate'], string> = {
+  off: 'Just cars in the lots.',
+  chill: 'Tents and grills behind some of the cars.',
+  rowdy: 'Tents everywhere, RVs and a party tent on the overflow field.',
+};
 
 const SETTING_NOTES: Record<StadiumLook['setting'], string> = {
   city: 'A skyline that lights up at dusk.',
   park: 'Lawns, hills and neighborhoods.',
   waterfront: 'On the bay, boats and all.',
   mountains: 'Pines and snowy peaks.',
-  desert: 'Sand, cacti and red mesas.',
+  desert: 'Dunes, cacti and pyramids.',
 };
 const FACADE_ART: Record<StadiumLook['facade'], string> = {
   concrete: 'linear-gradient(135deg,#ddd8ce,#a9a294)',
@@ -82,6 +101,9 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const changed = name.trim() !== saved.name || JSON.stringify(look) !== JSON.stringify(saved.look);
   const set = <K extends keyof StadiumLook>(k: K, v: StadiumLook[K]) => { setMsg(null); onLook({ ...look, [k]: v }); };
+  // The latest look, for the paint shop's color picker, which updates many times a second while dragged.
+  const lookRef = useRef(look);
+  lookRef.current = look;
 
   const save = async () => {
     setBusy(true); setMsg(null);
@@ -101,6 +123,8 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
       style: pick(LOOK_OPTIONS.style), facade: pick(LOOK_OPTIONS.facade), seats: pick(LOOK_OPTIONS.seats), turf: pick(LOOK_OPTIONS.turf),
       field: Math.random() < 0.7 ? 'green' : pick(LOOK_OPTIONS.field), endZone: pick(LOOK_OPTIONS.endZone),
       lights: pick(LOOK_OPTIONS.lights), crowd: pick(LOOK_OPTIONS.crowd), setting: pick(LOOK_OPTIONS.setting),
+      district: pick(LOOK_OPTIONS.district), tailgate: pick(LOOK_OPTIONS.tailgate), plaza: pick(LOOK_OPTIONS.plaza),
+      features: FEATURES.filter(() => Math.random() < 0.45),
       accent: Math.random() < 0.3 ? null : pick(ACCENTS),
     });
   };
@@ -176,9 +200,11 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
               </Field>
               <Field label="Seats">
                 <Tiles options={LOOK_OPTIONS.seats} labels={LOOK_LABELS.seats} value={look.seats} onPick={v => set('seats', v)}
-                  art={v => v === 'team' ? `linear-gradient(90deg,${color} 50%,color-mix(in srgb,${color} 70%,white) 50%)`
-                    : v === 'split' ? `repeating-linear-gradient(90deg,${color} 0 10px,${accent} 10px 20px)`
-                    : v === 'classic' ? 'linear-gradient(180deg,#8d939b 50%,#3d6fa8 50%)' : 'linear-gradient(180deg,#3a3f45 50%,#2f3338 50%)'} />
+                  art={v => { const a = autoColors({ ...look, seats: v }, color), s1 = look.colors.seats ?? a.seats, s2 = look.colors.seats2 ?? a.seats2;
+                    return v === 'split' ? `repeating-linear-gradient(90deg,${s1} 0 10px,${s2} 10px 20px)`
+                      : v === 'checker' ? `repeating-conic-gradient(${s1} 0 25%,${s2} 0 50%) 0 0/14px 14px`
+                      : v === 'ombre' ? `linear-gradient(0deg,${s1},${s2})`
+                      : `linear-gradient(0deg,${s1} 50%,${s2} 50%)`; }} />
               </Field>
               <Field label="Facade">
                 <Tiles options={LOOK_OPTIONS.facade} labels={LOOK_LABELS.facade} value={look.facade} onPick={v => set('facade', v)} art={v => FACADE_ART[v]} />
@@ -191,6 +217,9 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
                 <Tiles options={LOOK_OPTIONS.crowd} labels={LOOK_LABELS.crowd} value={look.crowd} onPick={v => set('crowd', v)}
                   art={v => crowdArt(v, color, accent)} />
               </Field>
+              <div className={cn(!compact && 'md:col-span-2')}>
+                <PaintShop look={look} team={color} onColors={colors => { setMsg(null); onLook({ ...lookRef.current, colors }); }} />
+              </div>
             </div>
           )}
 
@@ -218,21 +247,48 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
           )}
 
           {tab === 'world' && (
-            <div className={cn('grid grid-cols-2 gap-2.5', !compact && 'sm:grid-cols-3 lg:grid-cols-5')}>
-              {LOOK_OPTIONS.setting.map((s, i) => (
-                <motion.button key={s} onClick={() => set('setting', s)} aria-pressed={look.setting === s}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, ease: EASE }}
-                  className={cn('group flex flex-col overflow-hidden rounded-2xl border text-left transition', look.setting === s ? 'border-foreground ring-2 ring-foreground/15' : 'border-border hover:border-foreground/30')}>
-                  <div className="relative h-20 w-full shrink-0 overflow-hidden">
-                    <SettingArt setting={s} />
-                    {look.setting === s && <Picked />}
-                  </div>
-                  <div className="p-2.5">
-                    <p className="text-[13px] font-semibold">{LOOK_LABELS.setting[s]}</p>
-                    <p className="text-[11.5px] leading-snug text-muted-foreground">{SETTING_NOTES[s]}</p>
-                  </div>
-                </motion.button>
-              ))}
+            <div className="space-y-6">
+              <Field label="Setting" hint="The horizon past it all.">
+                <div className={cn('grid grid-cols-2 gap-2.5', !compact && 'sm:grid-cols-3 lg:grid-cols-5')}>
+                  {LOOK_OPTIONS.setting.map((s, i) => (
+                    <SceneCard key={s} index={i} selected={look.setting === s} onPick={() => set('setting', s)}
+                      art={<SettingArt setting={s} />} label={LOOK_LABELS.setting[s]} note={SETTING_NOTES[s]} />
+                  ))}
+                </div>
+              </Field>
+              <Field label="Neighborhood" hint="What surrounds the parking lots.">
+                <div className={cn('grid grid-cols-2 gap-2.5', !compact && 'lg:grid-cols-4')}>
+                  {LOOK_OPTIONS.district.map((d, i) => (
+                    <SceneCard key={d} index={i} selected={look.district === d} onPick={() => set('district', d)}
+                      art={<DistrictArt district={d} color={color} />} label={LOOK_LABELS.district[d]} note={DISTRICT_NOTES[d]} />
+                  ))}
+                </div>
+              </Field>
+              <div className={cn('grid gap-5', !compact && 'md:grid-cols-2')}>
+                <Field label="Tailgating" hint={TAILGATE_NOTES[look.tailgate]}>
+                  <Chips options={LOOK_OPTIONS.tailgate} labels={LOOK_LABELS.tailgate} value={look.tailgate} onPick={v => set('tailgate', v)} />
+                </Field>
+                <Field label="Plaza paving">
+                  <Tiles options={LOOK_OPTIONS.plaza} labels={LOOK_LABELS.plaza} value={look.plaza} onPick={v => set('plaza', v)}
+                    art={v => v === 'brick' ? 'repeating-linear-gradient(0deg,#a5583f 0 7px,#7d4b3a 7px 8px)'
+                      : v === 'garden' ? 'radial-gradient(circle at 25% 40%,#4f8f3a 0 18%,transparent 19%),radial-gradient(circle at 75% 60%,#4f8f3a 0 16%,transparent 17%),#d6ccb5'
+                        : 'repeating-conic-gradient(#d5cfc2 0 25%,#c4bdaf 0 50%) 0 0/20px 20px'} />
+                </Field>
+              </div>
+              <Field label="Extras" hint="Turn on as many as you like.">
+                <div className="flex flex-wrap gap-1.5">
+                  {FEATURES.map(f => {
+                    const on = look.features.includes(f);
+                    return (
+                      <button key={f} onClick={() => set('features', on ? look.features.filter(x => x !== f) : FEATURES.filter(x => x === f || look.features.includes(x)))} aria-pressed={on}
+                        className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition',
+                          on ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground')}>
+                        <FeatureMark feature={f} />{LOOK_LABELS.features[f]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
             </div>
           )}
         </motion.div>
@@ -335,12 +391,256 @@ function SettingArt({ setting }: { setting: StadiumLook['setting'] }) {
       </>}
       {setting === 'desert' && <>
         <circle cx="128" cy="20" r="9" fill="#fff1c9" />
-        <path d="M8 56 L14 40 L52 40 L58 56 Z" fill="#b0623b" /><path d="M92 56 L96 46 L120 46 L124 56 Z" fill="#c4774a" />
+        <path d="M20 56 L44 26 L68 56 Z" fill="#dcbd84" /><path d="M44 26 L68 56 L52 56 Z" fill="#c9a66c" />
+        <path d="M62 56 L78 37 L94 56 Z" fill="#e2c592" /><path d="M78 37 L94 56 L84 56 Z" fill="#c9a66c" />
+        <path d="M100 56 L109 46 L118 56 Z" fill="#e2c592" />
         <rect y="56" width="160" height="24" fill="#cdb383" />
         <g fill="#5f8a4a"><rect x="70" y="50" width="4" height="18" rx="2" /><rect x="64" y="54" width="3" height="8" rx="1.5" /><rect x="64" y="60" width="8" height="3" rx="1.5" /><rect x="77" y="52" width="3" height="8" rx="1.5" /><rect x="72" y="58" width="8" height="3" rx="1.5" /></g>
       </>}
     </svg>
   );
+}
+
+const PAINT_GROUPS: { title: string; slots: ColorSlot[] }[] = [
+  { title: 'Seats and crowd', slots: ['seats', 'seats2', 'crowd'] },
+  { title: 'Building', slots: ['walls', 'trim', 'roof', 'steel', 'boards'] },
+  { title: 'Field', slots: ['field', 'endzones', 'lettering', 'podium', 'posts'] },
+  { title: 'Lights', slots: ['lights'] },
+];
+const PAINT_LABELS: Record<ColorSlot, { label: string; note: string }> = {
+  seats: { label: 'Seats', note: 'The main seat color, in the pattern you picked.' },
+  seats2: { label: 'Second seat color', note: 'The other color in two-tone, fade and checkered seats.' },
+  crowd: { label: 'Fans\' jerseys', note: 'The color the crowd wears.' },
+  walls: { label: 'Outer walls', note: 'The stadium\'s outside, whatever it\'s built from.' },
+  trim: { label: 'Trim', note: 'Bands, edges, the press box and the roof\'s rim.' },
+  roof: { label: 'Roof', note: 'Canopies, gables, membranes and domes.' },
+  steel: { label: 'Steel', note: 'Masts, ribs, trusses and posts.' },
+  boards: { label: 'Scoreboard frames', note: 'Around every video board.' },
+  field: { label: 'Field', note: 'The turf, mowing and all.' },
+  endzones: { label: 'End zones', note: 'Painted end zones and their diagonals.' },
+  lettering: { label: 'End zone lettering', note: 'The name painted in the end zones.' },
+  podium: { label: 'Field wall', note: 'The wall between the field and the stands.' },
+  posts: { label: 'Goalposts', note: 'Classic yellow, or anything else.' },
+  lights: { label: 'Light color', note: 'The floodlights and the glow at night.' },
+};
+const QUICK = ['#ffffff', '#f3ead7', '#c9ced3', '#6b7280', '#15181c', '#c8102e', '#f26a21', '#d4a017', '#1f7a3a', '#00a3ad', '#1f4fa8', '#1f2a44', '#5b2a86', '#e64d8b'];
+
+/** Whole-stadium color themes to start from, made from the team's own colors. */
+function themes(team: string, accent: string): { name: string; colors: StadiumLook['colors'] }[] {
+  return [
+    { name: 'All in', colors: { seats: team, seats2: accent, walls: mixHex(team, '#000000', 0.35), trim: accent, roof: accent, steel: mixHex(team, '#ffffff', 0.5), podium: team, endzones: team, crowd: team } },
+    { name: 'Blackout', colors: { seats: '#1b1c1f', seats2: '#2a2c31', walls: '#22252a', trim: team, roof: '#16181b', steel: '#3a3f45', podium: '#111214', boards: '#111214', crowd: '#1b1c1e', lights: mixHex(team, '#ffffff', 0.4) } },
+    { name: 'Throwback', colors: { seats: '#2f6b3b', seats2: '#3a7d47', walls: '#a5583f', trim: '#f3ead7', roof: '#f3ead7', steel: '#3d5a45', podium: '#2f6b3b', posts: '#f3ead7', boards: '#1f3b2d', lights: '#fff1cf' } },
+    { name: 'Ice', colors: { seats: '#dfe9f2', seats2: '#9fc3e0', walls: '#eef3f7', trim: '#9fc3e0', roof: '#ffffff', steel: '#c9d6e2', podium: '#2c4a66', boards: '#eef3f7', lights: '#eef5ff', crowd: '#f4f7fb' } },
+    { name: 'Gilded', colors: { seats: '#1b1c1f', seats2: '#d4a017', walls: '#15181c', trim: '#d4a017', roof: '#d4a017', steel: '#b8901a', podium: '#15181c', posts: '#d4a017', boards: '#d4a017', lettering: '#d4a017', lights: '#ffe2a8' } },
+  ];
+}
+
+/**
+ * Paint any part of the stadium any color. Each part shows the color it is now
+ * (its own, "Auto", until painted); open one for the full color wheel, a hex
+ * code, quick swatches and the team's colors. Dragging the wheel repaints the
+ * stadium a dozen times a second rather than on every pixel, so it stays smooth.
+ */
+function PaintShop({ look, team, onColors }: { look: StadiumLook; team: string; onColors: (c: StadiumLook['colors']) => void }) {
+  const auto = useMemo(() => autoColors(look, team), [look, team]);
+  const accent = accentOf(look, team);
+  const [open, setOpen] = useState<ColorSlot | null>(null);
+  const painted = COLOR_SLOTS.filter(k => look.colors[k]).length;
+  // Coalesce a dragged picker: apply at once, then at most every 80ms, always ending on the last color.
+  const latest = useRef(look.colors);
+  latest.current = look.colors;
+  const queued = useRef<{ slot: ColorSlot; value: string | null } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const apply = (slot: ColorSlot, value: string | null) => {
+    const next = { ...latest.current };
+    if (value) next[slot] = value; else delete next[slot];
+    latest.current = next;
+    onColors(next);
+  };
+  const paint = (slot: ColorSlot, value: string | null) => {
+    if (timer.current) { queued.current = { slot, value }; return; }
+    apply(slot, value);
+    timer.current = setTimeout(function flush() {
+      const q = queued.current;
+      queued.current = null;
+      if (q) { apply(q.slot, q.value); timer.current = setTimeout(flush, 80); } else timer.current = null;
+    }, 80);
+  };
+
+  return (
+    <div className="rounded-2xl border border-border p-3.5 sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[13.5px] font-semibold">Paint it yourself</p>
+          <p className="text-[11.5px] leading-snug text-muted-foreground">Any part, any color. Left on Auto, a part follows your team colors and the choices above.</p>
+        </div>
+        {painted > 0 && (
+          <button onClick={() => { setOpen(null); onColors({}); }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground">
+            <RotateCcw className="h-3.5 w-3.5" /> All back to auto
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <span className="self-center pr-1 text-[11.5px] font-semibold text-muted-foreground">Start from</span>
+        {themes(team, accent).map(t => (
+          <button key={t.name} onClick={() => { setOpen(null); onColors(t.colors); }}
+            className="group inline-flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-[12px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
+            <span className="flex h-6 w-6 overflow-hidden rounded-full ring-1 ring-black/10" aria-hidden>
+              {[t.colors.seats, t.colors.walls, t.colors.trim].map((c, i) => <span key={i} className="h-full flex-1" style={{ background: c }} />)}
+            </span>
+            {t.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {PAINT_GROUPS.map(gr => (
+          <div key={gr.title}>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{gr.title}</p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {gr.slots.map(slot => {
+                const mine = look.colors[slot], shown = mine ?? auto[slot], isOpen = open === slot;
+                return (
+                  <div key={slot} className={cn('rounded-xl border transition', isOpen ? 'border-foreground/40 sm:col-span-2' : 'border-border')}>
+                    <button onClick={() => setOpen(isOpen ? null : slot)} aria-expanded={isOpen}
+                      className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-muted/50">
+                      <span className="h-8 w-8 shrink-0 rounded-lg ring-1 ring-black/10 dark:ring-white/15" style={{ background: shown }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-semibold">{PAINT_LABELS[slot].label}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">{mine ? shown.toUpperCase() : 'Auto'}</span>
+                      </span>
+                      {mine && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary">Custom</span>}
+                    </button>
+                    {isOpen && <PaintEditor slot={slot} value={shown} custom={!!mine} team={team} accent={accent} onPaint={v => paint(slot, v)} />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaintEditor({ slot, value, custom, team, accent, onPaint }: {
+  slot: ColorSlot; value: string; custom: boolean; team: string; accent: string; onPaint: (v: string | null) => void;
+}) {
+  const [hex, setHex] = useState(value);
+  useEffect(() => { setHex(value); }, [value]);
+  const commit = (v: string) => {
+    const h = v.trim().replace(/^#?/, '#').toLowerCase();
+    const full = /^#[0-9a-f]{3}$/.test(h) ? '#' + [...h.slice(1)].map(ch => ch + ch).join('') : h;
+    if (/^#[0-9a-f]{6}$/.test(full)) onPaint(full);
+  };
+  return (
+    <div className="space-y-3 border-t border-border px-2.5 pb-3 pt-3">
+      <p className="text-[11.5px] text-muted-foreground">{PAINT_LABELS[slot].note}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative h-10 w-16 cursor-pointer overflow-hidden rounded-lg ring-1 ring-black/10 dark:ring-white/15" style={{ background: value }} title="Any color">
+          <input type="color" value={value} onChange={e => onPaint(e.target.value.toLowerCase())} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={`Pick any color for ${PAINT_LABELS[slot].label}`} />
+          <span className="pointer-events-none absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full ring-1 ring-white/70" style={{ background: 'conic-gradient(#f43f5e,#f59e0b,#84cc16,#06b6d4,#6366f1,#d946ef,#f43f5e)' }} />
+        </label>
+        <input value={hex} onChange={e => { setHex(e.target.value); commit(e.target.value); }} onBlur={() => setHex(value)} maxLength={7} spellCheck={false}
+          aria-label="Hex color" className="h-10 w-28 rounded-lg border border-border bg-background px-2.5 font-mono text-[13px] uppercase outline-none focus:border-foreground/40" />
+        <button onClick={() => onPaint(team)} className="h-10 rounded-lg border border-border px-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground">
+          <span className="mr-1.5 inline-block h-3 w-3 rounded-full align-[-1px] ring-1 ring-black/10" style={{ background: team }} />Team
+        </button>
+        <button onClick={() => onPaint(accent)} className="h-10 rounded-lg border border-border px-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground">
+          <span className="mr-1.5 inline-block h-3 w-3 rounded-full align-[-1px] ring-1 ring-black/10" style={{ background: accent }} />Accent
+        </button>
+        {custom && (
+          <button onClick={() => onPaint(null)} className="h-10 rounded-lg px-2.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground">Back to auto</button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {QUICK.map(c => <Swatch key={c} color={c} selected={value === c} onPick={() => onPaint(c)} />)}
+      </div>
+    </div>
+  );
+}
+
+function SceneCard({ index, selected, onPick, art, label, note }: { index: number; selected: boolean; onPick: () => void; art: React.ReactNode; label: string; note: string }) {
+  return (
+    <motion.button onClick={onPick} aria-pressed={selected}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04, ease: EASE }}
+      className={cn('group flex flex-col overflow-hidden rounded-2xl border text-left transition', selected ? 'border-foreground ring-2 ring-foreground/15' : 'border-border hover:border-foreground/30')}>
+      <div className="relative h-20 w-full shrink-0 overflow-hidden">
+        {art}
+        {selected && <Picked />}
+      </div>
+      <div className="p-2.5">
+        <p className="text-[13px] font-semibold">{label}</p>
+        <p className="text-[11.5px] leading-snug text-muted-foreground">{note}</p>
+      </div>
+    </motion.button>
+  );
+}
+
+/** Each neighborhood from above. */
+function DistrictArt({ district, color }: { district: StadiumLook['district']; color: string }) {
+  return (
+    <svg viewBox="0 0 160 80" preserveAspectRatio="xMidYMid slice" className="h-full w-full transition-transform duration-500 group-hover:scale-[1.05]" aria-hidden>
+      <rect width="160" height="80" fill={district === 'countryside' ? '#7aa65a' : '#6a9a50'} />
+      {district === 'downtown' && <>
+        {[0, 1, 2, 3].map(r => <rect key={`h${r}`} y={r * 22 + 15} width="160" height="5" fill="#3a3e44" />)}
+        {[0, 1, 2, 3, 4, 5].map(c => <rect key={`v${c}`} x={c * 30 + 22} width="5" height="80" fill="#3a3e44" />)}
+        {Array.from({ length: 24 }, (_, i) => {
+          const c = i % 6, r = Math.floor(i / 6), sh = ['#8a96a3', '#a3adb7', '#6f7c89', '#b9c2ca'][(i * 7) % 4];
+          return <g key={i}><rect x={c * 30 - 4} y={r * 22 - 3} width="22" height="14" fill={sh} /><rect x={c * 30 - 4} y={r * 22 + 9} width="22" height="3" fill="#00000022" /></g>;
+        })}
+      </>}
+      {district === 'college' && <>
+        <rect x="20" y="16" width="120" height="48" fill="#86b665" />
+        <path d="M20 16 L140 64 M140 16 L20 64" stroke="#d9cfb8" strokeWidth="2.5" />
+        {[[6, 6, 34, 10], [60, 4, 40, 11], [120, 6, 34, 10], [6, 66, 34, 10], [60, 66, 40, 11], [120, 66, 34, 10], [4, 26, 12, 28], [144, 26, 12, 28]].map(([x, y, w, h], i) =>
+          <rect key={i} x={x} y={y} width={w} height={h} fill={i % 2 ? '#9c4a32' : '#a85a3c'} />)}
+        <rect x="74" y="34" width="12" height="12" fill="#9c4a32" /><path d="M74 34 L80 28 L86 34 Z" fill="#3d5a45" />
+        {[[34, 26], [126, 54], [40, 56], [118, 24]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4" fill="#3f7d32" />)}
+      </>}
+      {district === 'suburbs' && <>
+        {[0, 1].map(r => <rect key={r} y={r * 40 + 18} width="160" height="5" fill="#3a3e44" />)}
+        {Array.from({ length: 16 }, (_, i) => {
+          const c = i % 8, r = Math.floor(i / 8), x = c * 20 + 4, y = r * 40 + (r ? 26 : 2);
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width="12" height="10" fill={['#e8e1d3', '#c9d6df', '#e6d3b8', '#d9c4c4'][i % 4]} />
+              <path d={`M${x} ${y + 5} L${x + 12} ${y + 5}`} stroke="#5b4a44" strokeWidth="1.2" />
+              <rect x={x + 13} y={y + (r ? -6 : 8)} width="3" height="8" fill="#b9b4aa" />
+              <circle cx={x + 2} cy={y + (r ? 14 : -1)} r="2.5" fill="#3f7d32" />
+            </g>
+          );
+        })}
+      </>}
+      {district === 'countryside' && <>
+        {([[0, 0, 70, 36, '#c9a94a'], [74, 0, 86, 36, '#6f8f3a'], [0, 42, 60, 38, '#7a5a3a'], [96, 42, 64, 38, '#8aa04a']] as const).map(([x, y, w, h, c], i) => (
+          <g key={i}>
+            <rect x={x} y={y} width={w} height={h} fill={c} />
+            {Array.from({ length: 6 }, (_, k) => <rect key={k} x={x} y={y + k * (h / 6)} width={w} height="1.5" fill="#00000018" />)}
+          </g>
+        ))}
+        <rect y="37" width="160" height="4" fill="#a8997c" />
+        <rect x="66" y="48" width="18" height="12" fill="#9b2d22" /><path d="M64 48 L75 41 L86 48 Z" fill="#3b3f44" />
+        <circle cx="90" cy="52" r="4" fill="#c9ced3" />
+        <circle cx="140" cy="20" r="6" fill={color} stroke="#ffffff" strokeWidth="1.5" />
+      </>}
+    </svg>
+  );
+}
+
+function FeatureMark({ feature }: { feature: Feature }) {
+  const d: Record<Feature, React.ReactNode> = {
+    statue: <><rect x="5" y="11" width="6" height="3" /><circle cx="8" cy="3.5" r="1.6" /><path d="M6.8 5.5h2.4l.6 5H6.2z" /><path d="M9 6.2l3-1.8" strokeWidth="1.2" stroke="currentColor" /></>,
+    fountain: <><path d="M2 11h12v2H2z" /><path d="M8 10V4M8 4c-2 0-3 2-3.5 4M8 4c2 0 3 2 3.5 4" stroke="currentColor" strokeWidth="1.2" fill="none" /></>,
+    foodtrucks: <><path d="M1.5 5h8v6h-8zM9.5 7h3l2 2v2h-5z" /><circle cx="4.5" cy="12" r="1.3" /><circle cx="11.5" cy="12" r="1.3" /></>,
+    banners: <><path d="M4 2v12" stroke="currentColor" strokeWidth="1.2" /><path d="M4.6 3h6v6l-3-1.5-3 1.5z" /></>,
+    ferriswheel: <><circle cx="8" cy="7" r="5" stroke="currentColor" strokeWidth="1.2" fill="none" /><path d="M8 7l-3 7M8 7l3 7M3 7h10M8 2v10" stroke="currentColor" strokeWidth="0.9" /></>,
+  };
+  return <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden>{d[feature]}</svg>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

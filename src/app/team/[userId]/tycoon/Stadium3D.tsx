@@ -23,21 +23,24 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars } from '@react-three/drei';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, PerformanceMonitor, Stars } from '@react-three/drei';
 import {
   BoxGeometry, CanvasTexture, Color, DoubleSide, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
-  type Group, type InstancedMesh, type Mesh,
+  type Group, type InstancedMesh, type Matrix4, type Mesh,
 } from 'three';
 import type { Facilities } from '@/lib/tycoon/catalog';
 import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
+import { accentOf, FACADE, stadiumColors } from '@/lib/franchise/stadiumColors';
 import {
   blueprint, outerOf, PODIUM, roofClosed, seatsFilled, seatSpots, topOf, OVAL, TAU, type Blueprint, type Board, type Stand,
 } from '@/lib/franchise/stadiumBlueprint';
 import { fieldColors, Gridiron, inkOn } from './Gridiron';
 import { Grounds, GROUND } from './Grounds';
+import { HAZE } from './campusLook';
+import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
-import { along, Boxes, Ribbon, Rise, luminance, mix, rng, type Item } from './stadiumParts';
+import { along, Boxes, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
 
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
@@ -74,8 +77,10 @@ function skyFor(hour: number) {
   const golden = Math.max(0, 1 - Math.abs(elevation) * 4); // near the horizon
   const day = '#9fd0ef', dusk = '#f2a46d', dark = '#0b1430';
   const sky = elevation > 0 ? mix(day, dusk, golden) : mix(dusk, dark, Math.min(1, -elevation * 4));
+  // Deeper overhead: blue by day, violet at dusk, near black at night.
+  const zenith = elevation > 0 ? mix('#3d7fc7', '#5b5f9e', golden) : mix('#5b5f9e', '#050a1e', Math.min(1, -elevation * 4));
   return {
-    sky, night,
+    sky, zenith, night,
     sun: [Math.cos(angle) * 30, Math.max(2, elevation * 30), -12] as [number, number, number],
     sunColor: mix('#ffffff', '#ffb070', golden),
     sunIntensity: Math.max(0, elevation) * 1.7 + 0.08,
@@ -86,42 +91,43 @@ function skyFor(hour: number) {
 
 // ── Colors ──────────────────────────────────────────────────────────────────
 
-const FACADE: Record<StadiumLook['facade'], { wall: string; trim: string; metal: number; rough: number; glass?: boolean }> = {
-  concrete: { wall: '#cfcac0', trim: '#9e978a', metal: 0, rough: 0.9 },
-  brick: { wall: '#9c4a32', trim: '#e6dccb', metal: 0, rough: 0.95 },
-  // Kept matte: with nothing in the scene to reflect, any real metalness renders near black.
-  glass: { wall: '#8cc2e3', trim: '#d8e4ec', metal: 0.05, rough: 0.15, glass: true },
-  steel: { wall: '#a3adb7', trim: '#d3d9de', metal: 0.05, rough: 0.5 },
-  stone: { wall: '#d8ccb2', trim: '#b5a586', metal: 0, rough: 0.92 },
-};
-
-const LIGHT: Record<Exclude<StadiumLook['lights'], 'team'>, string> = { warm: '#fff1cf', white: '#eef5ff' };
-
 interface Palette {
   team: string; accent: string; trim: string; light: string;
+  /** The manager's paint over each part's own color (lib/franchise/stadiumColors). */
+  wall: string; roof: string | null; steel: string; podium: string; boards: string | null;
   seat: (a: number, deck: number) => Color;
   crowd: Color[];
 }
 
 function palette(look: StadiumLook, team: string): Palette {
-  const accent = look.accent ?? (luminance(team) > 0.6 ? '#1b1d21' : '#f4f4f2');
+  const k = stadiumColors(look, team), accent = accentOf(look, team);
   const c = (hex: string) => new Color(hex);
-  const A = c(mix(team, '#9aa0a6', 0.2)), B = c(mix(team, '#ffffff', 0.22)), X = c(mix(accent, '#9aa0a6', 0.15));
-  const blue = c('#3d6fa8'), gray = c('#8d939b'), dark = c('#2f3338'), dark2 = c('#3a3f45');
+  const A = c(k.seats), B = c(k.seats2);
   const section = (a: number) => Math.floor((((a % TAU) + TAU) % TAU) / (TAU / 36)) % 2;
+  // Fading up the decks: a few steps from the first color to the second.
+  const fade = [0, 1, 2, 3].map(d => c(mix(k.seats, k.seats2, d / 3)));
   const seat = (a: number, deck: number) => {
-    if (look.seats === 'split') return section(a) ? X : A;
-    if (look.seats === 'classic') return deck === 0 ? blue : gray;
-    if (look.seats === 'mono') return deck % 2 ? dark2 : dark;
-    return deck % 2 ? B : A;
+    switch (look.seats) {
+      case 'split': return section(a) ? B : A;
+      case 'checker': return (section(a) + deck) % 2 ? B : A;
+      case 'ombre': return fade[Math.min(3, deck)];
+      case 'classic': return deck === 0 ? A : B;
+      default: return deck % 2 ? B : A;
+    }
   };
+  // The crowd in the team's colors, or in the shirt color the manager picked.
+  const shirt = k.crowd;
   const crowd = {
-    mixed: [team, team, mix(team, '#ffffff', 0.55), accent, '#f2f2f2', '#2b2b2b'],
-    colorout: [team, team, team, mix(team, '#000000', 0.25), accent],
-    whiteout: ['#f6f6f4', '#f6f6f4', '#e9e9e6', '#ffffff', team],
-    blackout: ['#1b1c1e', '#232427', '#2b2c30', '#1b1c1e', team],
+    mixed: [shirt, shirt, mix(shirt, '#ffffff', 0.55), accent, '#f2f2f2', '#2b2b2b'],
+    colorout: [shirt, shirt, shirt, mix(shirt, '#000000', 0.25), accent],
+    whiteout: ['#f6f6f4', '#f6f6f4', '#e9e9e6', '#ffffff', shirt],
+    blackout: ['#1b1c1e', '#232427', '#2b2c30', '#1b1c1e', shirt],
   }[look.crowd].map(c);
-  return { team, accent, trim: FACADE[look.facade].trim, light: look.lights === 'team' ? mix(team, '#ffffff', 0.25) : LIGHT[look.lights], seat, crowd };
+  const painted = look.colors ?? {};
+  return {
+    team, accent, trim: k.trim, light: k.lights, seat, crowd,
+    wall: k.walls, roof: painted.roof ?? null, steel: k.steel, podium: k.podium, boards: painted.boards ?? null,
+  };
 }
 
 // ── The stands ──────────────────────────────────────────────────────────────
@@ -210,7 +216,7 @@ const outerAt = (s: Stand, a: number) => outerOf(s.decks(a));
 const topAt = (s: Stand, a: number) => topOf(s.decks(a));
 
 function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: Palette; night: number }) {
-  const f = FACADE[look.facade];
+  const f = { ...FACADE[look.facade], wall: p.wall, trim: p.trim };
   const o = bp.outline;
   const walled = bp.stands.filter(s => s.wallFrom !== null);
   const { columns, poles, flags } = useMemo(() => {
@@ -260,7 +266,7 @@ function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: 
         </group>
       ))}
       <Boxes items={columns} size={[0.1, 1, 0.1]} color={f.trim} />
-      <Boxes items={poles} size={[0.02, 0.44, 0.02]} color="#c9ced3" cast={false} />
+      <Boxes items={poles} size={[0.02, 0.44, 0.02]} color={p.steel} cast={false} />
       <Boxes items={flags} size={[0.22, 0.13, 0.01]} cast={false} />
       {gates.map((g, i) => (
         <group key={i} position={[g.x, 0, g.z]} rotation-y={g.ry}>
@@ -320,12 +326,12 @@ function Canopy({ bp, span, p, lightsOn }: { bp: Blueprint; span: number; p: Pal
   return (
     <group>
       <Ribbon o={o} k={k} cast profile={a => [[outerAt(s, a) + 0.06, topAt(s, a) + 0.3], [outerAt(s, a) - span, topAt(s, a) + 0.44]]}>
-        <meshStandardMaterial color="#eef1f4" side={DoubleSide} transparent opacity={0.92} />
+        <meshStandardMaterial color={p.roof ?? '#eef1f4'} side={DoubleSide} transparent opacity={0.92} />
       </Ribbon>
       <Ribbon o={o} k={`${k}e`} profile={a => [[outerAt(s, a) - span, topAt(s, a) + 0.38], [outerAt(s, a) - span, topAt(s, a) + 0.46]]}>
         <meshStandardMaterial color={lightsOn ? p.light : p.trim} emissive={p.light} emissiveIntensity={lightsOn ? 2 : 0} side={DoubleSide} />
       </Ribbon>
-      <Boxes items={masts} size={[0.06, 0.4, 0.06]} color="#c9ced3" />
+      <Boxes items={masts} size={[0.06, 0.4, 0.06]} color={p.steel} />
     </group>
   );
 }
@@ -338,7 +344,7 @@ function Dome({ bp, rise, p, night }: { bp: Blueprint; rise: number; p: Palette;
   return (
     <group position={[0, bp.top, 0]} scale={[1, rise, 1]}>
       <mesh geometry={shell}>
-        <meshPhysicalMaterial color="#e9f2ff" transparent opacity={0.3} roughness={0.15} side={DoubleSide} emissive={p.light} emissiveIntensity={night * 0.35} depthWrite={false} />
+        <meshPhysicalMaterial color={p.roof ?? '#e9f2ff'} transparent opacity={p.roof ? 0.55 : 0.3} roughness={0.15} side={DoubleSide} emissive={p.light} emissiveIntensity={night * 0.35} depthWrite={false} />
       </mesh>
       <mesh geometry={ribs}><meshBasicMaterial color={mix(p.trim, '#ffffff', 0.3)} wireframe transparent opacity={0.55} /></mesh>
     </group>
@@ -347,9 +353,9 @@ function Dome({ bp, rise, p, night }: { bp: Blueprint; rise: number; p: Palette;
 
 function Gables({ bp, stands, lift, p, lightsOn }: { bp: Blueprint; stands: string[]; lift: number; p: Palette; lightsOn: boolean }) {
   const o = bp.outline;
-  const roofColor = mix(p.team, '#2b2f33', 0.5);
-  const { posts, masts, glows } = useMemo(() => {
-    const posts: Item[] = [], glows: [number, number, number][] = [];
+  const roofColor = p.roof ?? mix(p.team, '#2b2f33', 0.5);
+  const { posts, masts } = useMemo(() => {
+    const posts: Item[] = [];
     const masts: { x: number; y: number; z: number; ry: number; h: number }[] = [];
     for (const id of stands) {
       const s = bp.stands.find(x => x.id === id);
@@ -367,11 +373,21 @@ function Gables({ bp, stands, lift, p, lightsOn }: { bp: Blueprint; stands: stri
         const [x, z] = o.around(a, outerAt(s, a) + 0.05);
         masts.push({ x, z, y: topAt(s, a) + lift, ry: Math.atan2(-x, -z), h: 0.95 });
       }
-      const mid = (s.from + s.to) / 2, [gx, gz] = o.around(mid, s.decks(mid)[0].inner);
-      glows.push([gx, topAt(s, mid) + lift + 0.9, gz]);
     }
-    return { posts, masts, glows };
+    return { posts, masts };
   }, [bp, stands, lift, o]);
+  // Each mast, its bank and the bank's eight lamps, as three instanced draws for all the masts together.
+  const rigs = useMemo(() => {
+    const poles: Matrix4[] = [], banks: Matrix4[] = [], lamps: Matrix4[] = [];
+    for (const m of masts) {
+      const g = mat(null, [m.x, m.y, m.z], [0, m.ry, 0]);
+      poles.push(mat(g, [0, m.h / 2, 0]));
+      const bank = mat(g, [0, m.h, 0.04], [0.42, 0, 0]); // aimed down at the field
+      banks.push(bank);
+      for (const x of [-0.24, -0.08, 0.08, 0.24]) for (const y of [-0.065, 0.065]) lamps.push(mat(bank, [x, y, 0.028]));
+    }
+    return { poles, banks, lamps };
+  }, [masts]);
   const lamp = lightsOn ? p.light : '#000000';
   return (
     <group>
@@ -385,23 +401,10 @@ function Gables({ bp, stands, lift, p, lightsOn }: { bp: Blueprint; stands: stri
           </Ribbon>
         );
       })}
-      <Boxes items={posts} size={[0.05, 1, 0.05]} color="#d9dcdf" />
-      {masts.map((m, i) => (
-        <group key={i} position={[m.x, m.y, m.z]} rotation-y={m.ry}>
-          <mesh position={[0, m.h / 2, 0]} castShadow><cylinderGeometry args={[0.025, 0.035, m.h, 8]} /><meshStandardMaterial color="#9aa1a8" roughness={0.5} /></mesh>
-          {/* The bank: a frame of lamps in two rows, aimed down at the field. */}
-          <group position={[0, m.h, 0.04]} rotation-x={0.42}>
-            <mesh castShadow><boxGeometry args={[0.66, 0.3, 0.05]} /><meshStandardMaterial color="#3a3f45" roughness={0.6} /></mesh>
-            {[-0.24, -0.08, 0.08, 0.24].flatMap(x => [-0.065, 0.065].map(y => (
-              <mesh key={`${x}${y}`} position={[x, y, 0.028]}>
-                <planeGeometry args={[0.12, 0.1]} />
-                <meshStandardMaterial color="#fffbe6" emissive={lamp} emissiveIntensity={lightsOn ? 2.4 : 0} />
-              </mesh>
-            )))}
-          </group>
-        </group>
-      ))}
-      {lightsOn && glows.map((g, i) => <pointLight key={i} position={g} intensity={6} distance={13} color={p.light} />)}
+      <Boxes items={posts} size={[0.05, 1, 0.05]} color={mix(p.steel, '#ffffff', 0.3)} />
+      <Placed matrices={rigs.poles} cast><cylinderGeometry args={[0.025, 0.035, 0.95, 8]} /><meshStandardMaterial color={mix(p.steel, '#000000', 0.15)} roughness={0.5} /></Placed>
+      <Placed matrices={rigs.banks} cast><boxGeometry args={[0.66, 0.3, 0.05]} /><meshStandardMaterial color="#3a3f45" roughness={0.6} /></Placed>
+      <Placed matrices={rigs.lamps}><planeGeometry args={[0.12, 0.1]} /><meshStandardMaterial color="#fffbe6" emissive={lamp} emissiveIntensity={lightsOn ? 2.4 : 0} /></Placed>
     </group>
   );
 }
@@ -424,28 +427,25 @@ function Membrane({ bp, moving, closed, p, lightsOn }: { bp: Blueprint; moving: 
     const [bx, bz] = o.around(pt.a, outerAt(s, pt.a) + 0.1), [ex, ez] = o.around(pt.a, edge);
     const back = new Vector3(bx, topAt(s, pt.a) + 0.33, bz), front = new Vector3(ex, Y + 0.03, ez), d = new Object3D();
     d.position.copy(back).add(front).multiplyScalar(0.5); d.lookAt(front);
-    return { position: d.position.toArray() as [number, number, number], quaternion: d.quaternion.toArray() as [number, number, number, number], length: back.distanceTo(front) };
+    d.scale.set(1, 1, back.distanceTo(front)); d.updateMatrix();
+    return d.matrix.clone();
   }), [o, s, edge, Y]);
   return (
     <group>
       <Ribbon o={o} k={k} cast profile={a => [[outerAt(s, a) + 0.1, topAt(s, a) + 0.3], [edge, Y]]}>
-        <meshStandardMaterial color="#f2f4f6" side={DoubleSide} transparent opacity={0.62} roughness={0.4} depthWrite={false} />
+        <meshStandardMaterial color={p.roof ?? '#f2f4f6'} side={DoubleSide} transparent opacity={p.roof ? 0.85 : 0.62} roughness={0.4} depthWrite={false} />
       </Ribbon>
-      {ribs.map((r, i) => (
-        <mesh key={i} position={r.position} quaternion={r.quaternion} castShadow>
-          <boxGeometry args={[0.04, 0.05, r.length]} /><meshStandardMaterial color="#c9ced3" roughness={0.5} />
-        </mesh>
-      ))}
+      <Placed matrices={ribs} cast><boxGeometry args={[0.04, 0.05, 1]} /><meshStandardMaterial color={p.steel} roughness={0.5} /></Placed>
       <Ribbon o={o} k={`${k}e`} profile={() => [[edge, Y - 0.08], [edge, Y]]}>
         <meshStandardMaterial color={lightsOn ? p.light : p.trim} emissive={p.light} emissiveIntensity={lightsOn ? 2.2 : 0} side={DoubleSide} />
       </Ribbon>
       {moving && (
         <group>
-          {[-1, 1].map(z => <mesh key={z} position={[0, Y + 0.07, z * (Z + 0.12)]} castShadow><boxGeometry args={[X * 4.1, 0.1, 0.08]} /><meshStandardMaterial color="#c9ced3" /></mesh>)}
+          {[-1, 1].map(z => <mesh key={z} position={[0, Y + 0.07, z * (Z + 0.12)]} castShadow><boxGeometry args={[X * 4.1, 0.1, 0.08]} /><meshStandardMaterial color={p.steel} /></mesh>)}
           {[left, right].map((ref, i) => (
             <group key={i} ref={ref} position={[(i ? 1 : -1) * X / 2, Y + 0.04, 0]}>
-              <mesh castShadow><boxGeometry args={[X, 0.04, 2 * Z + 0.2]} /><meshStandardMaterial color="#e7eef4" transparent opacity={0.82} roughness={0.2} /></mesh>
-              {[-0.3, 0, 0.3].map(f => <mesh key={f} position={[f * X, 0.03, 0]}><boxGeometry args={[0.05, 0.03, 2 * Z + 0.2]} /><meshStandardMaterial color="#aeb5bc" /></mesh>)}
+              <mesh castShadow><boxGeometry args={[X, 0.04, 2 * Z + 0.2]} /><meshStandardMaterial color={p.roof ?? '#e7eef4'} transparent opacity={0.82} roughness={0.2} /></mesh>
+              {[-0.3, 0, 0.3].map(f => <mesh key={f} position={[f * X, 0.03, 0]}><boxGeometry args={[0.05, 0.03, 2 * Z + 0.2]} /><meshStandardMaterial color={mix(p.steel, '#000000', 0.12)} /></mesh>)}
             </group>
           ))}
         </group>
@@ -459,7 +459,7 @@ function Membrane({ bp, moving, closed, p, lightsOn }: { bp: Blueprint; moving: 
 function Berm({ bp, setting }: { bp: Blueprint; setting: StadiumLook['setting'] }) {
   const b = bp.berm!;
   return (
-    <Ribbon o={bp.outline} k={`berm${b.r}${b.h}`} profile={() => [[b.r - 0.02, b.h], [b.r + 0.12, b.h], [b.r + b.run, 0.004]]}>
+    <Ribbon o={bp.outline} k={`berm${b.r}${b.h}`} profile={() => [[b.r - 0.02, b.h], [b.r + 0.12, b.h], [b.r + b.run, 0.007]]}>
       <meshStandardMaterial color={mix(GROUND[setting].grass, '#2f4a25', 0.15)} roughness={1} side={DoubleSide} />
     </Ribbon>
   );
@@ -507,7 +507,6 @@ function Torch({ at }: { at: [number, number, number] }) {
     <group position={at}>
       <mesh><cylinderGeometry args={[0.16, 0.07, 0.16, 16]} /><meshStandardMaterial color="#8c6a3a" metalness={0.4} roughness={0.5} /></mesh>
       <mesh ref={flame} position={[0, 0.24, 0]}><coneGeometry args={[0.12, 0.38, 10]} /><meshStandardMaterial color="#ffb347" emissive="#ff7b00" emissiveIntensity={3} transparent opacity={0.9} /></mesh>
-      <pointLight position={[0, 0.4, 0]} intensity={2.5} distance={7} color="#ff9a3c" />
     </group>
   );
 }
@@ -550,9 +549,9 @@ function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string
   const screen = useScreen(p.team, p.accent, text);
   const mats = useRef<MeshStandardMaterial[]>([]);
   useFrame(({ clock }) => { for (const m of mats.current) if (m) m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2; });
-  const wall = FACADE[look.facade].wall, stone = stoneOf(look);
+  const wall = p.wall, stone = stoneOf(look);
   const FRAME: Record<Board['frame'], string> = { steel: '#2a2e33', team: mix(p.team, '#15181c', 0.35), classic: '#1f3b2d', glass: '#e4e9ee', stone };
-  const steel = <meshStandardMaterial color="#8d949b" roughness={0.5} />;
+  const steel = <meshStandardMaterial color={mix(p.steel, '#000000', 0.3)} roughness={0.5} />;
   let n = 0;
   const face = (w: number, h: number, z: number, ry = 0, key?: string, dim = false) => {
     const i = n++;
@@ -641,7 +640,7 @@ function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string
     return (
       <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
         {mount(b)}
-        <mesh castShadow><boxGeometry args={[w + pad, h + pad, depth]} /><meshStandardMaterial color={FRAME[b.frame]} roughness={b.frame === 'glass' ? 0.2 : 0.7} /></mesh>
+        <mesh castShadow><boxGeometry args={[w + pad, h + pad, depth]} /><meshStandardMaterial color={p.boards ?? FRAME[b.frame]} roughness={b.frame === 'glass' ? 0.2 : 0.7} /></mesh>
         {b.frame === 'team' && <mesh position={[0, h / 2 + pad / 2 + 0.02, 0]}><boxGeometry args={[w + pad, 0.04, 0.13]} /><meshStandardMaterial color={p.accent} /></mesh>}
         {b.frame === 'stone' && <mesh position={[0, h / 2 + pad / 2 + 0.03, 0]}><boxGeometry args={[w + pad + 0.14, 0.06, 0.24]} /><meshStandardMaterial color={stone} /></mesh>}
         {/* The screen sits just proud of its frame, which is deeper in stone than in steel. */}
@@ -654,15 +653,20 @@ function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string
 }
 
 function LightTowers({ at, color, on }: { at: [number, number, number][]; color: string; on: boolean }) {
+  // The glow is the lamps' own: a point light per tower would cost every pixel on screen four more lights.
+  const { poles, heads } = useMemo(() => {
+    const poles: Matrix4[] = [], heads: Matrix4[] = [];
+    for (const [x, z, h] of at) {
+      const g = mat(null, [x, 0, z], [0, Math.atan2(-x, -z), 0]);
+      poles.push(mat(g, [0, h / 2, 0], [0, 0, 0], [1, h, 1]));
+      heads.push(mat(g, [0, h, 0]));
+    }
+    return { poles, heads };
+  }, [at]);
   return (
     <>
-      {at.map(([x, z, h]) => (
-        <group key={`${x}${z}`} position={[x, 0, z]} rotation-y={Math.atan2(-x, -z)}>
-          <mesh position={[0, h / 2, 0]} castShadow><cylinderGeometry args={[0.04, 0.06, h, 8]} /><meshStandardMaterial color="#9aa1a8" metalness={0.6} roughness={0.4} /></mesh>
-          <mesh position={[0, h, 0]}><boxGeometry args={[0.45, 0.25, 0.08]} /><meshStandardMaterial color="#fffbe6" emissive={on ? color : '#000000'} emissiveIntensity={on ? 2 : 0} /></mesh>
-          {on && <pointLight position={[0, h, 0]} intensity={3} distance={12} color={color} />}
-        </group>
-      ))}
+      <Placed matrices={poles} cast><cylinderGeometry args={[0.04, 0.06, 1, 8]} /><meshStandardMaterial color="#9aa1a8" metalness={0.6} roughness={0.4} /></Placed>
+      <Placed matrices={heads}><boxGeometry args={[0.45, 0.25, 0.08]} /><meshStandardMaterial color="#fffbe6" emissive={on ? color : '#000000'} emissiveIntensity={on ? 2 : 0} /></Placed>
     </>
   );
 }
@@ -718,12 +722,35 @@ function Pyro({ bp }: { bp: Blueprint }) {
 
 // ── The scene ───────────────────────────────────────────────────────────────
 
-function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen, hour }: StadiumProps & { hour: number }) {
+/**
+ * Shadows drawn only when something has changed, not every frame: the light
+ * barely moves, and nothing that moves casts one. After a change (a build, a
+ * new look, another hour) they redraw for a few seconds while the pieces
+ * grow in or the roof slides, then hold.
+ */
+function ShadowRig({ dirty }: { dirty: string }) {
+  const gl = useThree(s => s.gl);
+  const clock = useRef(0), until = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    until.current = clock.current + 4;
+  }, [gl, dirty]);
+  useFrame((_, delta) => {
+    clock.current += delta;
+    if (clock.current < until.current) gl.shadowMap.needsUpdate = true;
+  });
+  return null;
+}
+
+function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen, hour, quality }: StadiumProps & { hour: number; quality: Quality }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
   const sky = skyFor(hour);
+  const tone = useMemo(() => ({ horizon: sky.sky, zenith: sky.zenith, sun: sky.sun, glow: sky.sunColor, night: sky.night }), [hour]); // eslint-disable-line react-hooks/exhaustive-deps
   const bp = useMemo(() => blueprint(look.style, f), [look.style, f]);
   const p = useMemo(() => palette(look, color), [look, color]);
+  const crowdHex = useMemo(() => p.crowd.map(c => `#${c.getHexString()}`), [p]);
   const o = bp.outline;
   const team = teamName || name;
   const build = `${look.style}-${f.stadium}-${f.seating}-${f.suites}`;
@@ -738,17 +765,18 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
   return (
     <>
       <color attach="background" args={[sky.sky]} />
-      <fog attach="fog" args={[sky.sky, 30, 66]} />
+      <fogExp2 attach="fog" args={[sky.sky, HAZE]} />
       <hemisphereLight args={['#ffffff', mix(GROUND[look.setting].grass, '#b9b4a8', 0.45), sky.ambient]} />
-      <directionalLight position={sky.sun} intensity={sky.sunIntensity} color={sky.sunColor} castShadow
-        shadow-mapSize={[2048, 2048]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
-      {sky.night > 0.4 && <Stars radius={80} depth={30} count={2500} factor={3} fade speed={0.4} />}
+      <directionalLight position={sky.sun} intensity={sky.sunIntensity} color={sky.sunColor} castShadow={quality.shadows > 0}
+        shadow-mapSize={[quality.shadows || 512, quality.shadows || 512]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+      {quality.shadows > 0 && <ShadowRig dirty={`${build}|${JSON.stringify(look)}|${Math.round(hour * 4)}|${f.parking}|${Math.round(fill * 20)}|${closed}`} />}
+      {sky.night > 0.4 && <Stars radius={80} depth={30} count={Math.round(2500 * quality.detail)} factor={3} fade speed={0.4} />}
 
-      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={fill} night={sky.night} setting={look.setting} />
+      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={fill} night={sky.night} sky={tone} detail={quality.detail} look={look} team={p.team} accent={p.accent} crowd={crowdHex} />
 
       {/* The floor of the bowl, the wall around the field with a stripe, and the field. */}
       <Ribbon o={o} k={`floor${bp.inner}${apron}`} profile={() => [[0, 0.008], [bp.inner + 0.02, 0.008]]}><meshStandardMaterial color={apron} roughness={0.95} /></Ribbon>
-      <Ribbon o={o} k={`podium${bp.inner}`} profile={() => [[bp.inner, 0], [bp.inner, PODIUM]]}><meshStandardMaterial color="#1d2733" side={DoubleSide} roughness={0.7} /></Ribbon>
+      <Ribbon o={o} k={`podium${bp.inner}`} profile={() => [[bp.inner, 0], [bp.inner, PODIUM]]}><meshStandardMaterial color={p.podium} side={DoubleSide} roughness={0.7} /></Ribbon>
       <Ribbon o={o} k={`stripe${bp.inner}`} profile={() => [[bp.inner - 0.005, PODIUM - 0.025], [bp.inner - 0.005, PODIUM - 0.005]]}><meshStandardMaterial color={p.team} side={DoubleSide} /></Ribbon>
       {bp.ribbon && (
         <Ribbon o={o} k={`ribbon${bp.inner}`} profile={() => [[bp.inner - 0.006, 0.02], [bp.inner - 0.006, PODIUM - 0.035]]}>
@@ -758,7 +786,7 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
       <Gridiron look={look} color={color} team={team} logo={logo} />
 
       {bp.berm && <Berm bp={bp} setting={look.setting} />}
-      <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={FACADE[look.facade].wall} /></Rise>
+      <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={p.wall} /></Rise>
       <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={p.crowd} />
       <Rise key={`ext${build}`} delay={0.1}><Facades bp={bp} look={look} p={p} night={sky.night} /></Rise>
       {bp.suites.length > 0 && <Rise key={`s${build}`}><Suites bp={bp} night={sky.night} /></Rise>}
@@ -774,7 +802,8 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
       {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} /></Rise>}
       <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
       {/* With the lights on, the bowl glows. */}
-      {lightsOn && <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={6 + sky.night * 10} distance={14} color={p.light} />}
+      {/* Always there, only dimmed by day: adding or removing a light recompiles every material in the scene, a visible hitch. */}
+      <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={lightsOn ? 9 + sky.night * 12 : 0} distance={16} color={p.light} />
 
       {/* Concessions and restrooms line the plaza; the store sits by the west gate. */}
       <Rise key={`c${f.concessions}${build}`}>
@@ -819,8 +848,15 @@ export default function Stadium3D(props: StadiumProps) {
   const box = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(true);
   const [ok, setOk] = useState<boolean | null>(null);
+  const [quality, setQuality] = useState<Quality | null>(null);
+  const [dpr, setDpr] = useState(1);
   const hour = useLocalHour(props.hour);
-  useEffect(() => { setOk(webglOk()); }, []);
+  useEffect(() => {
+    setOk(webglOk());
+    const q = detectQuality();
+    setQuality(q);
+    setDpr(Math.min(window.devicePixelRatio || 1, q.maxDpr));
+  }, []);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -835,10 +871,15 @@ export default function Stadium3D(props: StadiumProps) {
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-sky-200 to-emerald-200 text-center dark:from-slate-800 dark:to-emerald-950">
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
         </div>
-      ) : ok ? (
-        <Canvas shadows dpr={[1, 2]} frameloop={visible ? 'always' : 'never'} camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38 }}>
-          <Scene {...props} hour={hour} />
-          <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={42} maxPolarAngle={Math.PI / 2.15} target={props.view?.target ?? [0, 0.8, 0]} />
+      ) : ok && quality ? (
+        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={visible ? 'always' : 'never'}
+          gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false }}
+          camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
+          {/* Fewer pixels when frames start to drop, more again once there's room. */}
+          <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
+            onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />
+          <Scene {...props} hour={hour} quality={quality} />
+          <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />
         </Canvas>
       ) : null}
     </div>

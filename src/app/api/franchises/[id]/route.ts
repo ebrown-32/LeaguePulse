@@ -22,6 +22,21 @@ async function context(id: string) {
   return { site, store, franchiseId: decodeURIComponent(id) };
 }
 
+/**
+ * The color a franchise without one of its own wears: the same one the league's
+ * franchise list gives it (seededColors over the league's unpicked teams).
+ */
+async function leagueColor(site: string, franchiseId: string): Promise<string | null> {
+  const [{ listFranchises }, { getFranchises }, { seededColors }] = await Promise.all([
+    import('@/lib/archive/franchises'), import('@/lib/franchise/store'), import('@/lib/franchise/seededLook'),
+  ]);
+  const list = await listFranchises(site).catch(() => null);
+  const ids = list?.map(f => f.franchiseId) ?? [];
+  if (!ids.includes(franchiseId)) ids.push(franchiseId);
+  const picked = await getFranchises(site, ids).catch(() => new Map());
+  return seededColors(ids.filter(id => !picked.get(id)?.color)).get(franchiseId) ?? null;
+}
+
 /** May this request edit the franchise? Its manager's pass, or the league's admin. */
 async function canEdit(req: Request, site: string, franchiseId: string): Promise<boolean> {
   const { verifyManagerPass } = await import('@/lib/franchise/managerPass');
@@ -45,7 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const accounts = accountsEnabled() && site !== 'self';
     return NextResponse.json({
       franchiseId,
-      identity: { color: f.color, motto: f.motto, bio: f.bio, stadiumName: f.stadiumName, look: f.look ? normalizeLook(f.look) : null, logoUrl: f.logoVersion ? `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${f.logoVersion}` : null },
+      identity: { color: f.color ?? await leagueColor(site, franchiseId), motto: f.motto, bio: f.bio, stadiumName: f.stadiumName, look: f.look ? normalizeLook(f.look) : null, logoUrl: f.logoVersion ? `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${f.logoVersion}` : null },
       manager: f.manager ? { name: f.manager.name } : null,
       pendingClaims: claims.filter(c => c.franchiseId === franchiseId).length,
       claimUrl: accounts && !f.manager ? product + links.claimPath(site, franchiseId) : null,

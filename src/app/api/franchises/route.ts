@@ -15,9 +15,15 @@ export async function GET() {
     const list = await listFranchises(site);
     if (!list) return NextResponse.json({ archived: false, franchises: [] });
     const identities = await franchiseIdentities(site, list.map(f => f.franchiseId));
+    // Teams whose manager hasn't picked a color get one of their own, each different from the league's other unpicked teams.
+    const { seededColors } = await import('@/lib/franchise/seededLook');
+    const seeded = seededColors(list.map(f => f.franchiseId).filter(id => !identities.get(id)?.color));
     return NextResponse.json({
       archived: true,
-      franchises: list.map(f => ({ ...f, ...(identities.get(f.franchiseId) ?? blank) })),
+      franchises: list.map(f => {
+        const own = identities.get(f.franchiseId) ?? blank;
+        return { ...f, ...own, color: own.color ?? seeded.get(f.franchiseId) ?? null };
+      }),
     }, { headers: { 'cache-control': 'private, max-age=60' } });
   } catch (err) {
     console.error('[api/franchises]', err);

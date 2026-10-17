@@ -25,6 +25,8 @@ export interface RibbonOptions {
   color?: (a: number, k: number) => Color;
   /** Close a partial sweep at both ends, down to the ground. */
   caps?: boolean;
+  /** Texture coordinates from the plan position (x and z over this), for a texture laid flat like paving. */
+  planarUV?: number;
 }
 
 export function ribbonGeometry(o: Outline, from: number, to: number, profile: (a: number) => Pt[], opts: RibbonOptions = {}): BufferGeometry {
@@ -35,8 +37,13 @@ export function ribbonGeometry(o: Outline, from: number, to: number, profile: (a
   const pos: number[] = [];
   const col: number[] = [];
   const point = (a: number, [r, y]: Pt) => { const [dx, dz] = o.dir(a); return [dx * r, y, dz * r]; };
+  const uv: number[] = [];
   const tri = (p: number[][], c?: Color) => {
-    for (const v of p) { pos.push(v[0], v[1], v[2]); if (c) col.push(c.r, c.g, c.b); }
+    for (const v of p) {
+      pos.push(v[0], v[1], v[2]);
+      if (c) col.push(c.r, c.g, c.b);
+      if (opts.planarUV) uv.push(v[0] / opts.planarUV, v[2] / opts.planarUV);
+    }
   };
 
   for (let i = 0; i < segs; i++) {
@@ -64,6 +71,7 @@ export function ribbonGeometry(o: Outline, from: number, to: number, profile: (a
   const g = new BufferGeometry();
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
   if (col.length) g.setAttribute('color', new Float32BufferAttribute(col, 3));
+  if (uv.length) g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
   g.computeVertexNormals();
   return g;
 }

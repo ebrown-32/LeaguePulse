@@ -20,6 +20,7 @@ import { StadiumMark } from '@/components/platform/marks';
 import { projectGame, type Prices } from '@/lib/tycoon/economy';
 import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
 import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
+import { seededLook } from '@/lib/franchise/seededLook';
 import { STYLES, styleBuild, type StadiumStyle } from '@/lib/franchise/stadiumStyles';
 import { FULLY_BUILT, lookSummary, PreviewControls, StadiumStudio } from './StadiumStudio';
 import { CHART_VARS, CrowdsChart, DemandCharts, InterestChart, RevenueChart, VCChart } from './charts';
@@ -76,7 +77,8 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   children?: React.ReactNode;
 }) {
   // On the manage page the studio below the stadium changes these live, before saving.
-  const savedLook = useMemo(() => normalizeLook(look), [look]);
+  // Nobody has dressed it yet: the franchise's own stadium, picked from its id (the same every time).
+  const savedLook = useMemo(() => (look ? normalizeLook(look) : seededLook(franchiseId)), [look, franchiseId]);
   const [draftLook, setDraftLook] = useState<StadiumLook>(savedLook);
   const [fullBuild, setFullBuild] = useState(false);
   const [draftName, setDraftName] = useState(stadiumName ?? '');
