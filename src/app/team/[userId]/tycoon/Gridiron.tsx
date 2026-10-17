@@ -200,6 +200,7 @@ function Pieces({ items, size, cast = true }: { items: Piece[]; size: [number, n
       d.updateMatrix(); m.setMatrixAt(i, d.matrix); m.setColorAt(i, new Color(it.c));
     });
     m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }, [items]);
   return (
@@ -239,7 +240,15 @@ const SCRIMMAGE = -15; // the offense on its own 35, going toward +x
  * Next's image route): a picture from another site would taint the canvas and
  * WebGL would refuse it.
  */
-export function Gridiron({ look, color, team, logo }: { look: StadiumLook; color: string; team: string; logo?: string | null }) {
+/** What's on the field: the game in progress, the two teams warming up before it, or nobody. */
+export type FieldScene = 'game' | 'warmup' | 'empty';
+
+export function Gridiron({ look, color, team, logo, visitors, scene = 'game' }: {
+  look: StadiumLook; color: string; team: string; logo?: string | null;
+  /** The visiting team's color, for its jerseys (white when unknown, as road teams wear). */
+  visitors?: string;
+  scene?: FieldScene;
+}) {
   const aniso = useThree(s => s.gl.capabilities.getMaxAnisotropy());
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -261,29 +270,38 @@ export function Gridiron({ look, color, team, logo }: { look: StadiumLook; color
   const { bodies, helmets, pylons, sticks, benches } = useMemo(() => {
     const r = rng(23);
     const home = color, homeHelmet = `#${new Color(color).multiplyScalar(0.55).getHexString()}`;
+    const away = visitors ?? '#f2f2f2', awayHelmet = visitors ? `#${new Color(visitors).multiplyScalar(0.55).getHexString()}` : '#8a9099';
     const bodies: Piece[] = [], helmets: Piece[] = [];
     const person = (x: number, z: number, jersey: string, helmet: string) => {
       bodies.push({ x, y: 0.75, z, c: jersey }); helmets.push({ x, y: 1.7, z, c: helmet });
     };
-    // Eleven on each side of the ball.
-    const offense: [number, number][] = [[-0.6, 0], [-0.8, 1.3], [-0.8, -1.3], [-1, 2.6], [-1, -2.6], [-1, 3.9], [-0.8, 20], [-0.8, -20], [-1.5, -14], [-5, 0], [-5.5, 1.6]];
-    const defense: [number, number][] = [[1, 1], [1, -1], [1, 3.2], [1, -3.2], [5, 2.2], [5, -2.2], [6, 20], [6, -20], [5, -14], [12, 8], [12, -8]];
-    for (const [dx, z] of offense) person(SCRIMMAGE + dx, z, home, homeHelmet);
-    for (const [dx, z] of defense) person(SCRIMMAGE + dx, z, '#f2f2f2', '#8a9099');
-    // The officials, in stripes that read gray from the stands.
-    for (const [x, z] of [[-27, 2], [-8, -3.5], [SCRIMMAGE, HALF + 0.8], [SCRIMMAGE, -HALF - 0.8], [2, 0], [5, 18], [5, -18]] as [number, number][]) person(x, z, '#a3a3a3', '#141414');
-    // Both sidelines, the home team on the near side.
-    for (const s of [1, -1]) for (let i = 0; i < 40; i++) {
-      person(-17 + r() * 34, s * (HALF + 4.4 + r() * 2.8), s > 0 ? home : '#f2f2f2', s > 0 ? homeHelmet : '#8a9099');
+    if (scene === 'game') {
+      // Eleven on each side of the ball.
+      const offense: [number, number][] = [[-0.6, 0], [-0.8, 1.3], [-0.8, -1.3], [-1, 2.6], [-1, -2.6], [-1, 3.9], [-0.8, 20], [-0.8, -20], [-1.5, -14], [-5, 0], [-5.5, 1.6]];
+      const defense: [number, number][] = [[1, 1], [1, -1], [1, 3.2], [1, -3.2], [5, 2.2], [5, -2.2], [6, 20], [6, -20], [5, -14], [12, 8], [12, -8]];
+      for (const [dx, z] of offense) person(SCRIMMAGE + dx, z, home, homeHelmet);
+      for (const [dx, z] of defense) person(SCRIMMAGE + dx, z, away, awayHelmet);
+      // The officials, in stripes that read gray from the stands.
+      for (const [x, z] of [[-27, 2], [-8, -3.5], [SCRIMMAGE, HALF + 0.8], [SCRIMMAGE, -HALF - 0.8], [2, 0], [5, 18], [5, -18]] as [number, number][]) person(x, z, '#a3a3a3', '#141414');
+      // Both sidelines, the home team on the near side.
+      for (const s of [1, -1]) for (let i = 0; i < 40; i++) {
+        person(-17 + r() * 34, s * (HALF + 4.4 + r() * 2.8), s > 0 ? home : away, s > 0 ? homeHelmet : awayHelmet);
+      }
+    } else if (scene === 'warmup') {
+      // Each team stretching in rows on its own half, a few throwing on the hash marks.
+      for (const [side, jersey, helmet] of [[-1, home, homeHelmet], [1, away, awayHelmet]] as const) {
+        for (let row = 0; row < 5; row++) for (let k = 0; k < 9; k++) person(side * (14 + row * 4.5), -16 + k * 4, jersey, helmet);
+        for (let k = 0; k < 6; k++) person(side * (6 + r() * 8), (r() - 0.5) * 30, jersey, helmet);
+      }
     }
     const pylons: Piece[] = [];
     for (const x of [-60, -50, 50, 60]) for (const z of [-HALF, HALF]) pylons.push({ x, y: 0.5, z, c: '#ff6a1a' });
     // The chain crew on the far sideline: the rods ten yards apart, the down box at the ball.
-    const sticks: Piece[] = [SCRIMMAGE, SCRIMMAGE + 10, SCRIMMAGE].map((x, i) => ({ x, y: 1.4, z: -HALF - 2.6 - (i === 2 ? 0.8 : 0), c: '#ff6a1a' }));
+    const sticks: Piece[] = scene !== 'game' ? [] : [SCRIMMAGE, SCRIMMAGE + 10, SCRIMMAGE].map((x, i) => ({ x, y: 1.4, z: -HALF - 2.6 - (i === 2 ? 0.8 : 0), c: '#ff6a1a' }));
     const benches: Piece[] = [];
     for (const s of [1, -1]) for (let k = 0; k < 6; k++) benches.push({ x: -13.5 + k * 5.4, y: 0.3, z: s * (HALF + 7.4), c: s > 0 ? color : '#5b6470' });
     return { bodies, helmets, pylons, sticks, benches };
-  }, [color]);
+  }, [color, visitors, scene]);
 
   return (
     <group>

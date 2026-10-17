@@ -21,6 +21,7 @@ import {
   CrownIcon, Trophy, Ticket, Zap, Sword, Scale, ArrowRight, type Icon,
 } from '@/components/icons';
 import { winLabel } from './MatchupForecastView';
+import MatchupStadium from './MatchupStadium';
 import type { MatchupTarget } from './MatchupDetailModal';
 import type { GameOfWeek, GotwSignal } from '@/lib/gameOfWeek';
 import type { MatchupForecast } from '@/lib/sim/matchupOdds';
@@ -138,6 +139,9 @@ export default function GameOfWeekCard({ week, onOpen, onPick, className }: {
             <span>proj {(status === 'upcoming' ? pick.b.projected : f!.b.projectedFinal).toFixed(1)}</span>
           </div>
         )}
+
+        {/* Where it's played: the host's stadium on game day. */}
+        <MatchupStadium a={target.a} b={target.b} week={pick.week} className="mt-5 h-56 sm:h-72" />
 
         {/* Why this one */}
         <ul className="mt-5 flex flex-wrap gap-2">

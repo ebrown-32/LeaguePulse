@@ -30,7 +30,7 @@ import {
   ArrowSquareOut, Funnel, Fire, Flask, Gavel as PGavel, GitBranch as PGitBranch,
   GithubLogo, DotsSixVertical, Heart as PHeart, House, Info as PInfo, Stack, SquaresFour,
   ChartLine, ListNumbers, Lock as PLock, ArrowsOut, Megaphone as PMegaphone, List,
-  ChatCircle, ArrowsIn, Minus as PMinus, Moon as PMoon, CursorClick, Newspaper as PNewspaper,
+  ChatCircle, ArrowsIn, Minus as PMinus, Moon as PMoon, CursorClick, Newspaper as PNewspaper, Camera as PCamera,
   Plus as PPlus, Broadcast, Receipt as PReceipt, ArrowsClockwise, Repeat, RocketLaunch,
   ArrowCounterClockwise, Scales, Scroll as PScroll, MagnifyingGlass, GearSix, ShareNetwork,
   ShieldCheck as PShieldCheck, TShirt, Shuffle as PShuffle, SlidersHorizontal as PSliders,
@@ -87,6 +87,7 @@ export const Megaphone       = duo(PMegaphone, 'Megaphone');
 export const MessageCircle   = duo(ChatCircle, 'MessageCircle');
 export const MousePointerClick = duo(CursorClick, 'MousePointerClick');
 export const Newspaper       = duo(PNewspaper, 'Newspaper');
+export const Camera          = duo(PCamera, 'Camera');
 export const Radio           = duo(Broadcast, 'Radio');
 export const Receipt         = duo(PReceipt, 'Receipt');
 export const Rocket          = duo(RocketLaunch, 'Rocket');

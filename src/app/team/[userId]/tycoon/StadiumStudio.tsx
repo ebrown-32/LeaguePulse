@@ -14,6 +14,7 @@
  *                 tailgate in the lots, the plaza's paving and the extras
  */
 
+import { defaultStadiumName } from '@/lib/franchise/stadiumName';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -135,7 +136,7 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className={cn('min-w-0 basis-full sm:basis-auto sm:flex-1', !compact && 'sm:max-w-sm')}>
           <label className="block text-[12.5px] font-medium text-muted-foreground" htmlFor="stadium-name">Stadium name</label>
-          <input id="stadium-name" value={name} onChange={e => { setMsg(null); onName(e.target.value); }} maxLength={LIMITS.stadiumName} placeholder="Fight Milk Coliseum"
+          <input id="stadium-name" value={name} onChange={e => { setMsg(null); onName(e.target.value); }} maxLength={LIMITS.stadiumName} placeholder={defaultStadiumName(franchiseId, teamName)}
             className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-[15px] outline-none focus:border-foreground/40" />
         </div>
         <div className="flex gap-2">

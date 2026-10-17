@@ -1185,6 +1185,70 @@ your own voice. It is a preview: nothing in this game has happened yet.`;
   };
 }
 
+const PhotoCaptionSchema = z.object({
+  caption: z.string().describe('The caption under the photo, under 240 characters.'),
+});
+
+/** What a desk photographer's shot shows, for its caption. */
+export interface PhotoMoment {
+  shot: 'exterior' | 'drone' | 'tailgate' | 'crowd' | 'warmup' | 'interview' | 'aerial';
+  stage: 'quiet' | 'tailgating' | 'gates' | 'live' | 'final';
+  host: { teamName: string; record: string };
+  guest: { teamName: string; record: string };
+  stadium: string;
+  /** The crowd the host's stadium projects for this game, and its seats. */
+  attendance: number | null;
+  capacity: number | null;
+  /** Hours to the week's first kickoff (negative once it has passed). */
+  hours: number;
+  gameOfWeek: boolean;
+  /** A playoff game: "the championship game", "a playoff semifinal"... */
+  occasion?: string | null;
+}
+
+const SHOT_WORDS: Record<PhotoMoment['shot'], string> = {
+  exterior: 'the stadium from across the plaza',
+  drone: 'a drone shot looking straight down on the tailgates in the parking lot',
+  tailgate: 'a photo from among the tailgate tents, the stadium behind',
+  crowd: 'a photo from the field looking up into the stands',
+  warmup: 'both teams warming up on the field, in their colors',
+  interview: 'a selfie of you on the sideline, there to interview people before the game',
+  aerial: 'an aerial shot of the whole stadium',
+};
+const STAGE_WORDS: Record<PhotoMoment['stage'], string> = {
+  quiet: 'days before the game, the lots still empty',
+  tailgating: 'game day, the lots filling with tailgates',
+  gates: 'the gates are open and the stands are filling',
+  live: 'the game is on',
+  final: 'the game is over and fans are heading home',
+};
+
+/**
+ * A caption for a photo the writer took at the stadium. The photo is the host's
+ * real 3D stadium on game day (lib/franchise/photo); the caption is about what
+ * is in it: the crowd, the scene, the game.
+ */
+export async function writePhotoCaption(p: Personality, m: PhotoMoment): Promise<{ caption: string }> {
+  const when = m.hours > 0 ? `${m.hours >= 30 ? `${Math.round(m.hours / 24)} days` : `${Math.round(m.hours)} hours`} before kickoff` : 'during the game';
+  const prompt = `${await briefBlock()}
+
+YOU ARE AT THE STADIUM. You took a photo and are posting it to the league feed.
+The photo: ${SHOT_WORDS[m.shot]}.
+Where: ${m.stadium}, home of ${m.host.teamName} (${m.host.record}), hosting ${m.guest.teamName} (${m.guest.record})${m.occasion ? `, in ${m.occasion}` : m.gameOfWeek ? ', this week\'s Game of the Week' : ''}.
+When: ${STAGE_WORDS[m.stage]}, ${when}.
+${m.attendance && m.capacity ? `The crowd: ${m.attendance.toLocaleString('en-US')} expected in a stadium that seats ${m.capacity.toLocaleString('en-US')}${m.attendance >= m.capacity * 0.98 ? ' (a sellout)' : ''}.` : ''}
+
+Write the caption, in your own voice, under 240 characters. Describe the scene
+and the atmosphere: the crowd, the tailgates, the noise, what it feels like to be
+there. You may use the crowd numbers above exactly as given, and nothing else
+that is not in this prompt or the context. No hashtags.`;
+  const write = (extra = '') => generateJson({
+    schema: PhotoCaptionSchema, probe: 'caption', model: MODEL_FAST, maxOutputTokens: 800,
+    system: systemFor(p), prompt: extra ? `${prompt}\n\n${extra}` : prompt,
+  }).then(r => stripDashes(r));
+  return publishable(await write(), async correction => write(correction));
+}
+
 function ordinalOf(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);

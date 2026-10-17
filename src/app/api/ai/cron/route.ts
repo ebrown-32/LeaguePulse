@@ -4,8 +4,9 @@ import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
 import {
   writeArticle, writeTweet, writePowerRankings, writePredictions,
-  writeMatchupPreview, writeGameBeat, writeGameOfWeek, angleAt,
+  writeMatchupPreview, writeGameBeat, writeGameOfWeek, writePhotoCaption, angleAt,
 } from '@/lib/ai/generate';
+import { planPhoto } from '@/lib/ai/photos';
 import { gameOfWeek, type GameOfWeek } from '@/lib/gameOfWeek';
 import { getCurrentLeagueId } from '@/config/league';
 import { resolveGameWindow, isGameTime } from '@/lib/ai/gameWindows';
@@ -444,7 +445,7 @@ async function runForLeague(request: Request): Promise<Response> {
   const times = clampToWaking(scheduleTimes(POSTS_PER_RUN, startAt));
 
   type PlannedKind =
-    'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview' | 'gameOfWeek';
+    'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview' | 'gameOfWeek' | 'photo';
   const plan: { kind: PlannedKind; persona: Personality }[] = [];
 
   /**
@@ -512,6 +513,21 @@ async function runForLeague(request: Request): Promise<Response> {
     plan.push({ kind, persona });
   }
 
+  /**
+   * Now and then, around the week's biggest game, a photo from the host's
+   * stadium in place of the batch's last short post (lib/ai/photos decides
+   * when one is due and what it shows). Taken by a writer, never a fan.
+   */
+  const lastTweet = plan.map(x => x.kind).lastIndexOf('tweet');
+  const photo = lastTweet > 0
+    ? await planPhoto(times[Math.min(lastTweet, times.length - 1)]).catch(err => { console.error('[api/ai/cron] photo:', err); return null; })
+    : null;
+  if (photo) {
+    const media = rotation.filter(p => (p.type ?? 'media') === 'media');
+    const photographer = media.find(p => !plan.some(x => x.persona.id === p.id)) ?? media[0];
+    if (photographer) plan[lastTweet] = { kind: 'photo', persona: photographer };
+  }
+
   // Advances for every subject-bearing piece in this batch.
   let subjectCursor = 0;
   const written: { kind: string; persona: string; publishAt: string }[] = [];
@@ -549,6 +565,7 @@ async function runForLeague(request: Request): Promise<Response> {
         kind === 'predictions'    ? await writePredictions(persona) :
         kind === 'matchupPreview' ? await writeMatchupPreview(persona, previewWeek) :
         kind === 'gameOfWeek'     ? await writeGameOfWeek(persona, gotw!) :
+        kind === 'photo'          ? { ...(await writePhotoCaption(persona, photo!.moment)), photo: photo!.spec, hostTeam: photo!.hostTeam, hostAvatar: photo!.hostAvatar, guestTeam: photo!.guestTeam } :
                                     await writeTweet(persona, subject, angle);
       // Times are claimed by successful posts only. Indexing by loop position
       // meant a failed item burned slot 0, the one that publishes immediately,

@@ -35,7 +35,7 @@ import { accentOf, FACADE, stadiumColors } from '@/lib/franchise/stadiumColors';
 import {
   blueprint, outerOf, PODIUM, roofClosed, seatsFilled, seatSpots, topOf, OVAL, TAU, type Blueprint, type Board, type Stand,
 } from '@/lib/franchise/stadiumBlueprint';
-import { fieldColors, Gridiron, inkOn } from './Gridiron';
+import { fieldColors, Gridiron, inkOn, type FieldScene } from './Gridiron';
 import { Grounds, GROUND } from './Grounds';
 import { HAZE } from './campusLook';
 import { detectQuality, type Quality } from './quality';
@@ -53,6 +53,20 @@ export interface StadiumProps {
   hour?: number;
   /** Where the camera starts and looks, and whether it holds still (for a picture) rather than circling. */
   view?: { position: [number, number, number]; target?: [number, number, number]; fov?: number; still?: boolean };
+  /**
+   * How full the lots and the plaza are, 0 to 1, when it differs from the stands:
+   * on game day the tailgates fill up hours before the seats do (see lib/franchise/venue).
+   */
+  lots?: number;
+  /** The visiting team's color, worn by a share of the crowd and by its players. */
+  visitors?: string;
+  /** What's on the field (see Gridiron). */
+  field?: FieldScene;
+  /**
+   * For a photograph rather than a view: the picture kept after each frame so it can be
+   * read back (see components/desk/StadiumPhoto), full quality, and nothing that adapts.
+   */
+  photo?: boolean;
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -172,8 +186,9 @@ function Stands({ bp, p, fascia, wall }: { bp: Blueprint; p: Palette; fascia: st
  * full house costs nothing extra.
  */
 function Crowd({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Color[] }) {
+  // A game-day preview can have the stands truly empty; otherwise a stadium always shows a few fans.
   const spots = useMemo(() => seatSpots(bp), [bp]);
-  const shown = useMemo(() => seatsFilled(bp, spots, Math.max(0.03, fill)), [bp, spots, fill]);
+  const shown = useMemo(() => seatsFilled(bp, spots, fill), [bp, spots, fill]);
   const time = useMemo(() => ({ value: 0 }), []);
   const material = useMemo(() => {
     const m = new MeshStandardMaterial({ roughness: 0.7 });
@@ -203,6 +218,7 @@ function Crowd({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Colo
       m.setColorAt(i, colors[Math.floor(r() * colors.length)]);
     });
     m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }, [shown, colors]);
   useFrame(({ clock }) => { time.value = clock.elapsedTime; });
@@ -696,7 +712,7 @@ function People({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Col
     });
     m.instanceMatrix.needsUpdate = true;
   });
-  return <instancedMesh ref={mesh} args={[undefined, undefined, folk.length]} key={folk.length}><capsuleGeometry args={[0.035, 0.1, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
+  return <instancedMesh ref={mesh} args={[undefined, undefined, folk.length]} key={folk.length} frustumCulled={false}><capsuleGeometry args={[0.035, 0.1, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
 }
 
 function Pyro({ bp }: { bp: Blueprint }) {
@@ -754,6 +770,13 @@ type CamPose = { r: number; az: number; el: number; target: [number, number, num
 type CamShot = { from: CamPose; to: CamPose; dur: number; start: number };
 const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && !!(window as unknown as { __lpCam?: CamShot }).__lpCam;
 
+/** A photograph's camera: exactly where it was put, looking at its subject, at any height (the orbit controls keep above 15 degrees). */
+function FixedCamera({ target }: { target: [number, number, number] }) {
+  const camera = useThree(s => s.camera);
+  useEffect(() => { camera.lookAt(...target); camera.updateProjectionMatrix(); }, [camera, target]);
+  return null;
+}
+
 function ScriptedCamera() {
   useFrame(({ camera }) => {
     const shot = (window as unknown as { __lpCam?: CamShot }).__lpCam;
@@ -772,14 +795,17 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen, hour, quality }: StadiumProps & { hour: number; quality: Quality }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, name, teamName, logo, look: chosen, hour, quality }: StadiumProps & { hour: number; quality: Quality }) {
+  const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
   const sky = skyFor(hour);
   const tone = useMemo(() => ({ horizon: sky.sky, zenith: sky.zenith, sun: sky.sun, glow: sky.sunColor, night: sky.night }), [hour]); // eslint-disable-line react-hooks/exhaustive-deps
   const bp = useMemo(() => blueprint(look.style, f), [look.style, f]);
   const p = useMemo(() => palette(look, color), [look, color]);
-  const crowdHex = useMemo(() => p.crowd.map(c => `#${c.getHexString()}`), [p]);
+  // The visitors' fans: about one in five, in their team's color.
+  const crowdColors = useMemo(() => (visitors ? [...p.crowd, ...Array.from({ length: Math.max(1, Math.round(p.crowd.length / 4)) }, () => new Color(visitors))] : p.crowd), [p, visitors]);
+  const crowdHex = useMemo(() => crowdColors.map(c => `#${c.getHexString()}`), [crowdColors]);
   const o = bp.outline;
   const team = teamName || name;
   const build = `${look.style}-${f.stadium}-${f.seating}-${f.suites}`;
@@ -798,10 +824,10 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
       <hemisphereLight args={['#ffffff', mix(GROUND[look.setting].grass, '#b9b4a8', 0.45), sky.ambient]} />
       <directionalLight position={sky.sun} intensity={sky.sunIntensity} color={sky.sunColor} castShadow={quality.shadows > 0}
         shadow-mapSize={[quality.shadows || 512, quality.shadows || 512]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
-      {quality.shadows > 0 && <ShadowRig dirty={`${build}|${JSON.stringify(look)}|${Math.round(hour * 4)}|${f.parking}|${Math.round(fill * 20)}|${closed}`} />}
+      {quality.shadows > 0 && <ShadowRig dirty={`${build}|${JSON.stringify(look)}|${Math.round(hour * 4)}|${f.parking}|${Math.round(fill * 20)}|${Math.round(lots * 20)}|${closed}`} />}
       {sky.night > 0.4 && <Stars radius={80} depth={30} count={Math.round(2500 * quality.detail)} factor={3} fade speed={0.4} />}
 
-      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={fill} night={sky.night} sky={tone} detail={quality.detail} look={look} team={p.team} accent={p.accent} crowd={crowdHex} />
+      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={lots} night={sky.night} sky={tone} detail={quality.detail} look={look} team={p.team} accent={p.accent} crowd={crowdHex} />
 
       {/* The floor of the bowl, the wall around the field with a stripe, and the field. */}
       <Ribbon o={o} k={`floor${bp.inner}${apron}`} profile={() => [[0, 0.008], [bp.inner + 0.02, 0.008]]}><meshStandardMaterial color={apron} roughness={0.95} /></Ribbon>
@@ -812,11 +838,11 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
           <meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.9} side={DoubleSide} />
         </Ribbon>
       )}
-      <Gridiron look={look} color={color} team={team} logo={logo} />
+      <Gridiron look={look} color={color} team={team} logo={logo} visitors={visitors} scene={field} />
 
       {bp.berm && <Berm bp={bp} setting={look.setting} />}
       <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={p.wall} /></Rise>
-      <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={p.crowd} />
+      <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={crowdColors} />
       <Rise key={`ext${build}`} delay={0.1}><Facades bp={bp} look={look} p={p} night={sky.night} /></Rise>
       {bp.suites.length > 0 && <Rise key={`s${build}`}><Suites bp={bp} night={sky.night} /></Rise>}
       {bp.pressBox && <Rise key={`pb${build}`}><PressBox bp={bp} p={p} night={sky.night} /></Rise>}
@@ -857,7 +883,7 @@ function Scene({ facilities: f, fill, color, name, teamName, logo, look: chosen,
           </group>
         </Rise>
       )}
-      <People bp={bp} fill={fill} colors={p.crowd} />
+      <People bp={bp} fill={lots} colors={crowdColors} />
       {f.atmosphere >= 3 && <Pyro bp={bp} />}
     </>
   );
@@ -882,7 +908,7 @@ export default function Stadium3D(props: StadiumProps) {
   const hour = useLocalHour(props.hour);
   useEffect(() => {
     setOk(webglOk());
-    const q = detectQuality();
+    const q = props.photo ? { ...detectQuality(), tier: 'high' as const, maxDpr: 1, shadows: 2048 as const, detail: 1, antialias: true } : detectQuality();
     setQuality(q);
     setDpr(Math.min(window.devicePixelRatio || 1, q.maxDpr));
   }, []);
@@ -901,14 +927,14 @@ export default function Stadium3D(props: StadiumProps) {
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
         </div>
       ) : ok && quality ? (
-        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={visible ? 'always' : 'never'}
-          gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false }}
+        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={visible || props.photo ? 'always' : 'never'}
+          gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: !!props.photo }}
           camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
-          {!scripted() && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
+          {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
-          {scripted() ? <ScriptedCamera /> : <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
         </Canvas>
       ) : null}
     </div>

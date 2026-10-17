@@ -8,6 +8,7 @@
  * sections follow in the same list (children).
  */
 
+import { defaultStadiumName } from '@/lib/franchise/stadiumName';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { lockScroll } from '@/lib/scrollLock';
 import { createPortal } from 'react-dom';
@@ -30,6 +31,8 @@ const Stadium3D = dynamic(() => import('./Stadium3D'), { ssr: false, loading: ()
 interface Game {
   key: string; season: number; week: number; result: 'W' | 'L' | 'T'; points: number; oppPoints: number; opponent: string; postseason: boolean;
   attendance: number; capacity: number; interest: number;
+  /** Hosted, or on the road (lib/franchise/venue). */
+  home?: boolean;
   prices?: Prices; fairTicket?: number; revenue?: Record<string, number>; costs?: { operations: number }; profit?: number; interestChange?: number;
 }
 interface ShopItem {
@@ -127,7 +130,8 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
 
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
   if (!t.available) return identity || children ? <Sections>{identity}{children}</Sections> : null;
-  const last = t.games.at(-1);
+  // The last crowd it drew: road games filled the other team's stadium.
+  const last = [...t.games].reverse().find(g => g.home !== false);
   // The economy plays every archived season; the charts and the books show the latest one.
   const seasonNow = last?.season ?? null;
   const thisSeason = t.games.filter(g => g.season === seasonNow);
@@ -135,8 +139,8 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const tSeason = { ...t, games: thisSeason };
   const hue = color ?? '#2a78d6';
   const scope = mode === 'manage' ? 'manage' : 'team';
-  const shownName = (mode === 'manage' ? draftName : stadiumName) || t.stadium.stadiumName;
-  const custom = shownName !== t.stadium.stadiumName;
+  // The manager's name for it, or the franchise's own until they pick one; the tier (Sandlot to Monolith) underneath.
+  const shownName = (mode === 'manage' ? draftName : stadiumName) || defaultStadiumName(franchiseId, teamName);
   const lookNow = mode === 'manage' ? draftLook : savedLook;
   const previewing = mode === 'manage' && fullBuild;
   const stadium = (
@@ -164,7 +168,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3, duration: 0.6, ease: EASE }}>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">{teamName}</p>
             <p className="font-display text-xl font-bold leading-tight tracking-tight drop-shadow sm:text-2xl">{shownName}</p>
-            <p className="text-[12.5px] text-white/85 drop-shadow">{custom ? `${t.stadium.stadiumName}, ` : ''}{t.stadium.capacity.toLocaleString('en-US')} seats</p>
+            <p className="text-[12.5px] text-white/85 drop-shadow">{t.stadium.stadiumName}, {t.stadium.capacity.toLocaleString('en-US')} seats</p>
           </motion.div>
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4, duration: 0.6, ease: EASE }} className="text-right">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">Franchise value</p>
@@ -207,7 +211,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           <Section scope={scope} id="crowds" icon={BarChart3} title="Crowds and fans" index={0}
             summary={`${seasonNow} season, ${thisSeason.length} game day${thisSeason.length === 1 ? '' : 's'}${last ? `, last crowd ${Math.round(100 * last.attendance / last.capacity)}% full` : ''}${seasons > 1 ? `, ${seasons} seasons in all` : ''}`}>
             <div className="grid gap-3 md:grid-cols-2">
-              <CrowdsChart games={thisSeason} />
+              <CrowdsChart games={thisSeason.filter(g => g.home !== false)} />
               <InterestChart games={thisSeason} />
             </div>
           </Section>
@@ -512,7 +516,7 @@ function Ledger({ games }: { games: Game[] }) {
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[640px] text-[12.5px] tabular-nums">
           <thead className="text-left text-muted-foreground">
-            <tr>{['Week', 'Result', 'Ticket', 'Crowd', 'Tickets', 'Food', 'Parking', 'Suites', 'Sponsors', 'Costs', 'Profit', 'Fans'].map(h => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr>
+            <tr>{['Week', 'Result', 'Ticket', 'Crowd', 'Tickets', 'Food', 'Parking', 'Suites', 'Sponsors', 'Home date', 'Road', 'Costs', 'Profit', 'Fans'].map(h => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr>
           </thead>
           <tbody>
             {[...rows].reverse().map(g => (
@@ -520,8 +524,8 @@ function Ledger({ games }: { games: Game[] }) {
                 <td className="py-1.5 pr-3">{g.week}</td>
                 <td className="pr-3">{g.result} {g.points.toFixed(1)}</td>
                 <td className="pr-3">${g.prices!.ticket}</td>
-                <td className="pr-3">{Math.round(100 * g.attendance / g.capacity)}%</td>
-                {(['tickets', 'concessions', 'parking', 'suites', 'sponsors'] as const).map(k => <td key={k} className="pr-3">{money(g.revenue![k])}</td>)}
+                <td className="pr-3">{g.home === false ? 'Away' : `${Math.round(100 * g.attendance / g.capacity)}%`}</td>
+                {(['tickets', 'concessions', 'parking', 'suites', 'sponsors', 'premium', 'road'] as const).map(k => <td key={k} className="pr-3">{money(g.revenue![k] ?? 0)}</td>)}
                 <td className="pr-3">{money(g.costs!.operations)}</td>
                 <td className="pr-3 font-semibold">{money(g.profit!)}</td>
                 <td>{g.interestChange! > 0 ? '+' : ''}{g.interestChange}</td>

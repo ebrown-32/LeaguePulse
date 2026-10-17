@@ -17,7 +17,31 @@
 
 import { getRedis } from '@/lib/redisClient';
 import { ensureArchive, T } from '@/lib/archive/db';
-import { simulate, franchiseValue, DAY, type Decision, type EconomyState, type GameDay } from './economy';
+import { simulate, franchiseValue, DAY, REBALANCED_AT, type Decision, type EconomyState, type GameDay } from './economy';
+import { chooseHost, type MeetingResult, type TeamGame } from '@/lib/franchise/venue';
+
+/**
+ * ESPN's own home teams, for the season the league is playing now: `season-week-roster` -> home.
+ * Earlier seasons were archived before the flag was kept, and Sleeper never names one,
+ * so those follow LeaguePulse's rule. Empty when the league isn't on ESPN.
+ */
+async function providerHomes(rows: { season: number; week: number }[]): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  try {
+    const { getCurrentLeagueId } = await import('@/config/league');
+    const leagueId = await getCurrentLeagueId();
+    if (!leagueId.startsWith('espn')) return out;
+    const season = Math.max(0, ...rows.map(r => Number(r.season)));
+    const weeks = [...new Set(rows.filter(r => Number(r.season) === season).map(r => r.week))];
+    const { getLeagueMatchups } = await import('@/lib/api');
+    await Promise.all(weeks.map(async w => {
+      for (const r of await getLeagueMatchups(leagueId, w).catch(() => [] as any[])) {
+        if (typeof (r as any).is_home === 'boolean') out.set(`${season}-${w}-${(r as any).roster_id}`, (r as any).is_home);
+      }
+    }));
+  } catch { /* the rule decides */ }
+  return out;
+}
 
 /** NFL kickoff: the Thursday after Labor Day (the first Monday of September), in UTC. */
 export function kickoff(season: number): number {
@@ -48,7 +72,7 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
   for (const r of champs.rows) titles.set(r.id, [...(titles.get(r.id) ?? []), Number(r.season)]);
 
   const rows = await db.query(`
-      SELECT s.season, m.week, m.matchup_id, m.points::float AS points, t.owner_id AS id,
+      SELECT s.season, m.week, m.matchup_id, m.roster_id, m.points::float AS points, t.owner_id AS id,
         coalesce(t.team_name, mg.display_name, t.owner_id) AS name,
         coalesce((s.settings->>'playoff_week_start')::int, 0) AS playoff_start
       FROM ${T('matchups')} m JOIN ${T('seasons')} s USING (site, season_id)
@@ -67,6 +91,33 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
   }
   const record = new Map<string, { w: number; g: number }>(); // per season-franchise, before each game
   const games = new Map<string, GameDay[]>();
+
+  // Who hosted each game (lib/franchise/venue): the provider's home team where it names one,
+  // otherwise LeaguePulse's rule from the league's history, as the matchup pages decide it.
+  const teamGames = new Map<string, TeamGame[]>(), meetings = new Map<string, MeetingResult[]>();
+  const pair = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
+  for (const list of weeks.values()) for (const me of list) {
+    const opp = me.matchup_id == null ? null : list.find(o => o.matchup_id === me.matchup_id && o.id !== me.id);
+    if (!opp) continue;
+    const stage = me.playoff_start > 0 && me.week >= me.playoff_start ? 'playoff' : 'regular';
+    teamGames.set(me.id, [...(teamGames.get(me.id) ?? []), { season: String(me.season), week: me.week, stage, score: me.points, opponentScore: opp.points }]);
+    if (me.id < opp.id) meetings.set(pair(me.id, opp.id), [...(meetings.get(pair(me.id, opp.id)) ?? []), { season: String(me.season), week: me.week, stage }]);
+  }
+  const providerHome = await providerHomes(rows.rows);
+  const hostOf = new Map<string, string>(); // season-week-pair -> host
+  const hosted = (me: any, opp: any): boolean => {
+    const k = `${me.season}-${me.week}-${pair(me.id, opp.id)}`;
+    if (!hostOf.has(k)) {
+      const home = providerHome.get(`${me.season}-${me.week}-${me.roster_id}`) ? me.id
+        : providerHome.get(`${opp.season}-${opp.week}-${opp.roster_id}`) ? opp.id : null;
+      hostOf.set(k, chooseHost({
+        a: me.id, b: opp.id, season: String(me.season), week: me.week,
+        playoff: me.playoff_start > 0 && me.week >= me.playoff_start,
+        providerHome: home, meetings: meetings.get(pair(me.id, opp.id)) ?? [], gamesOf: id => teamGames.get(id) ?? [],
+      }).host);
+    }
+    return hostOf.get(k) === me.id;
+  };
   for (const [k, list] of [...weeks.entries()].sort(([a], [b]) => {
     const [sa, wa] = a.split('-').map(Number), [sb, wb] = b.split('-').map(Number);
     return sa - sb || wa - wb;
@@ -82,6 +133,7 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
         points: me.points, oppPoints: opp.points, postseason: me.playoff_start > 0 && me.week >= me.playoff_start,
         rank: sorted.findIndex(x => x.id === me.id) + 1, teams: list.length,
         opponent: opp.name, oppWinPct: oppRec.g ? oppRec.w / oppRec.g : 0.5,
+        home: hosted(me, opp),
       };
       games.set(me.id, [...(games.get(me.id) ?? []), game]);
       results.push([me.id, me.points > opp.points ? 1 : me.points === opp.points ? 0.5 : 0]);
@@ -123,7 +175,7 @@ export async function economyOf(site: string, franchiseId: string, now = Date.no
   const end = last && last.season < inputs.latestSeason ? Math.min(now, last.at + 7 * DAY) : now;
   return simulate({
     games, decisions: await decisionsOf(franchiseId), titles: inputs.titles.get(franchiseId) ?? [],
-    start: first ? kickoff(first.season) : end, now: end,
+    start: first ? kickoff(first.season) : end, now: end, grandfatherBefore: REBALANCED_AT,
   });
 }
 
@@ -134,7 +186,7 @@ export async function leaderboard(site: string, ids: string[], now = Date.now())
   return (await Promise.all(ids.map(async id => {
     const s = await economyOf(site, id, now);
     if (!s) return null;
-    const last = s.games.at(-1);
+    const last = [...s.games].reverse().find(g => g.home);
     return { franchiseId: id, value: franchiseValue(s), interest: Math.round(s.interest), facilities: s.facilities, lastAttendance: last?.attendance ?? null, capacity: last?.capacity ?? null };
   }))).filter((x): x is NonNullable<typeof x> => Boolean(x)).sort((a, b) => b.value - a.value);
 }

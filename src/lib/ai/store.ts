@@ -22,7 +22,7 @@ export interface FeedPost {
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-      | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek';
+      | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo';
   content: any;
   /** When it was generated. */
   createdAt: string;
@@ -224,6 +224,9 @@ async function readPosts(): Promise<FeedPost[]> {
   return readJson<FeedPost[]>(POSTS_KEY, POSTS_FILE, []);
 }
 
+/** Every stored post, queued ones included: for a writer checking what is already planned. */
+export const allPosts = (): Promise<FeedPost[]> => readPosts();
+
 export async function getPosts(limit = 60): Promise<FeedPost[]> {
   const all = await readPosts();
   const now = Date.now();
@@ -323,7 +326,7 @@ export async function deletePost(id: string): Promise<boolean> {
  * their own cadences, so neither should count as "the batch already ran".
  */
 const BATCH_KINDS = new Set<FeedPost['kind']>([
-  'article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview', 'gameOfWeek',
+  'article', 'tweet', 'powerRankings', 'predictions', 'matchupPreview', 'gameOfWeek', 'photo',
 ]);
 
 /**
