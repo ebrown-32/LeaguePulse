@@ -46,11 +46,12 @@ export function loadGround(host: string, guest: string, hostAvatar?: string | nu
   return cache.get(key)!;
 }
 
-export function useHostGround(host: string | null, guest: string | null, hostAvatar?: string | null): Ground | null {
-  const [ground, setGround] = useState<Ground | null>(null);
+/** The host's ground: undefined while it loads, null when there is none to draw (no Franchise HQ here). */
+export function useHostGround(host: string | null, guest: string | null, hostAvatar?: string | null): Ground | null | undefined {
+  const [ground, setGround] = useState<Ground | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
-    setGround(null);
+    setGround(undefined);
     if (host && guest) loadGround(host, guest, hostAvatar).then(g => { if (!cancelled) setGround(g); });
     return () => { cancelled = true; };
   }, [host, guest, hostAvatar]);
