@@ -24,11 +24,11 @@ export const PAINTED = { long: 126, wide: 68 };
  * the apron around the field, which the bowl's floor shares so the two meet
  * without a seam.
  */
-export function fieldColors(look: Pick<StadiumLook, 'field'>, team: string) {
+export function fieldColors(look: Pick<StadiumLook, 'field' | 'colors'>, team: string) {
   const shade = (hex: string, k: number) => `#${new Color(hex).multiplyScalar(k).getHexString()}`;
-  const base = look.field === 'blue' ? '#2a62b5' : look.field === 'black' ? '#23272b' : look.field === 'team' ? shade(team, 0.85) : '#3a8a3e';
-  const alt = look.field === 'black' ? '#1b1e21' : shade(base, 0.86);
-  return { base, alt, apron: look.field === 'green' ? '#2f6f35' : shade(base, 0.72) };
+  const base = look.colors?.field ?? (look.field === 'blue' ? '#2a62b5' : look.field === 'black' ? '#23272b' : look.field === 'team' ? shade(team, 0.85) : '#3a8a3e');
+  const alt = look.field === 'black' && !look.colors?.field ? '#1b1e21' : shade(base, 0.86);
+  return { base, alt, apron: look.field === 'green' && !look.colors?.field ? '#2f6f35' : shade(base, 0.72) };
 }
 
 /** Black or white, whichever reads on a color. */
@@ -46,6 +46,20 @@ const luminance = (hex: string) => { const c = new Color(hex); return 0.2126 * c
 const initials = (name: string) => name.split(/\s+/).filter(w => /^[A-Za-z0-9]/.test(w)).slice(0, 3).map(w => w[0].toUpperCase()).join('') || 'LP';
 
 /** Paints the ground. x runs goal to goal, z sideline to sideline; (0, 0) is midfield. */
+let grain: HTMLCanvasElement | null = null;
+/** Specks of light and shade, at the density the field had when it was speckled one by one. */
+function grainTile() {
+  if (grain) return grain;
+  grain = document.createElement('canvas');
+  grain.width = grain.height = 256;
+  const g = grain.getContext('2d')!, r = rng(9);
+  for (let i = 0; i < 1300; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.06)';
+    g.fillRect(Math.floor(r() * 255), Math.floor(r() * 255), 2, 2);
+  }
+  return grain;
+}
+
 function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageElement | null): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = PAINTED.long * PX; canvas.height = PAINTED.wide * PX;
@@ -55,7 +69,7 @@ function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageEl
   const line = (x: number, z0: number, z1: number, w: number) => rect(x - w / 2, z0, x + w / 2, z1, WHITE);
   const ink = inkOn(color);
   // The lettering: the accent when it reads on the team color, otherwise black or white.
-  const letter = look.accent && Math.abs(luminance(look.accent) - luminance(color)) > 0.25 ? look.accent : ink;
+  const letter = look.colors?.lettering ?? (look.accent && Math.abs(luminance(look.accent) - luminance(color)) > 0.25 ? look.accent : ink);
   const { base, alt, apron } = fieldColors(look, color);
   const turf = look.turf;
 
@@ -66,23 +80,23 @@ function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageEl
     if (turf === 'stripes' && k % 2) rect(-50 + k * 5, -HALF, -45 + k * 5, HALF, alt);
     if (turf === 'checker') for (let j = 0; j < 6; j++) if ((k + j) % 2) rect(-50 + k * 5, -HALF + (j * HALF) / 3, -45 + k * 5, -HALF + ((j + 1) * HALF) / 3, alt);
   }
-  const r = rng(9);
-  for (let i = 0; i < 70_000; i++) {
-    g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.06)';
-    g.fillRect(r() * canvas.width, r() * canvas.height, 2, 2);
-  }
+  // The grain of the grass, from one tile drawn once (repainting a field is then quick enough to do as a color is dragged).
+  g.fillStyle = g.createPattern(grainTile(), 'repeat')!;
+  g.fillRect(0, 0, canvas.width, canvas.height);
 
   // End zones: the team's color with its name, the field with old-school diagonals, or the field plain.
-  const sameAsField = look.field === 'team';
+  const sameAsField = look.field === 'team' && !look.colors?.field && !look.colors?.endzones;
+  // The end zones in the manager's paint, or the team's color (or the accent, when the field is already the team's).
+  const zone = look.colors?.endzones ?? (sameAsField ? (look.accent ?? ink) : color);
   for (const s of [-1, 1]) {
     const x0 = s < 0 ? -60 : 50;
     g.save();
     g.beginPath(); g.rect(X(x0), Z(-HALF), 10 * PX, 2 * HALF * PX); g.clip();
-    if (look.endZone === 'color') rect(x0, -HALF, x0 + 10, HALF, sameAsField ? (look.accent ?? ink) : color);
+    if (look.endZone === 'color') rect(x0, -HALF, x0 + 10, HALF, zone);
     else if (look.endZone === 'plain') rect(x0, -HALF, x0 + 10, HALF, base);
     else {
       rect(x0, -HALF, x0 + 10, HALF, base);
-      g.strokeStyle = sameAsField ? (look.accent ?? ink) : color; g.lineWidth = 0.7 * PX;
+      g.strokeStyle = zone; g.lineWidth = 0.7 * PX;
       for (let t = -HALF - 12; t < HALF + 12; t += 3.2) {
         g.beginPath(); g.moveTo(X(x0), Z(t)); g.lineTo(X(x0 + 10), Z(t + 10 * s)); g.stroke();
       }
@@ -100,9 +114,9 @@ function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageEl
     g.textAlign = 'center'; g.textBaseline = 'middle';
     if (look.endZone !== 'color') {
       g.lineWidth = 0.45 * PX; g.strokeStyle = look.accent ?? WHITE; g.lineJoin = 'round';
-      g.strokeText(word, 0, 0); g.fillStyle = sameAsField ? ink : color; g.fillText(word, 0, 0);
+      g.strokeText(word, 0, 0); g.fillStyle = look.colors?.lettering ?? (sameAsField ? ink : zone); g.fillText(word, 0, 0);
     } else {
-      const fill = sameAsField ? inkOn(look.accent ?? ink) : letter;
+      const fill = look.colors?.lettering ?? (sameAsField ? inkOn(look.accent ?? ink) : look.colors?.endzones ? inkOn(zone) : letter);
       g.fillStyle = fill; g.fillText(word, 0, 0);
     }
     g.restore();
@@ -197,8 +211,8 @@ function Pieces({ items, size, cast = true }: { items: Piece[]; size: [number, n
 }
 
 /** A goalpost: the gooseneck behind the end line, the crossbar 10 feet up over it, uprights 18½ feet apart. */
-function Goalpost({ side, color }: { side: number; color: string }) {
-  const yellow = <meshStandardMaterial color="#f2c81b" roughness={0.45} metalness={0.2} />;
+function Goalpost({ side, color, post = '#f2c81b' }: { side: number; color: string; post?: string }) {
+  const yellow = <meshStandardMaterial color={post} roughness={0.45} metalness={0.2} />;
   const rad = 0.2 * U;
   const back = (62.2 * side - 60 * side) * U;
   return (
@@ -241,7 +255,7 @@ export function Gridiron({ look, color, team, logo }: { look: StadiumLook; color
     t.colorSpace = SRGBColorSpace; t.anisotropy = aniso;
     return t;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [look.turf, look.field, look.endZone, look.endZoneText, look.accent, color, team, image, aniso]);
+  }, [look.turf, look.field, look.endZone, look.endZoneText, look.accent, JSON.stringify(look.colors), color, team, image, aniso]);
   useEffect(() => () => texture.dispose(), [texture]);
 
   const { bodies, helmets, pylons, sticks, benches } = useMemo(() => {
@@ -284,8 +298,8 @@ export function Gridiron({ look, color, team, logo }: { look: StadiumLook; color
       <Pieces items={sticks} size={[0.12, 2.8, 0.12]} />
       <Pieces items={benches} size={[4.8, 0.6, 0.9]} />
       <mesh position={[SCRIMMAGE * U, 0.2 * U, 0]} scale={[1.6, 1, 1]}><sphereGeometry args={[0.16 * U, 10, 8]} /><meshStandardMaterial color="#7a3d17" /></mesh>
-      <Goalpost side={1} color={color} />
-      <Goalpost side={-1} color={color} />
+      <Goalpost side={1} color={color} post={look.colors?.posts} />
+      <Goalpost side={-1} color={color} post={look.colors?.posts} />
     </group>
   );
 }

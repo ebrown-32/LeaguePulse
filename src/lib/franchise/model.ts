@@ -31,7 +31,8 @@ export interface StadiumLook {
   facade: 'concrete' | 'brick' | 'glass' | 'steel' | 'stone';
   /** The second team color, for trim, split seats, flags and the end zone lettering. Null picks white or black to suit. */
   accent: string | null;
-  seats: 'team' | 'split' | 'classic' | 'mono';
+  /** The seats' pattern: by deck, by section, classic blue and gray, all dark, fading up the decks, or checkered. */
+  seats: 'team' | 'split' | 'classic' | 'mono' | 'ombre' | 'checker';
   /** How the grass is mowed. */
   turf: 'stripes' | 'checker' | 'plain';
   field: 'green' | 'blue' | 'black' | 'team';
@@ -43,11 +44,26 @@ export interface StadiumLook {
   lights: 'warm' | 'white' | 'team';
   crowd: 'mixed' | 'colorout' | 'whiteout' | 'blackout';
   setting: 'city' | 'park' | 'waterfront' | 'mountains' | 'desert';
+  /** What surrounds the stadium past its parking (lib/franchise/campusPlan). */
+  district: 'downtown' | 'college' | 'suburbs' | 'countryside';
+  /** How much of a party the parking lots are on game day. */
+  tailgate: 'off' | 'chill' | 'rowdy';
+  /** What the plaza around the stadium is paved with. */
+  plaza: 'concrete' | 'brick' | 'garden';
+  /** Extras on the grounds, any of FEATURES. */
+  features: Feature[];
+  /** Parts the manager has painted themselves, any color at all; a part left out keeps its own (lib/franchise/stadiumColors). */
+  colors: Partial<Record<ColorSlot, string>>;
 }
+/** The parts of a stadium a manager can paint. */
+export const COLOR_SLOTS = ['seats', 'seats2', 'walls', 'trim', 'roof', 'steel', 'podium', 'field', 'endzones', 'lettering', 'lights', 'crowd', 'posts', 'boards'] as const;
+export type ColorSlot = (typeof COLOR_SLOTS)[number];
+export const FEATURES = ['statue', 'fountain', 'foodtrucks', 'banners', 'ferriswheel'] as const;
+export type Feature = (typeof FEATURES)[number];
 export const LOOK_OPTIONS = {
   style: ['bowl', 'horseshoe', 'grandstand', 'dome', 'cantilever', 'coliseum'],
   facade: ['concrete', 'brick', 'glass', 'steel', 'stone'],
-  seats: ['team', 'split', 'classic', 'mono'],
+  seats: ['team', 'split', 'classic', 'mono', 'ombre', 'checker'],
   turf: ['stripes', 'checker', 'plain'],
   field: ['green', 'blue', 'black', 'team'],
   endZone: ['color', 'argyle', 'plain'],
@@ -55,11 +71,15 @@ export const LOOK_OPTIONS = {
   lights: ['warm', 'white', 'team'],
   crowd: ['mixed', 'colorout', 'whiteout', 'blackout'],
   setting: ['city', 'park', 'waterfront', 'mountains', 'desert'],
+  district: ['downtown', 'college', 'suburbs', 'countryside'],
+  tailgate: ['off', 'chill', 'rowdy'],
+  plaza: ['concrete', 'brick', 'garden'],
 } as const;
 type Choice = keyof typeof LOOK_OPTIONS;
 export const DEFAULT_LOOK: StadiumLook = {
   style: 'bowl', facade: 'concrete', accent: null, seats: 'team', turf: 'stripes', field: 'green', endZone: 'color',
   endZoneText: null, roof: 'auto', lights: 'warm', crowd: 'mixed', setting: 'city',
+  district: 'downtown', tailgate: 'chill', plaza: 'concrete', features: ['banners'], colors: {},
 };
 
 /**
@@ -70,13 +90,18 @@ export const DEFAULT_LOOK: StadiumLook = {
  */
 export function normalizeLook(input: unknown): StadiumLook {
   const l = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-  const out = { ...DEFAULT_LOOK };
+  const out = { ...DEFAULT_LOOK, features: [...DEFAULT_LOOK.features], colors: {} as StadiumLook['colors'] };
   for (const k of Object.keys(LOOK_OPTIONS) as Choice[]) {
     if ((LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) (out as Record<string, unknown>)[k] = l[k];
   }
   if (l.turf === 'classic') { out.turf = 'plain'; if (!l.endZone) out.endZone = 'argyle'; }
   if (typeof l.accent === 'string' && HEX.test(l.accent)) out.accent = l.accent.toLowerCase();
   if (typeof l.endZoneText === 'string') out.endZoneText = cleanEndZone(l.endZoneText);
+  if (Array.isArray(l.features)) out.features = FEATURES.filter(f => (l.features as unknown[]).includes(f));
+  if (l.colors && typeof l.colors === 'object') {
+    const c = l.colors as Record<string, unknown>;
+    for (const k of COLOR_SLOTS) if (typeof c[k] === 'string' && HEX.test(c[k] as string)) out.colors[k] = (c[k] as string).toLowerCase();
+  }
   return out;
 }
 
@@ -142,6 +167,14 @@ export function checkIdentity(input: unknown): Partial<FranchiseIdentity> | stri
         if (l[k] !== undefined && !(LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) return `Pick a ${k === 'endZone' ? 'end zone' : k} from the list.`;
       }
       if (l.accent !== undefined && l.accent !== null && l.accent !== '' && !HEX.test(String(l.accent))) return 'Pick an accent color.';
+      if (l.colors !== undefined && l.colors !== null) {
+        if (typeof l.colors !== 'object' || Array.isArray(l.colors)) return 'Pick colors with the color picker.';
+        for (const [k, v] of Object.entries(l.colors as Record<string, unknown>)) {
+          if (!(COLOR_SLOTS as readonly string[]).includes(k)) return 'That part of the stadium can\'t be painted.';
+          if (v !== null && v !== '' && !HEX.test(String(v))) return 'Pick colors with the color picker.';
+        }
+      }
+      if (l.features !== undefined && (!Array.isArray(l.features) || l.features.some(f => !(FEATURES as readonly string[]).includes(String(f))))) return 'Pick extras from the list.';
       if (l.endZoneText !== undefined && l.endZoneText !== null && typeof l.endZoneText !== 'string') return 'The end zone text must be text.';
       if (typeof l.endZoneText === 'string' && l.endZoneText.trim().length > LIMITS.endZoneText) return `Keep the end zone text under ${LIMITS.endZoneText} characters.`;
       out.look = normalizeLook(l);

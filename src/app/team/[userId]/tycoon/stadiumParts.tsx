@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Color, Object3D, type Group, type InstancedMesh } from 'three';
+import { Color, Object3D, type Group, type InstancedMesh, type Matrix4 } from 'three';
 import { TAU, type Outline } from '@/lib/franchise/stadiumBlueprint';
 import { ribbonGeometry, type Pt, type RibbonOptions } from './stadiumGeometry';
 
@@ -34,8 +34,10 @@ export function Ribbon({ o, from = 0, to = TAU, profile, k, opts, cast = false, 
 export interface Item { x: number; y: number; z: number; ry?: number; sx?: number; sy?: number; sz?: number; c?: string }
 
 /** Instances of one geometry (the child) from a list of placements, each its own color when it has one. */
-export function Instanced({ items, children, color, emissive, emissiveIntensity = 0, roughness = 0.8, cast = true, flat = false }: {
+export function Instanced({ items, children, color, emissive, emissiveIntensity = 0, roughness = 0.8, cast = true, flat = false, fog = true }: {
   items: Item[]; children: React.ReactNode; color?: string; emissive?: string; emissiveIntensity?: number; roughness?: number; cast?: boolean; flat?: boolean;
+  /** False for the far horizon, which shows through the haze as a silhouette instead of vanishing in it. */
+  fog?: boolean;
 }) {
   const mesh = useRef<InstancedMesh>(null);
   useEffect(() => {
@@ -49,14 +51,41 @@ export function Instanced({ items, children, color, emissive, emissiveIntensity 
     });
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    m.computeBoundingSphere(); // or it keeps the bounds of the last placements, and may be culled while in view
   }, [items]);
   if (!items.length) return null;
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, items.length]} key={items.length} castShadow={cast} receiveShadow>
       {children}
-      <meshStandardMaterial color={items[0].c ? undefined : color} emissive={emissive} emissiveIntensity={emissiveIntensity} roughness={roughness} flatShading={flat} />
+      <meshStandardMaterial color={items[0].c ? undefined : color} emissive={emissive} emissiveIntensity={emissiveIntensity} roughness={roughness} flatShading={flat} fog={fog} />
     </instancedMesh>
   );
+}
+
+const tmp = new Object3D();
+/** A placement (position, Euler rotation, scale) inside `parent`'s, as a matrix: for building up Placed lists. */
+export function mat(parent: Matrix4 | null, p: [number, number, number], r: [number, number, number] = [0, 0, 0], sc: [number, number, number] = [1, 1, 1]): Matrix4 {
+  tmp.position.set(...p); tmp.rotation.set(...r); tmp.scale.set(...sc); tmp.updateMatrix();
+  return parent ? parent.clone().multiply(tmp.matrix) : tmp.matrix.clone();
+}
+
+/**
+ * One geometry and material (the children) drawn at every matrix in one draw
+ * call: for repeated pieces too intricate for Instanced's position, turn and
+ * scale (a lamp on a tilted bank on a turned mast).
+ */
+export function Placed({ matrices, colors, children, cast = false }: { matrices: Matrix4[]; colors?: string[]; children: React.ReactNode; cast?: boolean }) {
+  const mesh = useRef<InstancedMesh>(null);
+  useEffect(() => {
+    const m = mesh.current;
+    if (!m) return;
+    matrices.forEach((x, i) => m.setMatrixAt(i, x));
+    if (colors) { colors.forEach((c, i) => m.setColorAt(i, new Color(c))); if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [matrices, colors]);
+  if (!matrices.length) return null;
+  return <instancedMesh ref={mesh} args={[undefined, undefined, matrices.length]} key={matrices.length} castShadow={cast} receiveShadow>{children}</instancedMesh>;
 }
 
 export function Boxes({ size, ...rest }: Omit<Parameters<typeof Instanced>[0], 'children'> & { size: [number, number, number] }) {
@@ -66,11 +95,13 @@ export function Boxes({ size, ...rest }: Omit<Parameters<typeof Instanced>[0], '
 /** Grows a child from nothing to full height when it first appears. */
 export function Rise({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const g = useRef<Group>(null);
-  const born = useRef<number | null>(null);
-  useFrame(({ clock }) => {
-    if (!g.current) return;
-    born.current ??= clock.elapsedTime + delay;
-    const t = Math.min(1, Math.max(0, (clock.elapsedTime - born.current) / 0.9));
+  // Its own age, frame by frame: not the canvas clock, which starts again from 0 each time the view
+  // scrolls back into sight (and would leave anything built later flattened until it caught up).
+  const age = useRef(0);
+  useFrame((_, delta) => {
+    if (!g.current || age.current > delay + 1) return;
+    age.current += Math.min(delta, 0.1);
+    const t = Math.min(1, Math.max(0, (age.current - delay) / 0.9));
     g.current.scale.set(1, Math.max(0.001, 1 - Math.pow(1 - t, 3)), 1);
   });
   return <group ref={g} scale={[1, 0.001, 1]}>{children}</group>;
