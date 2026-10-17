@@ -823,7 +823,7 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
                     Voice, this is the instruction Claude writes from
                   </label>
                   <button type="button" onClick={() => setStudio({ kind: 'refine', persona: active })}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-colors hover:bg-primary/15">
+                    className="min-h-10 sm:min-h-0 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-colors hover:bg-primary/15">
                     <Sparkles className="h-3 w-3" /> Improve with the assistant
                   </button>
                 </div>

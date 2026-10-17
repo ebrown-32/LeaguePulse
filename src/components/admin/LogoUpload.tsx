@@ -47,7 +47,7 @@ export default function LogoUpload({
         type="button"
         disabled={busy}
         onClick={() => input.current?.click()}
-        className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50"
+        className="min-h-10 sm:min-h-0 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50"
       >
         {busy ? 'Saving…' : logoUrl ? 'Replace logo' : 'Upload logo'}
       </button>
@@ -56,7 +56,7 @@ export default function LogoUpload({
           type="button"
           disabled={busy}
           onClick={() => send('DELETE')}
-          className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="min-h-10 sm:min-h-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           Remove
         </button>

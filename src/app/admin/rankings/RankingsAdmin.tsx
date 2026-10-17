@@ -164,8 +164,8 @@ function KeyCard({ s, call }: { s: Status; call: Call }) {
           <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input type={show ? 'text' : 'password'} value={key} onChange={e => { setKey(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && key.trim() && connect()}
             placeholder="Paste your FantasyPros API key" autoComplete="off" spellCheck={false}
-            className="w-full rounded-xl border border-border bg-background py-2.5 pl-10 pr-16 font-mono text-[13.5px] outline-none transition focus:border-foreground/40" />
-          <button onClick={() => setShow(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground">{show ? 'Hide' : 'Show'}</button>
+            className="w-full rounded-xl border border-border bg-background py-2.5 pl-10 pr-16 font-mono text-base outline-none sm:text-[13.5px] transition focus:border-foreground/40" />
+          <button onClick={() => setShow(v => !v)} className="absolute right-2 top-1/2 min-h-10 sm:min-h-0 -translate-y-1/2 rounded-md px-2 py-1 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground">{show ? 'Hide' : 'Show'}</button>
         </div>
         <button onClick={connect} disabled={!key.trim() || busy}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background transition hover:bg-foreground/85 disabled:opacity-50">
