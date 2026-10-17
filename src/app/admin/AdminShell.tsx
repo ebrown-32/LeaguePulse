@@ -14,6 +14,7 @@ import ConstitutionAdmin from './constitution/ConstitutionAdmin';
 import RankingsAdmin from './rankings/RankingsAdmin';
 import BillingCard from '@/components/admin/BillingCard';
 import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
+import SetupGuide from './SetupGuide';
 
 /**
  * The single admin panel.
@@ -75,12 +76,22 @@ export default function AdminShell() {
       .catch(() => {});
   }, [authed, password]);
 
+  // Straight from sign-up (/admin?setup=1): the setup guide, open on its first step.
+  const [setup, setSetup] = useState(false);
   // Remember the tab so a save-and-reload does not bounce you back. A link
   // can name one (/admin?tab=constitution), which wins.
   useEffect(() => {
-    const asked = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const fresh = params.get('setup') === '1';
+    const asked = params.get('tab') ?? (fresh ? 'appearance' : null);
     const saved = asked ?? localStorage.getItem(STORAGE_KEY);
     if (TABS.some(t => t.id === saved)) setTab(saved as Tab);
+    if (fresh) {
+      setSetup(true);
+      params.delete('setup');
+      const q = params.toString();
+      history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : '') + window.location.hash);
+    }
   }, []);
   useEffect(() => { localStorage.setItem(STORAGE_KEY, tab); }, [tab]);
 
@@ -198,6 +209,7 @@ export default function AdminShell() {
       <div data-admin>
       {/* ESPN leagues only: first, because a broken connection is the thing to fix. */}
       <EspnConnectionCard password={password} />
+      <SetupGuide password={password} tab={tab} onOpen={setTab} forced={setup} />
       {/* On a phone, every section at once, two to a row: a row of seven tabs ran off the screen. */}
       <nav aria-label="Admin section" className="mb-6 grid grid-cols-2 gap-2 sm:hidden">
         {TABS.map(t => (
@@ -224,6 +236,7 @@ export default function AdminShell() {
       {/* Both editors stay mounted-on-demand rather than always: the theme
           editor writes live CSS variables while open, which should not happen
           from behind another tab. */}
+      <div id="admin-editor" className="scroll-mt-28">
       {tab === 'appearance' && <AppearanceEditor adminPassword={password} />}
       {tab === 'ai' && <AIDeskAdmin adminPassword={password} />}
       {tab === 'data' && <LeagueDataAdmin adminPassword={password} />}
@@ -231,6 +244,7 @@ export default function AdminShell() {
       {tab === 'export' && <YourData adminPassword={password} />}
       {tab === 'constitution' && <ConstitutionAdmin adminPassword={password} />}
       {tab === 'rankings' && <RankingsAdmin adminPassword={password} />}
+      </div>
       <BillingCard password={password} />
       </div>
     </PageLayout>

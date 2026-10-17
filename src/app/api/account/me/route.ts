@@ -22,12 +22,21 @@ export async function GET(req: Request) {
   const t = await currentTenant();
   const [{ roleOf }, store] = await Promise.all([import('@/lib/platform/members'), import('@/lib/franchise/store')]);
   const [role, franchiseId] = t ? await Promise.all([roleOf(t.slug, me.userId), store.managedIn(t.slug, me.userId)]) : [null, null];
+  // For the people who run the site: how much of its setup is left, unless an admin hid the guide.
+  let setup: { left: number; total: number } | null = null;
+  if (t && (role === 'owner' || role === 'admin')) {
+    const [{ setupStatus }, { setupLeft }] = await Promise.all([import('@/lib/setupStatus'), import('@/lib/setup')]);
+    const s = await setupStatus().catch(() => null);
+    if (s && !s.dismissed && setupLeft(s) > 0) setup = { left: setupLeft(s), total: s.steps.length };
+  }
+  const admin = t && role ? `${product}/api/platform/account/open?slug=${encodeURIComponent(t.slug)}` : null;
   return NextResponse.json({
     accounts: true, signedIn: true, product, signIn,
-    name: me.name, image: me.image, role,
+    name: me.name, image: me.image, role, setup,
     links: {
       account: `${product}/account`,
-      admin: t && role ? `${product}/api/platform/account/open?slug=${encodeURIComponent(t.slug)}` : null,
+      admin,
+      setup: admin && setup ? `${admin}&setup=1` : null,
       franchise: franchiseId ? `/team/${encodeURIComponent(franchiseId)}` : null,
       editFranchise: t && franchiseId ? product + links.openPath(t.slug, franchiseId) : null,
     },

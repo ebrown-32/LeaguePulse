@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const { createFreeLeague } = await import('@/lib/platform/freeLeague');
     const made = await createFreeLeague({ leagueId, name: String(league.name ?? ''), slug, owner: await signedInAccount(), tier });
     if (!made.ok) return NextResponse.json({ error: made.error }, { status: made.status });
-    return NextResponse.json({ url: `/account?new=${made.tenant.slug}`, free: true, site: made.url });
+    return NextResponse.json({ url: `/api/platform/account/open?slug=${encodeURIComponent(made.tenant.slug)}&setup=1`, free: true, site: made.url });
   }
 
   try {

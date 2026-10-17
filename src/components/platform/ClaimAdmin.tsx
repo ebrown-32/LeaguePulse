@@ -26,16 +26,19 @@ export default function ClaimAdmin({ session, siteUrl }: { session: string; site
       <div className="mt-6 rounded-2xl border border-primary/40 bg-primary/10 p-4 text-left text-[13.5px]">
         <p className="flex items-center gap-2 font-semibold text-primary"><Check className="h-4 w-4" /> Admin password saved</p>
         <p className="mt-1 text-muted-foreground">
-          Sign in at <span className="font-semibold text-foreground">{siteUrl.replace('https://', '')}/admin</span> to
-          add your Anthropic key and switch on the AI desk.
+          The admin lives at <span className="font-semibold text-foreground">{siteUrl.replace('https://', '')}/admin</span>. Sign in
+          there with this password; a guide walks you through the rest.
         </p>
+        <a href={`${siteUrl}/admin?setup=1`} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-3 text-[14px] font-semibold text-primary-foreground">
+          Set up your site <ArrowRight className="h-3.5 w-3.5" />
+        </a>
       </div>
     );
   }
   return (
     <form onSubmit={e => { e.preventDefault(); save(); }} className="mt-6 text-left">
       <label className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground">Create your admin password</label>
-      <p className="mt-1 text-[12.5px] text-muted-foreground">You will use it to manage the site: colours, the AI desk and your API key.</p>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">You will use it to manage the site: your logo and colors, the media desk and your managers.</p>
       <div className="mt-2 flex gap-2">
         <input type="password" value={pw} onChange={e => setPw(e.target.value)} minLength={8} required placeholder="At least 8 characters"
           className="min-w-0 flex-1 rounded-xl border border-border bg-background/70 px-3 py-2.5 text-[14px] outline-none focus:border-primary/60" />
