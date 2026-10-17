@@ -26,12 +26,22 @@ export interface Tenant {
   plan: 'monthly' | 'season';
   /** League Pass ('standard', also when absent) or League Pass + AI ('ai'). */
   tier?: 'standard' | 'ai';
+  /**
+   * How its AI runs, when the operator has said otherwise than its plan (see
+   * aiMode below): never set by billing, so a Stripe event can't undo it.
+   */
+  aiOverride?: AiMode;
+  /** When its Stripe trial ends, while it is in one. */
+  trialEndsAt?: string | null;
   ownerEmail: string | null;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+import type { AiMode } from './plan';
+export { aiMode, billedAiMode, type AiMode } from './plan';
 
 const T = (slug: string) => `lp_tenant:${slug}`;
 /**

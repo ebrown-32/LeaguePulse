@@ -36,20 +36,31 @@ const hosted = () => process.env.LP_HOSTED === '1';
  * (LP_MANAGED_ANTHROPIC_API_KEY), because running its AI is what it pays for.
  * There is deliberately no fallback for any other league: that would quietly
  * bill the platform for every league's usage.
+ *
+ * The operator can override any league's plan either way (lib/platform/
+ * tenants, aiMode): switched off, no key at all, so nothing AI runs there,
+ * even on a key of its own.
  */
 export async function anthropicKey(): Promise<string | null> {
   if (!hosted()) return process.env.ANTHROPIC_API_KEY?.trim() || null;
+  if ((await currentAiMode()) === 'off') return null;
   const { tenantAnthropicKey } = await import('@/lib/tenant/secrets');
   const own = await tenantAnthropicKey();
   if (own) return own;
   return (await aiManaged()) ? process.env.LP_MANAGED_ANTHROPIC_API_KEY?.trim() || null : null;
 }
 
-/** Whether the platform runs this league's AI (League Pass + AI). Hosted only. */
+/** How this league's AI runs (its plan, unless the operator said otherwise). Hosted only. */
+async function currentAiMode() {
+  const [{ currentTenant }, { aiMode }] = await Promise.all([import('@/lib/tenant/context'), import('@/lib/platform/tenants')]);
+  const t = await currentTenant();
+  return t ? aiMode(t) : null;
+}
+
+/** Whether the platform runs this league's AI (League Pass + AI, or the operator's say-so). Hosted only. */
 export async function aiManaged(): Promise<boolean> {
   if (!hosted()) return false;
-  const { currentTenant } = await import('@/lib/tenant/context');
-  return (await currentTenant())?.tier === 'ai';
+  return (await currentAiMode()) === 'platform';
 }
 
 /**

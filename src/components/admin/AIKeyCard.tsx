@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertTriangle, ExternalLink, Trash2 } from '@/components/icons';
 
-interface Status { mode: 'hosted' | 'self-hosted'; configured: boolean; fingerprint: string | null; managed?: boolean }
+interface Status { mode: 'hosted' | 'self-hosted'; configured: boolean; fingerprint: string | null; managed?: boolean; off?: boolean }
 
 export default function AIKeyCard({ password, onChange }: { password: string; onChange?: (configured: boolean) => void }) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -53,6 +53,22 @@ export default function AIKeyCard({ password, onChange }: { password: string; on
         <span className="font-semibold text-amber-500">AI is not configured. </span>
         Add <code className="font-mono text-foreground">ANTHROPIC_API_KEY</code> to the environment.
       </div>
+    );
+  }
+
+  // Switched off for this league by LeaguePulse: nothing to set up here until it's back on.
+  if (status.off) {
+    return (
+      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">AI is paused for this league</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            LeaguePulse has switched off the desk, chat assistant and analytics questions here.
+            {process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL && <> Questions: <a className="text-primary" href={`mailto:${process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL}`}>{process.env.NEXT_PUBLIC_LP_SUPPORT_EMAIL}</a>.</>}
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">Paused</span>
+      </section>
     );
   }
 

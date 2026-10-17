@@ -38,6 +38,9 @@ const priceOf = (sub: Stripe.Subscription) => priceInfo(sub.items?.data?.[0]?.pr
 
 const idOf = (v: string | { id: string } | null | undefined) => (typeof v === 'string' ? v : v?.id ?? null);
 
+/** When the subscription's trial ends, while it is in one. */
+const trialEnd = (sub: Stripe.Subscription | null) => (sub?.status === 'trialing' && sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null);
+
 /** Bring a league's record in line with its subscription as Stripe has it now. */
 async function syncSubscription(s: Stripe, subscriptionId: string): Promise<void> {
   const sub = await s.subscriptions.retrieve(subscriptionId);
@@ -54,6 +57,7 @@ async function syncSubscription(s: Stripe, subscriptionId: string): Promise<void
     // A plan or tier switch made in the billing portal arrives here.
     plan: priceOf(sub)?.plan ?? t.plan,
     tier: priceOf(sub)?.tier ?? t.tier ?? 'standard',
+    trialEndsAt: trialEnd(sub),
   });
 }
 
@@ -88,6 +92,8 @@ async function checkoutCompleted(s: Stripe, session: Stripe.Checkout.Session): P
     status: sub ? STATUS[sub.status] ?? 'trialing' : 'trialing',
     plan: (sub && priceOf(sub)?.plan) ?? (m.plan === 'monthly' ? 'monthly' : 'season'),
     tier: (sub && priceOf(sub)?.tier) ?? (m.tier === 'ai' ? 'ai' : 'standard'),
+    trialEndsAt: trialEnd(sub),
+    ...(existing?.aiOverride ? { aiOverride: existing.aiOverride } : {}),
     ownerEmail: session.customer_details?.email ?? session.customer_email ?? null,
     stripeCustomerId: idOf(session.customer),
     stripeSubscriptionId: subscriptionId,
