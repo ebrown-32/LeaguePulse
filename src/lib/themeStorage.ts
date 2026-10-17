@@ -78,6 +78,16 @@ export async function getTheme(): Promise<ThemeConfig> {
   }
 }
 
+/** Whether an admin has ever saved this league's theme (only the Appearance editor does). */
+export async function themeSaved(): Promise<boolean> {
+  try {
+    if (redis) return (await redis.get(REDIS_KEY)) !== null;
+    return (await themeFileMtime()) > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function saveTheme(theme: Partial<ThemeConfig>): Promise<ThemeConfig> {
   const current = await getTheme();
   const next: ThemeConfig = { ...current, ...theme };

@@ -19,6 +19,7 @@ import { appIconUrl } from '@/lib/appIconUrl';
 import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
 import NavMemory from '@/components/layout/NavMemory';
+import SetupBar from '@/components/layout/SetupBar';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
 
 const displayFont = Space_Grotesk({
@@ -192,6 +193,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
               <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
+              {/* The league's owner and admins, until the site is set up. */}
+              <SetupBar />
               <main className="flex-1 pb-[env(safe-area-inset-bottom)]">
                 <PageTransition>{children}</PageTransition>
               </main>

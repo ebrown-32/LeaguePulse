@@ -1,5 +1,6 @@
 /**
- * Open one of your leagues' admin pages, signed in.
+ * Open one of your leagues' admin pages, signed in (with ?setup=1, on its
+ * setup guide: the way in straight after sign-up).
  *
  * Redirects to the league's own address with a short-lived pass in the URL
  * fragment (never sent to a server or logged), which the admin page swaps
@@ -26,5 +27,7 @@ export async function GET(req: Request) {
   // is always the configured root domain, never a host taken from headers.
   const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(url.host);
   const base = local ? `http://${slug}.localhost${url.port ? `:${url.port}` : ''}` : `https://${slug}.${PLATFORM.rootDomain}`;
-  return NextResponse.redirect(`${base}/admin#lpt=${mintAdminPass(slug, me.userId)}`);
+  // From sign-up: straight into the admin's setup guide.
+  const setup = url.searchParams.get('setup') === '1' ? '?setup=1' : '';
+  return NextResponse.redirect(`${base}/admin${setup}#lpt=${mintAdminPass(slug, me.userId)}`);
 }

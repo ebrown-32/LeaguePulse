@@ -45,20 +45,32 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
             <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-primary">{tenant ? 'You are live' : 'Setting up'}</p>
             <h1 className="mt-3 font-display text-[30px] font-bold leading-tight">{session.metadata?.leagueName || 'Your league'}</h1>
             <p className="mt-3 text-[14px] text-muted-foreground">
-              {tenant ? 'Share this link with your league. History from past seasons fills in on first visit.' : 'Creating your site. This takes a few seconds.'}
+              {!tenant ? 'Creating your site. This takes a few seconds.'
+                : needsAdmin ? 'One more thing: a password for the admin, where you make the site yours.'
+                : 'Next, make it yours: your logo and colors, the media desk and your managers. A few minutes, with a guide.'}
             </p>
+            {tenant && slug && session.metadata?.userId ? (
+              // Bought while signed in: straight into the admin's setup guide, already signed in.
+              <a href={`/api/platform/account/open?slug=${encodeURIComponent(slug)}&setup=1`} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-primary px-5 py-3.5 text-[15px] font-semibold text-primary-foreground">
+                Set up your site
+              </a>
+            ) : tenant && url && !needsAdmin ? (
+              <a href={`${url}/admin?setup=1`} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-primary px-5 py-3.5 text-[15px] font-semibold text-primary-foreground">
+                Set up your site
+              </a>
+            ) : null}
+            {needsAdmin && id && url && <ClaimAdmin session={id} siteUrl={url} />}
             {url && (
               <a href={tenant ? url : undefined}
-                className={`mt-6 inline-flex w-full items-center justify-center rounded-xl px-5 py-3.5 text-[15px] font-semibold ${tenant ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                className={`mt-3 inline-flex w-full items-center justify-center rounded-xl border border-border px-5 py-3.5 text-[14px] font-semibold ${tenant ? '' : 'text-muted-foreground'}`}>
                 {url.replace('https://', '')}
               </a>
             )}
-            {tenant && session.metadata?.userId ? (
-              // Bought while signed in: the league is already in their account.
-              <Link href="/account" className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-border px-5 py-3.5 text-[15px] font-semibold">
-                Manage it from My leagues
-              </Link>
-            ) : needsAdmin && id && url && <ClaimAdmin session={id} siteUrl={url} />}
+            {tenant && session.metadata?.userId && (
+              <p className="mt-4 text-[12.5px] text-muted-foreground">
+                The admin is always one tap away in <Link href="/account" className="font-semibold text-foreground underline-offset-2 hover:underline">My leagues</Link>, and in your account menu on the site.
+              </p>
+            )}
           </>
         )}
       </div>
