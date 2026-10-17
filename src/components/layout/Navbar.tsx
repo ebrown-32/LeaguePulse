@@ -43,23 +43,26 @@ interface NavItem {
 }
 
 /**
- * The four destinations worth a permanent slot.
+ * The marquee features: a permanent slot in the top bar on desktop, and the
+ * first thing in the menu on a phone.
  *
- * Home is reachable from the logo, and Matchups and Rivalries moved into the
- * menu: they are things you look up, where these four are things you read.
+ * Home is reachable from the logo, and everything else lives in the menu.
  */
 const PRIMARY_NAV: NavItem[] = [
-  { name: 'Next Gen',      href: '/next-gen', icon: Activity        },
-  { name: 'History',       href: '/history',  icon: Database        },
-  { name: 'Weekly Report', href: '/report',   icon: ClipboardCheck  },
-  { name: 'The Feed',      href: '/desk',     icon: Megaphone       },
+  { name: 'History',    href: '/history',    icon: Database  },
+  { name: 'Franchises', href: '/franchises', icon: Users     },
+  { name: 'Next Gen',   href: '/next-gen',   icon: Activity  },
+  { name: 'The Feed',   href: '/desk',       icon: Megaphone },
 ];
+
+/** A page or anything under it: a franchise's own page lights up Franchises. */
+const isIn = (pathname: string, href: string) => pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
 
 const MORE_NAV: NavItem[] = [
   { name: 'Home',         href: '/',             icon: LayoutDashboard },
   { name: 'Game Day',     href: '/live',         icon: Radio        },
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
-  { name: 'Franchises',   href: '/franchises',   icon: Users        },
+  { name: 'Weekly Report', href: '/report',      icon: ClipboardCheck },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
   { name: 'Standings',    href: '/standings',    icon: ListOrdered  },
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
@@ -252,8 +255,8 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
               lands right in iPad-portrait territory (768-834px) and the full
               5-link row plus the More dropdown doesn't fit there. */}
           <div className="hidden xl:flex xl:items-center xl:gap-1">
-            {PRIMARY_NAV.map(item => {
-              const isActive = pathname === item.href;
+            {PRIMARY_NAV.filter(shown).map(item => {
+              const isActive = isIn(pathname, item.href);
               return (
                 <Link
                   key={item.name}
@@ -451,13 +454,45 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
               </div>
 
               <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                {NAV_GROUPS.map((group, gi) => (
-                  <div key={group.label} className={gi > 0 ? 'mt-5' : undefined}>
+                {/* The marquee features first, as tiles, so a phone gets the
+                    same front door the desktop bar does. */}
+                <div className="grid grid-cols-2 gap-2 px-1 pb-1">
+                  {PRIMARY_NAV.filter(shown).map((item, i) => {
+                    const isActive = isIn(pathname, item.href);
+                    return (
+                      <motion.div key={item.href} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 + i * 0.03, duration: 0.2 }}>
+                        <Link
+                          href={item.href}
+                          onClick={() => setIsOpen(false)}
+                          aria-current={isActive ? 'page' : undefined}
+                          className={cn(
+                            'flex min-h-[76px] flex-col justify-between gap-2 rounded-xl border p-3 transition-colors',
+                            isActive
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border bg-background/40 text-foreground hover:border-primary/30 hover:bg-accent',
+                          )}
+                        >
+                          <span className={cn('lp-chip h-8 w-8 rounded-lg [&>svg]:h-4 [&>svg]:w-4', !isActive && 'lp-chip-muted')}>
+                            <item.icon />
+                          </span>
+                          <span className="font-display text-[15px] font-bold leading-tight">{item.name}</span>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {NAV_GROUPS.map((group, gi) => {
+                  // The tiles above already cover the marquee pages.
+                  const items = group.items.filter(item => shown(item) && !PRIMARY_NAV.some(p => p.href === item.href));
+                  if (!items.length) return null;
+                  return (
+                  <div key={group.label} className="mt-5">
                     <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
                     <div className="space-y-0.5">
-                      {group.items.filter(shown).map((item, i) => {
+                      {items.map((item, i) => {
                         const isActive = pathname === item.href;
                         return (
                           <motion.div
@@ -497,7 +532,8 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {platform !== 'other' && !isStandalone && (
                   <div className="mt-5 border-t border-border pt-3">
