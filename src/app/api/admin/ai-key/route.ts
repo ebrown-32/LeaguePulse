@@ -26,9 +26,13 @@ export async function GET(req: Request) {
   const [{ tenantAnthropicKey }, managed] = await Promise.all([import('@/lib/tenant/secrets'), aiManaged()]);
   // The league's own key, if it has one: the platform's key is never fingerprinted here.
   const own = hosted() ? await tenantAnthropicKey() : await anthropicKey();
+  // Switched off by the operator: no AI runs here, whatever key it has.
+  const t = hosted() ? await currentTenant() : null;
+  const off = Boolean(t && (await import('@/lib/platform/tenants')).aiMode(t) === 'off');
   return NextResponse.json({
     mode: hosted() ? 'hosted' : 'self-hosted',
-    configured: Boolean(own) || (managed && Boolean(await anthropicKey())),
+    configured: !off && (Boolean(own) || (managed && Boolean(await anthropicKey()))),
+    off,
     fingerprint: own ? fingerprint(own) : null,
     // League Pass + AI: the platform runs the AI; a key of the league's own is optional.
     managed,

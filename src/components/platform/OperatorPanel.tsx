@@ -21,8 +21,12 @@ import { Logomark, Route, Tick } from './marks';
 const accountsOn = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
 type Status = 'trialing' | 'active' | 'past_due' | 'canceled';
+type AiMode = 'off' | 'own' | 'platform';
+type Standing = 'beta' | 'trial' | 'paid' | 'paused';
 interface League {
   slug: string; url: string; name: string; leagueId: string; status: Status; plan: 'monthly' | 'season'; tier: 'standard' | 'ai';
+  /** How its AI runs, and what its plan alone gives it (they differ when overridden here). */
+  ai: AiMode; aiBilled: AiMode; standing: Standing; trialEndsAt: string | null;
   owner: string | null; stripeCustomer: string | null; comp: boolean; created: string; updated: string;
   adminSet: boolean; aiKey: boolean; lastPostAt: string | null; aiCost: number;
   ownerAccount: string | null; admins: number; pendingOwner: string | null;
@@ -30,7 +34,7 @@ interface League {
 interface Conflict { session: string; slug: string; leagueId: string; takenBy: string; email: string | null; at: string }
 interface Inquiry { id: string; name: string; email: string; league: string; message: string; at: string }
 interface Data {
-  rootDomain: string; stripeMode: 'live' | 'test' | 'off'; prices: { monthly: number; season: number }; conflicts: Conflict[]; inquiries: Inquiry[];
+  rootDomain: string; stripeMode: 'live' | 'test' | 'off'; prices: { monthly: number; season: number }; trialDays: number; conflicts: Conflict[]; inquiries: Inquiry[];
   totals: { all: number; trialing: number; active: number; past_due: number; canceled: number; paying: number; comp: number; mrr: number; ai?: number; aiCost?: number };
   leagues: League[];
 }
@@ -293,7 +297,7 @@ function Kpis({ data }: { data: Data }) {
     { label: 'On trial', value: t.trialing, sub: 'No card needed to start' },
     { label: 'Beta', value: t.comp, sub: 'Free, added here' },
     { label: 'Payment failing', value: t.past_due, sub: 'Stripe is retrying', tone: t.past_due ? 'alert' : undefined },
-    { label: 'AI we pay for', value: Math.round(t.aiCost ?? 0), prefix: '$', sub: `This month, ${t.ai ?? 0} on + AI` },
+    { label: 'AI we pay for', value: Math.round(t.aiCost ?? 0), prefix: '$', sub: `This month, ${t.ai ?? 0} we run` },
   ];
   return (
     <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -513,6 +517,9 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
   const [recovery, setRecovery] = useState<{ slug: string; url: string } | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [handing, setHanding] = useState<League | null>(null);
+  // By address, so the sheet shows the league as it is after each change.
+  const [managing, setManaging] = useState<string | null>(null);
+  const managed = managing ? data.leagues.find(l => l.slug === managing) ?? null : null;
   const rows = data.leagues.filter(l =>
     (filter === 'all' || l.status === filter) &&
     (!q || `${l.name} ${l.slug} ${l.owner ?? ''} ${l.ownerAccount ?? ''}`.toLowerCase().includes(q.toLowerCase())));
@@ -534,14 +541,6 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
     try { await call('PATCH', { slug, ownerEmail: email }); setHanding(null); onChange(`${slug} goes to ${email} when they sign in`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not hand over'); }
   };
-  const setStatus = async (slug: string, status: 'active' | 'canceled') => {
-    try { await call('PATCH', { slug, status }); onChange(status === 'active' ? `Resumed ${slug}` : `Paused ${slug}`); }
-    catch (e) { onChange(e instanceof Error ? e.message : 'Could not change status'); }
-  };
-  const setTier = async (slug: string, tier: 'standard' | 'ai') => {
-    try { await call('PATCH', { slug, tier }); onChange(tier === 'ai' ? `${slug} is on League Pass + AI` : `${slug} is on League Pass`); }
-    catch (e) { onChange(e instanceof Error ? e.message : 'Could not change tier'); }
-  };
   const remove = async (slug: string) => {
     try { await call('DELETE', { slug }); setConfirm(null); onChange(`Removed ${slug}`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not remove'); }
@@ -557,12 +556,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
         {l.stripeCustomer && <a href={`${stripeBase}/customers/${l.stripeCustomer}`} target="_blank" rel="noreferrer" className={btn}>Stripe</a>}
         <button onClick={() => recover(l.slug)} className={btn}>Reset link</button>
         <button onClick={() => setHanding(l)} className={btn}>Hand over</button>
-        {l.comp && (l.tier === 'ai'
-          ? <button onClick={() => setTier(l.slug, 'standard')} className={btn}>Stop running its AI</button>
-          : <button onClick={() => setTier(l.slug, 'ai')} className={btn}>Run its AI (+ AI)</button>)}
-        {l.comp && (l.status === 'canceled'
-          ? <button onClick={() => setStatus(l.slug, 'active')} className={btn}>Resume</button>
-          : <button onClick={() => setStatus(l.slug, 'canceled')} className={btn}>Pause</button>)}
+        <button onClick={() => setManaging(l.slug)} className={btn}>Plan &amp; AI</button>
         {confirm === l.slug
           ? <button onClick={() => remove(l.slug)} className={cn(btn, 'border-transparent bg-[hsl(var(--signal))] text-white hover:bg-[hsl(var(--signal))]')}>Confirm remove</button>
           : <button onClick={e => { e.stopPropagation(); setConfirm(l.slug); }} className={cn(btn, 'text-muted-foreground')}>Remove</button>}
@@ -608,7 +602,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12.5px]">
                   <div><dt className="text-muted-foreground">Owner</dt><dd className="truncate font-medium">{l.ownerAccount ?? l.owner ?? '—'}</dd></div>
-                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && `, $${l.aiCost.toFixed(2)}`}</span>}</dd></div>
+                  <div><dt className="text-muted-foreground">Plan</dt><dd className="font-medium capitalize"><PlanLabel l={l} /></dd></div>
                   <div><dt className="text-muted-foreground">Last post</dt><dd className="font-medium">{ago(l.lastPostAt)}</dd></div>
                   <div><dt className="text-muted-foreground">Created</dt><dd className="font-medium">{new Date(l.created).toLocaleDateString()}</dd></div>
                 </dl>
@@ -637,7 +631,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                       <a href={l.url} target="_blank" rel="noreferrer" className="text-[12px] text-muted-foreground hover:text-primary">{l.slug}.{data.rootDomain}</a>
                     </td>
                     <td className="px-3 py-3"><Pill s={l.status} /></td>
-                    <td className="px-3 py-3 capitalize">{l.comp ? 'Beta' : l.plan}{l.tier === 'ai' && <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">+ AI{l.aiCost > 0 && `, $${l.aiCost.toFixed(2)}`}</span>}</td>
+                    <td className="px-3 py-3 capitalize"><PlanLabel l={l} /></td>
                     <td className="max-w-[200px] px-3 py-3 text-muted-foreground">
                       <p className="truncate">{l.ownerAccount ?? l.owner ?? '—'}</p>
                       {l.pendingOwner && <p className="truncate text-[11.5px] text-primary">Handing to {l.pendingOwner}</p>}
@@ -661,8 +655,194 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
       )}
       <AnimatePresence>
         {handing && <HandOver league={handing} onCancel={() => setHanding(null)} onSubmit={email => handOver(handing.slug, email)} />}
+        {managed && <ManageLeague league={managed} trialDays={data.trialDays} stripeMode={data.stripeMode} call={call} onChange={onChange} onClose={() => setManaging(null)} />}
       </AnimatePresence>
     </Panel>
+  );
+}
+
+/** A league's plan in a word, and how its AI runs when that isn't the plan's default. */
+function PlanLabel({ l }: { l: League }) {
+  const cycle = l.standing === 'beta' || (l.standing === 'paused' && l.comp) ? 'Beta' : l.plan === 'season' ? 'Yearly' : 'Monthly';
+  const overridden = l.ai !== l.aiBilled && !l.comp;
+  return (
+    <>
+      {cycle}
+      {l.ai === 'platform' && (
+        <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-primary">
+          + AI{overridden && ' (on us)'}{l.aiCost > 0 && `, $${l.aiCost.toFixed(2)}`}
+        </span>
+      )}
+      {l.ai === 'off' && <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-bold normal-case text-muted-foreground">AI off</span>}
+      {l.standing === 'trial' && l.trialEndsAt && (
+        <span className="block text-[11.5px] font-normal normal-case text-muted-foreground">Trial ends {new Date(l.trialEndsAt).toLocaleDateString()}</span>
+      )}
+    </>
+  );
+}
+
+const STANDING_COPY: Record<Standing, { title: string; body: (l: League) => string }> = {
+  beta: { title: 'Beta', body: () => 'Free, with no billing. Added here, or moved here from a plan.' },
+  trial: { title: 'Trial', body: l => `On its free trial${l.trialEndsAt ? ` until ${new Date(l.trialEndsAt).toLocaleDateString()}` : ''}. It becomes paid if the owner adds a card from the admin's billing, and cancels quietly if not.` },
+  paid: { title: 'Paid', body: l => (l.status === 'past_due' ? 'Subscribed, but its last payment failed and Stripe is retrying.' : `Subscribed, ${l.plan === 'season' ? 'yearly' : 'monthly'}.`) },
+  paused: { title: 'Paused', body: l => (l.comp ? 'Paused by you. Its site shows as paused until you resume it.' : 'Its subscription ended. Its site shows as paused.') },
+};
+
+const AI_OPTIONS: { id: AiMode; label: string; body: string }[] = [
+  { id: 'off', label: 'Off', body: 'Nothing AI runs: no desk, chat or analytics, even on a key of its own.' },
+  { id: 'own', label: 'Own key', body: 'Runs on a key the league adds in its admin, billed to them.' },
+  { id: 'platform', label: 'We run it', body: 'Runs on the platform’s key: what League Pass + AI pays for.' },
+];
+
+/**
+ * A league's plan and its AI, for the operator: move it between beta, trial
+ * and paid, and say how its AI runs. Anything that touches Stripe asks first.
+ */
+function ManageLeague({ league: l, trialDays, stripeMode, call, onChange, onClose }: {
+  league: League; trialDays: number; stripeMode: Data['stripeMode'];
+  call: (m: string, b?: unknown) => Promise<any>; onChange: (msg: string) => void; onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  // The one Stripe change waiting on a second tap.
+  const [asking, setAsking] = useState<'beta' | 'trial' | null>(null);
+  const [days, setDays] = useState(trialDays);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const run = async (body: Record<string, unknown>, done: string) => {
+    setBusy(true); setError('');
+    try { await call('PATCH', { slug: l.slug, ...body }); setAsking(null); onChange(done); }
+    catch (e) { setError(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setBusy(false); }
+  };
+  const name = l.name || l.slug;
+  const extending = l.standing === 'trial';
+  const canTrial = l.standing === 'beta' || extending;
+  const canBeta = l.standing !== 'beta' && !(l.standing === 'paused' && l.comp);
+  const live = stripeMode === 'live';
+  const btn = 'rounded-xl border border-border px-3.5 py-2.5 text-[13px] font-semibold transition hover:bg-muted disabled:opacity-50';
+
+  return (
+    <motion.div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-foreground/40 backdrop-blur-[2px]" />
+      <motion.div role="dialog" aria-modal="true" aria-label={`Plan and AI for ${name}`}
+        initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+        className="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[24px] border border-border bg-card p-6 pb-8 shadow-2xl sm:rounded-[24px] sm:pb-6">
+        <span className="mx-auto mb-4 block h-1 w-10 rounded-full bg-muted sm:hidden" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="lp-display truncate text-[22px] font-extrabold tracking-[-0.02em]">{name}</h3>
+            <p className="text-[12.5px] text-muted-foreground">Plan and AI</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-muted-foreground hover:bg-muted">Done</button>
+        </div>
+
+        {/* Standing */}
+        <section className="mt-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Standing</p>
+          <div className="mt-2 rounded-2xl border border-border bg-background p-4">
+            <p className="flex items-center gap-2 text-[15px] font-bold">{STANDING_COPY[l.standing].title}<Pill s={l.status} /></p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{STANDING_COPY[l.standing].body(l)}</p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canTrial && asking !== 'trial' && (
+                <button disabled={busy} onClick={() => setAsking('trial')} className={btn}>{extending ? 'Extend trial' : 'Start a trial'}</button>
+              )}
+              {canBeta && asking !== 'beta' && (
+                <button disabled={busy} onClick={() => setAsking('beta')} className={btn}>Move to beta (free)</button>
+              )}
+              {l.comp && l.standing === 'beta' && (
+                <button disabled={busy} onClick={() => run({ status: 'canceled' }, `Paused ${l.slug}`)} className={cn(btn, 'text-muted-foreground')}>Pause</button>
+              )}
+              {l.comp && l.standing === 'paused' && (
+                <button disabled={busy} onClick={() => run({ status: 'active' }, `Resumed ${l.slug}`)} className={btn}>Resume</button>
+              )}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {asking && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <div className="mt-3 rounded-xl border border-primary/30 bg-primary/[0.05] p-3.5">
+                    {asking === 'trial' ? (
+                      <>
+                        <label className="flex items-center gap-2 text-[13px] font-semibold">
+                          {extending ? 'End it' : 'A trial of'}
+                          <input type="number" min={1} max={90} value={days} onChange={e => setDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+                            className="w-16 rounded-lg border border-border bg-card px-2 py-1.5 text-center text-[14px] outline-none focus:border-primary" />
+                          {extending ? 'days from now' : 'days'}
+                        </label>
+                        <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                          {extending
+                            ? 'Moves its trial end in Stripe. Nothing is charged until it ends.'
+                            : `Starts a ${l.tier === 'ai' ? 'League Pass + AI' : 'League Pass'} ${l.plan === 'season' ? 'yearly' : 'monthly'} trial in Stripe${live ? '' : ' (test mode)'}, billed to the owner. No card needed; if none is added by the end, it cancels and the league goes paused.`}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+                        {l.standing === 'trial' ? 'Cancels its trial in Stripe now. Nothing has been charged.'
+                          : l.standing === 'paid' ? 'Cancels its subscription in Stripe now, so it is never billed again. Nothing already paid is refunded; do that in Stripe if it is owed.'
+                          : 'Brings it back as a free league. Its old subscription stays ended.'}
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button disabled={busy} onClick={() => setAsking(null)} className={btn}>Cancel</button>
+                      <button disabled={busy}
+                        onClick={() => asking === 'trial'
+                          ? run({ standing: 'trial', days }, extending ? `${l.slug}'s trial now ends in ${days} days` : `${l.slug} is on a ${days}-day trial`)
+                          : run({ standing: 'beta' }, `${l.slug} is in beta, free`)}
+                        className="rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground disabled:opacity-50">
+                        {busy ? 'Working…' : asking === 'trial' ? (extending ? 'Extend' : 'Start trial') : 'Move to beta'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </section>
+
+        {/* AI */}
+        <section className="mt-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">AI</p>
+          <div role="radiogroup" aria-label="How its AI runs" className="mt-2 grid gap-2">
+            {AI_OPTIONS.map(o => {
+              const on = l.ai === o.id;
+              return (
+                <button key={o.id} role="radio" aria-checked={on} disabled={busy || on}
+                  onClick={() => run({ ai: o.id }, o.id === 'off' ? `${l.slug}'s AI is off` : o.id === 'own' ? `${l.slug}'s AI runs on its own key` : `We run ${l.slug}'s AI`)}
+                  className={cn('flex items-start gap-3 rounded-2xl border p-3.5 text-left transition',
+                    on ? 'border-primary bg-primary/[0.06]' : 'border-border hover:bg-muted/60')}>
+                  <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2', on ? 'border-primary' : 'border-muted-foreground/40')}>
+                    {on && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold">
+                      {o.label}
+                      {!l.comp && l.aiBilled === o.id && <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-bold text-muted-foreground">Its plan</span>}
+                    </span>
+                    <span className="block text-[12.5px] leading-snug text-muted-foreground">{o.body}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+            {l.comp
+              ? 'A beta league’s plan follows this.'
+              : l.ai !== l.aiBilled
+                ? 'Overridden by you. Its billing is unchanged, and Stripe won’t undo this. Pick “Its plan” to go back.'
+                : 'Its billing is never changed here. A different choice is kept as your override.'}
+            {l.ai === 'own' && !l.aiKey && ' It has no key of its own yet, so nothing runs until it adds one.'}
+          </p>
+        </section>
+
+        {error && <p className="mt-4 text-[13px] font-medium text-[hsl(var(--signal))]">{error}</p>}
+      </motion.div>
+    </motion.div>
   );
 }
 

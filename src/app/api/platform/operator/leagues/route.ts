@@ -4,6 +4,13 @@
  *   GET     every league with its status, plan, owner and health
  *   POST    { leagueId, slug }        add a league by hand (a free beta league, no Stripe)
  *   PATCH   { slug, status }          pause ("canceled") or resume ("active") a league
+ *   PATCH   { slug, ai }              how its AI runs: "off", "own" (its own key) or
+ *                                     "platform" (we run it). A beta league's plan
+ *                                     changes to match; a billed league keeps its
+ *                                     billing and gets an override instead
+ *   PATCH   { slug, standing, days? } "beta" (free; cancels any subscription in
+ *                                     Stripe) or "trial" (a no-card Stripe trial of
+ *                                     `days`, or extends one already running)
  *   PATCH   { slug, ownerEmail }      hand the league to someone: they become owner
  *                                     when they sign in with that email (the
  *                                     current owner becomes an admin)
@@ -19,9 +26,10 @@
 import { NextResponse } from 'next/server';
 import { isOperator } from '@/lib/platform/operator';
 import {
-  listTenants, getTenant, saveTenant, deleteTenant,
-  type Tenant, type TenantStatus,
+  listTenants, getTenant, saveTenant, deleteTenant, aiMode, billedAiMode,
+  type AiMode, type Tenant, type TenantStatus,
 } from '@/lib/platform/tenants';
+import { moveToBeta, standingOf, startTrial, TRIAL_DAYS } from '@/lib/platform/standing';
 import { PLATFORM, PLANS } from '@/lib/platform/config';
 import { runAsTenant, forgetTenant } from '@/lib/tenant/context';
 import { adminPasswordSet } from '@/lib/tenant/admin';
@@ -83,6 +91,11 @@ export async function GET(req: Request) {
     status: t.status,
     plan: t.plan,
     tier: t.tier ?? 'standard',
+    // How its AI runs, and what its plan alone would give it.
+    ai: aiMode(t),
+    aiBilled: billedAiMode(t),
+    standing: standingOf(t),
+    trialEndsAt: t.trialEndsAt ?? null,
     owner: t.ownerEmail,
     stripeCustomer: t.stripeCustomerId,
     comp: !t.stripeSubscriptionId,
@@ -102,6 +115,7 @@ export async function GET(req: Request) {
     inquiries: await listInquiries(),
     stripeMode: stripeMode(process.env.STRIPE_SECRET_KEY),
     prices: { monthly: PLANS.pro.monthly, season: PLANS.pro.season },
+    trialDays: TRIAL_DAYS,
     totals: {
       all: leagues.length, trialing: count('trialing'), active: count('active'),
       past_due: count('past_due'), canceled: count('canceled'),
@@ -111,9 +125,9 @@ export async function GET(req: Request) {
         const p = l.tier === 'ai' ? PLANS.ai : PLANS.pro;
         return s + (l.plan === 'monthly' ? p.monthly : p.season / 5);
       }, 0),
-      ai: leagues.filter(l => l.tier === 'ai' && l.status !== 'canceled').length,
-      // This month's AI bill the platform carries: + AI leagues without their own key.
-      aiCost: Math.round(leagues.filter(l => l.tier === 'ai' && !l.aiKey).reduce((s, l) => s + l.aiCost, 0) * 100) / 100,
+      ai: leagues.filter(l => l.ai === 'platform' && l.status !== 'canceled').length,
+      // This month's AI bill the platform carries: leagues we run the AI for, without their own key.
+      aiCost: Math.round(leagues.filter(l => l.ai === 'platform' && !l.aiKey).reduce((s, l) => s + l.aiCost, 0) * 100) / 100,
     },
     leagues,
   });
@@ -157,11 +171,39 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!(await isOperator(req))) return deny();
-  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string; tier?: string; dismissInquiry?: string };
+  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string; tier?: string; dismissInquiry?: string; ai?: string; standing?: string; days?: number };
   if (body.dismissInquiry) {
     const { removeInquiry } = await import('@/lib/platform/inquiries');
     await removeInquiry(String(body.dismissInquiry));
     return NextResponse.json({ ok: true });
+  }
+  if (body.ai !== undefined) {
+    const t = body.slug ? await getTenant(body.slug) : null;
+    const ai = body.ai as AiMode;
+    if (!t || !['off', 'own', 'platform'].includes(ai)) return NextResponse.json({ error: 'Unknown league or AI setting' }, { status: 400 });
+    let next: Tenant;
+    if (!t.stripeSubscriptionId && ai !== 'off') {
+      // Beta: its plan is ours to set, so it simply moves plan.
+      next = { ...t, tier: ai === 'platform' ? 'ai' : 'standard' };
+      delete next.aiOverride;
+    } else {
+      // Billed (or switching off): billing stays as it is, and an override says otherwise; none when they agree.
+      next = { ...t };
+      if (ai === billedAiMode(t)) delete next.aiOverride; else next.aiOverride = ai;
+    }
+    await saveTenant(next);
+    forgetTenant(t.slug);
+    return NextResponse.json({ ok: true, slug: t.slug, ai: aiMode(next) });
+  }
+  if (body.standing !== undefined) {
+    if (!body.slug) return NextResponse.json({ error: 'Unknown league' }, { status: 400 });
+    const done = body.standing === 'beta' ? await moveToBeta(body.slug)
+      : body.standing === 'trial' ? await startTrial(body.slug, Number(body.days ?? TRIAL_DAYS))
+      : null;
+    if (!done) return NextResponse.json({ error: 'Unknown standing' }, { status: 400 });
+    if (!done.ok) return NextResponse.json({ error: done.error }, { status: done.status });
+    forgetTenant(body.slug);
+    return NextResponse.json({ ok: true, slug: body.slug, standing: standingOf(done.tenant), trialEndsAt: done.tenant.trialEndsAt ?? null });
   }
   // League Pass or League Pass + AI, for a league the operator manages (a comp league; a paid one changes through Stripe).
   if (body.tier !== undefined) {
