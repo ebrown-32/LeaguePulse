@@ -82,6 +82,9 @@ async function bigGames(season: string, week: number): Promise<BigGame[]> {
 
 /** A photo to post at `at`, or null when none is due. */
 export async function planPhoto(at: number): Promise<PlannedPhoto | null> {
+  // The stadiums come from Franchise HQ, which is hosted only: a self-hosted
+  // desk has nothing to photograph, and a caption with no picture is worse than none.
+  if (process.env.LP_HOSTED !== '1') return null;
   const nfl = await getNFLState().catch(() => null as any);
   if (!nfl || nfl.season_type !== 'regular') return null;
   const season = String(nfl.season), week = Number(nfl.week);

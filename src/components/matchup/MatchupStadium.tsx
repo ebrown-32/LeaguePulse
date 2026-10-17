@@ -7,6 +7,10 @@
  * a full house once it's live (a fifth of it in the visitors' color), and the
  * last fans filing out once it's final. The host and the crowd come from
  * /api/venue (lib/franchise/venue); the stadium as its manager dressed it.
+ *
+ * Hosted only: the stadium comes from Franchise HQ, which a self-hosted copy
+ * doesn't run, so there it renders nothing at all. And anywhere the stadium
+ * can't be drawn, it steps aside rather than leave an empty box.
  */
 
 import { defaultStadiumName } from '@/lib/franchise/stadiumName';
@@ -58,7 +62,12 @@ function caption(stage: GameDayStage, hours: number, people: number): string {
   }
 }
 
-export default function MatchupStadium({ a, b, week, className }: { a: Team; b: Team; week?: number; className?: string }) {
+export default function MatchupStadium(props: { a: Team; b: Team; week?: number; className?: string }) {
+  if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
+  return <HostedStadium {...props} />;
+}
+
+function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: number; className?: string }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -77,7 +86,7 @@ export default function MatchupStadium({ a, b, week, className }: { a: Team; b: 
   const ground = useHostGround(venue?.host ?? null, venue?.guest ?? null, hostTeam?.avatar);
 
   const day = useMemo(() => (venue ? gameDay(now, venue.kickoff, venue.phase, venue.crowd?.fill ?? 0.8) : null), [venue, now]);
-  if (venue === null) return null;
+  if (venue === null || ground === null) return null;
   const host = venue ? (venue.host === a.userId ? a : b) : null;
   const guest = venue ? (venue.host === a.userId ? b : a) : null;
   const people = day && venue?.crowd ? Math.round(venue.crowd.capacity * day.stands) : 0;
