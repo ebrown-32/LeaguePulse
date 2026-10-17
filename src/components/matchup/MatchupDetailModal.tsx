@@ -17,6 +17,7 @@
  * here for the session, and a card starts fetching the moment it is touched.
  */
 
+import MatchupStadium from './MatchupStadium';
 import { useCallback, useEffect, useState } from 'react';
 import { lockScroll } from '@/lib/scrollLock';
 import Link from 'next/link';
@@ -228,6 +229,8 @@ export default function MatchupDetailModal({
               className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:px-6"
               onPointerDownCapture={e => e.stopPropagation()}
             >
+              {/* Where it's played, the same on every tab. */}
+              <MatchupStadium a={target.a} b={target.b} week={target.week} className="mb-4 h-48 sm:h-60" />
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={tab}

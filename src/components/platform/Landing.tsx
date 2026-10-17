@@ -355,15 +355,15 @@ function Hero() {
             The custom app for your fantasy football leagues.
           </motion.p>
           <h1 className="lp-display mt-4 max-w-4xl text-[46px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[76px] lg:text-[88px]">
-            <Words text="Your league finally gets a" />{' '}
-            <span className="lp-brand-text lp-underline-draw"><Words text="press box." delay={0.42} /></span>
+            <Words text="Making fantasy football" />{' '}
+            <span className="lp-brand-text lp-underline-draw"><Words text="even better." delay={0.42} /></span>
           </h1>
         </motion.div>
 
         <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
           <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } }}>
             <motion.p variants={rise} className="max-w-md text-[17px] leading-relaxed text-muted-foreground">
-              {PLATFORM.name} turns your Sleeper or ESPN league into its own app. AI writers who cover your actual teams,
+              {PLATFORM.name} turns your Sleeper or ESPN league into its own app on any device. Analytics that give you the edge, AI writers who cover your actual teams,
               live chances to win, a guide to which games to have on, and every stat back to your first draft.
               Everyone installs it from the link in two taps. No app store.
             </motion.p>

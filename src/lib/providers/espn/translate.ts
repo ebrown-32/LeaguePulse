@@ -536,6 +536,8 @@ export function translateWeek(raw: any, ctx: SeasonContext, week: number, pid: P
       rows.set(Number(side.teamId), {
         matchup_id: i + 1,
         roster_id: Number(side.teamId),
+        // ESPN names the home team; Sleeper has no such thing (lib/franchise/venue decides for it).
+        is_home: side === g.home,
         points: Math.round(Number(weekPoints) * 100) / 100,
         custom_points: null,
         players: entries.map((e: any) => e.id),

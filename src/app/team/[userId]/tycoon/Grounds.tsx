@@ -254,7 +254,7 @@ function Tailgates({ plan, team, accent, night }: { plan: CampusPlan; team: stri
       <Boxes items={parts.flags} size={[0.14, 0.09, 0.005]} cast={false} />
       <Instanced items={parts.people} roughness={0.8}><capsuleGeometry args={[0.03, 0.09, 3, 6]} /></Instanced>
       {parts.smoke.length > 0 && (
-        <instancedMesh ref={puff} args={[undefined, undefined, parts.smoke.length * 3]} key={parts.smoke.length}>
+        <instancedMesh ref={puff} args={[undefined, undefined, parts.smoke.length * 3]} key={parts.smoke.length} frustumCulled={false}>
           <sphereGeometry args={[1, 8, 6]} />
           <meshStandardMaterial color="#d9d9d9" transparent opacity={0.32} depthWrite={false} roughness={1} />
         </instancedMesh>
@@ -314,6 +314,7 @@ function Buildings({ plan, night, setting }: { plan: CampusPlan; night: number; 
     const d = new Object3D();
     blocks.forEach((b, i) => { d.position.set(b.x, b.y, b.z); d.rotation.set(0, b.ry ?? 0, 0); d.scale.set(b.sx!, b.sy!, b.sz!); d.updateMatrix(); m.setMatrixAt(i, d.matrix); m.setColorAt(i, new Color(b.c)); });
     m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
   }, [blocks]);
   return (
     <group>
@@ -465,6 +466,7 @@ function Streetlights({ plan, night, banners, team, accent }: { plan: CampusPlan
     const d = new Object3D();
     heads.forEach((h, i) => { d.position.set(h.x, Y.glow, h.z); d.rotation.set(-Math.PI / 2, 0, 0); d.updateMatrix(); m.setMatrixAt(i, d.matrix); });
     m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
   }, [heads, lit]);
   return (
     <group>
@@ -500,6 +502,7 @@ function Signals({ plan }: { plan: CampusPlan }) {
         dummy.position.set(p.x + Math.cos(ry) * off, y, p.z - Math.sin(ry) * off); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
       });
       m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
     }
   }, [poles, dummy]);
   const c = useMemo(() => ({ green: new Color('#39e46a'), amber: new Color('#ffb21f'), red: new Color('#ff3b2f'), walk: new Color('#f4f7ff'), stop: new Color('#ff7a1a') }), []);
@@ -519,10 +522,10 @@ function Signals({ plan }: { plan: CampusPlan }) {
       <Boxes items={items.posts} size={[0.03, 0.6, 0.03]} color="#3d4249" cast={false} />
       <Boxes items={items.heads} size={[0.05, 0.15, 0.05]} color="#1b1d21" cast={false} />
       <Boxes items={items.peds} size={[0.045, 0.06, 0.045]} color="#1b1d21" cast={false} />
-      <instancedMesh ref={car} args={[undefined, undefined, poles.length]} key={`c${poles.length}`}>
+      <instancedMesh ref={car} args={[undefined, undefined, poles.length]} key={`c${poles.length}`} frustumCulled={false}>
         <sphereGeometry args={[0.018, 8, 6]} /><meshBasicMaterial toneMapped={false} />
       </instancedMesh>
-      <instancedMesh ref={walk} args={[undefined, undefined, poles.length]} key={`w${poles.length}`}>
+      <instancedMesh ref={walk} args={[undefined, undefined, poles.length]} key={`w${poles.length}`} frustumCulled={false}>
         <sphereGeometry args={[0.014, 8, 6]} /><meshBasicMaterial toneMapped={false} />
       </instancedMesh>
     </group>
@@ -581,7 +584,7 @@ function Walkers({ routes, fill, colors, detail }: { routes: Route[]; fill: numb
     m.instanceMatrix.needsUpdate = true;
   });
   if (!walkers.length) return null;
-  return <instancedMesh ref={mesh} args={[undefined, undefined, walkers.length]} key={walkers.length}><capsuleGeometry args={[0.032, 0.09, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
+  return <instancedMesh ref={mesh} args={[undefined, undefined, walkers.length]} key={walkers.length} frustumCulled={false}><capsuleGeometry args={[0.032, 0.09, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
 }
 
 /**
@@ -677,10 +680,10 @@ function Traffic({ routes, night, detail }: { routes: Route[]; night: number; de
   const n = fleet.cars.length;
   return (
     <group>
-      <instancedMesh ref={body} args={[undefined, undefined, n]}><boxGeometry args={[0.5, 0.1, 0.24]} /><meshStandardMaterial roughness={0.6} /></instancedMesh>
-      <instancedMesh ref={cabin} args={[undefined, undefined, n]}><boxGeometry args={[0.26, 0.08, 0.2]} /><meshStandardMaterial color="#1d2733" /></instancedMesh>
-      <instancedMesh ref={head} args={[undefined, undefined, n]}><boxGeometry args={[0.02, 0.035, 0.2]} /><meshStandardMaterial color="#f6f1df" emissive="#fff4d6" emissiveIntensity={night * 3} /></instancedMesh>
-      <instancedMesh ref={tail} args={[undefined, undefined, n]}><boxGeometry args={[0.02, 0.03, 0.2]} /><meshBasicMaterial toneMapped={false} /></instancedMesh>
+      <instancedMesh ref={body} args={[undefined, undefined, n]} frustumCulled={false}><boxGeometry args={[0.5, 0.1, 0.24]} /><meshStandardMaterial roughness={0.6} /></instancedMesh>
+      <instancedMesh ref={cabin} args={[undefined, undefined, n]} frustumCulled={false}><boxGeometry args={[0.26, 0.08, 0.2]} /><meshStandardMaterial color="#1d2733" /></instancedMesh>
+      <instancedMesh ref={head} args={[undefined, undefined, n]} frustumCulled={false}><boxGeometry args={[0.02, 0.035, 0.2]} /><meshStandardMaterial color="#f6f1df" emissive="#fff4d6" emissiveIntensity={night * 3} /></instancedMesh>
+      <instancedMesh ref={tail} args={[undefined, undefined, n]} frustumCulled={false}><boxGeometry args={[0.02, 0.03, 0.2]} /><meshBasicMaterial toneMapped={false} /></instancedMesh>
     </group>
   );
 }

@@ -63,6 +63,37 @@ export interface GotwTeam {
   keyPlayers: { name: string; position: string; projected: number }[];
 }
 
+/** The rivalry line: "Blood feud: Trash Pandas leads the series 10-9", or null under two meetings. */
+function seriesReason(sr: Series | null, a: string, b: string): string | null {
+  if (!sr || sr.games.length < 2) return null;
+  const lead = sr.aWins === sr.bWins
+    ? `series tied ${sr.aWins}-${sr.bWins}`
+    : `${sr.aWins > sr.bWins ? a : b} leads the series ${Math.max(sr.aWins, sr.bWins)}-${Math.min(sr.aWins, sr.bWins)}`;
+  return sr.rivalryScore >= 55 ? `${sr.rivalryLabel}: ${lead}` : lead.charAt(0).toUpperCase() + lead.slice(1);
+}
+
+/** The series is read again this often: the pick is locked for the week, the history under it is not. */
+const SERIES_REFRESH_MS = 6 * 3_600_000;
+
+/**
+ * A stored pick with its rivalry line counted afresh. The pick and its other
+ * reasons stay as chosen; the series is a fact about the league's history,
+ * which gets corrected (a two-week playoff round once counted as two games).
+ */
+async function withFreshSeries(pick: GameOfWeek, save: (p: GameOfWeek) => Promise<unknown>): Promise<GameOfWeek> {
+  if (pick.seriesAt && Date.now() - pick.seriesAt < SERIES_REFRESH_MS) return pick;
+  const data = await fetchRivalriesData().catch(() => null);
+  if (!data) return pick;
+  const sr = await finishedSeries(data, pick.a.userId, pick.b.userId, pick.season, weekPhase).catch(() => null);
+  const line = seriesReason(sr, pick.a.teamName, pick.b.teamName);
+  const others = pick.reasons.filter(r => r.kind !== 'rivalry');
+  const at = pick.reasons.findIndex(r => r.kind === 'rivalry');
+  const reasons = line ? [...others.slice(0, at < 0 ? others.length : at), { kind: 'rivalry', text: line }, ...others.slice(at < 0 ? others.length : at)] : others;
+  const fresh = { ...pick, reasons, seriesAt: Date.now() } as GameOfWeek;
+  await save(fresh).catch(() => {});
+  return fresh;
+}
+
 export interface GameOfWeek {
   season: string;
   week: number;
@@ -77,6 +108,8 @@ export interface GameOfWeek {
   /** Every fixture's score and the signals behind it, so the choice can be audited. */
   field: { matchupId: number; teams: string; score: number; parts: Record<GotwSignal, number> }[];
   chosenAt: string;
+  /** When the rivalry line was last counted (see withFreshSeries). */
+  seriesAt?: number;
 }
 
 const WEIGHTS: Record<GotwSignal, number> = {
@@ -236,15 +269,8 @@ export async function chooseGameOfWeek(
     add('points', `${(best.projA + best.projB).toFixed(1)} points projected between them`);
   }
 
-  const sr = best.series;
-  if (sr && sr.games.length >= 2) {
-    const lead = sr.aWins === sr.bWins
-      ? `series tied ${sr.aWins}-${sr.bWins}`
-      : `${sr.aWins > sr.bWins ? best.f.a.teamName : best.f.b.teamName} leads the series ${Math.max(sr.aWins, sr.bWins)}-${Math.min(sr.aWins, sr.bWins)}`;
-    add('rivalry', sr.rivalryScore >= 55
-      ? `${sr.rivalryLabel}: ${lead}`
-      : lead.charAt(0).toUpperCase() + lead.slice(1));
-  }
+  const rivalry = seriesReason(best.series, best.f.a.teamName, best.f.b.teamName);
+  if (rivalry) add('rivalry', rivalry);
 
   const gap = Math.abs(best.projA - best.projB);
   const favPct = Math.round(Math.max(best.pA, 1 - best.pA) * 100);
@@ -304,7 +330,7 @@ export async function gameOfWeek(
   if (redis) {
     try {
       const raw = await redis.get(key(leagueId, season, week));
-      if (raw) return JSON.parse(raw) as GameOfWeek;
+      if (raw) return await withFreshSeries(JSON.parse(raw) as GameOfWeek, p => redis.set(key(leagueId, season, week), JSON.stringify(p)));
     } catch { /* fall through and choose */ }
   }
   if (week < currentWeek) return null;

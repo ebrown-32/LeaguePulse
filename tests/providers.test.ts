@@ -217,6 +217,9 @@ test('a week: one row per team, starters in slot order, points from ESPN', () =>
   assert.equal(t1.players_points.s201, 4);
   assert.equal(rows.find(r => r.roster_id === 2)!.starters[0], '0'); // empty slot, as Sleeper marks it
   assert.equal(rows.find(r => r.roster_id === 3)!.matchup_id, null); // no game in this data
+  // ESPN's home team is kept, for the venue (lib/franchise/venue).
+  assert.equal(t1.is_home, true);
+  assert.equal(rows.find(r => r.roster_id === 2)!.is_home, false);
 });
 
 test('transactions: completed waivers and free agents only', () => {

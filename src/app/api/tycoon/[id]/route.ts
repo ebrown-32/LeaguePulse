@@ -40,7 +40,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     interest: Math.round(s.interest * 10) / 10,
     value: franchiseValue(s),
     // Crowds are public: everyone saw them. Money is not.
-    games: s.games.map(g => ({ key: g.key, season: g.season, week: g.week, result: g.result, points: g.points, oppPoints: g.oppPoints, opponent: g.opponent, postseason: g.postseason, attendance: g.attendance, capacity: g.capacity, interest: g.interest, ...(open ? { prices: g.prices, fairTicket: g.fairTicket, revenue: g.revenue, costs: g.costs, profit: g.profit, interestChange: g.interestChange } : {}) })),
+    games: s.games.map(g => ({ key: g.key, season: g.season, week: g.week, result: g.result, points: g.points, oppPoints: g.oppPoints, opponent: g.opponent, postseason: g.postseason, home: g.home, attendance: g.attendance, capacity: g.capacity, interest: g.interest, ...(open ? { prices: g.prices, fairTicket: g.fairTicket, revenue: g.revenue, costs: g.costs, profit: g.profit, interestChange: g.interestChange } : {}) })),
     story: s.story.filter(e => open || e.kind !== 'prices').slice(-40),
     books: open ? {
       vc: s.vc, prices: s.prices, fair: fairPrices(s), autopilot: s.autopilot, form: s.form, resentment: s.resentment,

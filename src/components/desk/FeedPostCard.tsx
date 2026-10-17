@@ -1,10 +1,12 @@
 'use client';
 
+import StadiumPhoto from './StadiumPhoto';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users, Swords, Radio, CrownIcon,
   ArrowRight, Ticket, Zap, Sword, type Icon,
+  Camera,
 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/Avatar';
@@ -25,7 +27,7 @@ import PostReplies from './PostReplies';
  */
 type Kind =
   | 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-  | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek';
+  | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo';
 
 /** Written while the games are on, and rendered inline so it reads as news
  *  breaking rather than as a document to open. */
@@ -63,6 +65,7 @@ const KIND_META: Record<Kind, { label: string; icon: Icon } | null> = {
   kickoff: { label: 'Kickoff', icon: Radio },
   liveTake: { label: 'Live', icon: Radio },
   gameOfWeek: { label: 'Game of the Week', icon: CrownIcon },
+  photo: { label: 'Photo', icon: Camera },
 };
 
 const SIGNAL_ICON: Record<string, Icon> = {
@@ -452,7 +455,8 @@ export function FeedPostCard({
   const now = useNow();
   const isLive = LIVE_KINDS.has(post.kind);
   const isGotw = post.kind === 'gameOfWeek';
-  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw;
+  const isPhoto = post.kind === 'photo';
+  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto;
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}
@@ -502,8 +506,14 @@ export function FeedPostCard({
 
             {!isLong && !isLive && (
               <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
-                {post.content.text}
+                {isPhoto ? post.content.caption : post.content.text}
               </p>
+            )}
+
+            {/* A photograph from the stadium, developed from the real 3D view. */}
+            {isPhoto && post.content.photo && (
+              <StadiumPhoto spec={post.content.photo} hostTeam={post.content.hostTeam} hostAvatar={post.content.hostAvatar}
+                persona={{ name: post.personaName, avatar: post.personaAvatar }} />
             )}
 
             {isLive && <GameBeat post={post} />}

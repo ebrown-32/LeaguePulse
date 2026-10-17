@@ -40,6 +40,14 @@ export interface GameDay {
   opponent: string;
   /** The opponent's win share this season before this game, 0 to 1. */
   oppWinPct: number;
+  /**
+   * Whether this franchise hosted (lib/franchise/venue). Only the host opens
+   * its gates and draws a crowd. On the road a franchise earns its share of
+   * the gate and the league's TV money (ROAD_SHARE of what a home date would
+   * have made it) and pays no game-day staff; the result moves its fans the
+   * same either way. Left out, a game is a home game.
+   */
+  home?: boolean;
 }
 
 export interface Prices { ticket: number; concession: number; parking: number }
@@ -50,10 +58,16 @@ export type Decision =
 
 export interface GameReport {
   key: string; season: number; week: number; at: number; postseason: boolean;
+  /** Hosted, or on the road (no crowd, no gate). */
+  home: boolean;
   result: 'W' | 'L' | 'T'; points: number; oppPoints: number; opponent: string;
   attendance: number; capacity: number; fill: number;
   prices: Prices; fairTicket: number;
-  revenue: { tickets: number; concessions: number; parking: number; suites: number; sponsors: number };
+  /**
+   * `premium`: at home, what a franchise's one home date in two weeks adds (premium pricing, every
+   * suite and sponsor); `road`: on the road, its share of the gate and the league's TV money.
+   */
+  revenue: { tickets: number; concessions: number; parking: number; suites: number; sponsors: number; premium: number; road: number };
   costs: { operations: number };
   profit: number;
   interest: number; interestChange: number;
@@ -117,7 +131,7 @@ export const FRONT_OFFICE_RESERVE = 2_000;
  */
 function frontOfficeOffseason(s: EconomyState, at: number, earned: number, winning: boolean) {
   let budget = Math.max(0, earned) * (winning ? 0.6 : 0.3);
-  const recent = s.games.slice(-7);
+  const recent = s.games.filter(g => g.home).slice(-7);
   const full = recent.length >= 4 && recent.reduce((a, g) => a + g.fill, 0) / recent.length >= 0.9;
   for (;;) {
     const pick = TRACKS.filter(t => full || !ROOM.has(t.id))
@@ -193,9 +207,29 @@ function dailyMoney(s: EconomyState, f: FacilityStats) {
   return { merch, sponsors, upkeep };
 }
 
+/**
+ * Home and road, balanced. Only half the league's stadiums open each week, so a home date earns
+ * its gate plus HOME_PREMIUM of it (the franchise's one home date in two weeks: premium pricing,
+ * every suite and sponsor) and a road week earns ROAD_SHARE of what that gate would have been (the
+ * visitors' cut and the league's TV money). Over a season that is the money every franchise always
+ * made; within it, a home date is worth three road weeks.
+ */
+export const HOME_PREMIUM = 0.5;
+export const ROAD_SHARE = 0.5;
+
+/** When home games started driving the money (17 October 2026): builds before it are honored as made. */
+export const REBALANCED_AT = Date.UTC(2026, 9, 17);
+
 function playGame(s: EconomyState, g: GameDay): GameReport {
   const before = s.interest;
-  const p = projectGame(s, s.prices, g);
+  const home = g.home !== false;
+  const projected = projectGame(s, s.prices, g);
+  // On the road the other team's stadium fills; this one stays dark, and its share comes in.
+  const gate = Math.max(0, projected.profit);
+  const premium = home ? Math.round(gate * HOME_PREMIUM) : 0, road = home ? 0 : Math.round(gate * ROAD_SHARE);
+  const p = home
+    ? { ...projected, profit: projected.profit + premium, revenue: { ...projected.revenue, premium, road: 0 } }
+    : { ...projected, attendance: 0, fill: 0, operations: 0, profit: road, revenue: { tickets: 0, concessions: 0, parking: 0, suites: 0, sponsors: 0, premium: 0, road } };
   const f = facilityStats(s.facilities);
   const result: GameReport['result'] = g.points > g.oppPoints ? 'W' : g.points < g.oppPoints ? 'L' : 'T';
 
@@ -208,11 +242,11 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
   const overprice = s.prices.ticket / p.fairTicket;
   s.resentment = overprice > 1.15 ? s.resentment + (overprice - 1.15) * 8 : s.resentment * 0.7;
   s.interest -= s.resentment * 0.5;
-  if (p.fill < 0.55) s.interest -= 1.5;
+  if (home && p.fill < 0.55) s.interest -= 1.5;
   s.interest = clamp(s.interest, 5, 100);
 
   const report: GameReport = {
-    key: g.key, season: g.season, week: g.week, at: g.at, postseason: g.postseason, result,
+    key: g.key, season: g.season, week: g.week, at: g.at, postseason: g.postseason, home, result,
     points: g.points, oppPoints: g.oppPoints, opponent: g.opponent,
     attendance: p.attendance, capacity: p.capacity, fill: p.fill, prices: { ...s.prices }, fairTicket: p.fairTicket,
     revenue: p.revenue, costs: { operations: p.operations }, profit: p.profit,
@@ -229,7 +263,15 @@ function tell(s: EconomyState, e: StoryEvent) { s.story.push(e); }
  * (epoch ms); `now` is where it stops: today, or the end of a former
  * franchise's last season.
  */
-export function simulate(o: { games: GameDay[]; decisions: Decision[]; start: number; now: number; titles?: number[] }): EconomyState {
+export function simulate(o: {
+  games: GameDay[]; decisions: Decision[]; start: number; now: number; titles?: number[];
+  /**
+   * Builds made before this moment happen as they were made, even if the bank can't cover them
+   * in today's economy (it was rebalanced under them; see REBALANCED_AT). Builds after it must be
+   * affordable, as always: nothing is bought on credit.
+   */
+  grandfatherBefore?: number;
+}): EconomyState {
   const s = startingState();
   const games = [...o.games].sort((a, b) => a.at - b.at);
   // A title is won with the season's last game.
@@ -238,6 +280,7 @@ export function simulate(o: { games: GameDay[]; decisions: Decision[]; start: nu
   for (const g of games) seasonEnd.set(g.season, Math.max(seasonEnd.get(g.season) ?? 0, g.at));
   const decisions = [...o.decisions].sort((a, b) => a.at - b.at);
   let gi = 0, di = 0, streak = 0, best = 0, milestone = 1_000, season = 0, seasonStartVc = s.vc;
+  const waiting: Decision[] = [];
 
   for (let day = o.start; day <= o.now; day += DAY) {
     const end = Math.min(day + DAY, o.now + 1);
@@ -248,13 +291,17 @@ export function simulate(o: { games: GameDay[]; decisions: Decision[]; start: nu
       if (d.kind === 'prices') {
         s.prices = { ...d.prices }; s.autopilot = false;
         tell(s, { at: d.at, kind: 'prices', title: 'New prices', detail: `Tickets $${d.prices.ticket}, food $${d.prices.concession}, parking $${d.prices.parking}.` });
-      } else {
-        const next = nextLevel(s.facilities, d.track);
-        if (next && 'spec' in next && s.vc >= next.spec.cost) {
-          s.vc -= next.spec.cost; s.invested += next.spec.cost; s.facilities = { ...s.facilities, [d.track]: next.level };
-          tell(s, { at: d.at, kind: 'build', title: `Built: ${next.spec.name}`, detail: `${TRACK[d.track].name}, ${next.spec.blurb}` });
-        }
-      }
+      } else waiting.push(d);
+    }
+    // Builds, in order. One from before the economy was rebalanced is a fact: it happens as it was
+    // made, even if the bank dips below zero (later games pay it back). After that, a build needs the money.
+    for (const d of waiting.splice(0)) {
+      if (d.kind !== 'build') continue;
+      const next = nextLevel(s.facilities, d.track);
+      if (!next || !('spec' in next)) continue;
+      if (s.vc < next.spec.cost && !(o.grandfatherBefore && d.at < o.grandfatherBefore)) continue;
+      s.vc -= next.spec.cost; s.invested += next.spec.cost; s.facilities = { ...s.facilities, [d.track]: next.level };
+      tell(s, { at: d.at, kind: 'build', title: `Built: ${next.spec.name}`, detail: `${TRACK[d.track].name}, ${next.spec.blurb}` });
     }
     // The old front office keeps prices fair until a manager sets their own.
     if (s.autopilot) { const { exact: _, ...fair } = fairPrices(s); s.prices = fair; }
@@ -283,9 +330,10 @@ export function simulate(o: { games: GameDay[]; decisions: Decision[]; start: nu
         tell(s, { at: g.at, kind: 'title', title: `Champions, ${g.season}`, detail: s.titles === 1 ? 'The first banner goes up. The whole town is wearing the colors.' : `Banner number ${s.titles}. A dynasty sells itself.` });
       }
       streak = r.result === 'W' ? Math.max(1, streak + 1) : r.result === 'L' ? Math.min(-1, streak - 1) : 0;
-      if (r.fill >= 0.995) tell(s, { at: g.at, kind: 'sellout', title: 'Sold out', detail: `Every one of ${r.capacity.toLocaleString('en-US')} seats, week ${g.week}.` });
+      if (!r.home) { /* the crowd was the other team's */ }
+      else if (r.fill >= 0.995) tell(s, { at: g.at, kind: 'sellout', title: 'Sold out', detail: `Every one of ${r.capacity.toLocaleString('en-US')} seats, week ${g.week}.` });
       else if (r.attendance > best && s.games.length > 1) tell(s, { at: g.at, kind: 'record', title: 'Record crowd', detail: `${r.attendance.toLocaleString('en-US')} came for week ${g.week}.` });
-      best = Math.max(best, r.attendance);
+      if (r.home) best = Math.max(best, r.attendance);
       if (s.resentment > 2.5 && r.interestChange < 0) tell(s, { at: g.at, kind: 'unrest', title: 'Fans are grumbling', detail: `Tickets at $${r.prices.ticket} feel steep when fair is about $${Math.round(r.fairTicket)}.` });
       if (streak === 3 || streak === 5) tell(s, { at: g.at, kind: 'streak', title: `${streak} straight wins`, detail: 'The bandwagon is filling up.' });
       if (streak === -3) tell(s, { at: g.at, kind: 'streak', title: 'Three losses running', detail: 'Empty seats are starting to show.' });
