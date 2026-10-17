@@ -60,6 +60,17 @@ function productAccountLink(): string | null {
   return `${origin}/api/platform/account/open?slug=${encodeURIComponent(slug)}`;
 }
 
+/**
+ * Who a pass from the back office belongs to: the operator's email, "secret",
+ * or null for a member's pass (or none). Read for display only; the server
+ * checks the signature on every request.
+ */
+function operatorOf(pass: string | null): string | null {
+  const body = pass?.startsWith('lpt.') ? pass.slice(4).split('.')[0] : null;
+  if (!body) return null;
+  try { return JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))).op ?? null; } catch { return null; }
+}
+
 export default function AdminShell() {
   const [password, setPassword] = useState('');
   const [authed, setAuthed] = useState(false);
@@ -68,6 +79,8 @@ export default function AdminShell() {
   const [tab, setTab] = useState<Tab>('appearance');
   // Claims waiting on the league's franchises, counted on the Managers tab.
   const [pending, setPending] = useState(0);
+  // In from the back office, as the operator rather than one of the league's own.
+  const [operator, setOperator] = useState<string | null>(null);
   useEffect(() => {
     if (!authed || !password) return;
     fetch('/api/admin/franchises', { headers: { 'x-admin-password': password }, cache: 'no-store' })
@@ -135,7 +148,7 @@ export default function AdminShell() {
     } else {
       try { pass = sessionStorage.getItem(PASS_KEY); } catch { /* ignore */ }
     }
-    if (pass) login(pass);
+    if (pass) { setOperator(operatorOf(pass)); login(pass); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -207,9 +220,16 @@ export default function AdminShell() {
   return (
     <PageLayout title="Admin" subtitle={active.blurb}>
       <div data-admin>
+      {operator && (
+        <p className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-[13px]">
+          <span className="font-semibold text-amber-600 dark:text-amber-400">You’re in as the LeaguePulse operator</span>
+          <span className="text-muted-foreground">{operator === 'secret' ? '' : ` (${operator})`}. Anything you change here changes this league’s site. Access ends in two hours.</span>
+        </p>
+      )}
       {/* ESPN leagues only: first, because a broken connection is the thing to fix. */}
       <EspnConnectionCard password={password} />
-      <SetupGuide password={password} tab={tab} onOpen={setTab} forced={setup} />
+      {/* The owner's own checklist: the operator helping out shouldn't tick it off or hide it for them. */}
+      {!operator && <SetupGuide password={password} tab={tab} onOpen={setTab} forced={setup} />}
       {/* On a phone, every section at once, two to a row: a row of seven tabs ran off the screen. */}
       <nav aria-label="Admin section" className="mb-6 grid grid-cols-2 gap-2 sm:hidden">
         {TABS.map(t => (

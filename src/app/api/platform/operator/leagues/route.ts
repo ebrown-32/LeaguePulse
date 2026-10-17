@@ -14,6 +14,8 @@
  *   PATCH   { slug, ownerEmail }      hand the league to someone: they become owner
  *                                     when they sign in with that email (the
  *                                     current owner becomes an admin)
+ *   PATCH   { slug, openAdmin: true } a link into its admin, signed in as the operator
+ *                                     (two hours; see lib/platform/adminPass)
  *   DELETE  { slug }                  take a league off the platform
  *
  * Status changes made here are overwritten by the next Stripe event for a
@@ -171,7 +173,17 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!(await isOperator(req))) return deny();
-  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string; tier?: string; dismissInquiry?: string; ai?: string; standing?: string; days?: number };
+  const body = await req.json().catch(() => ({})) as { slug?: string; status?: string; ownerEmail?: string; tier?: string; dismissInquiry?: string; ai?: string; standing?: string; days?: number; openAdmin?: boolean };
+  if (body.openAdmin) {
+    const t = body.slug ? await getTenant(body.slug) : null;
+    if (!t) return NextResponse.json({ error: 'Unknown league' }, { status: 404 });
+    const { isOperatorRequest } = await import('@/lib/platform/operator');
+    const who = isOperatorRequest(req) ? 'secret' : (await (await import('@/lib/platform/account')).signedInAccount())?.email ?? null;
+    if (!who) return deny();
+    const { leagueAdminUrl, mintOperatorPass } = await import('@/lib/platform/adminPass');
+    console.info(`[operator] ${who} opened the admin of ${t.slug}`);
+    return NextResponse.json({ url: `${leagueAdminUrl(t.slug, new URL(req.url), PLATFORM.rootDomain)}#lpt=${mintOperatorPass(t.slug, who)}` });
+  }
   if (body.dismissInquiry) {
     const { removeInquiry } = await import('@/lib/platform/inquiries');
     await removeInquiry(String(body.dismissInquiry));

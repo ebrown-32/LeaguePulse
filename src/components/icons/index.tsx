@@ -39,6 +39,7 @@ import {
   UploadSimple, User as PUser, UserPlus as PUserPlus, Users as PUsers, Wind as PWind, X as PX,
   Lightning, Eye, WarningCircle, FootballHelmet, Football, Crown, Handshake, Fire as PFire,
   CheckCircle, Lightbulb, DownloadSimple, FileCsv, FileXls, BracketsCurly, PencilSimple, Tag as PTag,
+  BeerStein, Smiley,
 } from '@phosphor-icons/react/dist/ssr';
 
 export type IconProps = Omit<PhosphorProps, 'ref'> & { weight?: IconWeight };
@@ -123,6 +124,8 @@ export const Zap             = duo(Lightning, 'Zap');
 export const Helmet          = duo(FootballHelmet, 'Helmet');
 export const Ball            = duo(Football, 'Ball');
 export const CrownIcon       = duo(Crown, 'CrownIcon');
+export const Beer            = duo(BeerStein, 'Beer');
+export const Smile           = duo(Smiley, 'Smile');
 
 /**
  * A stadium: Phosphor has none, so it is drawn here on Phosphor's own grid

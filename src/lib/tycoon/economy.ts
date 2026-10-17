@@ -54,7 +54,28 @@ export interface Prices { ticket: number; concession: number; parking: number }
 
 export type Decision =
   | { at: number; kind: 'prices'; prices: Prices }
-  | { at: number; kind: 'build'; track: TrackId };
+  | { at: number; kind: 'build'; track: TrackId }
+  /** A promotion night run before a home game (PROMOS): 0 to PROMO_MAX for how well it went. */
+  | { at: number; kind: 'promo'; promo: PromoId; score: number };
+
+/**
+ * Promotion nights: once a week, a manager can run one promotion at their next
+ * home game, through the promo minigame on the manage page. Each trades something for fan interest:
+ * Dollar Beer Night costs that game's food money (beer for a dollar), the others cost VC up front.
+ * How well it's run (0 to PROMO_MAX) scales what the fans get from it.
+ */
+export type PromoId = 'beer' | 'fireworks' | 'bobblehead';
+export const PROMO_MAX = 6;
+export const PROMOS: Record<PromoId, { name: string; cost: number; interest: number; concession?: number; blurb: string }> = {
+  beer: { name: 'Dollar Beer Night', cost: 0, interest: 1.0, concession: 1, blurb: 'Food at a dollar for the night: the fans love it, the concession stands earn less.' },
+  fireworks: { name: 'Fireworks Night', cost: 60, interest: 0.8, blurb: 'A show after the final whistle, paid for up front.' },
+  bobblehead: { name: 'Bobblehead Giveaway', cost: 25, interest: 0.5, blurb: 'A bobblehead for the first 10,000 through the gates. Cheap and cheerful.' },
+};
+export const isPromo = (v: unknown): v is PromoId => typeof v === 'string' && v in PROMOS;
+
+/** One promotion a week; one booked is kept for a home game within PROMO_KEEP. */
+export const PROMO_COOLDOWN = 6 * 86_400_000;
+export const PROMO_KEEP = 10 * 86_400_000;
 
 export interface GameReport {
   key: string; season: number; week: number; at: number; postseason: boolean;
@@ -71,9 +92,11 @@ export interface GameReport {
   costs: { operations: number };
   profit: number;
   interest: number; interestChange: number;
+  /** The promotion run at this game, if any, and how well. */
+  promo?: { id: PromoId; score: number };
 }
 
-export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title'; title: string; detail: string }
+export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title' | 'covered' | 'promo'; title: string; detail: string }
 
 export interface Day { at: number; vc: number; interest: number; merch: number; sponsors: number; upkeep: number }
 
@@ -96,14 +119,54 @@ export interface EconomyState {
   invested: number;
   /** Championships won: banners, a lasting draw for fans and merchandise, and value. */
   titles: number;
+  /**
+   * VC the owner has put in to cover bills the bank couldn't: the bank never goes below zero.
+   * Not part of the franchise's value (it was never earned).
+   */
+  covered: number;
+  /** Whether the bank is empty right now, with the owner covering the bills. */
+  broke: boolean;
+  /** A promotion waiting for the next home game, and when the last was run (see PROMOS). */
+  promo: { id: PromoId; score: number; at: number } | null;
+  lastPromoAt: number;
 }
 
 export const DAY = 86_400_000;
 export const VC_PER_DOLLAR = 1 / 4_000;
+
+/**
+ * Money as players see it: one currency, dollars. The economy keeps its books in its own unit (one
+ * per $4,000 of profit, so prices in the catalog stay small numbers); everything shown converts
+ * at that rate, so a game's profit lands in the bank as the same dollars it made.
+ */
+export const toDollars = (units: number) => units / VC_PER_DOLLAR;
+export function cash(units: number): string {
+  const d = toDollars(units), a = Math.abs(d), sign = d < 0 ? '-' : '';
+  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1)}B`;
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(a >= 1e8 ? 0 : 1)}M`;
+  if (a >= 1e3) return `${sign}$${Math.round(a / 1e3).toLocaleString('en-US')}k`;
+  return `${sign}$${Math.round(a)}`;
+}
 /** What a championship adds to a franchise's value, for good: the banner. */
 export const TITLE_VALUE = 30_000_000;
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+/**
+ * Money in or out of the bank, which never goes below zero: what it can't cover, the owner does
+ * (a build honored from before the economy was rebalanced, upkeep through a long offseason, a
+ * game in an empty stadium). Told once each time the bank runs dry.
+ */
+function move(s: EconomyState, vc: number, at: number): void {
+  s.vc += vc;
+  if (s.vc >= 0) { if (s.broke && s.vc >= 25) s.broke = false; return; }
+  s.covered += -s.vc;
+  s.vc = 0;
+  if (!s.broke) {
+    s.broke = true;
+    s.story.push({ at, kind: 'covered', title: 'The owner covered the bills', detail: 'The bank ran dry, so the owner paid the rest. Every game from here refills it.' });
+  }
+}
 const round5 = (x: number) => Math.max(5, Math.round(x / 5) * 5);
 
 /** Where every franchise starts, on opening day of its first season. */
@@ -111,6 +174,7 @@ export function startingState(): EconomyState {
   const state: EconomyState = {
     vc: 150, interest: 40, form: 0.5, resentment: 0, facilities: { ...EMPTY_FACILITIES },
     prices: { ticket: 0, concession: 0, parking: 0 }, autopilot: true, managed: false, games: [], days: [], story: [], invested: 0, titles: 0,
+    covered: 0, broke: false, promo: null, lastPromoAt: 0,
   };
   const { exact: _, ...fair } = fairPrices(state);
   state.prices = fair;
@@ -221,9 +285,14 @@ export const ROAD_SHARE = 0.5;
 export const REBALANCED_AT = Date.UTC(2026, 9, 17);
 
 function playGame(s: EconomyState, g: GameDay): GameReport {
-  const before = s.interest;
   const home = g.home !== false;
-  const projected = projectGame(s, s.prices, g);
+  // A promotion waiting for a home game: the fans' reward, and Dollar Beer Night's dollar food.
+  if (s.promo && g.at - s.promo.at > PROMO_KEEP) s.promo = null;
+  const promo = home && s.promo ? { id: s.promo.id, score: s.promo.score } : null;
+  if (promo) { s.interest = clamp(s.interest + promo.score * PROMOS[promo.id].interest, 5, 100); s.promo = null; }
+  const tonight = promo && PROMOS[promo.id].concession !== undefined ? { ...s.prices, concession: PROMOS[promo.id].concession! } : s.prices;
+  const before = s.interest;
+  const projected = projectGame(s, tonight, g);
   // On the road the other team's stadium fills; this one stays dark, and its share comes in.
   const gate = Math.max(0, projected.profit);
   const premium = home ? Math.round(gate * HOME_PREMIUM) : 0, road = home ? 0 : Math.round(gate * ROAD_SHARE);
@@ -251,8 +320,9 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
     attendance: p.attendance, capacity: p.capacity, fill: p.fill, prices: { ...s.prices }, fairTicket: p.fairTicket,
     revenue: p.revenue, costs: { operations: p.operations }, profit: p.profit,
     interest: Math.round(s.interest * 10) / 10, interestChange: Math.round((s.interest - before) * 10) / 10,
+    ...(promo ? { promo } : {}),
   };
-  s.vc += p.profit * VC_PER_DOLLAR;
+  move(s, p.profit * VC_PER_DOLLAR, g.at);
   return report;
 }
 
@@ -267,8 +337,8 @@ export function simulate(o: {
   games: GameDay[]; decisions: Decision[]; start: number; now: number; titles?: number[];
   /**
    * Builds made before this moment happen as they were made, even if the bank can't cover them
-   * in today's economy (it was rebalanced under them; see REBALANCED_AT). Builds after it must be
-   * affordable, as always: nothing is bought on credit.
+   * in today's economy (it was rebalanced under them; see REBALANCED_AT): the owner covers the
+   * difference. Builds after it must be affordable, as always: nothing is bought on credit.
    */
   grandfatherBefore?: number;
 }): EconomyState {
@@ -287,20 +357,31 @@ export function simulate(o: {
     // Decisions made today, in order.
     while (di < decisions.length && decisions[di].at < end) {
       const d = decisions[di++];
-      s.managed = true;
+      // Anything else in the log (a retired feature's entries) changes nothing.
+      if (d.kind !== 'prices' && d.kind !== 'build' && d.kind !== 'promo') continue;
+      // Setting prices or building takes the franchise over from the old front office; a promotion doesn't.
+      if (d.kind !== 'promo') s.managed = true;
       if (d.kind === 'prices') {
         s.prices = { ...d.prices }; s.autopilot = false;
         tell(s, { at: d.at, kind: 'prices', title: 'New prices', detail: `Tickets $${d.prices.ticket}, food $${d.prices.concession}, parking $${d.prices.parking}.` });
+      } else if (d.kind === 'promo') {
+        // Once a week too, and only one the bank can pay for.
+        if (d.at - s.lastPromoAt < PROMO_COOLDOWN || !isPromo(d.promo) || s.vc < PROMOS[d.promo].cost) continue;
+        const p = PROMOS[d.promo], score = clamp(Math.round(d.score), 0, PROMO_MAX);
+        s.lastPromoAt = d.at;
+        if (p.cost) move(s, -p.cost, d.at);
+        s.promo = { id: d.promo, score, at: d.at };
+        tell(s, { at: d.at, kind: 'promo', title: `${p.name} is on`, detail: `${score} of ${PROMO_MAX} for the setup${p.cost ? `, ${cash(p.cost)} spent` : ''}. It runs at the next home game.` });
       } else waiting.push(d);
     }
     // Builds, in order. One from before the economy was rebalanced is a fact: it happens as it was
-    // made, even if the bank dips below zero (later games pay it back). After that, a build needs the money.
+    // made, and what the bank can't cover the owner does. After that, a build needs the money.
     for (const d of waiting.splice(0)) {
       if (d.kind !== 'build') continue;
       const next = nextLevel(s.facilities, d.track);
       if (!next || !('spec' in next)) continue;
       if (s.vc < next.spec.cost && !(o.grandfatherBefore && d.at < o.grandfatherBefore)) continue;
-      s.vc -= next.spec.cost; s.invested += next.spec.cost; s.facilities = { ...s.facilities, [d.track]: next.level };
+      move(s, -next.spec.cost, d.at); s.invested += next.spec.cost; s.facilities = { ...s.facilities, [d.track]: next.level };
       tell(s, { at: d.at, kind: 'build', title: `Built: ${next.spec.name}`, detail: `${TRACK[d.track].name}, ${next.spec.blurb}` });
     }
     // The old front office keeps prices fair until a manager sets their own.
@@ -308,7 +389,7 @@ export function simulate(o: {
 
     const f = facilityStats(s.facilities);
     const m = dailyMoney(s, f);
-    s.vc += (m.merch + m.sponsors - m.upkeep) * VC_PER_DOLLAR;
+    move(s, (m.merch + m.sponsors - m.upkeep) * VC_PER_DOLLAR, day);
 
     while (gi < games.length && games[gi].at < end) {
       const g = games[gi++];
@@ -320,7 +401,7 @@ export function simulate(o: {
         }
         season = g.season;
         seasonStartVc = s.vc;
-        tell(s, { at: g.at, kind: 'start', title: `The ${season} season`, detail: `${facilityStats(s.facilities).stadiumName}, ${Math.round(s.interest)} fan interest, ${Math.round(s.vc).toLocaleString('en-US')} VC in the bank.` });
+        tell(s, { at: g.at, kind: 'start', title: `The ${season} season`, detail: `${facilityStats(s.facilities).stadiumName}, ${Math.round(s.interest)} fan interest, ${cash(s.vc)} in the bank.` });
       }
       const r = playGame(s, g);
       s.games.push(r);
@@ -338,7 +419,7 @@ export function simulate(o: {
       if (streak === 3 || streak === 5) tell(s, { at: g.at, kind: 'streak', title: `${streak} straight wins`, detail: 'The bandwagon is filling up.' });
       if (streak === -3) tell(s, { at: g.at, kind: 'streak', title: 'Three losses running', detail: 'Empty seats are starting to show.' });
     }
-    if (s.vc >= milestone) { tell(s, { at: day, kind: 'milestone', title: `${milestone.toLocaleString('en-US')} VC`, detail: 'A war chest worth spending.' }); milestone *= 5; }
+    if (s.vc >= milestone) { tell(s, { at: day, kind: 'milestone', title: `${cash(milestone)} in the bank`, detail: 'A war chest worth spending.' }); milestone *= 5; }
     s.days.push({ at: day, vc: Math.round(s.vc), interest: Math.round(s.interest * 10) / 10, merch: m.merch, sponsors: m.sponsors, upkeep: m.upkeep });
   }
   s.vc = Math.round(s.vc);

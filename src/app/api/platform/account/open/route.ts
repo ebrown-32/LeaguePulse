@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { accountsEnabled, signedInAccount } from '@/lib/platform/account';
 import { roleOf } from '@/lib/platform/members';
-import { mintAdminPass } from '@/lib/platform/adminPass';
+import { leagueAdminUrl, mintAdminPass } from '@/lib/platform/adminPass';
 import { PLATFORM } from '@/lib/platform/config';
 
 export const dynamic = 'force-dynamic';
@@ -23,11 +23,7 @@ export async function GET(req: Request) {
   const slug = url.searchParams.get('slug') ?? '';
   if (!slug || !(await roleOf(slug, me.userId))) return NextResponse.redirect(new URL('/account', url));
 
-  // Locally that is whatever localhost port this runs on; anywhere else it
-  // is always the configured root domain, never a host taken from headers.
-  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(url.host);
-  const base = local ? `http://${slug}.localhost${url.port ? `:${url.port}` : ''}` : `https://${slug}.${PLATFORM.rootDomain}`;
   // From sign-up: straight into the admin's setup guide.
   const setup = url.searchParams.get('setup') === '1' ? '?setup=1' : '';
-  return NextResponse.redirect(`${base}/admin${setup}#lpt=${mintAdminPass(slug, me.userId)}`);
+  return NextResponse.redirect(`${leagueAdminUrl(slug, url, PLATFORM.rootDomain)}${setup}#lpt=${mintAdminPass(slug, me.userId)}`);
 }

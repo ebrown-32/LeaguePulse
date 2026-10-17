@@ -7,6 +7,7 @@
  * Text stays in text colors; a colored mark beside it carries identity.
  */
 
+import { cash } from '@/lib/tycoon/economy';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -105,7 +106,7 @@ export function RevenueChart({ games }: { games: { week: number; revenue: Record
 export function VCChart({ days }: { days: { at: number; vc: number }[] }) {
   const data = days.map(d => ({ day: new Date(d.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), vc: d.vc }));
   return (
-    <Frame title="VC in the bank" note="Daily">
+    <Frame title="Cash in the bank" note="Daily">
       <AreaChart data={data} margin={{ top: 6, right: 8, left: -6, bottom: 0 }}>
         <defs>
           <linearGradient id="vcfill" x1="0" y1="0" x2="0" y2="1">
@@ -115,8 +116,8 @@ export function VCChart({ days }: { days: { at: number; vc: number }[] }) {
         </defs>
         {grid}
         <XAxis dataKey="day" tick={axis} tickLine={false} axisLine={false} minTickGap={40} />
-        <YAxis tick={axis} tickLine={false} axisLine={false} width={52} tickFormatter={v => v.toLocaleString('en-US')} />
-        <Tooltip {...tip} cursor={{ stroke: 'hsl(var(--border))' }} formatter={(v: number) => [`${v.toLocaleString('en-US')} VC`, 'Balance']} />
+        <YAxis tick={axis} tickLine={false} axisLine={false} width={52} tickFormatter={v => cash(v)} />
+        <Tooltip {...tip} cursor={{ stroke: 'hsl(var(--border))' }} formatter={(v: number) => [cash(v), 'Balance']} />
         <Area dataKey="vc" stroke="var(--s1)" strokeWidth={2} fill="url(#vcfill)" />
       </AreaChart>
     </Frame>

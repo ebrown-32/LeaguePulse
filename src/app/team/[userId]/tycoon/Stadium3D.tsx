@@ -99,7 +99,8 @@ function skyFor(hour: number) {
     sunColor: mix('#ffffff', '#ffb070', golden),
     sunIntensity: Math.max(0, elevation) * 1.7 + 0.08,
     ambient: 0.35 + Math.max(0, elevation) * 0.75,
-    lightsOn: night > 0.35 || golden > 0.6,
+    // On while the sun is low: from late afternoon, well before sunset, until after sunrise.
+    lightsOn: elevation < 0.35,
   };
 }
 
@@ -908,7 +909,7 @@ export default function Stadium3D(props: StadiumProps) {
   const hour = useLocalHour(props.hour);
   useEffect(() => {
     setOk(webglOk());
-    const q = props.photo ? { ...detectQuality(), tier: 'high' as const, maxDpr: 1, shadows: 2048 as const, detail: 1, antialias: true } : detectQuality();
+    const q = props.photo ? { ...detectQuality(), tier: 'high' as const, maxDpr: 1, minDpr: 1, shadows: 2048 as const, detail: 1, antialias: true } : detectQuality();
     setQuality(q);
     setDpr(Math.min(window.devicePixelRatio || 1, q.maxDpr));
   }, []);
@@ -931,7 +932,7 @@ export default function Stadium3D(props: StadiumProps) {
           gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: !!props.photo }}
           camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
-          {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(0.6, +(d - 0.25).toFixed(2)))}
+          {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
           {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />}

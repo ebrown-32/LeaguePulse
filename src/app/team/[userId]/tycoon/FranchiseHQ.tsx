@@ -15,31 +15,31 @@ import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Tag, Ticket, Trophy, X } from '@/components/icons';
+import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy, X } from '@/components/icons';
 import { Section, Sections } from '../Section';
 import { StadiumMark } from '@/components/platform/marks';
-import { projectGame, type Prices } from '@/lib/tycoon/economy';
+import { cash, projectGame, type Prices } from '@/lib/tycoon/economy';
 import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
 import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
 import { seededLook } from '@/lib/franchise/seededLook';
-import { STYLES, styleBuild, type StadiumStyle } from '@/lib/franchise/stadiumStyles';
 import { FULLY_BUILT, lookSummary, PreviewControls, StadiumStudio } from './StadiumStudio';
 import { CHART_VARS, CrowdsChart, DemandCharts, InterestChart, RevenueChart, VCChart } from './charts';
+import GamePlan, { LevelUp } from './GamePlan';
 
 const Stadium3D = dynamic(() => import('./Stadium3D'), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-muted/40" /> });
 
-interface Game {
-  key: string; season: number; week: number; result: 'W' | 'L' | 'T'; points: number; oppPoints: number; opponent: string; postseason: boolean;
+export interface Game {
+  key: string; at?: number; season: number; week: number; result: 'W' | 'L' | 'T'; points: number; oppPoints: number; opponent: string; postseason: boolean;
   attendance: number; capacity: number; interest: number;
   /** Hosted, or on the road (lib/franchise/venue). */
   home?: boolean;
   prices?: Prices; fairTicket?: number; revenue?: Record<string, number>; costs?: { operations: number }; profit?: number; interestChange?: number;
 }
-interface ShopItem {
+export interface ShopItem {
   track: TrackId; name: string; about: string; level: number; max: number; blocked: string | null;
   next: { name: string; cost: number; upkeep: number; blurb: string; level: number; affordable: boolean } | null;
 }
-interface Tycoon {
+export interface Tycoon {
   available: boolean; canManage: boolean;
   stadium: { stadiumName: string; capacity: number; parking: number; appeal: number; upkeep: number; facilities: Facilities };
   interest: number; value: number; games: Game[];
@@ -48,21 +48,25 @@ interface Tycoon {
     vc: number; prices: Prices; fair: Prices; autopilot: boolean; form: number; resentment: number;
     days: { at: number; vc: number; interest: number; merch: number; sponsors: number; upkeep: number }[];
     shop: ShopItem[];
+    /** Promotion night: the one booked for the next home game, and when the next can be. */
+    promo?: { pending: { id: 'beer' | 'fireworks' | 'bobblehead'; score: number } | null; nextAt: number; max: number };
+    covered?: number;
   };
 }
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const money = (n: number) => (Math.abs(n) >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n / 1000).toLocaleString('en-US')}k`);
 
-function Counter({ value, suffix = '' }: { value: number; suffix?: string }) {
+function Counter({ value, suffix = '', format }: { value: number; suffix?: string; format?: (n: number) => string }) {
   const mv = useMotionValue(value);
-  const text = useTransform(mv, v => `${Math.round(v).toLocaleString('en-US')}${suffix}`);
+  const text = useTransform(mv, v => `${format ? format(v) : Math.round(v).toLocaleString('en-US')}${suffix}`);
   useEffect(() => { const c = animate(mv, value, { duration: 0.9, ease: [0.22, 1, 0.36, 1] }); return c.stop; }, [mv, value]);
   return <motion.span>{text}</motion.span>;
 }
 
 const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   start: CalendarDays, title: Trophy, build: Layers, sellout: Ticket, record: Megaphone, unrest: AlertTriangle, streak: Flame, milestone: Rocket, prices: Tag,
+  covered: Receipt, promo: Sparkles,
 };
 
 /**
@@ -89,6 +93,13 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   useEffect(() => { setDraftLook(savedLook); }, [savedLook]);
   useEffect(() => { setDraftName(stadiumName ?? ''); }, [stadiumName]);
   const [t, setT] = useState<Tycoon | null>(null);
+  // An upgrade shown on the stadium before it's bought (the studio's Build tab, the Next build card),
+  // the one being built, and the celebration after.
+  const [buildPreview, setBuildPreview] = useState<TrackId | null>(null);
+  const [building, setBuilding] = useState<TrackId | null>(null);
+  const [buildError, setBuildError] = useState('');
+  const [party, setParty] = useState<{ title: string; detail: string } | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const url = `/api/tycoon/${encodeURIComponent(franchiseId)}`;
   const load = useCallback(() => {
     fetch(url, { headers: auth ?? {}, cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => d && setT(d)).catch(() => {});
@@ -128,6 +139,23 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   }, [full, close]);
   useEffect(() => { const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, []);
 
+  const buildNow = async (item: ShopItem) => {
+    if (!item.next) return;
+    setBuilding(item.track); setBuildError('');
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...(auth ?? {}) }, body: JSON.stringify({ action: 'build', track: item.track }) }).catch(() => null);
+    const d = await r?.json().catch(() => null);
+    setBuilding(null);
+    if (!r?.ok) { setBuildError(r?.status === 401 ? 'Your editing pass has expired. Open the franchise again from your LeaguePulse account.' : d?.error ?? 'That did not go through.'); return; }
+    setBuildPreview(null);
+    setParty({ title: d?.built ?? item.next.name, detail: `${item.name}, level ${item.level + 1} of ${item.max}` });
+    load();
+  };
+  // Shown on the stadium, which comes into view to show it.
+  const previewBuild = (track: TrackId | null) => {
+    setBuildPreview(track); setBuildError('');
+    if (track && !full) stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   if (!t) return <div className="h-[440px] animate-pulse rounded-3xl border border-border bg-card sm:h-[540px]" />;
   if (!t.available) return identity || children ? <Sections>{identity}{children}</Sections> : null;
   // The last crowd it drew: road games filled the other team's stadium.
@@ -143,8 +171,12 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const shownName = (mode === 'manage' ? draftName : stadiumName) || defaultStadiumName(franchiseId, teamName);
   const lookNow = mode === 'manage' ? draftLook : savedLook;
   const previewing = mode === 'manage' && fullBuild;
+  const shop = mode === 'manage' ? t.books?.shop ?? [] : [];
+  const previewItem = buildPreview ? shop.find(i => i.track === buildPreview && i.next) ?? null : null;
+  const facilitiesShown = previewing ? FULLY_BUILT
+    : previewItem ? { ...t.stadium.facilities, [previewItem.track]: previewItem.next!.level } : t.stadium.facilities;
   const stadium = (
-    <Stadium3D facilities={previewing ? FULLY_BUILT : t.stadium.facilities} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
+    <Stadium3D facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
       teamName={teamName} logo={logo} look={lookNow} hour={hour} />
   );
   const studio = (compact: boolean) => (
@@ -152,13 +184,14 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
       color={hue} teamName={teamName} facilities={t.stadium.facilities} fullBuild={fullBuild} compact={compact}
       onLook={setDraftLook} onName={setDraftName} onHour={setHour} onFullBuild={setFullBuild}
       onFullscreen={compact ? undefined : () => setFull(true)}
-      saved={{ look: savedLook, name: stadiumName ?? '' }} onSaved={onLookSaved} />
+      saved={{ look: savedLook, name: stadiumName ?? '' }} onSaved={onLookSaved}
+      build={t.books && t.canManage ? { shop: t.books.shop, vc: t.books.vc, preview: buildPreview, building, error: buildError, onPreview: previewBuild, onBuild: buildNow } : undefined} />
   );
 
   return (
     <div className={cn('space-y-3', CHART_VARS)}>
       {/* The stadium */}
-      <motion.div initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
+      <motion.div ref={stage} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
         className="relative h-[440px] overflow-hidden rounded-3xl border border-border bg-muted/40 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.45)] sm:h-[540px]">
         {/* One stadium at a time: while fullscreen has it, this spot holds still. */}
         <StadiumSlot host={host} active={!full} />
@@ -173,10 +206,11 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4, duration: 0.6, ease: EASE }} className="text-right">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">Franchise value</p>
             <p className="font-display text-xl font-bold tabular-nums drop-shadow sm:text-2xl">{money(t.value)}</p>
-            {mode === 'manage' && t.books && <p className="text-[12.5px] font-semibold tabular-nums text-white/85"><Counter value={t.books.vc} /> VC</p>}
+            {mode === 'manage' && t.books && <p className="text-[12.5px] font-semibold tabular-nums text-white/85"><Counter value={t.books.vc} format={cash} /> in the bank</p>}
           </motion.div>
         </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white sm:p-5">
+        {/* Steps aside while an upgrade is previewed: the preview bar takes the bottom. */}
+        <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white transition-opacity duration-300 sm:p-5', previewItem && 'opacity-0')}>
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6, ease: EASE }} className="flex gap-5 sm:gap-8">
             <Gauge label="Fan interest" value={t.interest} />
             <div>
@@ -186,7 +220,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
           </motion.div>
           <div className="flex items-center gap-2">
           <AnimatePresence>
-            {previewing ? (
+            {previewItem ? null : previewing ? (
               <motion.p key="preview" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                 className="rounded-full bg-black/45 px-3 py-1.5 text-[12px] font-semibold backdrop-blur-md">
                 Preview: fully built
@@ -198,13 +232,18 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
               </motion.p>
             )}
           </AnimatePresence>
-          <button onClick={() => setFull(true)} aria-label="Open the stadium fullscreen" title="Fullscreen"
+          <button onClick={() => setFull(true)} aria-label="Open the stadium fullscreen" title="Fullscreen" tabIndex={previewItem ? -1 : 0}
             className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/60">
             <Maximize2 className="h-4 w-4" />
           </button>
           </div>
         </div>
+        {/* An upgrade previewed on the stadium: build it right here, or put it back. */}
+        <AnimatePresence>
+          {previewItem && <PreviewBar item={previewItem} vc={t.books!.vc} building={building === previewItem.track} onBuild={() => buildNow(previewItem)} onClose={() => setBuildPreview(null)} />}
+        </AnimatePresence>
       </motion.div>
+
 
       <Sections>
         {mode === 'public' && thisSeason.length > 0 && (
@@ -224,15 +263,22 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
 
         {mode === 'manage' && (
           <Section scope={scope} id="look" icon={StadiumMark} title="Stadium studio" index={0} defaultOpen
-            summary={`${shownName}: ${lookSummary(draftLook)}`}>
+            summary={`${(() => { const n = shop.filter(i => i.next?.affordable).length; return n && t.canManage ? `${n} upgrade${n === 1 ? '' : 's'} ready to build · ` : ''; })()}${shownName}: ${lookSummary(draftLook)}`}>
             {full ? <p className="text-[12.5px] text-muted-foreground">Open in fullscreen.</p> : studio(false)}
           </Section>
         )}
         {identity}
-        {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} style={draftLook.style} />}
+        {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} />}
 
         {children}
       </Sections>
+
+      {/* The manager's weekly round, at the foot of the page: payday and promotion night. */}
+      {mode === 'manage' && t.books && t.canManage && <GamePlan franchiseId={franchiseId} t={t} url={url} auth={auth} reload={load} hue={hue} />}
+
+      <AnimatePresence>
+        {party && <LevelUp key="party" {...party} hue={hue} onDone={() => { setParty(null); if (!full) stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />}
+      </AnimatePresence>
 
       {host && createPortal(stadium, host)}
       {typeof document !== 'undefined' && createPortal(
@@ -256,7 +302,9 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
                 </div>
                 {mode === 'manage' && (
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent p-3 pt-8">
-                    <PreviewControls overlay hour={hour} fullBuild={fullBuild} onHour={setHour} onFullBuild={setFullBuild} />
+                    {previewItem
+                      ? <PreviewBar inline item={previewItem} vc={t.books!.vc} building={building === previewItem.track} onBuild={() => buildNow(previewItem)} onClose={() => setBuildPreview(null)} />
+                      : <PreviewControls overlay hour={hour} fullBuild={fullBuild} onHour={setHour} onFullBuild={setFullBuild} />}
                   </div>
                 )}
               </div>
@@ -272,6 +320,29 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         document.body,
       )}
     </div>
+  );
+}
+
+/** An upgrade previewed on the stadium, with the way to build it. */
+function PreviewBar({ item, vc, building, onBuild, onClose, inline = false }: { item: ShopItem; vc: number; building: boolean; onBuild: () => void; onClose: () => void; inline?: boolean }) {
+  const n = item.next!;
+  return (
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 14 }} transition={{ duration: 0.3, ease: EASE }}
+      className={cn('flex items-center gap-3 rounded-2xl bg-black/65 p-2.5 pl-4 text-white backdrop-blur-md', !inline && 'absolute inset-x-3 bottom-3 mx-auto max-w-[560px]')}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/65">Preview · {item.name}</p>
+        <p className="truncate text-[14.5px] font-bold">{n.name}</p>
+      </div>
+      {n.affordable ? (
+        <button onClick={onBuild} disabled={building}
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-white px-3.5 text-[13px] font-bold text-black transition active:scale-[0.97] disabled:opacity-60">
+          <Rocket className="h-4 w-4" /> {building ? 'Building…' : `Build, ${cash(n.cost)}`}
+        </button>
+      ) : (
+        <span className="shrink-0 text-[12px] font-semibold tabular-nums text-white/75">{cash(n.cost - vc)} to go</span>
+      )}
+      <button onClick={onClose} aria-label="Stop previewing" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"><X className="h-4 w-4" /></button>
+    </motion.div>
   );
 }
 
@@ -321,7 +392,7 @@ function Story({ events }: { events: Tycoon['story'] }) {
 }
 
 /** The manager's sections: prices, building, and the books. */
-function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tycoon; url: string; auth: Record<string, string> | null; reload: () => void; canManage: boolean; scope: string; style: StadiumStyle }) {
+function ControlRoom({ t, url, auth, reload, canManage, scope }: { t: Tycoon; url: string; auth: Record<string, string> | null; reload: () => void; canManage: boolean; scope: string }) {
   const b = t.books!;
   const [prices, setPrices] = useState<Prices>(b.prices);
   const [busy, setBusy] = useState<string | null>(null);
@@ -358,7 +429,6 @@ function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tyc
       )}
     </AnimatePresence>
   );
-  const ready = b.shop.filter(i => i.next?.affordable).length;
   const lastBooks = [...t.games].reverse().find(g => g.profit !== undefined);
 
   return (
@@ -372,6 +442,7 @@ function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tyc
             </p>
           )}
           <p className="text-[12.5px] text-muted-foreground">Fans think about ${b.fair.ticket} is fair for a ticket right now. Charge much more and they will remember.</p>
+          {canManage && <PricePresets fair={b.fair} prices={prices} onPick={setPrices} />}
           <div className="grid gap-5 sm:grid-cols-3">
             <Slider label="Ticket" value={prices.ticket} min={5} max={Math.max(150, b.fair.ticket * 2.5)} step={1} fair={b.fair.ticket} onChange={v => setPrices(p => ({ ...p, ticket: v }))} disabled={!canManage} />
             <Slider label="Concessions (per item)" value={prices.concession} min={1} max={30} step={0.5} fair={b.fair.concession} onChange={v => setPrices(p => ({ ...p, concession: v }))} disabled={!canManage} />
@@ -405,23 +476,8 @@ function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tyc
         </div>
       </Section>
 
-      <Section scope={scope} id="build" icon={Layers} title="Build" index={1}
-        summary={`${b.vc.toLocaleString('en-US')} VC to spend${ready ? `, ${ready} upgrade${ready === 1 ? '' : 's'} ready` : ''}`}>
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <p className="text-3xl font-extrabold tabular-nums tracking-tight"><Counter value={b.vc} /> <span className="text-base font-bold text-muted-foreground">VC</span></p>
-            <p className="text-[12px] text-muted-foreground">Upkeep {money(t.stadium.upkeep)} a week. Profit becomes VC: one for every $4,000.</p>
-          </div>
-          {note('build')}
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {b.shop.map(item => <ShopCard key={item.track} item={item} vc={b.vc} busy={busy === item.track} canManage={canManage} style={style}
-              onBuild={() => post(item.track, 'build', { action: 'build', track: item.track }, 'Built.')} />)}
-          </div>
-        </div>
-      </Section>
-
       <Section scope={scope} id="books" icon={Receipt} title="The books" index={2}
-        summary={lastBooks ? `Last game: ${money(lastBooks.profit!)} profit on ${money((lastBooks.profit ?? 0) + (lastBooks.costs?.operations ?? 0))} revenue` : 'No game days yet'}>
+        summary={lastBooks ? `Last game: ${money(lastBooks.profit!)} profit on ${money((lastBooks.profit ?? 0) + (lastBooks.costs?.operations ?? 0))} revenue, into the bank` : 'No game days yet'}>
         <div className="space-y-3">
           {t.games.some(g => g.revenue) && (
             <div className="grid gap-3 lg:grid-cols-2">
@@ -433,6 +489,32 @@ function ControlRoom({ t, url, auth, reload, canManage, scope, style }: { t: Tyc
         </div>
       </Section>
     </>
+  );
+}
+
+/** Three ways to price, one tap each: the sliders are there for anything finer. */
+function PricePresets({ fair, prices, onPick }: { fair: Prices; prices: Prices; onPick: (p: Prices) => void }) {
+  const r = (x: number, step: number) => Math.max(step, Math.round(x / step) * step);
+  const sets = [
+    { id: 'bargain', name: 'Bargain', blurb: 'Pack it, win fans', p: { ticket: r(fair.ticket * 0.8, 1), concession: r(fair.concession * 0.85, 0.5), parking: r(fair.parking * 0.8, 1) } },
+    { id: 'fair', name: 'Fair', blurb: 'What fans expect', p: { ticket: fair.ticket, concession: fair.concession, parking: fair.parking } },
+    // Under the line where fans start to resent it (15% over fair).
+    { id: 'premium', name: 'Premium', blurb: 'More per fan', p: { ticket: r(fair.ticket * 1.12, 1), concession: r(fair.concession * 1.1, 0.5), parking: r(fair.parking * 1.1, 1) } },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Price presets">
+      {sets.map(x => {
+        const on = x.p.ticket === prices.ticket && x.p.concession === prices.concession && x.p.parking === prices.parking;
+        return (
+          <motion.button key={x.id} role="radio" aria-checked={on} whileTap={{ scale: 0.96 }} onClick={() => onPick(x.p)}
+            className={cn('rounded-xl border px-3 py-2.5 text-left transition', on ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/60')}>
+            <span className="block text-[13.5px] font-bold">{x.name}</span>
+            <span className="block text-[11.5px] text-muted-foreground">{x.blurb}</span>
+            <span className="mt-1 block text-[12px] font-semibold tabular-nums">${x.p.ticket}</span>
+          </motion.button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -461,48 +543,6 @@ function Forecast({ label, now, next, fmt }: { label: string; now: number; next:
       <p className="text-[15px] font-bold tabular-nums">{fmt(next)}</p>
       {Math.abs(diff) > 0.5 && <p className="text-[11px] font-semibold tabular-nums text-muted-foreground">{diff > 0 ? '▲' : '▼'} {fmt(Math.abs(diff))} vs now</p>}
     </div>
-  );
-}
-
-function ShopCard({ item, vc, busy, canManage, style, onBuild }: { item: ShopItem; vc: number; busy: boolean; canManage: boolean; style: StadiumStyle; onBuild: () => void }) {
-  const next = item.next;
-  const build = styleBuild(style, item.track);
-  const progress = next ? Math.min(1, vc / next.cost) : 1;
-  return (
-    <motion.div layout className="flex flex-col rounded-xl border border-border bg-card p-3.5">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[14px] font-semibold">{item.name}</p>
-          <p className="text-[11.5px] leading-snug text-muted-foreground">{item.about}</p>
-        </div>
-        <div className="flex shrink-0 gap-0.5 pt-1" aria-label={`Level ${item.level} of ${item.max}`}>
-          {Array.from({ length: item.max }, (_, i) => (
-            <motion.span key={i} initial={false} animate={{ scale: i < item.level ? 1 : 0.85 }} className={cn('h-2 w-2 rounded-full', i < item.level ? 'bg-primary' : 'bg-muted')} />
-          ))}
-        </div>
-      </div>
-      {next ? (
-        <div className="mt-3">
-          <p className="text-[13px] font-semibold">{next.name}</p>
-          <p className="text-[11.5px] text-muted-foreground">{next.blurb} Upkeep {money(next.upkeep)} a week.</p>
-          {build && <p className="mt-1 text-[11.5px] leading-snug text-primary/90">On your {STYLES[style].name}: {build.charAt(0).toLowerCase() + build.slice(1)}</p>}
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-            <motion.div className="h-full rounded-full bg-primary" initial={{ width: 0 }} animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.8 }} />
-          </div>
-          <div className="mt-2.5 flex items-center justify-between gap-2">
-            <span className="text-[12.5px] font-bold tabular-nums">{next.cost.toLocaleString('en-US')} VC</span>
-            {canManage && (
-              <button onClick={onBuild} disabled={!next.affordable || busy}
-                className="rounded-full bg-foreground px-3.5 py-1.5 text-[12.5px] font-semibold text-background hover:bg-foreground/85 disabled:bg-muted disabled:text-muted-foreground">
-                {busy ? 'Building' : next.affordable ? 'Build' : `${Math.round(progress * 100)}% saved`}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 text-[12.5px] font-semibold text-muted-foreground">{item.blocked ?? 'Fully built.'}</p>
-      )}
-    </motion.div>
   );
 }
 

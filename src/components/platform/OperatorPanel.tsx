@@ -541,6 +541,15 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
     try { await call('PATCH', { slug, ownerEmail: email }); setHanding(null); onChange(`${slug} goes to ${email} when they sign in`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not hand over'); }
   };
+  // Into its admin as the operator. The tab opens first, so a phone's popup blocker lets it through.
+  const openAdmin = async (slug: string) => {
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const { url } = await call('PATCH', { slug, openAdmin: true });
+      if (tab) tab.location.href = url; else window.location.href = url;
+    } catch (e) { tab?.close(); onChange(e instanceof Error ? e.message : 'Could not open its admin'); }
+  };
   const remove = async (slug: string) => {
     try { await call('DELETE', { slug }); setConfirm(null); onChange(`Removed ${slug}`); }
     catch (e) { onChange(e instanceof Error ? e.message : 'Could not remove'); }
@@ -553,6 +562,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
     return (
       <>
         {!inMenu && <a href={l.url} target="_blank" rel="noreferrer" className={btn}>Open</a>}
+        {!inMenu && <button onClick={() => openAdmin(l.slug)} className={btn}>Admin</button>}
         {l.stripeCustomer && <a href={`${stripeBase}/customers/${l.stripeCustomer}`} target="_blank" rel="noreferrer" className={btn}>Stripe</a>}
         <button onClick={() => recover(l.slug)} className={btn}>Reset link</button>
         <button onClick={() => setHanding(l)} className={btn}>Hand over</button>
@@ -643,6 +653,7 @@ function Leagues({ data, call, onChange }: { data: Data; call: (m: string, b?: u
                     <td className="py-3 pl-3">
                       <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                         <a href={l.url} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-semibold hover:bg-muted">Open</a>
+                        <button onClick={() => openAdmin(l.slug)} className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-semibold hover:bg-muted">Admin</button>
                         <RowMenu>{actions(l, false, true)}</RowMenu>
                       </div>
                     </td>
