@@ -16,7 +16,6 @@ import {
   ClipboardList,
   Scroll,
   Sword,
-  Users,
   Shuffle,
   Shirt,
   ListOrdered,
@@ -26,6 +25,7 @@ import {
   FlaskConical,
   BarChart3,
   Radio,
+  Stadium,
 } from '@/components/icons';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
@@ -50,10 +50,13 @@ interface NavItem {
  */
 const PRIMARY_NAV: NavItem[] = [
   { name: 'History',    href: '/history',    icon: Database  },
-  { name: 'Franchises', href: '/franchises', icon: Users     },
+  { name: 'Franchises', href: '/franchises', icon: Stadium   },
   { name: 'Next Gen',   href: '/next-gen',   icon: Activity  },
   { name: 'The Feed',   href: '/desk',       icon: Megaphone },
 ];
+
+/** Franchises' stand-in on a site without them (they need the league archive's database). */
+const RIVALRIES: NavItem = { name: 'Rivalries', href: '/rivalries', icon: Sword };
 
 /** A page or anything under it: a franchise's own page lights up Franchises. */
 const isIn = (pathname: string, href: string) => pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
@@ -111,7 +114,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'Next Gen',      href: '/next-gen',     icon: Activity       },
       // Somewhere you go to explore, not to look one thing up.
       { name: 'History',       href: '/history',      icon: Database       },
-      { name: 'Franchises',    href: '/franchises',   icon: Users          },
+      { name: 'Franchises',    href: '/franchises',   icon: Stadium        },
       { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
       { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
       { name: 'Simulator',     href: '/simulator',    icon: FlaskConical   },
@@ -150,6 +153,9 @@ interface NavbarProps {
 
 export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true }: NavbarProps) {
   const shown = (item: NavItem) => (franchises || item.href !== '/franchises') && (rankings || item.href !== '/rankings');
+  // Always four: Rivalries steps in where there are no franchises.
+  const featured = franchises ? PRIMARY_NAV : PRIMARY_NAV.map(item => (item.href === '/franchises' ? RIVALRIES : item));
+  const isFeatured = (item: NavItem) => featured.some(f => f.href === item.href);
   const pathname  = usePathname();
   const [isOpen,    setIsOpen]    = useState(false);
   const [moreOpen,  setMoreOpen]  = useState(false);
@@ -193,7 +199,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
     return () => document.removeEventListener('mousedown', handler);
   }, [moreOpen]);
 
-  const isMoreActive = MORE_NAV.some(item => pathname === item.href);
+  const isMoreActive = MORE_NAV.some(item => pathname === item.href && !isFeatured(item));
 
   // Lighter and more transparent at rest so the ambient background reads
   // through it; condenses into frosted glass once you scroll.
@@ -255,7 +261,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
               lands right in iPad-portrait territory (768-834px) and the full
               5-link row plus the More dropdown doesn't fit there. */}
           <div className="hidden xl:flex xl:items-center xl:gap-1">
-            {PRIMARY_NAV.filter(shown).map(item => {
+            {featured.map(item => {
               const isActive = isIn(pathname, item.href);
               return (
                 <Link
@@ -334,7 +340,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                         rather than repeated a few pixels below itself. */}
                     {NAV_GROUPS.map(group => {
                       const items = group.items.filter(
-                        item => shown(item) && !PRIMARY_NAV.some(p => p.href === item.href),
+                        item => shown(item) && !isFeatured(item),
                       );
                       if (!items.length) return null;
                       return (
@@ -457,7 +463,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                 {/* The marquee features first, as tiles, so a phone gets the
                     same front door the desktop bar does. */}
                 <div className="grid grid-cols-2 gap-2 px-1 pb-1">
-                  {PRIMARY_NAV.filter(shown).map((item, i) => {
+                  {featured.map((item, i) => {
                     const isActive = isIn(pathname, item.href);
                     return (
                       <motion.div key={item.href} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 + i * 0.03, duration: 0.2 }}>
@@ -484,7 +490,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
 
                 {NAV_GROUPS.map((group, gi) => {
                   // The tiles above already cover the marquee pages.
-                  const items = group.items.filter(item => shown(item) && !PRIMARY_NAV.some(p => p.href === item.href));
+                  const items = group.items.filter(item => shown(item) && !isFeatured(item));
                   if (!items.length) return null;
                   return (
                   <div key={group.label} className="mt-5">

@@ -123,6 +123,30 @@ export const Zap             = duo(Lightning, 'Zap');
 export const Helmet          = duo(FootballHelmet, 'Helmet');
 export const Ball            = duo(Football, 'Ball');
 export const CrownIcon       = duo(Crown, 'CrownIcon');
+
+/**
+ * A stadium: Phosphor has none, so it is drawn here on Phosphor's own grid
+ * (256 units, 16-unit round strokes, a 20% tint for duotone) to sit beside
+ * the rest of the set. The bowl, its seating sections, the field, and two
+ * pennants flying from the back rim.
+ */
+const STROKE: Record<IconWeight, number> = { thin: 8, light: 12, regular: 16, bold: 24, fill: 16, duotone: 16 };
+export const Stadium: Icon = forwardRef<SVGSVGElement, IconProps>(({ weight = 'duotone', size = '1em', color = 'currentColor', mirrored, children, ...props }, ref) => {
+  const tint = weight === 'fill' ? 1 : weight === 'duotone' ? 0.2 : 0;
+  return (
+    <svg ref={ref} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width={size} height={size} fill="none"
+      stroke={color} strokeWidth={STROKE[weight]} strokeLinecap="round" strokeLinejoin="round"
+      transform={mirrored ? 'scale(-1, 1)' : undefined} aria-hidden={props['aria-label'] ? undefined : true} {...(props as React.SVGProps<SVGSVGElement>)}>
+      {children}
+      {tint > 0 && <path d="M24 128v48c0 22.1 46.6 40 104 40s104-17.9 104-40v-48" fill={color} fillOpacity={tint} stroke="none" />}
+      {tint > 0 && weight === 'duotone' && <ellipse cx="128" cy="130" rx="52" ry="16" fill={color} fillOpacity={tint} stroke="none" />}
+      <ellipse cx="128" cy="128" rx="104" ry="40" />
+      <path d="M24 128v48c0 22.1 46.6 40 104 40s104-17.9 104-40v-48M80 162v48M176 162v48" />
+      <path d="M72 94V40l36 14-36 14M184 94V40l36 14-36 14" />
+    </svg>
+  );
+}) as unknown as Icon;
+(Stadium as { displayName?: string }).displayName = 'Stadium';
 export const Rivalry         = duo(Handshake, 'Rivalry');
 export const Idea            = duo(Lightbulb, 'Idea');
 export const Verified        = duo(CheckCircle, 'Verified');
