@@ -45,7 +45,7 @@ export default function BillingCard({ password }: { password: string }) {
       </div>
       {info.canManage ? (
         <button onClick={open} disabled={busy}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50">
+          className="min-h-10 sm:min-h-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50">
           {busy ? 'Opening…' : 'Manage billing'}
         </button>
       ) : info.supportEmail ? (

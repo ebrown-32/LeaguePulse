@@ -398,12 +398,12 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
 
   // ── Editor ──
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl pb-24 pt-2 sm:px-6 sm:py-8 lg:px-8">
       <div className="space-y-8">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
               <EyeIcon className="h-5 w-5" />
             </div>
@@ -413,8 +413,9 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-2">
+          {/* On a phone, a bar pinned to the bottom of the screen: the page is long, and the save shouldn't be at the top of it. */}
+          <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex flex-col gap-2 rounded-xl border border-border bg-card/95 p-2 shadow-lg backdrop-blur sm:static sm:inset-auto sm:shrink-0 sm:items-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+            <div className="flex items-center gap-2 [&>button]:min-h-11 [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:min-h-0 sm:[&>button]:flex-none">
               <button
                 onClick={handleReset}
                 disabled={resetting}
@@ -526,7 +527,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                     key={m}
                     onClick={() => setAccentMode(m)}
                     className={cn(
-                      'px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
+                      'min-h-10 sm:min-h-0 px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
                       accentMode === m
                         ? 'bg-card text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
@@ -583,7 +584,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                       if (/^#[0-9a-f]{6}$/i.test(v)) handleCustomColor(v);
                     }}
                     className="
-                      w-24 rounded border border-border bg-background px-2 py-1 text-xs
+                      min-h-10 sm:min-h-0 w-24 rounded border border-border bg-background px-2 py-1 text-base sm:text-xs
                       font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary
                     "
                     placeholder="#0dd8cf"
@@ -609,7 +610,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                     key={m}
                     onClick={() => setTxMode(m)}
                     className={cn(
-                      'px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
+                      'min-h-10 sm:min-h-0 px-3 py-1 text-xs font-semibold rounded capitalize transition-colors',
                       txMode === m
                         ? 'bg-card text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
@@ -638,7 +639,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                         key={preset.name}
                         onClick={() => applyTxPreset(preset)}
                         className={cn(
-                          'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                          'min-h-10 sm:min-h-0 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                           active
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border bg-background text-muted-foreground hover:text-foreground',
@@ -679,7 +680,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                           type="text"
                           value={val}
                           onChange={e => { if (/^#[0-9a-f]{6}$/i.test(e.target.value)) setTxColor(txMode, key, e.target.value); }}
-                          className="w-full rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="min-h-10 sm:min-h-0 w-full rounded border border-border bg-background px-2 py-1 text-base sm:text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           maxLength={7}
                         />
                       </div>

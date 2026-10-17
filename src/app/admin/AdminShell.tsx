@@ -195,9 +195,23 @@ export default function AdminShell() {
 
   return (
     <PageLayout title="Admin" subtitle={active.blurb}>
+      <div data-admin>
       {/* ESPN leagues only: first, because a broken connection is the thing to fix. */}
       <EspnConnectionCard password={password} />
-      <div className="mb-6">
+      {/* On a phone, every section at once, two to a row: a row of seven tabs ran off the screen. */}
+      <nav aria-label="Admin section" className="mb-6 grid grid-cols-2 gap-2 sm:hidden">
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
+            className={`flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 text-left text-[13.5px] font-semibold transition ${
+              tab === t.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground'}`}>
+            <span className="truncate">{t.label}</span>
+            {t.id === 'managers' && pending > 0 && (
+              <span className={`rounded-full px-1.5 text-[11px] ${tab === t.id ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary'}`}>{pending}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+      <div className="mb-6 hidden sm:block">
         <TabSelector
           id="admin"
           aria-label="Admin section"
@@ -218,6 +232,7 @@ export default function AdminShell() {
       {tab === 'constitution' && <ConstitutionAdmin adminPassword={password} />}
       {tab === 'rankings' && <RankingsAdmin adminPassword={password} />}
       <BillingCard password={password} />
+      </div>
     </PageLayout>
   );
 }

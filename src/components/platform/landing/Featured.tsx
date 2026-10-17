@@ -31,11 +31,11 @@ interface FeaturedLeague {
 const FEATURED: FeaturedLeague[] = [
   {
     name: 'The Domination League',
-    url: 'https://www.dominationleague.com',
-    host: 'dominationleague.com',
+    url: 'https://dominationleague.leaguepulse.io',
+    host: 'dominationleague.leaguepulse.io',
     provider: 'Sleeper',
     since: '2024',
-    blurb: 'The league LeaguePulse was built for. Its own address, its own crest and colours, a desk that posts all week and a Game Day screen that runs every Sunday.',
+    blurb: 'The home league of LeaguePulse.',
     desktop: '/featured/dominationleague-desktop.webp',
     phone: '/featured/dominationleague-phone.webp',
   },

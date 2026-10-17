@@ -36,6 +36,8 @@ export default function EspnConnectionCard({ password }: { password: string }) {
   const [s2, setS2] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Working, the card is a status line; the form opens to replace the cookies (and stays open when something is wrong).
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/espn', { headers: { 'x-admin-password': password } }).catch(() => null);
@@ -89,7 +91,11 @@ export default function EspnConnectionCard({ password }: { password: string }) {
         </p>
       )}
 
-      {status.mode === 'hosted' ? (
+      {status.mode === 'hosted' && !broken && status.hasCredentials && !open ? (
+        <button onClick={() => setOpen(true)} className="mt-2 min-h-10 rounded-lg px-1 text-[12.5px] font-semibold text-primary hover:underline sm:min-h-0">
+          Update cookies
+        </button>
+      ) : status.mode === 'hosted' ? (
         <form onSubmit={e => { e.preventDefault(); save(); }} className="mt-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <input value={swid} onChange={e => setSwid(e.target.value)} placeholder="SWID" autoComplete="off" spellCheck={false}

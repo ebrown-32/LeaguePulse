@@ -1179,3 +1179,15 @@ mark {
 .lp-range::-webkit-slider-thumb:active { transform: scale(1.15); }
 .lp-range::-moz-range-thumb { height: 20px; width: 20px; border-radius: 999px; background: hsl(var(--card)); border: 2px solid hsl(var(--primary)); }
 .lp-range:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 4px; }
+
+/* The admin on a touch screen: fields at 16px, or iOS zooms the page in when one is tapped. */
+@media (pointer: coarse) {
+  [data-admin] input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  [data-admin] select,
+  [data-admin] textarea { font-size: 16px; }
+}
+
+/* On a phone the assistant's floating button sat over the admin's own controls; the admin has no use for it. */
+@media (max-width: 639px) {
+  body:has([data-admin]) button:has(> .lp-chat-halo) { display: none; }
+}

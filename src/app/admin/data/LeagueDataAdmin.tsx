@@ -171,7 +171,7 @@ function SeasonCard({ s, open, moves, onToggle, onAdd, onEditMove, onDeleteMove,
           )}
           {(missingMoves || moves.length > 0 || s.provider === 'manual') && (
             <button onClick={onToggle} aria-expanded={open}
-              className={cn('rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition', open ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+              className={cn('min-h-10 sm:min-h-0 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition', open ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
               {open ? 'Close' : missingMoves ? 'Fill in' : 'Moves'}
             </button>
           )}

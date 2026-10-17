@@ -734,7 +734,7 @@ function Pricing() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const head = (n: number) => `$${(n / teams).toFixed(2)}`;
   const priced = (p: { season: number; monthly: number }) => (cycle === 'season' ? p.season : p.monthly);
-  const per = cycle === 'season' ? 'per season' : 'per month';
+  const per = cycle === 'season' ? 'per year' : 'per month';
 
   const tiers: TierCard[] = [
     {
@@ -809,7 +809,7 @@ function Pricing() {
                 <button key={c} onClick={() => setCycle(c)} aria-pressed={cycle === c}
                   className={cn('relative rounded-full px-4 py-2', cycle === c ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
                   {cycle === c && <motion.span layoutId="cycle" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }} />}
-                  <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
+                  <span className="relative">{c === 'season' ? 'Yearly' : 'Monthly'}</span>
                 </button>
               ))}
             </div>
@@ -876,8 +876,8 @@ function Pricing() {
               </li>
             </ul>
             <div className="mt-2 space-y-1 border-t-2 border-foreground pt-2 font-semibold">
-              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass</span><span>${PLANS.pro.season}/season or ${PLANS.pro.monthly}/mo</span></p>
-              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass + AI</span><span>${PLANS.ai.season}/season or ${PLANS.ai.monthly}/mo</span></p>
+              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass</span><span>${PLANS.pro.season}/year or ${PLANS.pro.monthly}/mo</span></p>
+              <p className="flex flex-wrap items-baseline justify-between gap-x-4"><span>League Pass + AI</span><span>${PLANS.ai.season}/year or ${PLANS.ai.monthly}/mo</span></p>
             </div>
           </div>
         </motion.div>

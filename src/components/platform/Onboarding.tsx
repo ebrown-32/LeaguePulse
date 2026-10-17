@@ -261,7 +261,7 @@ export default function Onboarding() {
                         </span>
                         {!operator && (
                           <span className="mt-2 block font-display text-[28px] font-bold leading-none">
-                            ${price}<span className="ml-1 text-[12.5px] font-normal text-muted-foreground">{plan === 'season' ? 'per season' : 'per month'}</span>
+                            ${price}<span className="ml-1 text-[12.5px] font-normal text-muted-foreground">{plan === 'season' ? 'per year' : 'per month'}</span>
                           </span>
                         )}
                         <span className="mt-2 block text-[12.5px] leading-snug text-muted-foreground">
@@ -279,7 +279,7 @@ export default function Onboarding() {
                       <button key={c} role="radio" aria-checked={plan === c} onClick={() => setPlan(c)}
                         className={cn('relative rounded-full px-3.5 py-1.5 transition', plan === c ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
                         {plan === c && <motion.span layoutId="cycle-pill" className="absolute inset-0 rounded-full bg-primary" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
-                        <span className="relative">{c === 'season' ? 'Per season' : 'Monthly'}</span>
+                        <span className="relative">{c === 'season' ? 'Yearly' : 'Monthly'}</span>
                       </button>
                     ))}
                   </div>
