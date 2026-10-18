@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { lockScroll } from '@/lib/scrollLock';
-import { Camera, Check, Maximize2, X } from '@/components/icons';
+import { Camera, Check, ChevronDown, Maximize2, X } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { gameDay, type GameDayStage, type HostReason } from '@/lib/franchise/venue';
 import type { WeekPhase } from '@/lib/nflSchedule';
@@ -235,7 +235,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
       {!full && <Banner celebrate={celebrate} compact />}
       {full && <Fullscreen onClose={() => setFull(false)} label={host && guest ? `${guest.teamName} @ ${host.teamName}` : 'Stadium'}>
         {scene(true)}
-        {words(true) && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-5 pb-6 pt-16 text-white sm:px-8">{words(true)}</div>}
+        {words(true) && <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-5 pb-6 pt-16 text-white sm:px-8', playing && playing.plays.length > 0 && 'max-md:hidden')}>{words(true)}</div>}
         {playing && host && guest && (
           <ScoreBug match={playing} onNow={onNow} host={{ avatar: host.avatar, color: ground?.color ?? '#2a78d6' }} guest={{ avatar: guest.avatar, color: guestColor }} />
         )}
@@ -270,9 +270,10 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
  */
 function liveStatus(match: LiveMatchup, driving: number): string {
   if (match.phase === 'final') return 'Final';
-  if (driving) return `${driving} starter${driving === 1 ? '' : 's'} on the field right now`;
+  // How many starters' games are being played right now, whether or not they're on the field this snap.
+  const playing = match.players.filter(p => p.state === 'driving' || p.state === 'defending' || p.state === 'sideline').length;
+  if (playing) return `${playing} playing now`;
   const states = new Set(match.players.map(p => p.state));
-  if (states.has('sideline') || states.has('defending')) return 'Live';
   const played = states.has('final'), toPlay = states.has('pregame');
   if (toPlay && !played) return 'Pregame: nobody has kicked off yet';
   if (toPlay) return 'Between games';
@@ -429,6 +430,31 @@ function ScoreBug({ match, host, guest, onNow }: {
         </div>
         {side(match.host, host, lead > 0, true)}
       </div>
+      <BugStrip match={match} host={host} guest={guest} />
+    </div>
+  );
+}
+
+/**
+ * Under the score bug: each side's win chance (LeaguePulse's live forecast) split as a bar in
+ * their colors. Who's playing is marked on the players' own cards (LiveField).
+ */
+function BugStrip({ match, host, guest }: { match: LiveMatchup; host: { color: string }; guest: { color: string } }) {
+  const p = match.hostWinProb;
+  if (p == null) return null;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  // Desktop only: on a phone the score bug stands alone.
+  return (
+    <div className="mt-1.5 rounded-xl bg-[#0b0f14]/70 px-2.5 py-1.5 ring-1 ring-white/10 backdrop-blur-xl max-sm:hidden">
+      <p className="text-center text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">Win chance</p>
+      <div className="mt-1 flex items-center gap-2 text-[11px] font-black tabular-nums text-white">
+        <span className="w-8">{pct(1 - p)}</span>
+        <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+          <motion.span className="absolute inset-y-0 left-0" style={{ background: guest.color }} initial={false} animate={{ width: pct(1 - p) }} transition={{ duration: 0.8 }} />
+          <motion.span className="absolute inset-y-0 right-0" style={{ background: host.color }} initial={false} animate={{ width: pct(p) }} transition={{ duration: 0.8 }} />
+        </span>
+        <span className="w-8 text-right">{pct(p)}</span>
+      </div>
     </div>
   );
 }
@@ -474,9 +500,42 @@ function CameraMenu({ angle, onPick }: { angle: Angle; onPick: (a: Angle) => voi
 
 /** The plays as they come, newest first, in each side's color. */
 function Ticker({ match, hostColor, guestColor }: { match: LiveMatchup; hostColor: string; guestColor: string }) {
+  const [open, setOpen] = useState(false);
   if (!match.plays.length) return null;
   const nameOf = (id: string) => match.players.find(p => p.playerId === id)?.name ?? '';
+  const latest = match.plays[0];
+  const tone = (side: 'host' | 'guest') => (side === 'host' ? hostColor : guestColor);
+  const pts = (n: number | null) => n == null ? null : <span className={cn('shrink-0 tabular-nums', n > 0 ? 'text-emerald-300' : 'text-white/60')}>{n > 0 ? '+' : ''}{n.toFixed(1)}</span>;
   return (
+    <>
+    {/* Phones: in the caption's place at the bottom, the latest play, and a toggle for the rest. */}
+    <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-10 md:hidden">
+      <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Play by play</p>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ opacity: 0, y: 10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: 10, height: 0 }}
+            className="mb-1.5 max-h-[42dvh] space-y-1.5 overflow-y-auto overscroll-contain rounded-2xl">
+            {match.plays.slice(1, 12).map(p => (
+              <div key={p.id} className="rounded-xl bg-black/70 px-3 py-2 text-white backdrop-blur-md" style={{ borderLeft: `3px solid ${tone(p.side)}` }}>
+                <p className="flex items-baseline justify-between gap-2 text-[12px] font-bold"><span className="truncate">{nameOf(p.playerId)}</span>{pts(p.points)}</p>
+                <p className="line-clamp-2 text-[11px] text-white/70">{p.text}</p>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="rounded-xl bg-black/70 px-3 py-2 text-white backdrop-blur-md" style={{ borderLeft: `3px solid ${tone(latest.side)}` }}>
+        <p className="flex items-baseline justify-between gap-2 text-[12.5px] font-bold"><span className="truncate">{nameOf(latest.playerId)}</span>{pts(latest.points)}</p>
+        <p className="line-clamp-2 text-[11.5px] text-white/75">{latest.text}</p>
+      </div>
+      {match.plays.length > 1 && (
+        <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/12 py-2 text-[12.5px] font-bold text-white backdrop-blur-md active:bg-white/20">
+          {open ? 'Show less' : `All plays (${match.plays.length})`}
+          <ChevronDown className={cn('h-4 w-4 transition-transform', open ? 'rotate-0' : 'rotate-180')} />
+        </button>
+      )}
+    </div>
     <div className="pointer-events-none absolute bottom-4 right-3 hidden w-[290px] space-y-1.5 md:block">
       <AnimatePresence initial={false}>
         {match.plays.slice(0, 4).map(p => (
@@ -491,6 +550,7 @@ function Ticker({ match, hostColor, guestColor }: { match: LiveMatchup; hostColo
         ))}
       </AnimatePresence>
     </div>
+    </>
   );
 }
 

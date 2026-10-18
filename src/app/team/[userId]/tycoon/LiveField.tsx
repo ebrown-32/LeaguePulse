@@ -84,7 +84,8 @@ function layout(players: LivePlayer[], anyGameLive = false) {
     const attack: 1 | -1 = (p.side === 'host') === (p.state === 'driving') ? 1 : -1;
     const ball = attack * (50 - p.yardsToEndzone!);
     const laneZ = lanes === 1 ? 0 : -18 + (g / (lanes - 1)) * 36;
-    spots.push({ p, dir: attack, lane: g, x: ball - attack * (k * 2.5), z: laneZ + (k - (mates.length - 1) / 2) * 4.5 });
+    // Teammates on the same drive line up together at the ball, spread across the field so their cards don't crowd.
+    spots.push({ p, dir: attack, lane: g, x: ball, z: laneZ + (k - (mates.length - 1) / 2) * 13 });
   }
   // Warming up before their game: each side on its own half (the end it defends), in rows of four.
   // Only while no NFL game is being played anywhere: once one is on, the field is for live play,
@@ -158,9 +159,11 @@ export default function LiveField({ live }: { live: LiveScene }) {
     <group ref={settle}>
       {balls.map(s => <Drive key={`${s.p.side}${s.p.nflTeam}`} spot={s} color={colorOf(s.p.side)} defending={s.p.state === 'defending'} />)}
       {live.cards && spots.filter(s => s.p.playerId !== hidden).map(s => (
-        <Html key={s.p.playerId} position={[s.x * U, 0.42, s.z * U]} center distanceFactor={df} zIndexRange={z(s.p.playerId, [30, 10])}>
+        <Glide key={s.p.playerId} to={[s.x * U, 0.42, s.z * U]}>
+        <Html center distanceFactor={df} zIndexRange={z(s.p.playerId, [30, 10])}>
           {live.pins ? <Pin p={s.p} color={colorOf(s.p.side)} size={live.pinSize} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} /> : <Card p={s.p} mini={live.mini} color={colorOf(s.p.side)} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} />}
         </Html>
+        </Glide>
       ))}
       {live.cards && warm.filter(w => w.p.playerId !== hidden).map((w, i) => (
         <Html key={w.p.playerId} position={[w.x * U, 0.3, w.z * U]} center distanceFactor={df} zIndexRange={z(w.p.playerId, [20, 10])}>
@@ -183,64 +186,98 @@ export default function LiveField({ live }: { live: LiveScene }) {
 function Drive({ spot, color, defending }: { spot: Spot; color: string; defending: boolean }) {
   const chevrons = useRef<Group>(null);
   const ring = useRef<MeshBasicMaterial>(null);
+  const holder = useRef<Group>(null);
+  const path = useRef<Group>(null);
   const togo = spot.p.yardsToEndzone ?? 0;
   const ballX = spot.dir * (50 - togo);
   const red = spot.p.redZone;
-  useFrame(({ clock }) => {
+  // The ball's spot, eased toward the real one: a gain (or a loss) slides there rather than jumps.
+  const shown = useRef<number | null>(null);
+  useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime;
+    shown.current = shown.current == null ? ballX : shown.current + (ballX - shown.current) * Math.min(1, dt * 2.2);
+    const x = shown.current, left = Math.max(1, spot.dir * (spot.dir * 50 - x));
+    holder.current?.position.set(x * U, 0, 0);
+    if (path.current) { path.current.scale.x = left; path.current.position.x = (spot.dir * left / 2) * U; }
     chevrons.current?.children.forEach((c, i) => {
       const m = (c as unknown as { material: MeshBasicMaterial }).material;
       m.opacity = 0.25 + 0.75 * Math.max(0, Math.sin(t * 4 - i * 0.9));
     });
     if (ring.current) ring.current.opacity = 0.35 + 0.35 * Math.sin(t * 6);
   });
-  const lineLen = Math.max(1, togo);
   return (
     <group position={[0, 0.02, spot.z * U]}>
-      {/* The path to the end zone, faint. */}
-      <mesh rotation-x={-Math.PI / 2} position={[(ballX + spot.dir * lineLen / 2) * U, 0, 0]}>
-        <planeGeometry args={[lineLen * U, 1.6 * U]} />
-        <meshBasicMaterial color={defending ? '#ffffff' : color} transparent opacity={0.22} depthWrite={false} />
-      </mesh>
-      {/* Chevrons ahead of the ball, pointing the way. */}
-      {!defending && (
-        <group ref={chevrons}>
-          {[0, 1, 2].map(i => (
-            // A three-sided circle's tip is its local +x, which lying flat is the field's +x: flipped for the other way.
-            <mesh key={i} rotation-x={-Math.PI / 2} rotation-z={spot.dir > 0 ? 0 : Math.PI} position={[(ballX + spot.dir * (2.5 + i * 2.6)) * U, 0.004, 0]}>
-              <circleGeometry args={[1.3 * U, 3]} />
-              <meshBasicMaterial color={red ? '#ff4d4d' : color} transparent opacity={0.6} depthWrite={false} />
-            </mesh>
-          ))}
+      {/* Everything here is drawn from the ball, which glides (above). */}
+      <group ref={holder}>
+        {/* The path to the end zone, faint: one yard wide in x, stretched to the yards left. */}
+        <group ref={path}>
+          <mesh rotation-x={-Math.PI / 2}>
+            <planeGeometry args={[U, 1.6 * U]} />
+            <meshBasicMaterial color={defending ? '#ffffff' : color} transparent opacity={0.22} depthWrite={false} />
+          </mesh>
         </group>
-      )}
-      {/* The ball. */}
-      <mesh position={[ballX * U, 0.35 * U, 0]} scale={[1.7, 1, 1]} castShadow><sphereGeometry args={[0.5 * U, 14, 10]} /><meshStandardMaterial color="#7a3d17" roughness={0.6} /></mesh>
-      {red && !defending && (
-        <mesh rotation-x={-Math.PI / 2} position={[ballX * U, 0.006, 0]}>
-          <ringGeometry args={[2.2 * U, 3 * U, 32]} />
-          <meshBasicMaterial ref={ring} color="#ff3b3b" transparent opacity={0.5} depthWrite={false} />
-        </mesh>
-      )}
+        {/* Chevrons ahead of the ball, pointing the way. */}
+        {!defending && (
+          <group ref={chevrons}>
+            {[0, 1, 2].map(i => (
+              // A three-sided circle's tip is its local +x, which lying flat is the field's +x: flipped for the other way.
+              <mesh key={i} rotation-x={-Math.PI / 2} rotation-z={spot.dir > 0 ? 0 : Math.PI} position={[spot.dir * (2.5 + i * 2.6) * U, 0.004, 0]}>
+                <circleGeometry args={[1.3 * U, 3]} />
+                <meshBasicMaterial color={red ? '#ff4d4d' : color} transparent opacity={0.6} depthWrite={false} />
+              </mesh>
+            ))}
+          </group>
+        )}
+        {/* The ball. */}
+        <mesh position={[0, 0.35 * U, 0]} scale={[1.7, 1, 1]} castShadow><sphereGeometry args={[0.5 * U, 14, 10]} /><meshStandardMaterial color="#7a3d17" roughness={0.6} /></mesh>
+        {red && !defending && (
+          <mesh rotation-x={-Math.PI / 2} position={[0, 0.006, 0]}>
+            <ringGeometry args={[2.2 * U, 3 * U, 32]} />
+            <meshBasicMaterial ref={ring} color="#ff3b3b" transparent opacity={0.5} depthWrite={false} />
+          </mesh>
+        )}
+      </group>
     </group>
   );
+}
+
+/** A group that eases toward its spot: a player's card slides down the field with their drive. */
+function Glide({ to, children }: { to: [number, number, number]; children: React.ReactNode }) {
+  const g = useRef<Group>(null);
+  const placed = useRef(false);
+  useFrame((_, dt) => {
+    const o = g.current;
+    if (!o) return;
+    if (!placed.current) { o.position.set(...to); placed.current = true; return; }
+    const k = Math.min(1, dt * 2.2);
+    o.position.x += (to[0] - o.position.x) * k;
+    o.position.y += (to[1] - o.position.y) * k;
+    o.position.z += (to[2] - o.position.z) * k;
+  });
+  return <group ref={g}>{children}</group>;
 }
 
 /** The pin in the small preview: their headshot ringed in their team's color, lit while they're on the field. */
 function Pin({ p, color, size = 14, focused = false, onTap }: { p: LivePlayer; color: string; size?: number; focused?: boolean; onTap?: () => void }) {
   const photo = playerPhoto(p);
   const live = p.state === 'driving' || p.state === 'defending' || focused;
+  const on = gameOn(p);
   return (
+    <div className="relative" style={{ opacity: on || focused ? 1 : 0.6 }}>
     <div onPointerDown={onTap ? e => e.stopPropagation() : undefined} onClick={onTap} role={onTap ? 'button' : undefined}
       className={`relative select-none overflow-hidden rounded-full bg-[#0f151b] ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
-      style={{ width: size, height: size, borderWidth: size > 18 ? 2 : 1.5, borderStyle: 'solid', borderColor: focused ? '#ffffff' : color, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)', opacity: live || p.state === 'pregame' ? 1 : 0.8 }}>
+      style={{ width: size, height: size, borderWidth: size > 18 ? 2 : 1.5, borderStyle: 'solid', borderColor: focused ? '#ffffff' : color, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)' }}>
       {photo
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={photo} alt="" className={`absolute left-1/2 -translate-x-1/2 ${p.position === 'DEF' ? 'top-1/2 h-[70%] -translate-y-1/2' : 'bottom-0 h-full'} w-auto`} />
         : <span className="absolute inset-0 flex items-center justify-center text-[5px] font-black text-white">{initialsOf(p.name)}</span>}
     </div>
+    </div>
   );
 }
+
+/** Whether a player's NFL game is being played right now (on the field this snap or not). */
+const gameOn = (p: LivePlayer) => p.state === 'driving' || p.state === 'defending' || p.state === 'sideline';
 
 /** A slow, slight float, out of step with the next player's: loose and easy before the game. */
 function Warmup({ delay, children }: { delay: number; children: React.ReactNode }) {
@@ -273,7 +310,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   if (mini) {
     return (
       <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${live || focused || highlight ? '' : 'opacity-90'}`}
+        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
         style={{ transform: highlight ? 'scale(1.18)' : undefined }}>
         <div className="overflow-hidden rounded-md text-white shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
           style={{ background: '#0f151b', border: `1.5px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 2px ${color}, 0 0 18px ${color}` : live || focused ? `0 0 12px ${color}` : undefined }}>
@@ -294,7 +331,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   }
   return (
     <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-      className={`select-none transition-transform duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${live || focused || highlight ? '' : 'opacity-90'}`}
+      className={`select-none transition-[transform,opacity] duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
       style={{ fontFamily: 'inherit', transform: highlight ? 'scale(1.18)' : undefined }}>
       <div className="overflow-hidden rounded-lg text-white shadow-[0_6px_14px_rgba(0,0,0,0.55)]"
         style={{ background: '#0f151b', border: `2px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 3px ${color}, 0 0 28px ${color}, 0 0 46px #ffd44d88` : live || focused ? `0 0 0 2px ${color}55, 0 0 18px ${color}` : undefined }}>

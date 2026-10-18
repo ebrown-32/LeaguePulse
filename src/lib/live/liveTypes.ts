@@ -75,5 +75,10 @@ export interface LiveMatchup {
   demo?: boolean;
   /** Any NFL game in progress right now, ours or not: the field is for live play, not warm-ups. */
   anyGameLive?: boolean;
+  /**
+   * LeaguePulse's chance the host wins, 0 to 1: the same live forecast as the matchup cards and
+   * Game Day (lib/sim/weekForecasts), so the numbers never disagree. Null when it can't be had.
+   */
+  hostWinProb?: number | null;
   updatedAt: number;
 }
