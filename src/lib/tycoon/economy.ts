@@ -48,6 +48,11 @@ export interface GameDay {
    * same either way. Left out, a game is a home game.
    */
   home?: boolean;
+  /**
+   * The league's Game of the Week (lib/gameOfWeek): the whole league is watching, so the host's
+   * stadium all but sells out (BIG_GAME) and both sides earn more from the gate.
+   */
+  big?: boolean;
 }
 
 export interface Prices { ticket: number; concession: number; parking: number }
@@ -235,7 +240,7 @@ function noise(key: string): number {
 export function projectGame(
   s: Pick<EconomyState, 'interest' | 'facilities'>,
   prices: Prices,
-  game: { postseason?: boolean; oppWinPct?: number; key?: string } = {},
+  game: { postseason?: boolean; oppWinPct?: number; key?: string; big?: boolean } = {},
 ) {
   const f = facilityStats(s.facilities);
   const fair = fairPrices(s).exact;
@@ -247,6 +252,7 @@ export function projectGame(
   const carsWanted = f.capacity * Math.min(1, demand) / 2.8;
   demand *= 0.8 + 0.2 * Math.min(1, f.parking / Math.max(1, carsWanted));
   if (prices.parking > fair.parking * 1.3) demand *= 0.96;
+  if (game.big) demand = Math.max(demand * BIG_GAME.draw, BIG_GAME.floor * Math.min(1, priceEffect));
   const attendance = Math.round(f.capacity * clamp(demand, 0, 1));
   const items = Math.min(5, (1.2 + 0.45 * f.food) * Math.pow(fair.concession / Math.max(0.5, prices.concession), 1.3));
   const cars = Math.min(attendance / 2.8, f.parking);
@@ -279,6 +285,13 @@ function dailyMoney(s: EconomyState, f: FacilityStats) {
  * made; within it, a home date is worth three road weeks.
  */
 export const HOME_PREMIUM = 0.5;
+
+/**
+ * A Game of the Week: demand up by a quarter, and at least nineteen seats in twenty sold unless
+ * tickets are priced above fair (gouging still empties seats, spotlight or not); and the gate is
+ * worth a third more, at home and on the road.
+ */
+export const BIG_GAME = { draw: 1.25, floor: 0.95, bonus: 0.35 };
 export const ROAD_SHARE = 0.5;
 
 /** When home games started driving the money (17 October 2026): builds before it are honored as made. */
@@ -295,7 +308,8 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
   const projected = projectGame(s, tonight, g);
   // On the road the other team's stadium fills; this one stays dark, and its share comes in.
   const gate = Math.max(0, projected.profit);
-  const premium = home ? Math.round(gate * HOME_PREMIUM) : 0, road = home ? 0 : Math.round(gate * ROAD_SHARE);
+  const bonus = g.big ? BIG_GAME.bonus : 0;
+  const premium = home ? Math.round(gate * (HOME_PREMIUM + bonus)) : 0, road = home ? 0 : Math.round(gate * ROAD_SHARE * (1 + bonus));
   const p = home
     ? { ...projected, profit: projected.profit + premium, revenue: { ...projected.revenue, premium, road: 0 } }
     : { ...projected, attendance: 0, fill: 0, operations: 0, profit: road, revenue: { tickets: 0, concessions: 0, parking: 0, suites: 0, sponsors: 0, premium: 0, road } };

@@ -25,8 +25,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, Stars } from '@react-three/drei';
+import LiveField, { type LiveScene } from './LiveField';
 import {
-  BoxGeometry, CanvasTexture, Color, DoubleSide, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
+  BoxGeometry, CanvasTexture, Color, DoubleSide, Plane, type Material, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
   type Group, type InstancedMesh, type Matrix4, type Mesh,
 } from 'three';
 import type { Facilities } from '@/lib/tycoon/catalog';
@@ -52,7 +53,15 @@ export interface StadiumProps {
   /** Hour of day, 0 to 24; the visitor's clock when left out. */
   hour?: number;
   /** Where the camera starts and looks, and whether it holds still (for a picture) rather than circling. */
-  view?: { position: [number, number, number]; target?: [number, number, number]; fov?: number; still?: boolean };
+  view?: {
+    position: [number, number, number]; target?: [number, number, number]; fov?: number; still?: boolean;
+    /**
+     * Watching the field (a live matchup): nothing may stand between the camera and the field, so
+     * whatever is nearer than the field's nearest corner (near stands, a roof, a dome) is cut away,
+     * from any angle. Changing the view glides the camera there.
+     */
+    broadcast?: boolean;
+  };
   /**
    * How full the lots and the plaza are, 0 to 1, when it differs from the stands:
    * on game day the tailgates fill up hours before the seats do (see lib/franchise/venue).
@@ -67,6 +76,11 @@ export interface StadiumProps {
    * read back (see components/desk/StadiumPhoto), full quality, and nothing that adapts.
    */
   photo?: boolean;
+  /**
+   * A fantasy matchup, live (see LiveField): the score on the boards, the starters on the field
+   * where their drives really are, the rest on the sidelines.
+   */
+  live?: LiveScene | null;
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -556,14 +570,59 @@ function useScreen(team: string, accent: string, text: string) {
   return tex;
 }
 
+/** The scoreboard in a live matchup: both teams in their colors, the score, and a flash for a big play. */
+export interface ScoreScreen { host: { name: string; score: number; color: string }; guest: { name: string; score: number; color: string }; status: string; flash?: string | null }
+
+function useScoreScreen(score: ScoreScreen | null) {
+  const key = score ? JSON.stringify(score) : '';
+  const tex = useMemo(() => {
+    if (!score || typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 200;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#07090c'; g.fillRect(0, 0, 512, 200);
+    const font = (px: number) => `900 ${px}px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
+    const half = (x: number, t: ScoreScreen['host']) => {
+      const grad = g.createLinearGradient(0, 0, 0, 200);
+      grad.addColorStop(0, mix(t.color, '#ffffff', 0.1)); grad.addColorStop(1, mix(t.color, '#000000', 0.45));
+      g.fillStyle = grad; g.fillRect(x + 6, 34, 238, 160);
+      g.fillStyle = inkOn(t.color); g.textAlign = 'center'; g.textBaseline = 'middle';
+      let size = 26; g.font = font(size);
+      const name = t.name.toUpperCase();
+      const w = g.measureText(name).width;
+      if (w > 220) { size *= 220 / w; g.font = font(size); }
+      g.fillText(name, x + 125, 58);
+      g.font = font(70); g.fillText(t.score.toFixed(1), x + 125, 128);
+    };
+    half(0, score.host); half(256, score.guest);
+    g.fillStyle = '#ffb43a'; g.font = font(22); g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(score.status.toUpperCase(), 256, 17);
+    if (score.flash) {
+      g.fillStyle = 'rgba(0,0,0,0.72)'; g.fillRect(0, 70, 512, 76);
+      g.fillStyle = '#ffd44d'; let size = 54; g.font = font(size);
+      const w = g.measureText(score.flash).width;
+      if (w > 490) { size *= 490 / w; g.font = font(size); }
+      g.fillText(score.flash, 256, 110);
+    }
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => tex?.dispose(), [tex]);
+  return tex;
+}
+
 /**
  * The video boards, each held up the way its blueprint says (posts, a tower,
  * a truss on the stands, cables from the roof, stone piers on the colonnade)
  * and framed in its style's own way. Their backs carry the team's name too,
  * for everyone outside.
  */
-function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook }) {
-  const screen = useScreen(p.team, p.accent, text);
+function Boards({ bp, p, text, look, score = null }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook; score?: ScoreScreen | null }) {
+  const named = useScreen(p.team, p.accent, text);
+  const scored = useScoreScreen(score);
+  // In a live matchup the screens show the score; otherwise the team's name.
+  const screen = scored ?? named;
   const mats = useRef<MeshStandardMaterial[]>([]);
   useFrame(({ clock }) => { for (const m of mats.current) if (m) m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2; });
   const wall = p.wall, stone = stoneOf(look);
@@ -640,10 +699,16 @@ function Boards({ bp, p, text, look }: { bp: Blueprint; p: Palette; text: string
         <group key={i} position={[b.x, b.y, b.z]} rotation-y={b.ry}>
           {mount(b)}
           <mesh castShadow><boxGeometry args={[w, h, 0.14]} /><meshStandardMaterial color={FRAME.classic} /></mesh>
-          {[-0.26, 0.26].map(x => (
-            <mesh key={x} position={[x * w, -0.04 * h, 0.075]}><planeGeometry args={[w * 0.3, h * 0.42]} /><meshStandardMaterial color="#2a1a05" emissive="#ffb43a" emissiveIntensity={1.1} /></mesh>
-          ))}
-          <mesh position={[0, h * 0.32, 0.075]}><planeGeometry args={[w * 0.7, h * 0.18]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.4} /></mesh>
+          {scored ? (
+            <mesh position={[0, 0, 0.075]}><planeGeometry args={[w * 0.92, h * 0.86]} /><meshStandardMaterial map={scored} emissiveMap={scored} emissive="#ffffff" emissiveIntensity={0.9} /></mesh>
+          ) : (
+            <>
+              {[-0.26, 0.26].map(x => (
+                <mesh key={x} position={[x * w, -0.04 * h, 0.075]}><planeGeometry args={[w * 0.3, h * 0.42]} /><meshStandardMaterial color="#2a1a05" emissive="#ffb43a" emissiveIntensity={1.1} /></mesh>
+              ))}
+              <mesh position={[0, h * 0.32, 0.075]}><planeGeometry args={[w * 0.7, h * 0.18]} /><meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.4} /></mesh>
+            </>
+          )}
           {[-1, 1].map(sz => (
             <mesh key={sz} position={[0, h / 2 + 0.07, sz * 0.07]} rotation-x={sz * 0.6} castShadow><boxGeometry args={[w + 0.16, 0.03, 0.2]} /><meshStandardMaterial color={roof} /></mesh>
           ))}
@@ -772,6 +837,79 @@ type CamShot = { from: CamPose; to: CamPose; dur: number; start: number };
 const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && !!(window as unknown as { __lpCam?: CamShot }).__lpCam;
 
 /** A photograph's camera: exactly where it was put, looking at its subject, at any height (the orbit controls keep above 15 degrees). */
+/** Where the field's corners are, for the broadcast cut: the painted ground, a little beyond the sidelines. */
+const FIELD_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => new Vector3(x * 3.7, 0, z * 2.05));
+
+/**
+ * The broadcast view: glides the camera to a new view when it changes, and keeps the field in plain
+ * sight from any angle. Everything that is both nearer the camera than the field's nearest corner
+ * and above the ground is cut away (two clipping planes, intersected): the near stands, a roof, a
+ * dome, a light tower. The ground in front stays, so the cut never leaves a hole in the picture.
+ */
+function BroadcastRig({ view }: { view: NonNullable<StadiumProps['view']> }) {
+  const camera = useThree(st => st.camera);
+  const gl = useThree(st => st.gl);
+  const scene = useThree(st => st.scene);
+  const controls = useThree(st => st.controls) as unknown as { target: Vector3; update: () => void } | null;
+  const glide = useRef<{ from: Vector3; to: Vector3; fromT: Vector3; toT: Vector3; t: number } | null>(null);
+  const key = JSON.stringify([view.position, view.target]);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    glide.current = {
+      from: camera.position.clone(), to: new Vector3(...view.position),
+      fromT: controls?.target.clone() ?? new Vector3(), toT: new Vector3(...(view.target ?? [0, 0, 0])), t: 0,
+    };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Kept: farther than the field (the near plane), or at ground level (the ground plane).
+  const planes = useMemo(() => [new Plane(), new Plane(new Vector3(0, -1, 0), 0.14)], []);
+  const dressed = useRef(new Set<Material>());
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+    const set = dressed.current;
+    return () => {
+      for (const m of set) { m.clippingPlanes = null; m.clipIntersection = false; m.needsUpdate = true; }
+      set.clear();
+    };
+  }, [gl]);
+
+  const forward = useMemo(() => new Vector3(), []);
+  const tmp = useMemo(() => new Vector3(), []);
+  const frames = useRef(0);
+  useFrame((_, dt) => {
+    const g = glide.current;
+    if (g) {
+      g.t = Math.min(1, g.t + dt / 1.1);
+      const e = 1 - Math.pow(1 - g.t, 3);
+      camera.position.lerpVectors(g.from, g.to, e);
+      controls?.target.lerpVectors(g.fromT, g.toT, e);
+      controls?.update();
+      if (g.t >= 1) glide.current = null;
+    }
+    // The near plane: square to the line of sight, just short of the field's nearest corner.
+    camera.getWorldDirection(forward);
+    let nearest = Infinity;
+    for (const c of FIELD_CORNERS) nearest = Math.min(nearest, tmp.copy(c).sub(camera.position).dot(forward));
+    const depth = Math.max(0.1, nearest - 0.35);
+    planes[0].normal.copy(forward);
+    planes[0].constant = -(forward.dot(camera.position) + depth);
+    // Every so often, dress anything new in the scene (a part rising into place) with the cut.
+    if (frames.current++ % 30 === 0) {
+      scene.traverse(o => {
+        const mats = (o as { material?: Material | Material[] }).material;
+        if (!mats) return;
+        for (const m of Array.isArray(mats) ? mats : [mats]) {
+          if (dressed.current.has(m)) continue;
+          m.clippingPlanes = planes; m.clipIntersection = true; m.needsUpdate = true;
+          dressed.current.add(m);
+        }
+      });
+    }
+  });
+  return null;
+}
+
 function FixedCamera({ target }: { target: [number, number, number] }) {
   const camera = useThree(s => s.camera);
   useEffect(() => { camera.lookAt(...target); camera.updateProjectionMatrix(); }, [camera, target]);
@@ -796,7 +934,7 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, name, teamName, logo, look: chosen, hour, quality }: StadiumProps & { hour: number; quality: Quality }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, name, teamName, logo, look: chosen, hour, quality, live }: StadiumProps & { hour: number; quality: Quality }) {
   const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
@@ -816,6 +954,13 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
   const lightsOn = sky.lightsOn || indoors;
   const fascia = look.style === 'cantilever' ? mix(color, '#1b1d21', 0.2) : p.trim;
   const plaza = bp.footprint;
+  // The live matchup's score for the boards, with the latest big play flashed across them.
+  const liveScore = useMemo<ScoreScreen | null>(() => (live ? {
+    host: { name: live.match.host.name, score: live.match.host.score, color: live.hostColor },
+    guest: { name: live.match.guest.name, score: live.match.guest.score, color: live.guestColor },
+    status: live.match.demo ? 'Demo' : live.match.phase === 'final' ? 'Final' : live.match.phase === 'live' ? `Live · Week ${live.match.week}` : `Week ${live.match.week}`,
+    flash: live.celebrate ? (live.celebrate.td ? 'TOUCHDOWN!' : 'BIG PLAY!') : null,
+  } : null), [live]);
 
   // A fragment, not a group: the sky color and the fog attach to their parent, and only the scene draws them.
   return (
@@ -855,7 +1000,8 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
       {bp.roof?.kind === 'gable' && <Rise key={`roof${build}`} delay={0.3}><Gables bp={bp} stands={bp.roof.stands} lift={bp.roof.lift} p={p} lightsOn={lightsOn} /></Rise>}
       {bp.roof?.kind === 'membrane' && <Rise key={`roof${build}`} delay={0.3}><Membrane bp={bp} moving={bp.roof.moving} closed={closed} p={p} lightsOn={lightsOn} /></Rise>}
 
-      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} /></Rise>}
+      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} score={liveScore} /></Rise>}
+      {live && live.match.phase !== 'upcoming' && <LiveField live={live} />}
       <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
       {/* With the lights on, the bowl glows. */}
       {/* Always there, only dimmed by day: adding or removing a light recompiles every material in the scene, a visible hitch. */}
@@ -935,7 +1081,8 @@ export default function Stadium3D(props: StadiumProps) {
           {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
-          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? 3 : 9} maxDistance={34} maxPolarAngle={1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
       ) : null}
     </div>

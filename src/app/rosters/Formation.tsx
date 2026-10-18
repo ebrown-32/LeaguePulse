@@ -16,17 +16,13 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { POSITION_COLOR } from './positions';
+import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import type { AnalysisPlayer } from '@/app/api/rosters/analysis/route';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** Sleeper's headshot for a player, or the team logo for a defense; ESPN-only players have none. */
-function photoOf(p: AnalysisPlayer): string | null {
-  if (p.position === 'DEF') return p.nflTeam || /^[A-Z]{2,3}$/.test(p.playerId) ? `https://sleepercdn.com/images/team_logos/nfl/${(p.nflTeam || p.playerId).toLowerCase()}.png` : null;
-  return /^\d+$/.test(p.playerId) ? `https://sleepercdn.com/content/nfl/players/thumb/${p.playerId}.jpg` : null;
-}
-
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const photoOf = playerPhoto;
+const initials = initialsOf;
 const lastName = (p: AnalysisPlayer) => (p.position === 'DEF' ? p.nflTeam || p.name : p.name.split(/\s+/).slice(1).join(' ') || p.name);
 
 export interface FormationProps {
