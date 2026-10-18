@@ -29,7 +29,12 @@ async function getJson<T>(url: string, revalidate: number): Promise<T | null> {
     // Live reads (revalidate 0) skip Next's data cache: on a serverless host it serves stale
     // copies while refreshing in the background, which left live games minutes behind. They are
     // shared through Redis instead (shared, below).
-    const res = await fetch(url, revalidate === 0 ? { cache: 'no-store' } : { next: { revalidate } });
+    const res = await fetch(url, {
+      // No address in it: ESPN's firewall turns away any user agent with a URL (tested: 403).
+      headers: { 'User-Agent': 'LeaguePulse/1.0 (fantasy football league sites)' },
+      ...(revalidate === 0 ? { cache: 'no-store' as const } : { next: { revalidate } }),
+    });
+    if (res.status === 429 || res.status === 403) { await backOff(res.status, url); return null; }
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -89,6 +94,8 @@ export interface LiveGame {
   yardsToEndzone: number | null;
   redZone: boolean;
   lastPlay: string | null;
+  /** ESPN's id for the game's latest play: when it changes, there's a new play to fetch. */
+  lastPlayId: string | null;
   /** TV network or stream, e.g. "CBS", "Prime Video". */
   broadcast: string | null;
 }
@@ -122,10 +129,40 @@ export function yardsToGo(possessionText: string | null | undefined, possession:
  * leagues are watching.
  */
 const LIVE_FRESH_MS = 4_000;
+
+/**
+ * If ESPN ever pushes back (429 Too Many Requests, or 403), every live read slows down for a while,
+ * for every server and league at once (it's kept in Redis): the copies on hand are served, and
+ * refreshed every 30 seconds, then every minute if it happens again. Logged, so it shows up.
+ */
+const BACKOFF_KEY = 'lp_live_backoff';
+let localBackoff: { until: number; slowMs: number } | null = null;
+async function backOff(status: number, url: string) {
+  const prev = await currentBackoff();
+  const slowMs = prev ? 60_000 : 30_000;
+  const until = Date.now() + 10 * 60_000;
+  localBackoff = { until, slowMs };
+  console.warn(`[live/espn] ESPN answered ${status} for ${url.split('?')[0]}: slowing live reads to every ${slowMs / 1000}s for 10 minutes`);
+  try {
+    const { getRedis } = await import('@/lib/redisClient');
+    await getRedis().client?.set(BACKOFF_KEY, JSON.stringify(localBackoff), 600);
+  } catch { /* this server's copy stands */ }
+}
+async function currentBackoff(): Promise<{ until: number; slowMs: number } | null> {
+  if (localBackoff && localBackoff.until > Date.now()) return localBackoff;
+  try {
+    const { getRedis } = await import('@/lib/redisClient');
+    const raw = await getRedis().client?.get(BACKOFF_KEY);
+    const b = raw ? JSON.parse(raw) : null;
+    if (b && b.until > Date.now()) { localBackoff = b; return b; }
+  } catch { /* none */ }
+  return null;
+}
 const memo = new Map<string, { at: number; value: unknown }>();
 
 async function shared<T>(key: string, fresh: number | ((v: T) => number), keepS: number, load: () => Promise<T | null>): Promise<T | null> {
-  const freshFor = (v: T) => (typeof fresh === 'function' ? fresh(v) : fresh);
+  const slow = (await currentBackoff())?.slowMs ?? 0;
+  const freshFor = (v: T) => Math.max(slow, typeof fresh === 'function' ? fresh(v) : fresh);
   const local = memo.get(key);
   if (local && Date.now() - local.at < Math.min(freshFor(local.value as T), 1_500)) return local.value as T;
   const { getRedis } = await import('@/lib/redisClient');
@@ -191,6 +228,7 @@ async function readScoreboard(): Promise<LiveGame[] | null> {
       yardsToEndzone: state === 'in' ? yardsToGo(s?.possessionText, possession) : null,
       redZone: state === 'in' && Boolean(s?.isRedZone),
       lastPlay: s?.lastPlay?.text ?? null,
+      lastPlayId: s?.lastPlay?.id != null ? String(s.lastPlay.id) : null,
       broadcast: (c.broadcasts ?? []).flatMap((b: any) => b.names ?? [])[0]
         ?? c.geoBroadcasts?.[0]?.media?.shortName ?? null,
     };
@@ -223,9 +261,20 @@ export interface Play {
  * only in the play text ("J.Williams up the middle"), which cannot be matched
  * to a roster reliably. Core tags each play with athlete ids and roles.
  */
-export async function espnPlays(eventId: string, live: boolean): Promise<Play[]> {
-  // A game in progress: a few seconds old at most. A finished one doesn't change; kept for hours.
-  return (await shared<Play[]>(`lp_live_plays:${eventId}`, live ? LIVE_FRESH_MS : 3_600_000, 6 * 3600, () => readPlays(eventId))) ?? [];
+/**
+ * A game's plays. In progress, they're fetched again only when the scoreboard's latest play
+ * (`lastPlayId`) is one the stored copy doesn't have yet: a play happens about every forty seconds,
+ * so this is one request per play rather than one every few seconds. Without a marker, a few
+ * seconds old at most. A finished game doesn't change; kept for hours.
+ */
+export async function espnPlays(eventId: string, live: boolean, lastPlayId?: string | null): Promise<Play[]> {
+  const fresh = (v: { marker: string | null; plays: Play[] }) =>
+    !live ? 3_600_000 : lastPlayId && v.marker === lastPlayId ? 6 * 3_600_000 : LIVE_FRESH_MS;
+  const v = await shared<{ marker: string | null; plays: Play[] }>(`lp_live_plays_v2:${eventId}`, fresh, 6 * 3600, async () => {
+    const plays = await readPlays(eventId);
+    return plays ? { marker: lastPlayId ?? null, plays } : null;
+  });
+  return v?.plays ?? [];
 }
 
 async function readPlays(eventId: string): Promise<Play[] | null> {

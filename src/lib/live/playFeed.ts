@@ -14,7 +14,8 @@
  * Sleeper's total on the scoreboard stays the official figure.
  */
 
-import { espnPlays, espnScoreboard } from './espn';
+import { espnPlays, espnScoreboard, espnTeam } from './espn';
+import { getPlayersDirectory } from '@/lib/playerStats';
 import { crosswalkFor } from './crosswalk';
 
 export interface FeedPlay {
@@ -88,9 +89,12 @@ export async function playFeed(opts: {
   for (const id of opts.theirs) if (!side.has(id)) side.set(id, 'theirs');
   const espnIds = new Set(all.map(id => xw.toEspn.get(id)).filter((x): x is string => Boolean(x)));
 
-  // Only games that have started; plays for an unplayed game are empty anyway.
-  const started = games.filter(g => g.state !== 'pre');
-  const perGame = await Promise.all(started.map(async g => ({ g, plays: await espnPlays(g.id, g.state === 'in') })));
+  // Only games that have started and have one of these starters in them: nobody else's plays are
+  // asked for. A game in progress is fetched again only on a new play (see espnPlays).
+  const directory = await getPlayersDirectory().catch(() => ({} as Record<string, any>));
+  const teams = new Set(all.map(id => espnTeam(directory[id]?.team ?? (/^[A-Z]{2,3}$/.test(id) ? id : null))).filter((t): t is string => Boolean(t)));
+  const started = games.filter(g => g.state !== 'pre' && (teams.has(g.home.abbr) || teams.has(g.away.abbr)));
+  const perGame = await Promise.all(started.map(async g => ({ g, plays: await espnPlays(g.id, g.state === 'in', g.lastPlayId) })));
 
   const out: FeedPlay[] = [];
   for (const { g, plays } of perGame) {

@@ -6,7 +6,7 @@ import type { LiveGame } from '../src/lib/live/espn.ts';
 const game = (o: Partial<LiveGame>): LiveGame => ({
   id: '1', away: { abbr: 'KC', score: 7, id: '12' }, home: { abbr: 'BUF', score: 10, id: '2' }, state: 'in', detail: 'Q2 4:12',
   kickoff: '2026-10-18T17:00Z', period: 2, clock: '4:12', possession: 'KC', downDistance: '2nd & 7 at BUF 34', yardsToEndzone: 34,
-  redZone: false, lastPlay: null, broadcast: null, ...o,
+  redZone: false, lastPlay: null, lastPlayId: null, broadcast: null, ...o,
 });
 
 test('a skill player whose team has the ball is driving, at the real spot', () => {
