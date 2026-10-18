@@ -90,12 +90,17 @@ export default function MatchupStadium(props: {
   a: Team; b: Team; week?: number; className?: string;
   /** A big invitation to watch it in the stadium (Game Day), while the matchup's week is on. */
   prompt?: boolean;
+  /**
+   * A small preview inside a card that already names both teams (the matchups page): just the
+   * stadium's name and the score over it, so the stadium shows. Fullscreen is the same either way.
+   */
+  compact?: boolean;
 }) {
   if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
   return <HostedStadium {...props} />;
 }
 
-function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean }) {
+function HostedStadium({ a, b, week, className, prompt = false, compact = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -188,14 +193,14 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
       {venue?.playoff ? 'Playoffs · ' : ''}{guest.teamName} @ {host.teamName}
     </p>
   ) : null;
-  // The caption; in the preview the matchup line sits apart, at the top left (see below).
+  // The caption; in the preview the matchup line sits apart, at the top left (see below). A compact preview keeps only the name and the score.
   const words = (withMatchup: boolean) => host && guest && day ? (
     <>
       {withMatchup && matchupLine}
-      <p className={cn('font-display text-[17px] font-bold leading-tight sm:text-[19px]', withMatchup && 'mt-0.5')}>{ground?.name || defaultStadiumName(host.userId, host.teamName)}</p>
-      {playing ? <LiveLine match={playing} crowd={venue?.crowd ? { people, capacity: venue.crowd.capacity } : null} />
+      <p className={cn('font-display font-bold leading-tight', compact ? 'text-[14px] sm:text-[15px]' : 'text-[17px] sm:text-[19px]', withMatchup && 'mt-0.5')}>{ground?.name || defaultStadiumName(host.userId, host.teamName)}</p>
+      {playing ? <LiveLine match={playing} crowd={venue?.crowd && !(compact && !withMatchup) ? { people, capacity: venue.crowd.capacity } : null} />
         : <p className="mt-1 text-[12px] leading-snug text-white/85">{caption(day.stage, day.hours, people)}</p>}
-      {venue && seriesLine(venue, host.teamName, guest.teamName) && <p className="mt-0.5 text-[10.5px] font-medium text-white/65">{seriesLine(venue, host.teamName, guest.teamName)}</p>}
+      {!(compact && !withMatchup) && venue && seriesLine(venue, host.teamName, guest.teamName) && <p className="mt-0.5 text-[10.5px] font-medium text-white/65">{seriesLine(venue, host.teamName, guest.teamName)}</p>}
     </>
   ) : null;
 
@@ -205,14 +210,14 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
       {!full && scene(false)}
       {!ground && <div className="h-full w-full animate-pulse" />}
       {/* The matchup, top left, under its own shade so it reads over any sky. */}
-      {matchupLine && day && (
+      {matchupLine && day && !compact && (
         <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-3 pr-32 text-white">
           {matchupLine}
           {playing?.demo && <span className="mt-1.5 inline-block rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">Demo data</span>}
         </div>
       )}
       {words(false) && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3 pt-10 text-white">{words(false)}</div>
+        <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white', compact ? 'px-3 pb-2.5 pt-8' : 'px-4 pb-3 pt-10')}>{words(false)}</div>
       )}
       {/* Game Day: the invitation in, front and center, while the week is on. */}
       {prompt && ground && playing && (

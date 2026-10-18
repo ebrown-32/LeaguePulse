@@ -862,11 +862,20 @@ function People({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Col
   return <instancedMesh ref={mesh} args={[undefined, undefined, folk.length]} key={folk.length} frustumCulled={false}><capsuleGeometry args={[0.035, 0.1, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
 }
 
-function Pyro({ bp }: { bp: Blueprint }) {
+/**
+ * The pyro cannons around the bowl. On a franchise's own page they fire on a loop, showing off the
+ * upgrade; during a live game (`once`) they fire a single volley, mounted afresh for each score.
+ */
+function Pyro({ bp, once = false }: { bp: Blueprint; once?: boolean }) {
   const g = useRef<Group>(null);
+  const start = useRef<number | null>(null);
   useFrame(({ clock }) => {
     if (!g.current) return;
-    const t = clock.elapsedTime % 4;
+    start.current ??= clock.elapsedTime;
+    const since = clock.elapsedTime - start.current;
+    // Two volleys for a score, then quiet.
+    if (once && since >= 8) { g.current.visible = false; return; }
+    const t = since % 4;
     g.current.children.forEach((c, i) => {
       const local = Math.max(0, t - i * 0.15);
       c.position.y = 0.5 + local * 2.2;
@@ -1139,7 +1148,10 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
         </Rise>
       )}
       <People bp={bp} fill={lots} colors={crowdColors} />
-      {f.atmosphere >= 3 && <Pyro bp={bp} />}
+      {/* Watching a game, the cannons only go off for a score. */}
+      {f.atmosphere >= 3 && (live
+        ? live.celebrate?.td && <Pyro key={`pyro-${live.celebrate.id}`} bp={bp} once />
+        : <Pyro bp={bp} />)}
     </>
   );
 }

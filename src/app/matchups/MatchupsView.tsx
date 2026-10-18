@@ -16,9 +16,9 @@ import { SeasonSelect } from '@/components/ui/SeasonSelect';
 import { getDefaultSeason, cn } from '@/lib/utils';
 import type { SleeperMatchup } from '@/types/sleeper';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CrownIcon, CalendarDays } from '@/components/icons';
+import { ChevronLeft, ChevronRight, CalendarDays } from '@/components/icons';
 import { teamAvatar } from '@/lib/teamAvatar';
-import GameOfWeekCard from '@/components/matchup/GameOfWeekCard';
+import MatchupStadium from '@/components/matchup/MatchupStadium';
 import { IconChip, StatusPill, WinBar } from '@/components/ui/kit';
 
 /** Per roster: win chance, projected final, starters still to play. */
@@ -51,7 +51,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
    */
   const [phase, setPhase] = useState<WeekPhase>('upcoming');
   const [odds, setOdds] = useState<Odds>(new Map());
-  const [gotwId, setGotwId] = useState<number | null>(null);
   /** Whether the season being viewed played median games. Read per season:
    *  the setting can change between seasons. */
   const [seasonMedian, setSeasonMedian] = useState(false);
@@ -121,9 +120,8 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             : 1;
           setSelectedWeek(leagueData.status === 'in_season' ? currentWeek : 1);
         }
-
-        const matchupsData = await getLeagueMatchups(leagueId, selectedWeek);
-        setMatchups(matchupsData);
+        // The week's matchups load below, once the season and week are settled: loading them here,
+        // for the week before it was settled, could land after them and show another week's games.
 
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -137,10 +135,13 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
   }, [initialWeek]);
 
   useEffect(() => {
+    // Only the latest season and week's answer is shown; one for a week since left is dropped.
+    let cancelled = false;
     const fetchSeasonData = async () => {
       if (!selectedSeason || !league) return;
 
       setLoadingSeasonData(true);
+      setMatchups([]);
       try {
         const linkedLeagues = await getAllLinkedLeagueIds(league.league_id);
 
@@ -157,6 +158,7 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
           }
           return league.league_id;
         })();
+        if (cancelled) return;
         setSeasonMedian(median);
         setSeasonGapsInfo(gaps);
 
@@ -164,21 +166,25 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
           getLeagueRosters(seasonLeagueId),
           getLeagueMatchups(seasonLeagueId, selectedWeek)
         ]);
+        if (cancelled) return;
 
         setSeasonRosters(seasonRostersData);
         setMatchups(matchupsData);
-        setPhase(await weekPhase(
+        const nextPhase = await weekPhase(
           selectedSeason, selectedWeek, selectedSeason === nflState?.season,
-        ).catch(() => 'upcoming' as WeekPhase));
+        ).catch(() => 'upcoming' as WeekPhase);
+        if (!cancelled) setPhase(nextPhase);
       } catch (error) {
+        if (cancelled) return;
         console.error('Failed to fetch season data:', error);
         setSeasonRosters(rosters);
       } finally {
-        setLoadingSeasonData(false);
+        if (!cancelled) setLoadingSeasonData(false);
       }
     };
 
     fetchSeasonData();
+    return () => { cancelled = true; };
   }, [selectedSeason, selectedWeek, league, rosters]);
 
   if (loading) return <LoadingPage />;
@@ -286,16 +292,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
         </div>
       </motion.div>
 
-      {/* The featured game, for the week being viewed, when there is one. */}
-      {selectedSeason === nflState?.season && !isPlayoffWeek && (
-        <GameOfWeekCard
-          key={selectedWeek}
-          week={selectedWeek}
-          onOpen={setOpenMatchup}
-          onPick={id => setGotwId(id)}
-        />
-      )}
-
 
       {/* Matchups Content */}
       {loadingSeasonData ? (
@@ -334,7 +330,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             const tie = final && p1 === p2;
             // Who is ahead: the score once there is one, the odds before.
             const lead1 = final ? p1 > p2 : o1 ? o1.winProb >= 0.5 : p1 > p2;
-            const isGotw = gotwId === team1.matchup_id;
             const target: MatchupTarget = {
               a: { userId: user1.user_id, teamName: user1.metadata?.team_name || user1.display_name, avatar: teamAvatar(user1) },
               b: { userId: user2.user_id, teamName: user2.metadata?.team_name || user2.display_name, avatar: teamAvatar(user2) },
@@ -381,19 +376,19 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
             };
 
             return (
-              <motion.button
+              <motion.div
                 key={team1.matchup_id}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                className="lp-surface lp-lift flex w-full flex-col gap-4 rounded-2xl p-4 md:p-5"
+              >
+              <button
                 // Loading starts on hover or touch, a beat before the tap.
                 onPointerEnter={() => prefetchMatchup(target)}
                 onTouchStart={() => prefetchMatchup(target)}
                 onClick={() => setOpenMatchup(target)}
-                className={cn(
-                  'group lp-surface lp-lift flex w-full flex-col gap-4 rounded-2xl p-4 text-left md:p-5',
-                  isGotw && 'ring-1 ring-primary/40',
-                )}
+                className="group flex w-full flex-col gap-4 text-left"
               >
                 <div className="flex w-full items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
@@ -403,11 +398,6 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                     />
                     {isPlayoffWeek && (
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Playoffs</span>
-                    )}
-                    {isGotw && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-1 pr-2 text-[10px] font-bold uppercase tracking-wider text-primary">
-                        <CrownIcon className="h-3 w-3" /> Game of the Week
-                      </span>
                     )}
                   </div>
                   <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted-foreground transition-colors group-hover:text-primary">
@@ -427,7 +417,12 @@ export default function MatchupsView({ currentWeek: initialWeek }: MatchupsViewP
                   </div>
                 )}
                 {row(user2, roster2, p2, o2, !lead1 && !tie)}
-              </motion.button>
+              </button>
+                {/* Its stadium, small, to watch live: every game this season. */}
+                {selectedSeason === league.season && (
+                  <MatchupStadium a={target.a} b={target.b} week={selectedWeek} compact className="h-40" />
+                )}
+              </motion.div>
             );
           })}
         </div>

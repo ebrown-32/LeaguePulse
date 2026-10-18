@@ -6,7 +6,7 @@
  * game is being played (every minute between games), once when the week is over. New plays come back one at a time as `reel`, for the
  * stadium to replay (the ball in the air, the run, the scorer in the end
  * zone), in the order they happened; a big one is also `celebrate`, for the
- * fireworks, the scoreboard flash and the banner. Plays already in the feed
+ * scoreboard flash and the banner (and, for a score, the fireworks and the pyro). Plays already in the feed
  * when the stadium opened are history, not news.
  *
  * `demo` (a development server only: ?livedemo=1 on the page) simulates a game.
