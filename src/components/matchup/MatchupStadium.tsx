@@ -85,12 +85,16 @@ function caption(stage: GameDayStage, hours: number, people: number): string {
   }
 }
 
-export default function MatchupStadium(props: { a: Team; b: Team; week?: number; className?: string }) {
+export default function MatchupStadium(props: {
+  a: Team; b: Team; week?: number; className?: string;
+  /** A big invitation to watch it in the stadium (Game Day), while the matchup's week is on. */
+  prompt?: boolean;
+}) {
   if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
   return <HostedStadium {...props} />;
 }
 
-function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: number; className?: string }) {
+function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -200,7 +204,22 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
       {words(false) && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3 pt-10 text-white">{words(false)}</div>
       )}
-      {ground && (playing ? (
+      {/* Game Day: the invitation in, front and center, while the week is on. */}
+      {prompt && ground && playing && (
+        // Above the caption at the bottom, below the matchup line at the top.
+        <div className="pointer-events-none absolute inset-x-0 bottom-[46%] top-12 flex items-center justify-center [&>*]:pointer-events-auto">
+          <motion.button onClick={e => { e.stopPropagation(); setFull(true); }} onPointerDown={e => e.stopPropagation()}
+            initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+            className="inline-flex items-center gap-2.5 rounded-full bg-white/95 px-5 py-3 text-[14px] font-extrabold text-black shadow-[0_12px_32px_-8px_rgba(0,0,0,0.6)] backdrop-blur-md sm:text-[15px]">
+            <span className="relative flex h-2.5 w-2.5">
+              {onNow && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />}
+              <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', onNow ? 'bg-red-500' : 'bg-black/40')} />
+            </span>
+            {onNow ? 'Watch live in the stadium' : 'Watch in the stadium'}
+          </motion.button>
+        </div>
+      )}
+      {ground && !(prompt && playing) && (playing ? (
         // Live: the way in to watch it, players and all.
         <button onClick={e => { e.stopPropagation(); setFull(true); }} onPointerDown={e => e.stopPropagation()}
           className="absolute right-2.5 top-2.5 inline-flex h-8 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur-md transition hover:bg-black/70">

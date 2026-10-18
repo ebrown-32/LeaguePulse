@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import MatchupStadium from '@/components/matchup/MatchupStadium';
 import { PageLayout } from '@/components/layout/PageLayout';
 import Avatar from '@/components/ui/Avatar';
 import { StatusPill, WinBar, SectionHeader } from '@/components/ui/kit';
@@ -141,6 +142,8 @@ export default function WatchView() {
             </div>
           </div>
           <WinBar p={guide.winProb} className="mt-3" />
+          {/* The same live stadium as everywhere else: the field, your starters, every play. */}
+          <MatchupStadium a={guide.me} b={guide.opponent} week={guide.week} prompt className="mt-4 h-52 sm:h-64" />
           <div className="mt-2 flex justify-between">
             <span className="text-[11px] text-muted-foreground">Week {guide.week}</span>
             <button onClick={() => setPicking(true)} className="text-[11px] font-semibold text-primary">Not you?</button>
