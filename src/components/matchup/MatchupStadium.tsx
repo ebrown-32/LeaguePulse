@@ -166,7 +166,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
     <Stadium3D facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // In a live matchup the starters are the players on the field.
       field={playing ? 'empty' : day.stage === 'live' ? 'game' : day.stage === 'gates' ? 'warmup' : 'empty'}
-      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: 0.85, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
+      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: narrow || portrait ? 0.85 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
