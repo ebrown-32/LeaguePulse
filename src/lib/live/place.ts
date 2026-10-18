@@ -13,7 +13,7 @@ export const OFFENSE = new Set(['QB', 'RB', 'WR', 'TE', 'FB']);
 export const KICKER_RANGE = 37;
 
 /** "Sun 1p", "Mon 8:15p": short enough for a card on the sideline (Eastern, as the NFL lists them). */
-const kickoff = (iso: string) => {
+export const kickoff = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   const s = d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });

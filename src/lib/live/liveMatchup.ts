@@ -13,7 +13,7 @@ import { getPlayersDirectory } from '@/lib/playerStats';
 import { espnScoreboard, espnTeam, type LiveGame } from './espn';
 import { playFeed } from './playFeed';
 import type { LiveMatchup, LivePlay, LivePlayer, LiveState } from './liveTypes';
-import { KICKER_RANGE, OFFENSE, placeOf } from './place';
+import { KICKER_RANGE, OFFENSE, kickoff, placeOf } from './place';
 
 /** What the stadium draws for a play, from its type and the player's part in it. */
 export function playKind(type: string, role: string): LivePlay['kind'] {
@@ -62,6 +62,7 @@ export async function liveMatchup(o: {
         points: typeof m?.players_points?.[id] === 'number' ? m.players_points[id] : null,
         ...placeOf(position, espn, byTeam.get(espn), gameWeek, past),
         channel: byTeam.get(espn)?.broadcast ?? null,
+        when: (() => { const g = byTeam.get(espn); return !g ? null : g.state === 'pre' ? kickoff(g.kickoff) : g.state === 'in' ? g.detail : null; })(),
       });
     }
   }
@@ -121,6 +122,7 @@ export function demoize(real: LiveMatchup, now = Date.now()): LiveMatchup {
       downDistance: y != null ? `${['1st', '2nd', '3rd'][tick % 3]} & ${1 + (hash(p.nflTeam + tick) % 10)}` : null,
       game: `${p.nflTeam} · Q${1 + (Math.floor(tick / 30) % 4)} (demo)`,
       channel: p.channel ?? ['CBS', 'FOX', 'NBC', 'ESPN', 'Prime Video'][hash(p.nflTeam) % 5],
+      when: `Q${1 + (Math.floor(tick / 30) % 4)} ${7 + (tick % 8)}:${String((tick * 7) % 60).padStart(2, '0')}`,
     };
   });
   // A play every tick for one of the drivers; every fourth a touchdown.
