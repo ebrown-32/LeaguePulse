@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /** Built answers, per league and matchup, for TTL; a build in flight is shared. */
-const TTL_MS = 10_000;
+const TTL_MS = 3_000;
 const built = new Map<string, { at: number; value: Promise<unknown> }>();
 
 export async function GET(req: NextRequest) {
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const live = await pending as Awaited<ReturnType<typeof liveMatchup>>;
     if (!live) return NextResponse.json({ error: 'Those two teams have no matchup that week' }, { status: 404 });
     if (demo) return NextResponse.json(demoize(live), { headers: { 'Cache-Control': 'no-store' } });
-    return NextResponse.json(live, { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' } });
+    return NextResponse.json(live, { headers: { 'Cache-Control': 'public, s-maxage=3, stale-while-revalidate=2' } });
   } catch (err) {
     console.error('[api/live/matchup]', err);
     return NextResponse.json({ error: 'Could not load the live matchup' }, { status: 500 });

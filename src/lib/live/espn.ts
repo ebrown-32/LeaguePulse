@@ -26,7 +26,10 @@ export const espnTeam = (sleeperCode: string | null | undefined) =>
 
 async function getJson<T>(url: string, revalidate: number): Promise<T | null> {
   try {
-    const res = await fetch(url, { next: { revalidate } });
+    // Live reads (revalidate 0) skip Next's data cache: on a serverless host it serves stale
+    // copies while refreshing in the background, which left live games minutes behind. They are
+    // shared through Redis instead (shared, below).
+    const res = await fetch(url, revalidate === 0 ? { cache: 'no-store' } : { next: { revalidate } });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -107,10 +110,61 @@ export function yardsToGo(possessionText: string | null | undefined, possession:
   return m[1] === possession ? 100 - n : n;
 }
 
+// ── The live slate, shared ────────────────────────────────────────────────────
+
+/**
+ * One copy of each live read for the whole platform, kept in Redis: the scoreboard, and each
+ * game's plays. Whichever request first finds a copy older than its freshness refreshes it from
+ * ESPN, holding a short lock so a crowd arriving together makes one request, not hundreds; the
+ * rest are served the copy. Each server also holds what it read for a moment. So every league's
+ * stadiums, the Game Day feed and the watch guide all see the same state, a few seconds old at
+ * most, and ESPN sees about one request every few seconds per game in progress, however many
+ * leagues are watching.
+ */
+const LIVE_FRESH_MS = 4_000;
+const memo = new Map<string, { at: number; value: unknown }>();
+
+async function shared<T>(key: string, fresh: number | ((v: T) => number), keepS: number, load: () => Promise<T | null>): Promise<T | null> {
+  const freshFor = (v: T) => (typeof fresh === 'function' ? fresh(v) : fresh);
+  const local = memo.get(key);
+  if (local && Date.now() - local.at < Math.min(freshFor(local.value as T), 1_500)) return local.value as T;
+  const { getRedis } = await import('@/lib/redisClient');
+  const redis = getRedis().client;
+  if (!redis) {
+    // No Redis (a self-hosted copy without one): this server's own copy.
+    if (local && Date.now() - local.at < freshFor(local.value as T)) return local.value as T;
+    const v = await load();
+    if (v !== null) memo.set(key, { at: Date.now(), value: v });
+    return v ?? (local?.value as T) ?? null;
+  }
+  let stored: { at: number; value: T } | null = null;
+  try { const raw = await redis.get(key); if (raw) stored = JSON.parse(raw); } catch { /* refresh */ }
+  if (stored && Date.now() - stored.at < freshFor(stored.value)) { memo.set(key, { at: stored.at, value: stored.value }); return stored.value; }
+  // Stale or missing: refresh, unless another request already is (then the old copy will do).
+  let mine = true;
+  try {
+    const n = await redis.incrby(`${key}:lock`, 1);
+    if (n === 1) await redis.expire(`${key}:lock`, 6); else mine = false;
+  } catch { /* refresh anyway */ }
+  if (!mine && stored) return stored.value;
+  const value = await load();
+  if (value === null) return stored?.value ?? null;
+  await redis.set(key, JSON.stringify({ at: Date.now(), value }), keepS).catch(() => {});
+  if (mine) await redis.del(`${key}:lock`).catch(() => {});
+  memo.set(key, { at: Date.now(), value });
+  return value;
+}
+
 export async function espnScoreboard(): Promise<LiveGame[]> {
-  // Fifteen seconds: a play takes about forty, so this is fresh enough to
-  // follow a drive and coarse enough to be one request per room, not per tab.
-  const d = await getJson<any>(`${SITE}/scoreboard`, 15);
+  // While any game is on (or one is about to kick off), a few seconds; otherwise a minute.
+  const soon = (g: LiveGame) => g.state === 'pre' && Math.abs(Date.parse(g.kickoff) - Date.now()) < 10 * 60_000;
+  const fresh = (games: LiveGame[]) => (games.some(g => g.state === 'in' || soon(g)) ? LIVE_FRESH_MS : 60_000);
+  return (await shared<LiveGame[]>('lp_live_scoreboard', fresh, 3600, () => readScoreboard())) ?? [];
+}
+
+async function readScoreboard(): Promise<LiveGame[] | null> {
+  const d = await getJson<any>(`${SITE}/scoreboard`, 0);
+  if (!d) return null;
   return (d?.events ?? []).map((e: any): LiveGame => {
     const c = e.competitions?.[0] ?? {};
     const st = c.status ?? e.status ?? {};
@@ -170,10 +224,13 @@ export interface Play {
  * to a roster reliably. Core tags each play with athlete ids and roles.
  */
 export async function espnPlays(eventId: string, live: boolean): Promise<Play[]> {
-  const d = await getJson<any>(
-    `${CORE}/events/${eventId}/competitions/${eventId}/plays?limit=400`,
-    live ? 20 : 3600,
-  );
+  // A game in progress: a few seconds old at most. A finished one doesn't change; kept for hours.
+  return (await shared<Play[]>(`lp_live_plays:${eventId}`, live ? LIVE_FRESH_MS : 3_600_000, 6 * 3600, () => readPlays(eventId))) ?? [];
+}
+
+async function readPlays(eventId: string): Promise<Play[] | null> {
+  const d = await getJson<any>(`${CORE}/events/${eventId}/competitions/${eventId}/plays?limit=400`, 0);
+  if (!d) return null;
   return (d?.items ?? []).map((p: any): Play => ({
     id: String(p.id),
     sequence: Number(p.sequenceNumber ?? 0),

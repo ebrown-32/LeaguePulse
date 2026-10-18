@@ -2,8 +2,8 @@
 
 /**
  * A fantasy matchup, live, for the stadium (api/live/matchup): fetched while
- * its week is on, every fifteen seconds while the stadium is in view, once
- * when the week is over. New plays come back one at a time as `reel`, for the
+ * its week is on, every five seconds while the stadium is in view and an NFL
+ * game is being played (every minute between games), once when the week is over. New plays come back one at a time as `reel`, for the
  * stadium to replay (the ball in the air, the run, the scorer in the end
  * zone), in the order they happened; a big one is also `celebrate`, for the
  * fireworks, the scoreboard flash and the banner. Plays already in the feed
@@ -15,7 +15,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LiveMatchup, LivePlay } from '@/lib/live/liveTypes';
 
-const POLL_MS = 15_000;
+/** While any NFL game is being played, every few seconds (the server's copy is about as fresh); otherwise a minute, to catch a kickoff. */
+const LIVE_POLL_MS = 5_000, IDLE_POLL_MS = 60_000;
 /** How long a replay holds the stage: a touchdown lingers in the end zone. */
 const REEL_MS = 4_000, TOUCHDOWN_MS = 7_000;
 /** At most this many plays wait their turn; a backlog older than that isn't news any more. */
@@ -61,7 +62,10 @@ export function useLiveMatchup(o: { host: string | null; guest: string | null; w
         }
         setMatch(d);
       }
-      if (o.polling && (d?.phase === 'live' || demo.current)) timer = setTimeout(load, POLL_MS);
+      // Keep going while the week isn't over; quickly whenever a game is actually on.
+      if (o.polling && (demo.current || (d && d.phase !== 'final'))) {
+        timer = setTimeout(load, demo.current ? 15_000 : d?.anyGameLive ? LIVE_POLL_MS : IDLE_POLL_MS);
+      }
     };
     load();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };

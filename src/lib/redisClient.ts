@@ -80,6 +80,8 @@ const SHARED_PREFIXES = [
   'lp_espn_xwalk', 'lp_espn_creds', 'lp_fp_snapshot', 'lp_calib_v', 'lp_gotw_v',
   // One count of Sleeper calls for the whole platform (src/lib/providers/sleeperBudget.ts).
   'lp_sleeper_rpm',
+  // The live NFL slate, one for every league (src/lib/live/espn.ts).
+  'lp_live_',
 ];
 
 /**

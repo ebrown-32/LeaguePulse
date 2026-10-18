@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       ? await playFeed({ mine, theirs, scoring: info?.scoring_settings ?? {}, limit: 50 }).catch(() => [])
       : [];
 
-    return NextResponse.json({ guide, feed }, { headers: { 'Cache-Control': 'private, max-age=10' } });
+    return NextResponse.json({ guide, feed }, { headers: { 'Cache-Control': 'private, max-age=4' } });
   } catch (err) {
     console.error('[api/watch]', err);
     return NextResponse.json({ error: 'Could not build the watch guide' }, { status: 500 });

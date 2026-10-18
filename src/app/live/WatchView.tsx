@@ -65,7 +65,7 @@ export default function WatchView() {
         seenPlays.current = ids;
         setData(d); setError(null);
         const live = (d.guide?.games ?? []).some((g: WatchGame) => g.state === 'in');
-        if (document.visibilityState === 'visible') timer = setTimeout(load, live ? 20_000 : 120_000);
+        if (document.visibilityState === 'visible') timer = setTimeout(load, live ? 8_000 : 120_000);
       } catch (e: any) {
         if (!cancelled) { setError(e.message ?? 'Could not load'); timer = setTimeout(load, 60_000); }
       }

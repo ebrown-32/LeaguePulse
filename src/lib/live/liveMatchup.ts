@@ -90,6 +90,7 @@ export async function liveMatchup(o: {
     host: { userId: o.host, name: nameOf(o.host), score: score(hostM) },
     guest: { userId: o.guest, name: nameOf(o.guest), score: score(guestM) },
     players, plays, updatedAt: Date.now(),
+    anyGameLive: games.some(g => g.state === 'in'),
   };
 }
 
