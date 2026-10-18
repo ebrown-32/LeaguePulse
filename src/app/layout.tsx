@@ -194,7 +194,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeInjector />
         <NavMemory />
         {theme.background === 'particles' && <ParticleField />}
-        <ThemeProvider>
+        {/* The demo opens dark (lib/demo): its theme is made for the night. */}
+        <ThemeProvider defaultTheme={demoProduct ? 'dark' : 'light'}>
           {/* The install prompt previews the very icon the phone will get. */}
           <InstallPromptProvider logoUrl={appIconUrl(theme.logoUrl, 192)} leagueName={theme.leagueName ?? tenantName}>
             <Analytics />

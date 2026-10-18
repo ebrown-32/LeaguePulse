@@ -64,6 +64,20 @@ export async function setUpDemo(): Promise<DemoSetup> {
   return runAsTenant(tenant, async () => {
     // The chain of seasons is found again: a new season, or an earlier first one, joins it.
     await (await import('@/config/league')).forgetLinkedLeagueIds();
+    // How it looks: Midnight, deep space blue with an electric cyan, sharp corners, in Space Grotesk, under its own
+    // crest. It opens dark (see app/layout).
+    const [{ saveTheme }, { palettes }] = await Promise.all([import('@/lib/themeStorage'), import('@/lib/themeConfig')]);
+    const night = palettes.midnight;
+    await saveTheme({
+      palette: 'midnight', fontPair: 'space-inter', radiusRem: 0, background: 'grid', motion: 'full',
+      primaryH: night.accentDark.h, primaryS: night.accentDark.s, primaryL: night.accentDark.l,
+      primaryHLight: night.accentLight.h, primarySLight: night.accentLight.s, primaryLLight: night.accentLight.l,
+      txColorsDark: night.txDark, txColorsLight: night.txLight,
+      logoUrl: '/demo/league.svg', faviconUrl: '/demo/league.svg', leagueName: LEAGUE_NAME,
+      siteTitle: `${LEAGUE_NAME} · LeaguePulse demo`,
+      siteDescription: 'A live demo of LeaguePulse: ten made-up managers, real NFL players, every point scored from the real games.',
+    });
+
     // Who they are.
     const { saveIdentity } = await import('@/lib/franchise/store');
     for (const c of CAST) {
