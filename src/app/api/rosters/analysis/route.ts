@@ -8,6 +8,8 @@ import {
   getPlayersDirectory, getSeasonStats, getSeasonProjections, resolveStatsSeason,
 } from '@/lib/playerStats';
 import { teamAvatar } from '@/lib/teamAvatar';
+import { phaseOf, seasonSchedule } from '@/lib/nflSchedule';
+import { fantasyPositions, weeklyProjections } from '@/lib/sim/weeklyProjections';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +67,16 @@ export interface AnalysisPlayer {
    * than as a very low value.
    */
   dynastyAdp: number | null;
+
+  /**
+   * The coming week, on the live roster only (null otherwise): Sleeper's
+   * projection for it, scored by the league's own settings (ESPN leagues
+   * included, from their translated settings), whether the player's NFL team
+   * is on its bye, and who they play ("vs BUF", "@KC").
+   */
+  weekProjection: number | null;
+  bye: boolean;
+  opponent: string | null;
 }
 
 export interface AnalysisResponse {
@@ -100,6 +112,8 @@ export interface AnalysisResponse {
     record: { wins: number; losses: number; ties: number };
   }[];
   players: AnalysisPlayer[];
+  /** The week `weekProjection`, `bye` and `opponent` are about; null off the live roster or out of season. */
+  upcomingWeek: number | null;
 }
 
 const num = (v: unknown): number | null =>
@@ -165,12 +179,33 @@ export async function GET(request: Request) {
     // a result already in the record.
     const projectionSeason = currentSeason;
 
-    const [rosters, users, players, stats, projections] = await Promise.all([
+    /**
+     * The coming week, for the live roster: the current NFL week until all its games are done,
+     * then the next. Preseason looks at week 1; after the regular season there is none.
+     */
+    let upcomingWeek: number | null = null;
+    let schedule: Awaited<ReturnType<typeof seasonSchedule>> = [];
+    if (isCurrent && nflState?.season_type !== 'post') {
+      schedule = await seasonSchedule(currentSeason).catch(() => []);
+      const now = nflState?.season_type === 'pre' ? 1 : Math.max(1, Number(nflState?.week ?? 1));
+      const games = (w: number) => schedule.filter(g => Number(g.week) === w);
+      const w = games(now).length && phaseOf(games(now)) === 'final' ? now + 1 : now;
+      upcomingWeek = games(w).length ? w : null;
+    }
+    const weekGames = upcomingWeek ? schedule.filter(g => Number(g.week) === upcomingWeek) : [];
+    // Each NFL team's game that week, as seen from its side.
+    const matchup = new Map<string, string>();
+    for (const g of weekGames) { matchup.set(g.home, `vs ${g.away}`); matchup.set(g.away, `@${g.home}`); }
+
+    const [rosters, users, players, stats, projections, weekProj] = await Promise.all([
       getLeagueRosters(seasonLeagueId),
       getLeagueUsers(seasonLeagueId),
       getPlayersDirectory(),
       getSeasonStats(statsSeason),
       isCurrent ? getSeasonProjections(projectionSeason) : Promise.resolve({} as Record<string, any>),
+      upcomingWeek
+        ? weeklyProjections(currentSeason, upcomingWeek, fantasyPositions(league?.roster_positions ?? []), league?.scoring_settings ?? null).catch(() => new Map<string, number>())
+        : Promise.resolve(new Map<string, number>()),
     ]);
 
     /**
@@ -270,6 +305,17 @@ export async function GET(request: Request) {
           projectedPoints: num(pr.pts_ppr),
           adp: priced(pr.adp_ppr),
           dynastyAdp: priced(pr.adp_dynasty_ppr),
+
+          ...(() => {
+            // A team in the league with no game that week is on its bye; a free agent has neither.
+            const team = p.team as string | undefined;
+            const bye = Boolean(upcomingWeek && team && weekGames.length && !matchup.has(team));
+            return {
+              weekProjection: upcomingWeek && !bye ? num(weekProj.get(id)) : null,
+              bye,
+              opponent: upcomingWeek && team ? matchup.get(team) ?? null : null,
+            };
+          })(),
         });
       }
     }
@@ -287,6 +333,7 @@ export async function GET(request: Request) {
       isDynasty: leagueType === 2,
       teams,
       players: out,
+      upcomingWeek,
     } satisfies AnalysisResponse);
   } catch (err) {
     console.error('[api/rosters/analysis]', err);
