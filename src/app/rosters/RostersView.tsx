@@ -10,12 +10,17 @@ import { cn } from '@/lib/utils';
 import { POSITION_STYLE } from './positions';
 import PlayerDetailModal from './PlayerDetailModal';
 import DynastyBreakdown from './DynastyBreakdown';
+import Formation from './Formation';
 import type { AnalysisPlayer, AnalysisResponse } from '@/app/api/rosters/analysis/route';
 
 /**
  * Rosters.
  *
  * Pick a team, see their players, tap one to go deep. That is the whole page.
+ *
+ * The players stand in formation on a field by default (Formation): starters
+ * where they'd line up, the bench on the sideline. The plain list is a tap
+ * away for scanning numbers, and the choice is remembered.
  *
  * It has been two other things: eight stacked lists nobody could compare, and
  * then a filter bench with axis pickers and league-wide scatter plots that
@@ -40,8 +45,10 @@ function feetInches(inches: number | null): string {
   return `${Math.floor(inches / 12)}'${inches % 12}`;
 }
 
-function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel }: {
+function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel, lead, decimals }: {
   player: AnalysisPlayer; onOpen: () => void; best: number;
+  /** The number the row leads with (see leadOf in the page), and its precision. */
+  lead: number | null; decimals: number;
   /** False for a past season or a specific week, where there is nothing to
    *  project and the only number worth showing is what actually happened. */
   forwardLooking: boolean;
@@ -50,13 +57,13 @@ function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel }: {
   const style = POSITION_STYLE[player.position] ?? POSITION_STYLE.DEFAULT;
   // The bar measures whichever number leads: the projection on a live roster,
   // the points actually scored on a historical one.
-  const lead = forwardLooking ? player.projectedPoints : player.points;
   const pct = lead != null && best > 0 ? Math.max(3, (lead / best) * 100) : 0;
 
   const detail = [
     player.nflTeam,
     player.age != null ? `${player.age}yr` : null,
     player.weight != null ? `${feetInches(player.height)}, ${player.weight}lb` : null,
+    player.opponent,
     player.depthChartOrder ? `depth ${player.depthChartOrder}` : null,
   ].filter(Boolean).join(' · ');
 
@@ -85,6 +92,11 @@ function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel }: {
           <span className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary">
             {player.name}
           </span>
+          {player.bye && (
+            <span className="shrink-0 rounded border border-slate-400/30 bg-slate-400/15 px-1 py-px text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
+              Bye
+            </span>
+          )}
           {player.injuryStatus && (
             <span className="shrink-0 rounded border border-rose-500/25 bg-rose-500/10 px-1 py-px text-[8px] font-bold uppercase tracking-widest text-rose-500">
               {player.injuryStatus}
@@ -96,7 +108,7 @@ function PlayerRow({ player, onOpen, best, forwardLooking, pointsLabel }: {
 
       <span className="relative shrink-0 text-right">
         <span className="block font-display text-sm font-bold tabular-nums text-foreground">
-          {lead != null ? lead.toFixed(forwardLooking ? 0 : 1) : '–'}
+          {player.bye ? 'BYE' : lead != null ? lead.toFixed(decimals) : '–'}
         </span>
         <span className="block text-[10px] tabular-nums text-muted-foreground">
           {forwardLooking && player.points != null
@@ -189,6 +201,9 @@ export default function RostersView() {
   const [error, setError] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<number | null>(null);
   const [openPlayer, setOpenPlayer] = useState<AnalysisPlayer | null>(null);
+  const [view, setView] = useState<'field' | 'list'>('field');
+  useEffect(() => { try { if (localStorage.getItem('lp_rosters_view') === 'list') setView('list'); } catch { /* field */ } }, []);
+  const pickView = (v: 'field' | 'list') => { setView(v); try { localStorage.setItem('lp_rosters_view', v); } catch { /* this visit only */ } };
 
   const load = useCallback((s: string, w: number | null) => {
     setError(null);
@@ -232,26 +247,33 @@ export default function RostersView() {
     return m;
   }, [data]);
 
+  /**
+   * The number each player leads with: on the live roster, the projection for the coming week
+   * (the season's when there is no week coming); on a past roster or week, the points scored.
+   */
+  const weekly = Boolean(data?.isCurrent && data.upcomingWeek);
+  const leadOf = useCallback((p: AnalysisPlayer) =>
+    (!data?.isCurrent ? p.points : weekly ? p.weekProjection : p.projectedPoints), [data?.isCurrent, weekly]);
+  const decimals = !data?.isCurrent || weekly ? 1 : 0;
+
   const { starters, bench } = useMemo(() => {
     // Within a position, order by whichever number is on screen. Sorting a
     // historical roster by projections it does not carry left every group in
     // arbitrary order.
-    const lead = (p: AnalysisPlayer) =>
-      (data?.isCurrent ? p.projectedPoints : p.points) ?? -1;
+    const lead = (p: AnalysisPlayer) => leadOf(p) ?? -1;
     const order = (a: AnalysisPlayer, b: AnalysisPlayer) =>
       positionRank(a) - positionRank(b) || lead(b) - lead(a);
     return {
       starters: squad.filter(p => p.starter).sort(order),
       bench: squad.filter(p => !p.starter).sort(order),
     };
-  }, [squad, data?.isCurrent]);
+  }, [squad, leadOf]);
 
   if (error) return <ErrorMessage title="Rosters" message={error} />;
   if (!data || !team) return <LoadingPage />;
 
   // Scale the bars against whichever number is being shown.
-  const best = Math.max(1, ...squad.map(p =>
-    (data.isCurrent ? p.projectedPoints : p.points) ?? 0));
+  const best = Math.max(1, ...squad.map(p => leadOf(p) ?? 0));
   const rec = team.record;
 
   return (
@@ -333,9 +355,27 @@ export default function RostersView() {
                 {team.manager} · {rec.wins}-{rec.losses}{rec.ties ? `-${rec.ties}` : ''} · {squad.length} players
               </p>
             </div>
+            <div role="radiogroup" aria-label="Show the roster as" className="flex shrink-0 rounded-full border border-border bg-muted/40 p-0.5">
+              {(['field', 'list'] as const).map(v => (
+                <button key={v} role="radio" aria-checked={view === v} onClick={() => pickView(v)}
+                  className={cn('relative rounded-full px-3 py-1 text-[12px] font-semibold capitalize transition-colors', view === v ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
+                  {view === v && <motion.span layoutId="roster-view" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+                  <span className="relative">{v}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {[
+          {view === 'field' && (
+            <div className="p-2 sm:p-4">
+              <Formation starters={starters} bench={bench} teamKey={`${teamId}-${season}-${data.week ?? 'now'}`}
+                lead={leadOf} decimals={decimals}
+                leadLabel={data.week ? `week ${data.week} pts` : weekly ? `week ${data.upcomingWeek} projection` : data.isCurrent ? 'season projection' : 'pts'}
+                onOpen={setOpenPlayer} />
+            </div>
+          )}
+
+          {view === 'list' && [
             { label: 'Starters', list: starters },
             { label: 'Bench', list: bench },
           ].map(({ label, list }) => list.length > 0 && (
@@ -355,6 +395,7 @@ export default function RostersView() {
                       player={p}
                       best={best}
                       forwardLooking={data.isCurrent}
+                      lead={leadOf(p)} decimals={decimals}
                       pointsLabel={
                         data.week ? `week ${data.week}`
                           : data.isCurrent ? `${data.statsSeason} pts`
@@ -372,7 +413,9 @@ export default function RostersView() {
             {data.week
               ? `The squad exactly as it was in week ${data.week}, with that week's points. Sleeper freezes a roster each week, so this is what was actually fielded.`
               : data.isCurrent
-                ? `Right hand number is the ${data.projectionSeason} projection, beneath it ${data.statsSeason} points.`
+                ? weekly
+                  ? `${view === 'field' ? 'Each card shows' : 'Right hand number is'} the week ${data.upcomingWeek} projection, scored the way this league scores, with each player's opponent. BYE marks a team with no game that week. Tap anyone for the season outlook.`
+                  : view === 'field' ? `Each card shows the ${data.projectionSeason} projection; the bar is against the best on the roster. Tap anyone for ${data.statsSeason} points and more.` : `Right hand number is the ${data.projectionSeason} projection, beneath it ${data.statsSeason} points.`
                 : `The roster at the end of ${data.rosterSeason}, with that season's points. Projections are not shown for a season already played.`}
           </p>
         </section>
