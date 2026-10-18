@@ -29,6 +29,9 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({})) as { slug?: string; franchiseId?: string; note?: string };
   const t = body.slug ? await getTenant(body.slug) : null;
   if (!t || !isLive(t)) return bad('That league is not on LeaguePulse.', 404);
+  // The demo league's teams are made up: nobody manages them.
+  const { DEMO_SLUG } = await import('@/lib/demo/site');
+  if (t.slug === DEMO_SLUG) return bad('The demo league’s teams can’t be claimed. Start your own league to manage a franchise.', 403);
   const { franchiseInfo } = await import('@/lib/franchise/lookup');
   const info = body.franchiseId ? await franchiseInfo(t, body.franchiseId) : null;
   if (!info) return bad('That team is not part of this league.', 404);

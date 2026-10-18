@@ -355,8 +355,14 @@ export function simulate(o: {
    * difference. Builds after it must be affordable, as always: nothing is bought on credit.
    */
   grandfatherBefore?: number;
+  /**
+   * A bankroll from the owner, in VC, put in the bank on a day (the demo league's, each season:
+   * see lib/demo/site). After the old front office's off-season, which keeps only a reserve.
+   */
+  grant?: { at: number; vc: number };
 }): EconomyState {
   const s = startingState();
+  let granted = !o.grant;
   const games = [...o.games].sort((a, b) => a.at - b.at);
   // A title is won with the season's last game.
   const won = new Set(o.titles ?? []);
@@ -368,6 +374,11 @@ export function simulate(o: {
 
   for (let day = o.start; day <= o.now; day += DAY) {
     const end = Math.min(day + DAY, o.now + 1);
+    if (!granted && o.grant && o.grant.at < end) {
+      granted = true;
+      move(s, o.grant.vc, o.grant.at);
+      tell(s, { at: o.grant.at, kind: 'start', title: 'Deep pockets', detail: `The owner opened the books with ${cash(o.grant.vc)} to build something special.` });
+    }
     // Decisions made today, in order.
     while (di < decisions.length && decisions[di].at < end) {
       const d = decisions[di++];

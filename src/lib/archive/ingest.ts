@@ -71,7 +71,7 @@ class OutOfRoom extends Error {}
  * seasons spend it; ESPN and hand-entered seasons never call Sleeper.
  */
 async function room(seasonId: string, calls: number, deadline: number) {
-  if (providerOf(seasonId) !== 'sleeper') return;
+  if (providerOf(seasonId) !== 'sleeper' || seasonId.startsWith('demo-')) return;
   if (!(await waitForSleeperRoom(calls, deadline))) throw new OutOfRoom();
 }
 

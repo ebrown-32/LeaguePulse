@@ -31,6 +31,15 @@ async function ownEspnLeague(): Promise<string | null> {
 }
 
 export async function serveLeagueData(path: string): Promise<Response> {
+  // The demo league (src/lib/demo): made up, so served to anyone.
+  if (/^(?:(?:league|draft)\/demo-\d{4}|user\/demo-u-)/.test(path)) {
+    const { serveDemo } = await import('@/lib/demo/serve');
+    const hit = await serveDemo(path).catch(err => {
+      console.error('[demo] could not serve', path, err instanceof Error ? err.message : err);
+      return { status: 503, body: { error: 'Demo data is temporarily unavailable' } };
+    });
+    return json(hit.body, hit.status);
+  }
   // A season the commissioner entered (src/lib/manual).
   if (/^(?:league|draft)\/manual-\d{4}/.test(path)) {
     const [{ getManual }, { serveManualSeason }] = await Promise.all([import('@/lib/manual/store'), import('@/lib/manual/model')]);

@@ -30,6 +30,7 @@ import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import Avatar from '@/components/ui/Avatar';
 import HoneycombLoader from '@/components/ui/honeycomb-loader';
 import { BEAT_MS, directorShot } from './director';
+import { blueprint } from '@/lib/franchise/stadiumBlueprint';
 
 /**
  * The broadcast angles, wide screens and phones apart (each fitted to its screen's shape). Every
@@ -177,6 +178,8 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false 
   const people = day && venue?.crowd ? Math.round(venue.crowd.capacity * day.stands) : 0;
 
   const guestColor = ground?.guestColor ?? '#e5e7eb';
+  // The overview stands back as far as the stadium needs: framed for a Proving Ground, further out for a Cathedral or a Monolith.
+  const fit = ground ? Math.max(1, blueprint(ground.look.style, ground.facilities).footprint / 4.7) : 1;
   const scene = (full: boolean) => ground && host && day ? (
     <Stadium3D facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // A preview is a glance: 30 frames a second is smooth for a crowd and a slow orbit, at half the battery.
@@ -188,7 +191,7 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false 
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
       view={full && playing ? { ...(shot ?? ANGLE_VIEW[angle && angle !== 'director' ? angle : 'sideline'][portrait ? 'narrow' : 'wide']), still: true, broadcast: true }
-        : full ? { position: [14, 7.5, 14], target: [0, 0.4, 0], fov: 40 } : { position: [10.5, 6.2, 10.5], target: [0, 0.4, 0], fov: 42 }} />
+        : full ? { position: [14 * fit, 7.5 * fit, 14 * fit], target: [0, 0.4, 0], fov: 40 } : { position: [10.5 * fit, 6.2 * fit, 10.5 * fit], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
   const matchupLine = host && guest ? (
     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/80">

@@ -82,6 +82,8 @@ const SHARED_PREFIXES = [
   'lp_sleeper_rpm',
   // The live NFL slate, one for every league (src/lib/live/espn.ts).
   'lp_live_',
+  // The demo league's scored weeks, from the real NFL games (src/lib/demo/data.ts).
+  'lp_demo_',
 ];
 
 /**

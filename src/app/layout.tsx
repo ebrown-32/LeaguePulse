@@ -20,6 +20,7 @@ import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
 import NavMemory from '@/components/layout/NavMemory';
 import SetupBar from '@/components/layout/SetupBar';
+import DemoBar from '@/components/platform/DemoBar';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
 
 const displayFont = Space_Grotesk({
@@ -141,6 +142,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // than a league site with nothing to load.
   let tenantLeague: string | null = null;
   let tenantName: string | null = null;
+  // The demo site (lib/demo): its strip, with the way to the product site.
+  let demoProduct: string | null = null;
   if (process.env.LP_HOSTED === '1') {
     const tenant = await (await import('@/lib/tenant/context')).currentTenant();
     const { isLive } = await import('@/lib/platform/tenants');
@@ -159,6 +162,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // public, so nothing secret is exposed.
     tenantLeague = tenant.leagueId;
     tenantName = tenant.leagueName?.trim() || null;
+    const { DEMO_SLUG } = await import('@/lib/demo/site');
+    if (tenant.slug === DEMO_SLUG) {
+      const [{ headers }, { productOriginFor }] = await Promise.all([import('next/headers'), import('@/lib/franchise/links')]);
+      demoProduct = productOriginFor((await headers()).get('host'));
+    }
   }
 
   const [theme, rankings] = await Promise.all([
@@ -193,6 +201,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
               <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
+              {demoProduct && <DemoBar productUrl={demoProduct} />}
               {/* The league's owner and admins, until the site is set up. */}
               <SetupBar />
               <main className="flex-1 pb-[env(safe-area-inset-bottom)]">

@@ -122,11 +122,70 @@ function GetStarted() {
   );
 }
 
-/** The sections the nav links to, in page order. */
+/**
+ * The live demo league (lib/demo): demo.<root domain>, or NEXT_PUBLIC_LP_DEMO_URL when set; on
+ * a local server, the demo on the same port.
+ */
+function useDemoUrl(): string {
+  const [url, setUrl] = useState(PLATFORM.demoUrl || `https://demo.${PLATFORM.rootDomain}`);
+  useEffect(() => {
+    const { hostname, port } = window.location;
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) setUrl(`http://demo.localhost${port ? `:${port}` : ''}`);
+  }, []);
+  return url;
+}
+
+/** The nav's way into the demo, beside "Get started": a plain link, in a new tab. */
+function DemoLink() {
+  const url = useDemoUrl();
+  return (
+    <a href={url} target="_blank" rel="noopener"
+      className="hidden items-center gap-1.5 whitespace-nowrap px-2 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground md:inline-flex">
+      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+      Live demo
+    </a>
+  );
+}
+
+/** The phone menu's way into the demo, in a new tab, above the trial. */
+function DemoMenuLink() {
+  const url = useDemoUrl();
+  return (
+    <a href={url} target="_blank" rel="noopener"
+      className="mb-2.5 flex items-center justify-center gap-2 rounded-2xl border border-border py-3.5 text-[15px] font-semibold active:bg-muted">
+      <span className="h-2 w-2 rounded-full bg-red-500" />
+      Try the live demo
+    </a>
+  );
+}
+
+/** Under the hero's form: the demo league, to click around in before signing up. */
+function DemoInvite() {
+  const url = useDemoUrl();
+  return (
+    <a href={url} target="_blank" rel="noopener" className="group mt-4 flex max-w-md items-center gap-3 rounded-2xl border border-border bg-card/70 p-3 pr-4 transition hover:border-primary/40 hover:bg-card">
+      <span className="flex -space-x-2">
+        {['priya', 'rosa', 'gus'].map(k => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={k} src={`/demo/teams/${k}.svg`} alt="" width={32} height={32} className="h-8 w-8 rounded-full ring-2 ring-card" />
+        ))}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold text-foreground">Explore the live demo league</span>
+        <span className="block truncate text-[12px] text-muted-foreground">Ten made-up managers, real NFL games, scored live. No sign-up.</span>
+      </span>
+      <Route size={16} />
+    </a>
+  );
+}
+
+/**
+ * The sections the nav links to, in page order: the few that sell it, so the bar stays calm. The
+ * rest (the app, featured leagues, questions) are a scroll away and in the phone menu.
+ */
 const NAV_LINKS = [
-  { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' }, { label: 'The App', href: '#app' },
-  { label: 'Analytics', href: '#analytics' }, { label: 'Stadiums', href: '#franchise' }, { label: 'Leagues', href: '#leagues' }, { label: 'Pricing', href: '#pricing' },
-  { label: 'FAQ', href: '#faq' },
+  { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' },
+  { label: 'Analytics', href: '#analytics' }, { label: 'Stadiums', href: '#franchise' }, { label: 'Pricing', href: '#pricing' },
 ];
 
 /** Which of the nav's sections is on screen. */
@@ -204,7 +263,10 @@ function Nav() {
             {/* Signed in, the account area replaces "Get started": a returning
                 commissioner wants their leagues, not the sign-up. */}
             <div className={cn('transition-opacity duration-300', open && 'pointer-events-none opacity-0')}>
-              {accountsOn ? <NavAccount getStarted={<GetStarted />} /> : <GetStarted />}
+              <span className="flex items-center gap-3">
+                <DemoLink />
+                {accountsOn ? <NavAccount getStarted={<GetStarted />} /> : <GetStarted />}
+              </span>
             </div>
             <MenuButton open={open} onClick={() => setOpen(o => !o)} />
           </div>
@@ -315,6 +377,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
       </motion.div>
 
       <motion.div variants={row} className="relative mt-auto pt-10">
+        <DemoMenuLink />
         <Link href="/start" onClick={onClose}
           className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-[16px] font-semibold text-primary-foreground active:brightness-110">
           Start your {PLANS.pro.trialDays}-day free trial <Route size={16} />
@@ -368,6 +431,7 @@ function Hero() {
               Everyone installs it from the link in two taps. No app store.
             </motion.p>
             {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
+            <motion.div variants={rise}><DemoInvite /></motion.div>
             <motion.ul variants={rise} className="mt-9 grid max-w-md grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-6 sm:grid-cols-4">
               {([[PhoneMark, 'Installs as an app', '#app'], [DeskMark, 'AI desk', '#desk'], [GameDayMark, 'Game Day', '#gameday'], [SheetMark, 'Analytics', '#analytics']] as const).map(([M, label, href]) => (
                 <li key={label}>

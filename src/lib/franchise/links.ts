@@ -10,9 +10,12 @@
 import { PLATFORM } from '@/lib/platform/config';
 
 export function productOrigin(req: Request): string {
-  const u = new URL(req.url);
-  const host = req.headers.get('host') ?? u.host;
-  const m = /^(?:[a-z0-9-]+\.)?localhost(:\d+)?$/.exec(host);
+  return productOriginFor(req.headers.get('host') ?? new URL(req.url).host);
+}
+
+/** The product site, from the address a page was asked for (a server component's Host header). */
+export function productOriginFor(host: string | null | undefined): string {
+  const m = /^(?:[a-z0-9-]+\.)?localhost(:\d+)?$/.exec(host ?? '');
   return m ? `http://localhost${m[1] ?? ''}` : `https://${PLATFORM.rootDomain}`;
 }
 
