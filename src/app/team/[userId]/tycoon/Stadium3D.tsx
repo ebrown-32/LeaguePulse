@@ -79,6 +79,12 @@ export interface StadiumProps {
    */
   photo?: boolean;
   /**
+   * Frames a second to draw while on screen, 60 by default (a 120Hz screen would otherwise draw
+   * twice as many, for no difference anyone sees). A small preview passes fewer; touching or
+   * dragging the stadium always gets 60.
+   */
+  fps?: number;
+  /**
    * A fantasy matchup, live (see LiveField): the score on the boards, the starters on the field
    * where their drives really are, the rest on the sidelines.
    */
@@ -1015,6 +1021,27 @@ function BroadcastRig({ view }: { view: NonNullable<StadiumProps['view']> }) {
   return null;
 }
 
+/**
+ * Draws the scene `fps` times a second (the Canvas renders on demand): a stadium drawing every
+ * refresh of a 120Hz screen, or a small preview drawing 60 times a second, was the bulk of the
+ * battery the app used.
+ */
+function Pace({ fps }: { fps: number }) {
+  const invalidate = useThree(st => st.invalidate);
+  useEffect(() => {
+    // A little slack, so a 60Hz screen asked for 30 gets every other refresh, never a stutter.
+    const gap = 1000 / fps - 2;
+    let raf = 0, last = 0;
+    const tick = (t: number) => {
+      if (t - last >= gap) { last = t; invalidate(); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fps, invalidate]);
+  return null;
+}
+
 /** Calls back once a few frames are drawn: the scene is built, its textures up, the stands rising. */
 function ReadySignal({ onReady }: { onReady: () => void }) {
   const frames = useRef(0);
@@ -1186,25 +1213,39 @@ export default function Stadium3D(props: StadiumProps) {
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  // Touching or dragging the stadium: full frame rate for that, and a moment after.
+  const [handled, setHandled] = useState(false);
+  const calm = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handle = () => {
+    setHandled(true);
+    if (calm.current) clearTimeout(calm.current);
+    calm.current = setTimeout(() => setHandled(false), 1500);
+  };
+  useEffect(() => () => { if (calm.current) clearTimeout(calm.current); }, []);
+  const fps = handled ? 60 : Math.min(60, props.fps ?? 60);
 
   return (
     // A stacking context of its own (`isolate`): the 3D labels (live cards and pins) set their own
     // z-index, and without this they'd rise above whatever the page lays over the stadium.
-    <div ref={box} className="relative isolate h-full w-full">
+    <div ref={box} className="relative isolate h-full w-full" onPointerDown={handle} onWheel={handle}
+      onPointerMove={e => { if (e.buttons) handle(); }}>
       {ok === false ? (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-sky-200 to-emerald-200 text-center dark:from-slate-800 dark:to-emerald-950">
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
         </div>
       ) : ok && quality ? (
-        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={visible || props.photo ? 'always' : 'never'}
-          gl={{ antialias: quality.antialias, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: !!props.photo }}
+        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={props.photo ? 'always' : visible ? 'demand' : 'never'}
+          // The default GPU: asking for the high-performance one wakes a laptop's discrete graphics.
+          gl={{ antialias: quality.antialias, powerPreference: 'default', stencil: false, preserveDrawingBuffer: !!props.photo }}
           camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
-          {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
+          {!props.photo && visible && <Pace fps={fps} />}
+          {/* Measured against the pace it's held to, so a stadium held to 30 isn't taken for a slow one. */}
+          {!scripted() && !props.photo && <PerformanceMonitor key={fps} bounds={() => [fps - 8, fps + 30]} flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
           {props.onReady && <ReadySignal onReady={props.onReady} />}
-          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4 * (60 / fps)} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
           {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
       ) : null}
