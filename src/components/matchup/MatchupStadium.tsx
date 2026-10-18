@@ -110,7 +110,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
     return () => { cancelled = true; };
   }, [a.userId, b.userId, week]);
   const hostTeam = venue ? (venue.host === a.userId ? a : b) : null;
-  const ground = useHostGround(venue?.host ?? null, venue?.guest ?? null, hostTeam?.avatar);
+  const ground = useHostGround(venue?.host ?? null, venue?.guest ?? null);
 
   const day = useMemo(() => (venue ? gameDay(now, venue.kickoff, venue.phase, venue.crowd?.fill ?? 0.8) : null), [venue, now]);
 

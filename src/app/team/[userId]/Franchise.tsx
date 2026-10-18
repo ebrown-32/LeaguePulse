@@ -33,14 +33,12 @@ const passKey = (id: string) => `lp_manager_pass:${id}`;
 
 /**
  * The picture for midfield of the franchise's stadium: its uploaded logo, else
- * the team's picture from the provider. Always same-origin (a provider picture
- * goes through Next's image route), since WebGL refuses pictures from other sites.
+ * its logo route, which sends on the team's picture from Sleeper or ESPN
+ * (api/franchises/<id>/logo). Always same-origin, since WebGL refuses pictures
+ * from other sites.
  */
-export function fieldLogo(logoUrl: string | null | undefined, avatar: string | null | undefined): string | null {
-  if (logoUrl) return logoUrl;
-  if (!avatar) return null;
-  const url = /^(https?:\/\/|\/)/.test(avatar) ? avatar : `https://sleepercdn.com/avatars/${avatar}`;
-  return url.startsWith('/') ? url : `/_next/image?url=${encodeURIComponent(url)}&w=256&q=80`;
+export function fieldLogo(logoUrl: string | null | undefined, franchiseId: string): string {
+  return logoUrl || `/api/franchises/${encodeURIComponent(franchiseId)}/logo`;
 }
 
 /**
@@ -187,7 +185,7 @@ function Card({ icon: Icon, title, children }: { icon: React.ComponentType<{ cla
 
 const SWATCHES = ['#e11d48', '#ea580c', '#d97706', '#16a34a', '#0d9488', '#0284c7', '#4f46e5', '#7c3aed', '#c026d3', '#334155'];
 
-/** The manager's editor for the franchise's public face: logo, color, motto and bio. */
+/** The manager's editor for the franchise's public face: the stadium's midfield logo, color, motto and bio. */
 export function IdentityEditor({ info, auth, teamName, onSaved }: {
   info: FranchiseInfo; auth: Record<string, string>; teamName: string; onSaved: () => void;
 }) {
@@ -230,9 +228,10 @@ export function IdentityEditor({ info, auth, teamName, onSaved }: {
 
   return (
     <div>
-        <p className="text-[12.5px] text-muted-foreground">The logo and story appear on your franchise page, the logo at midfield too; the color and motto also show in the league&apos;s list of franchises.</p>
+        <p className="text-[12.5px] text-muted-foreground">The story appears on your franchise page; the color and motto also show in the league&apos;s list of franchises.</p>
 
-        <p className="mt-5 text-[13px] font-semibold">Logo</p>
+        <p className="mt-5 text-[13px] font-semibold">Midfield logo</p>
+        <p className="mt-0.5 text-[12.5px] text-muted-foreground">Painted at midfield of your stadium. Without one, the field shows your team picture from your league. Your franchise picture is always your league&apos;s team picture.</p>
         <div className="mt-2 flex items-center gap-3">
           <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-muted text-xl font-bold" style={color ? { boxShadow: `0 0 0 2px ${color}` } : undefined}>
             {/* eslint-disable-next-line @next/next/no-img-element */}

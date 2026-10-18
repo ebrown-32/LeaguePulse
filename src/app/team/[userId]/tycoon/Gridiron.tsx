@@ -152,7 +152,8 @@ function paint(look: StadiumLook, color: string, team: string, logo: HTMLImageEl
     g.fillText(mark, X(0), Z(0) + 0.2 * PX);
   }
   g.beginPath(); g.arc(X(0), Z(0), R, 0, Math.PI * 2);
-  g.lineWidth = 0.5 * PX; g.strokeStyle = look.accent ?? WHITE; g.stroke();
+  // Rimmed in the team's color, never the stadium's trim.
+  g.lineWidth = 0.5 * PX; g.strokeStyle = color; g.stroke();
 
   // Yard numbers, 12 yards in from each sideline, read from that sideline, with arrows toward the nearer goal.
   g.font = `700 ${2.7 * PX}px "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;

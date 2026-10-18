@@ -14,6 +14,7 @@ import { espnScoreboard, espnTeam, type LiveGame } from './espn';
 import { playFeed } from './playFeed';
 import type { LiveMatchup, LivePlay, LivePlayer, LiveState } from './liveTypes';
 import { KICKER_RANGE, OFFENSE, kickoff, placeOf } from './place';
+import { catchUp, type PointsAnchor } from './catchUp';
 
 /** What the stadium draws for a play, from its type and the player's part in it. */
 export function playKind(type: string, role: string): LivePlay['kind'] {
@@ -21,6 +22,36 @@ export function playKind(type: string, role: string): LivePlay['kind'] {
   if (/pass reception|passing touchdown/.test(t)) return role === 'receiver' || role === 'scorer' ? 'catch' : role === 'passer' ? 'throw' : 'other';
   if (/^rush|rushing/.test(t) && (role === 'rusher' || role === 'scorer')) return 'run';
   return 'other';
+}
+
+/** How long the anchors are kept: the length of a game day, and then some. */
+const ANCHOR_TTL_S = 2 * 24 * 3600;
+
+/**
+ * Each starter's anchor (see PointsAnchor), kept in Redis so every server agrees on it; a
+ * figure seen for the first time is anchored now. Without Redis there are no anchors, and the
+ * points are Sleeper's alone.
+ */
+async function anchorsFor(leagueId: string, week: number, players: LivePlayer[]): Promise<Map<string, PointsAnchor>> {
+  const { getRedis } = await import('@/lib/redisClient');
+  const redis = getRedis().client;
+  const out = new Map<string, PointsAnchor>();
+  if (!redis || !players.length) return out;
+  const key = (id: string) => `live_pts:${leagueId}:${week}:${id}`;
+  const stored = await redis.mget(players.map(p => key(p.playerId))).catch(() => null);
+  if (!stored) return out;
+  const now = Date.now();
+  await Promise.all(players.map(async (p, i) => {
+    if (p.points == null) return;
+    let a: PointsAnchor | null = null;
+    try { a = stored[i] ? JSON.parse(stored[i]!) as PointsAnchor : null; } catch { /* rewritten below */ }
+    if (!a || a.p !== p.points) {
+      a = { p: p.points, at: now };
+      await redis.set(key(p.playerId), JSON.stringify(a), ANCHOR_TTL_S).catch(() => {});
+    }
+    out.set(p.playerId, a);
+  }));
+  return out;
 }
 
 export async function liveMatchup(o: {
@@ -84,7 +115,16 @@ export async function liveMatchup(o: {
     }));
   }
 
-  const score = (m: any) => Math.round(Number(m?.custom_points ?? m?.points ?? 0) * 100) / 100;
+  // Sleeper's points, caught up with the plays it hasn't counted yet; the team scores move with them.
+  const lift = new Map<string, number>();
+  if (gameWeek && started && plays.length) {
+    const anchors = await anchorsFor(o.leagueId, o.week, players).catch(() => new Map<string, PointsAnchor>());
+    for (const p of players) {
+      const now = catchUp(p.points, anchors.get(p.playerId) ?? null, plays.filter(x => x.playerId === p.playerId));
+      if (now != null && p.points != null && now !== p.points) { lift.set(p.side, (lift.get(p.side) ?? 0) + now - p.points); p.points = now; }
+    }
+  }
+  const score = (m: any, side: 'host' | 'guest') => Math.round((Number(m?.custom_points ?? m?.points ?? 0) + (lift.get(side) ?? 0)) * 100) / 100;
   // The live win chance, from the week's forecast (cached and shared with Game Day).
   let hostWinProb: number | null = null;
   try {
@@ -95,8 +135,8 @@ export async function liveMatchup(o: {
   } catch { /* the scoreboard goes without it */ }
   return {
     week: o.week, phase,
-    host: { userId: o.host, name: nameOf(o.host), score: score(hostM) },
-    guest: { userId: o.guest, name: nameOf(o.guest), score: score(guestM) },
+    host: { userId: o.host, name: nameOf(o.host), score: score(hostM, 'host') },
+    guest: { userId: o.guest, name: nameOf(o.guest), score: score(guestM, 'guest') },
     players, plays, updatedAt: Date.now(),
     anyGameLive: games.some(g => g.state === 'in'),
     hostWinProb,

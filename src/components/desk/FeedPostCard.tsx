@@ -512,7 +512,7 @@ export function FeedPostCard({
 
             {/* A photograph from the stadium, developed from the real 3D view. */}
             {isPhoto && post.content.photo && (
-              <StadiumPhoto spec={post.content.photo} hostTeam={post.content.hostTeam} hostAvatar={post.content.hostAvatar}
+              <StadiumPhoto spec={post.content.photo} hostTeam={post.content.hostTeam}
                 persona={{ name: post.personaName, avatar: post.personaAvatar }} />
             )}
 

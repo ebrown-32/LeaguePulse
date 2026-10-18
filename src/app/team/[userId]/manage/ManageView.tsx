@@ -22,7 +22,6 @@ const TRIED = (id: string) => `lp_manage_tried:${id}`;
 export default function ManageView({ franchiseId }: { franchiseId: string }) {
   const { info, auth, reload } = useFranchise(franchiseId);
   const [teamName, setTeamName] = useState<string | null>(null);
-  const [avatar, setAvatar] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const publicPath = `/team/${encodeURIComponent(franchiseId)}`;
 
@@ -30,7 +29,6 @@ export default function ManageView({ franchiseId }: { franchiseId: string }) {
     fetch('/api/franchises').then(r => (r.ok ? r.json() : null)).then(d => {
       const f = d?.franchises?.find((x: { franchiseId: string }) => x.franchiseId === franchiseId);
       setTeamName(f ? f.teamName || f.manager : 'Your franchise');
-      setAvatar(f?.avatar ?? null);
     }).catch(() => setTeamName('Your franchise'));
   }, [franchiseId]);
 
@@ -80,10 +78,10 @@ export default function ManageView({ franchiseId }: { franchiseId: string }) {
         <a href={publicPath} className="rounded-full border border-border px-4 py-2 text-[13px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">View public page</a>
       </motion.div>
       <FranchiseHQ franchiseId={franchiseId} mode="manage" auth={auth} color={color} teamName={teamName}
-        logo={fieldLogo(info.identity.logoUrl, avatar)} look={info.identity.look} stadiumName={info.identity.stadiumName} onLookSaved={reload}
+        logo={fieldLogo(info.identity.logoUrl, franchiseId)} look={info.identity.look} stadiumName={info.identity.stadiumName} onLookSaved={reload}
         identity={
           <Section scope="manage" id="identity" icon={Pencil} title="Identity" index={1}
-            summary={[info.identity.logoUrl ? 'Logo' : 'No logo', info.identity.motto ? `"${info.identity.motto}"` : 'no motto'].join(', ')}>
+            summary={[info.identity.logoUrl ? 'Midfield logo' : 'No midfield logo', info.identity.motto ? `"${info.identity.motto}"` : 'no motto'].join(', ')}>
             <IdentityEditor info={info} auth={auth} teamName={teamName} onSaved={reload} />
           </Section>
         } />
