@@ -79,7 +79,7 @@ export function WelcomeBack({ fallback }: { fallback: React.ReactNode }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="mt-8 max-w-md rounded-[22px] border border-border bg-card p-4 shadow-[0_1px_0_hsl(var(--border)),0_24px_48px_-30px_hsl(var(--foreground)/0.25)] sm:p-5">
+      className="mt-8 max-w-md md:max-w-2xl lg:max-w-none rounded-[22px] border border-border bg-card p-4 shadow-[0_1px_0_hsl(var(--border)),0_24px_48px_-30px_hsl(var(--foreground)/0.25)] sm:p-5">
       <div className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={user.imageUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-2 ring-background shadow-[0_0_0_1px_hsl(var(--border))]" />

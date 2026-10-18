@@ -28,7 +28,7 @@ export async function venueFor(a: string, b: string, weekWanted?: number): Promi
   const playoff = week >= Number(league?.settings?.playoff_week_start ?? 99);
 
   const redis = getRedis().client;
-  const key = `lp_venue_v3:${leagueId}:${season}:${week}:${[a, b].sort().join(':')}`;
+  const key = `lp_venue_v4:${leagueId}:${season}:${week}:${[a, b].sort().join(':')}`;
   let host: Stored | null = null;
   try { const raw = redis ? await redis.get(key) : null; if (raw) host = JSON.parse(raw); } catch { /* decide again */ }
   if (!host) {
