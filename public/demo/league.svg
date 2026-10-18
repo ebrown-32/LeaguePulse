@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1630"/><stop offset="1" stop-color="#050912"/></linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#22d3ee" stop-opacity="0.28"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+  <rect width="256" height="256" rx="58" fill="url(#glow)"/>
+  <rect x="3" y="3" width="250" height="250" rx="55" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+  <!-- A football, laced, its seam drawn as the league's pulse. -->
+  <g transform="rotate(-32 128 128)">
+    <path d="M36 128 Q128 34 220 128 Q128 222 36 128 Z" stroke-linejoin="round" fill="none" stroke="url(#ink)" stroke-width="12"/>
+    <path d="M70 128 L100 128 L112 106 L128 152 L142 116 L152 128 L186 128" fill="none" stroke="url(#ink)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
