@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { IconChip, StatusPill, WinBar, type Status } from '@/components/ui/kit';
@@ -184,13 +185,22 @@ export default function GameOfWeekCard({ week, onOpen, onPick, className }: {
           </div>
         )}
 
-        <button
-          onClick={() => onOpen(target)}
-          className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-[var(--elev-1)] transition-[filter] hover:brightness-110 sm:w-auto"
-        >
-          {status === 'upcoming' ? 'Open the matchup' : status === 'live' ? 'Follow it live' : 'See how it finished'}
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </button>
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            onClick={() => onOpen(target)}
+            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-[var(--elev-1)] transition-[filter] hover:brightness-110 sm:w-auto"
+          >
+            {status === 'upcoming' ? 'Open the matchup' : status === 'live' ? 'Follow it live' : 'See how it finished'}
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </button>
+          {/* The rest of the week's games. */}
+          <Link
+            href="/matchups"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted sm:w-auto"
+          >
+            All matchups
+          </Link>
+        </div>
       </div>
     </motion.section>
   );

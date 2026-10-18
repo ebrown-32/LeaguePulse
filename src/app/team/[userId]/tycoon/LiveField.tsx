@@ -176,7 +176,7 @@ export default function LiveField({ live }: { live: LiveScene }) {
         </Html>
       ))}
       {reel && reelPlayer && <PlayReel key={`reel-${reel.id}`} play={reel} player={reelPlayer} spot={reelSpot} color={colorOf(reel.side)} df={df} pin={Boolean(live.pins)} />}
-      {live.celebrate && <Fireworks key={`fw-${live.celebrate.id}`} delay={reel && reel.id === live.celebrate.id && reel.kind !== 'other' ? 1.4 : 0}
+      {live.celebrate?.td && <Fireworks key={`fw-${live.celebrate.id}`} delay={reel && reel.id === live.celebrate.id && reel.kind !== 'other' ? 1.4 : 0}
         x={(live.celebrate.side === 'host' ? 1 : -1) * 55} big={live.celebrate.td} colors={[colorOf(live.celebrate.side), '#f5c542', '#ffffff']} />}
     </group>
   );
