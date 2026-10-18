@@ -48,6 +48,13 @@ export interface LiveScene {
    * there is unreadable, and a dozen of them bury the stadium).
    */
   pins?: boolean;
+  /** The pins' size on screen, in pixels. */
+  pinSize?: number;
+  /**
+   * Compact cards at a fixed size on screen (a phone, a tablet held upright): the camera there
+   * stands far back to fit the field, and cards scaled by distance came out either huge or tiny.
+   */
+  mini?: boolean;
   /** The latest big play, which sets off fireworks once per id. */
   celebrate?: { id: string; side: 'host' | 'guest'; td: boolean } | null;
   /** The play being replayed right now (one at a time, see useLiveMatchup). */
@@ -102,7 +109,7 @@ function layout(players: LivePlayer[]) {
 
 export default function LiveField({ live }: { live: LiveScene }) {
   // Pins keep a fixed size on screen (no distance scaling); cards scale with the view.
-  const df = live.pins ? undefined : 5.2 * (live.cardScale ?? 1);
+  const df = live.pins || live.mini ? undefined : 5.2 * (live.cardScale ?? 1);
   const { spots, warm, bench } = useMemo(() => layout(live.match.players), [live.match.players]);
   const colorOf = (side: 'host' | 'guest') => (side === 'host' ? live.hostColor : live.guestColor);
   // A tapped card: the page shows it up close (onPick). A tap on the field (not a card) lets it go.
@@ -123,6 +130,24 @@ export default function LiveField({ live }: { live: LiveScene }) {
   const hidden = reel?.playerId ?? null;
   const reelPlayer = reel ? live.match.players.find(p => p.playerId === reel.playerId) ?? null : null;
   const reelSpot = reel ? spots.find(s => s.p.playerId === reel.playerId) ?? null : null;
+
+  /**
+   * The labels (drei's Html) only re-measure their size when their spot on screen moves. Opening
+   * fullscreen, the canvas sizes itself and the camera settles a moment after they first draw,
+   * and they kept that first, wrong size until the view was dragged. So for a couple of seconds
+   * after opening, and after any resize (a phone turned), the whole layer is nudged by a hair
+   * each frame, far too little to see, which has every label measure itself again.
+   */
+  const settle = useRef<Group>(null);
+  const settleFrames = useRef(120);
+  const size = useThree(st => st.size);
+  useEffect(() => { settleFrames.current = 120; }, [size.width, size.height]);
+  useFrame(() => {
+    const g = settle.current;
+    if (!g) return;
+    if (settleFrames.current > 0) { settleFrames.current--; g.position.y = settleFrames.current % 2 ? 0.0015 : 0; }
+    else if (g.position.y !== 0) g.position.y = 0;
+  });
   // One ball per drive: the first player of each lane carries it.
   const balls = useMemo(() => {
     const seen = new Set<number>();
@@ -130,21 +155,21 @@ export default function LiveField({ live }: { live: LiveScene }) {
   }, [spots]);
 
   return (
-    <group>
+    <group ref={settle}>
       {balls.map(s => <Drive key={`${s.p.side}${s.p.nflTeam}`} spot={s} color={colorOf(s.p.side)} defending={s.p.state === 'defending'} />)}
       {live.cards && spots.filter(s => s.p.playerId !== hidden).map(s => (
         <Html key={s.p.playerId} position={[s.x * U, 0.42, s.z * U]} center distanceFactor={df} zIndexRange={z(s.p.playerId, [30, 10])}>
-          {live.pins ? <Pin p={s.p} color={colorOf(s.p.side)} /> : <Card p={s.p} color={colorOf(s.p.side)} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} />}
+          {live.pins ? <Pin p={s.p} color={colorOf(s.p.side)} size={live.pinSize} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} /> : <Card p={s.p} mini={live.mini} color={colorOf(s.p.side)} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} />}
         </Html>
       ))}
       {live.cards && warm.filter(w => w.p.playerId !== hidden).map((w, i) => (
         <Html key={w.p.playerId} position={[w.x * U, 0.3, w.z * U]} center distanceFactor={df} zIndexRange={z(w.p.playerId, [20, 10])}>
-          <Warmup delay={(i * 0.37) % 1.4}>{live.pins ? <Pin p={w.p} color={colorOf(w.p.side)} /> : <Card p={w.p} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} />}</Warmup>
+          <Warmup delay={(i * 0.37) % 1.4}>{live.pins ? <Pin p={w.p} color={colorOf(w.p.side)} size={live.pinSize} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} /> : <Card p={w.p} mini={live.mini} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} />}</Warmup>
         </Html>
       ))}
       {live.cards && bench.filter(b => b.p.playerId !== hidden).map(b => (
         <Html key={b.p.playerId} position={[b.x * U, 0.22, b.z * U]} center distanceFactor={df} zIndexRange={z(b.p.playerId, [9, 0])}>
-          {live.pins ? <Pin p={b.p} color={colorOf(b.p.side)} /> : <Card p={b.p} color={colorOf(b.p.side)} small focused={focus === b.p.playerId} onTap={live.onPick ? () => tap(b.p.playerId) : undefined} />}
+          {live.pins ? <Pin p={b.p} color={colorOf(b.p.side)} size={live.pinSize} focused={focus === b.p.playerId} onTap={live.onPick ? () => tap(b.p.playerId) : undefined} /> : <Card p={b.p} mini={live.mini} color={colorOf(b.p.side)} small focused={focus === b.p.playerId} onTap={live.onPick ? () => tap(b.p.playerId) : undefined} />}
         </Html>
       ))}
       {reel && reelPlayer && <PlayReel key={`reel-${reel.id}`} play={reel} player={reelPlayer} spot={reelSpot} color={colorOf(reel.side)} df={df} pin={Boolean(live.pins)} />}
@@ -202,12 +227,13 @@ function Drive({ spot, color, defending }: { spot: Spot; color: string; defendin
 }
 
 /** The pin in the small preview: their headshot ringed in their team's color, lit while they're on the field. */
-function Pin({ p, color }: { p: LivePlayer; color: string }) {
+function Pin({ p, color, size = 14, focused = false, onTap }: { p: LivePlayer; color: string; size?: number; focused?: boolean; onTap?: () => void }) {
   const photo = playerPhoto(p);
-  const live = p.state === 'driving' || p.state === 'defending';
+  const live = p.state === 'driving' || p.state === 'defending' || focused;
   return (
-    <div className="pointer-events-none relative h-[14px] w-[14px] select-none overflow-hidden rounded-full bg-[#0f151b]"
-      style={{ border: `1.5px solid ${color}`, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)', opacity: live || p.state === 'pregame' ? 1 : 0.8 }}>
+    <div onPointerDown={onTap ? e => e.stopPropagation() : undefined} onClick={onTap} role={onTap ? 'button' : undefined}
+      className={`relative select-none overflow-hidden rounded-full bg-[#0f151b] ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
+      style={{ width: size, height: size, borderWidth: size > 18 ? 2 : 1.5, borderStyle: 'solid', borderColor: focused ? '#ffffff' : color, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)', opacity: live || p.state === 'pregame' ? 1 : 0.8 }}>
       {photo
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={photo} alt="" className={`absolute left-1/2 -translate-x-1/2 ${p.position === 'DEF' ? 'top-1/2 h-[70%] -translate-y-1/2' : 'bottom-0 h-full'} w-auto`} />
@@ -227,8 +253,10 @@ function Warmup({ delay, children }: { delay: number; children: React.ReactNode 
 }
 
 /** A player, on the field or the sideline: photo, name, points, and what they're doing. */
-function Card({ p, color, small = false, focused = false, highlight = false, onTap }: {
+function Card({ p, color, small = false, mini = false, focused = false, highlight = false, onTap }: {
   p: LivePlayer; color: string; small?: boolean;
+  /** The compact card for a phone: photo, position, name and points; the rest is a tap away. */
+  mini?: boolean;
   /** Tapped: in front of the rest, larger, its game spelled out. */
   focused?: boolean;
   /** Making the play being replayed. */
@@ -242,6 +270,28 @@ function Card({ p, color, small = false, focused = false, highlight = false, onT
     : p.state === 'bye' ? 'Bye' : p.state === 'final' ? 'Final'
     : p.state === 'pregame' ? 'Warming up' : 'Sideline';
   const live = p.state === 'driving' || p.state === 'defending';
+  if (mini) {
+    return (
+      <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
+        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${live || focused || highlight ? '' : 'opacity-90'}`}
+        style={{ transform: highlight ? 'scale(1.18)' : undefined }}>
+        <div className="overflow-hidden rounded-md text-white shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
+          style={{ background: '#0f151b', border: `1.5px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 2px ${color}, 0 0 18px ${color}` : live || focused ? `0 0 12px ${color}` : undefined }}>
+          <div className="relative" style={{ height: 22, background: `radial-gradient(90% 100% at 50% 100%, ${color}88, transparent 70%)` }}>
+            {photo
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={photo} alt="" className={`absolute left-1/2 -translate-x-1/2 ${p.position === 'DEF' ? 'bottom-1 h-[68%]' : 'bottom-0 h-full'} w-auto`} />
+              : <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white/80">{initialsOf(p.name)}</span>}
+            <span className="absolute left-px top-px rounded-sm px-[2px] text-[6px] font-black leading-[9px]" style={{ background: color }}>{p.position}</span>
+          </div>
+          <div className="px-[3px] pb-[2px]">
+            <div className="truncate text-[7px] font-extrabold leading-[9px]">{last}</div>
+            <div className="text-right text-[8px] font-black leading-[9px] tabular-nums">{p.points != null ? p.points.toFixed(1) : '0.0'}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
       className={`select-none transition-transform duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${live || focused || highlight ? '' : 'opacity-90'}`}
