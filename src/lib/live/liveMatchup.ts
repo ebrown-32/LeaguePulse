@@ -85,12 +85,21 @@ export async function liveMatchup(o: {
   }
 
   const score = (m: any) => Math.round(Number(m?.custom_points ?? m?.points ?? 0) * 100) / 100;
+  // The live win chance, from the week's forecast (cached and shared with Game Day).
+  let hostWinProb: number | null = null;
+  try {
+    const { weekForecasts } = await import('@/lib/sim/weekForecasts');
+    const slate = await weekForecasts(o.leagueId, String(nfl?.season ?? new Date().getFullYear()), o.week, false);
+    const f = slate?.fixtures.find(x => [x.a.userId, x.b.userId].includes(o.host) && [x.a.userId, x.b.userId].includes(o.guest));
+    if (f) hostWinProb = f.a.userId === o.host ? f.forecast.aWinProb : 1 - f.forecast.aWinProb;
+  } catch { /* the scoreboard goes without it */ }
   return {
     week: o.week, phase,
     host: { userId: o.host, name: nameOf(o.host), score: score(hostM) },
     guest: { userId: o.guest, name: nameOf(o.guest), score: score(guestM) },
     players, plays, updatedAt: Date.now(),
     anyGameLive: games.some(g => g.state === 'in'),
+    hostWinProb,
   };
 }
 

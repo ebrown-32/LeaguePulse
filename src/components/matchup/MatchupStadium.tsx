@@ -430,6 +430,31 @@ function ScoreBug({ match, host, guest, onNow }: {
         </div>
         {side(match.host, host, lead > 0, true)}
       </div>
+      <BugStrip match={match} host={host} guest={guest} />
+    </div>
+  );
+}
+
+/**
+ * Under the score bug: each side's win chance (LeaguePulse's live forecast) split as a bar in
+ * their colors. Who's playing is marked on the players' own cards (LiveField).
+ */
+function BugStrip({ match, host, guest }: { match: LiveMatchup; host: { color: string }; guest: { color: string } }) {
+  const p = match.hostWinProb;
+  if (p == null) return null;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  // Desktop only: on a phone the score bug stands alone.
+  return (
+    <div className="mt-1.5 rounded-xl bg-[#0b0f14]/70 px-2.5 py-1.5 ring-1 ring-white/10 backdrop-blur-xl max-sm:hidden">
+      <p className="text-center text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">Win chance</p>
+      <div className="mt-1 flex items-center gap-2 text-[11px] font-black tabular-nums text-white">
+        <span className="w-8">{pct(1 - p)}</span>
+        <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+          <motion.span className="absolute inset-y-0 left-0" style={{ background: guest.color }} initial={false} animate={{ width: pct(1 - p) }} transition={{ duration: 0.8 }} />
+          <motion.span className="absolute inset-y-0 right-0" style={{ background: host.color }} initial={false} animate={{ width: pct(p) }} transition={{ duration: 0.8 }} />
+        </span>
+        <span className="w-8 text-right">{pct(p)}</span>
+      </div>
     </div>
   );
 }

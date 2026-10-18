@@ -261,17 +261,23 @@ function Glide({ to, children }: { to: [number, number, number]; children: React
 function Pin({ p, color, size = 14, focused = false, onTap }: { p: LivePlayer; color: string; size?: number; focused?: boolean; onTap?: () => void }) {
   const photo = playerPhoto(p);
   const live = p.state === 'driving' || p.state === 'defending' || focused;
+  const on = gameOn(p);
   return (
+    <div className="relative" style={{ opacity: on || focused ? 1 : 0.6 }}>
     <div onPointerDown={onTap ? e => e.stopPropagation() : undefined} onClick={onTap} role={onTap ? 'button' : undefined}
       className={`relative select-none overflow-hidden rounded-full bg-[#0f151b] ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
-      style={{ width: size, height: size, borderWidth: size > 18 ? 2 : 1.5, borderStyle: 'solid', borderColor: focused ? '#ffffff' : color, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)', opacity: live || p.state === 'pregame' ? 1 : 0.8 }}>
+      style={{ width: size, height: size, borderWidth: size > 18 ? 2 : 1.5, borderStyle: 'solid', borderColor: focused ? '#ffffff' : color, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)' }}>
       {photo
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={photo} alt="" className={`absolute left-1/2 -translate-x-1/2 ${p.position === 'DEF' ? 'top-1/2 h-[70%] -translate-y-1/2' : 'bottom-0 h-full'} w-auto`} />
         : <span className="absolute inset-0 flex items-center justify-center text-[5px] font-black text-white">{initialsOf(p.name)}</span>}
     </div>
+    </div>
   );
 }
+
+/** Whether a player's NFL game is being played right now (on the field this snap or not). */
+const gameOn = (p: LivePlayer) => p.state === 'driving' || p.state === 'defending' || p.state === 'sideline';
 
 /** A slow, slight float, out of step with the next player's: loose and easy before the game. */
 function Warmup({ delay, children }: { delay: number; children: React.ReactNode }) {
@@ -304,7 +310,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   if (mini) {
     return (
       <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${live || focused || highlight ? '' : 'opacity-90'}`}
+        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
         style={{ transform: highlight ? 'scale(1.18)' : undefined }}>
         <div className="overflow-hidden rounded-md text-white shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
           style={{ background: '#0f151b', border: `1.5px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 2px ${color}, 0 0 18px ${color}` : live || focused ? `0 0 12px ${color}` : undefined }}>
@@ -325,7 +331,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   }
   return (
     <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-      className={`select-none transition-transform duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${live || focused || highlight ? '' : 'opacity-90'}`}
+      className={`select-none transition-[transform,opacity] duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
       style={{ fontFamily: 'inherit', transform: highlight ? 'scale(1.18)' : undefined }}>
       <div className="overflow-hidden rounded-lg text-white shadow-[0_6px_14px_rgba(0,0,0,0.55)]"
         style={{ background: '#0f151b', border: `2px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 3px ${color}, 0 0 28px ${color}, 0 0 46px #ffd44d88` : live || focused ? `0 0 0 2px ${color}55, 0 0 18px ${color}` : undefined }}>
