@@ -5,9 +5,10 @@
  */
 
 import { parseDemoLeague } from '@/lib/providers/ids';
-import { demoSeason, demoSeasons } from './data';
+import { demoSeason, demoSeasonFinished, demoSeasons } from './data';
 
-type Answer = { status: number; body: unknown };
+/** An answer, and whether it's from a finished season (it will never change). */
+type Answer = { status: number; body: unknown; final?: boolean };
 const ok = (body: unknown): Answer => ({ status: 200, body });
 const missing: Answer = { status: 404, body: null };
 
@@ -24,29 +25,30 @@ export async function serveDemo(path: string): Promise<Answer> {
 
   const season = parseDemoLeague(parts[1] ?? '');
   if (season == null) return missing;
-  const s = await demoSeason(season);
+  const [s, final] = await Promise.all([demoSeason(season), demoSeasonFinished(season)]);
   if (!s) return missing;
   const rest = parts.slice(2);
+  const answer = (body: unknown): Answer => ({ status: 200, body, final });
 
   if (parts[0] === 'draft') {
-    if (rest.length === 0) return ok(s.drafts[0]);
-    if (rest[0] === 'picks') return ok(s.picks);
-    if (rest[0] === 'traded_picks') return ok([]);
+    if (rest.length === 0) return answer(s.drafts[0]);
+    if (rest[0] === 'picks') return answer(s.picks);
+    if (rest[0] === 'traded_picks') return answer([]);
     return missing;
   }
   if (parts[0] !== 'league') return missing;
 
   const [what, arg] = rest;
   switch (what) {
-    case undefined: return ok(s.league);
-    case 'users': return ok(s.users);
-    case 'rosters': return ok(s.rosters);
-    case 'matchups': return ok(s.matchups[Number(arg)] ?? []);
-    case 'transactions': return ok(s.transactions[Number(arg)] ?? []);
-    case 'winners_bracket': return ok(s.winners_bracket);
-    case 'losers_bracket': return ok(s.losers_bracket);
-    case 'drafts': return ok(s.drafts);
-    case 'traded_picks': return ok([]);
+    case undefined: return answer(s.league);
+    case 'users': return answer(s.users);
+    case 'rosters': return answer(s.rosters);
+    case 'matchups': return answer(s.matchups[Number(arg)] ?? []);
+    case 'transactions': return answer(s.transactions[Number(arg)] ?? []);
+    case 'winners_bracket': return answer(s.winners_bracket);
+    case 'losers_bracket': return answer(s.losers_bracket);
+    case 'drafts': return answer(s.drafts);
+    case 'traded_picks': return answer([]);
     default: return missing;
   }
 }

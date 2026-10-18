@@ -13,6 +13,7 @@ import { getRedis } from '@/lib/redisClient';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { playSeason, type PlayerInfo, type Season, type SeasonInput, type WeekData } from './league';
 import { FIRST_SEASON, LAST_WEEK, pointsFor } from './settings';
+import { BUNDLE_VERSION, MAX_WEEK, type SeasonBundle } from '@/lib/bundles/paths';
 
 const STATS = 'https://api.sleeper.app/v1/stats/nfl/regular';
 const FANTASY = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
@@ -149,4 +150,39 @@ async function play(season: number, final: number, live: number | null): Promise
     }
   }
   return playSeason({ season, prior, current, weeks, live, final, directory: dir });
+}
+
+// ── Bundles ────────────────────────────────────────────────────────────────
+
+/** Whether a season is over: a bundle of it never changes. */
+export async function demoSeasonFinished(season: number): Promise<boolean> {
+  const clock = await nflClock();
+  return season < clock.season || (season === clock.season && clock.over);
+}
+
+/**
+ * A finished season as one bundle (src/lib/bundles): every answer the app would ask for, so a
+ * page reads ten seasons in ten requests rather than hundreds. Null for the season under way.
+ */
+export async function demoBundle(leagueId: string): Promise<SeasonBundle | null> {
+  const season = Number(/^demo-(\d{4})$/.exec(leagueId)?.[1]);
+  if (!season || !(await demoSeasonFinished(season))) return null;
+  return once(`bundle:${season}`, async () => {
+    const s = await demoSeason(season);
+    if (!s) return null;
+    const ok = (body: unknown) => ({ status: 200, body });
+    const league: SeasonBundle['league'] = {
+      '': ok(s.league), users: ok(s.users), rosters: ok(s.rosters), winners_bracket: ok(s.winners_bracket),
+      losers_bracket: ok(s.losers_bracket), drafts: ok(s.drafts), traded_picks: ok([]),
+    };
+    for (let w = 1; w <= MAX_WEEK; w++) {
+      league[`matchups/${w}`] = ok(s.matchups[w] ?? []);
+      league[`transactions/${w}`] = ok(s.transactions[w] ?? []);
+    }
+    const draftId = s.drafts[0]?.draft_id ?? leagueId;
+    return {
+      v: BUNDLE_VERSION, leagueId, season, builtAt: Date.now(), league,
+      drafts: { [draftId]: { '': ok(s.drafts[0] ?? null), picks: ok(s.picks), traded_picks: ok([]) } },
+    };
+  });
 }

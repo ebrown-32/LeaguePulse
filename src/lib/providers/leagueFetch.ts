@@ -77,8 +77,8 @@ function clientBundle(leagueId: string): Promise<SeasonBundle | null> {
 }
 
 const clientLookup: BundleLookup = async ref => {
-  // An ESPN draft's id is its league's id; a Sleeper draft is found through its league's bundle.
-  const leagueId = ref.kind === 'league' ? ref.id : draftLeague.get(ref.id) ?? (ref.id.startsWith('espn-') ? ref.id : null);
+  // An ESPN or demo draft's id is its league's id; a Sleeper draft is found through its league's bundle.
+  const leagueId = ref.kind === 'league' ? ref.id : draftLeague.get(ref.id) ?? (/^(espn|demo)-/.test(ref.id) ? ref.id : null);
   if (!leagueId) return undefined;
   const b = await clientBundle(leagueId);
   return b ? lookup(b, ref) : undefined;

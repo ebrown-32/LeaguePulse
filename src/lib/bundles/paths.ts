@@ -27,7 +27,8 @@ export const BUNDLE_VERSION = 6;
 export const MAX_WEEK = 18;
 
 const SLEEPER_V1 = 'https://api.sleeper.app/v1/';
-const LEAGUE_ID = '(\\d{8,22}|espn-\\d{1,12}-\\d{4})';
+/** A Sleeper league, an ESPN season, or a demo season (src/lib/demo). */
+const LEAGUE_ID = '(\\d{8,22}|espn-\\d{1,12}-\\d{4}|demo-\\d{4})';
 const PARTS = '(users|rosters|winners_bracket|losers_bracket|drafts|traded_picks)';
 
 export type BundleRef =
