@@ -167,7 +167,7 @@ export default function LiveField({ live }: { live: LiveScene }) {
       ))}
       {live.cards && warm.filter(w => w.p.playerId !== hidden).map((w, i) => (
         <Html key={w.p.playerId} position={[w.x * U, 0.3, w.z * U]} center distanceFactor={df} zIndexRange={z(w.p.playerId, [20, 10])}>
-          <Warmup delay={(i * 0.37) % 1.4}>{live.pins ? <Pin p={w.p} color={colorOf(w.p.side)} size={live.pinSize} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} /> : <Card p={w.p} mini={live.mini} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} />}</Warmup>
+          <Warmup delay={(i * 0.37) % 1.4}>{live.pins ? <Pin p={w.p} warming color={colorOf(w.p.side)} size={live.pinSize} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} /> : <Card p={w.p} warming mini={live.mini} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} />}</Warmup>
         </Html>
       ))}
       {live.cards && bench.filter(b => b.p.playerId !== hidden).map(b => (
@@ -258,10 +258,10 @@ function Glide({ to, children }: { to: [number, number, number]; children: React
 }
 
 /** The pin in the small preview: their headshot ringed in their team's color, lit while they're on the field. */
-function Pin({ p, color, size = 14, focused = false, onTap }: { p: LivePlayer; color: string; size?: number; focused?: boolean; onTap?: () => void }) {
+function Pin({ p, color, size = 14, focused = false, warming = false, onTap }: { p: LivePlayer; color: string; size?: number; focused?: boolean; warming?: boolean; onTap?: () => void }) {
   const photo = playerPhoto(p);
   const live = p.state === 'driving' || p.state === 'defending' || focused;
-  const on = gameOn(p);
+  const on = gameOn(p) || warming;
   return (
     <div className="relative" style={{ opacity: on || focused ? 1 : 0.6 }}>
     <div onPointerDown={onTap ? e => e.stopPropagation() : undefined} onClick={onTap} role={onTap ? 'button' : undefined}
@@ -276,7 +276,10 @@ function Pin({ p, color, size = 14, focused = false, onTap }: { p: LivePlayer; c
   );
 }
 
-/** Whether a player's NFL game is being played right now (on the field this snap or not). */
+/**
+ * Whether a player's NFL game is being played right now (on the field this snap or not). Anyone
+ * else is faded, except while warming up before kickoff (see Warmup).
+ */
 const gameOn = (p: LivePlayer) => p.state === 'driving' || p.state === 'defending' || p.state === 'sideline';
 
 /** A slow, slight float, out of step with the next player's: loose and easy before the game. */
@@ -290,7 +293,7 @@ function Warmup({ delay, children }: { delay: number; children: React.ReactNode 
 }
 
 /** A player, on the field or the sideline: photo, name, points, and what they're doing. */
-function Card({ p, color, small = false, mini = false, focused = false, highlight = false, onTap }: {
+function Card({ p, color, small = false, mini = false, focused = false, highlight = false, warming = false, onTap }: {
   p: LivePlayer; color: string; small?: boolean;
   /** The compact card for a phone: photo, position, name and points; the rest is a tap away. */
   mini?: boolean;
@@ -298,6 +301,8 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   focused?: boolean;
   /** Making the play being replayed. */
   highlight?: boolean;
+  /** Warming up before kickoff: shown at full strength, not faded with the other players not yet playing. */
+  warming?: boolean;
   onTap?: () => void;
 }) {
   const photo = playerPhoto(p);
@@ -310,7 +315,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   if (mini) {
     return (
       <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
+        className={`w-[38px] select-none ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${gameOn(p) || warming || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
         style={{ transform: highlight ? 'scale(1.18)' : undefined }}>
         <div className="overflow-hidden rounded-md text-white shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
           style={{ background: '#0f151b', border: `1.5px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 2px ${color}, 0 0 18px ${color}` : live || focused ? `0 0 12px ${color}` : undefined }}>
@@ -331,7 +336,7 @@ function Card({ p, color, small = false, mini = false, focused = false, highligh
   }
   return (
     <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
-      className={`select-none transition-[transform,opacity] duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${gameOn(p) || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
+      className={`select-none transition-[transform,opacity] duration-200 ${onTap ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${small ? 'w-[58px]' : 'w-[74px]'} ${gameOn(p) || warming || focused || highlight ? '' : 'opacity-60 saturate-50'}`}
       style={{ fontFamily: 'inherit', transform: highlight ? 'scale(1.18)' : undefined }}>
       <div className="overflow-hidden rounded-lg text-white shadow-[0_6px_14px_rgba(0,0,0,0.55)]"
         style={{ background: '#0f151b', border: `2px solid ${highlight || focused ? '#ffffff' : color}`, boxShadow: highlight ? `0 0 0 3px ${color}, 0 0 28px ${color}, 0 0 46px #ffd44d88` : live || focused ? `0 0 0 2px ${color}55, 0 0 18px ${color}` : undefined }}>

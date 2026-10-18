@@ -61,6 +61,8 @@ export interface StadiumProps {
      * from any angle. Changing the view glides the camera there.
      */
     broadcast?: boolean;
+    /** Seconds a change of view takes to glide there (the broadcast view; 1.1 by default). */
+    glide?: number;
   };
   /**
    * How full the lots and the plaza are, 0 to 1, when it differs from the stands:
@@ -917,6 +919,8 @@ const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !=
 
 /** A photograph's camera: exactly where it was put, looking at its subject, at any height (the orbit controls keep above 15 degrees). */
 /** Where the field's corners are, for the broadcast cut: the painted ground, a little beyond the sidelines. */
+/** How far the broadcast view can slide (two fingers, or a right drag): either goal line, a little either side of midfield. */
+const PAN_LIMIT = { x: 3.5, z: 1.2 };
 const FIELD_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => new Vector3(x * 3.7, 0, z * 2.05));
 
 /**
@@ -930,14 +934,16 @@ function BroadcastRig({ view }: { view: NonNullable<StadiumProps['view']> }) {
   const gl = useThree(st => st.gl);
   const scene = useThree(st => st.scene);
   const controls = useThree(st => st.controls) as unknown as { target: Vector3; update: () => void } | null;
-  const glide = useRef<{ from: Vector3; to: Vector3; fromT: Vector3; toT: Vector3; t: number } | null>(null);
-  const key = JSON.stringify([view.position, view.target]);
+  const glide = useRef<{ from: Vector3; to: Vector3; fromT: Vector3; toT: Vector3; fromF: number; toF: number; dur: number; t: number } | null>(null);
+  const key = JSON.stringify([view.position, view.target, view.fov]);
+  const lens = camera as unknown as { fov?: number; updateProjectionMatrix: () => void };
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     glide.current = {
       from: camera.position.clone(), to: new Vector3(...view.position),
-      fromT: controls?.target.clone() ?? new Vector3(), toT: new Vector3(...(view.target ?? [0, 0, 0])), t: 0,
+      fromT: controls?.target.clone() ?? new Vector3(), toT: new Vector3(...(view.target ?? [0, 0, 0])),
+      fromF: lens.fov ?? 38, toF: view.fov ?? lens.fov ?? 38, dur: view.glide ?? 1.1, t: 0,
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -959,12 +965,23 @@ function BroadcastRig({ view }: { view: NonNullable<StadiumProps['view']> }) {
   useFrame((_, dt) => {
     const g = glide.current;
     if (g) {
-      g.t = Math.min(1, g.t + dt / 1.1);
-      const e = 1 - Math.pow(1 - g.t, 3);
+      g.t = Math.min(1, g.t + dt / g.dur);
+      // A quick cut eases out; a long move eases in and out, as a camera operator would.
+      const e = g.dur > 2 ? g.t * g.t * (3 - 2 * g.t) : 1 - Math.pow(1 - g.t, 3);
       camera.position.lerpVectors(g.from, g.to, e);
       controls?.target.lerpVectors(g.fromT, g.toT, e);
+      if (lens.fov != null && g.fromF !== g.toF) { lens.fov = g.fromF + (g.toF - g.fromF) * e; lens.updateProjectionMatrix(); }
       controls?.update();
       if (g.t >= 1) glide.current = null;
+    } else if (controls) {
+      // Slid too far: back to the edge, camera and all, so the field never leaves the picture.
+      const t = controls.target;
+      const x = Math.max(-PAN_LIMIT.x, Math.min(PAN_LIMIT.x, t.x)), z = Math.max(-PAN_LIMIT.z, Math.min(PAN_LIMIT.z, t.z));
+      if (x !== t.x || z !== t.z) {
+        camera.position.x += x - t.x; camera.position.z += z - t.z;
+        t.x = x; t.z = z;
+        controls.update();
+      }
     }
     // The near plane: square to the line of sight, just short of the field's nearest corner.
     camera.getWorldDirection(forward);
@@ -1175,7 +1192,7 @@ export default function Stadium3D(props: StadiumProps) {
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
           {props.onReady && <ReadySignal onReady={props.onReady} />}
-          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
           {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
       ) : null}
