@@ -81,6 +81,8 @@ export interface StadiumProps {
    * where their drives really are, the rest on the sidelines.
    */
   live?: LiveScene | null;
+  /** Called once the stadium has drawn its first frames, for a loader to step aside. */
+  onReady?: () => void;
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -200,45 +202,122 @@ function Stands({ bp, p, fascia, wall }: { bp: Blueprint; p: Palette; fascia: st
  * the best seats taken first (seatsFilled). The wave runs in the shader, so a
  * full house costs nothing extra.
  */
-function Crowd({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Color[] }) {
+/**
+ * The crowd's moods, one after another, each held for a stretch and crossfaded into the next:
+ * the wave going round the bowl, towels swinging overhead, everyone jumping (out of step, as a
+ * real crowd does), and settled, swaying a little. A big play overrides the lot: the whole
+ * place jumps and swings its towels.
+ */
+const MOODS = ['wave', 'towels', 'jump', 'settled'] as const;
+const MOOD_SECONDS = 9;
+
+/** How much of each mood is on at time t: a smooth crossfade between stretches. */
+function moodWeights(t: number, cheer: boolean) {
+  if (cheer) return { wave: 0, towels: 1, jump: 1, settled: 0 };
+  const seg = Math.floor(t / MOOD_SECONDS), k = (t % MOOD_SECONDS) / MOOD_SECONDS;
+  // A shuffled order, the same for everyone watching at the same moment.
+  const pick = (n: number) => MOODS[Math.floor(Math.abs(Math.sin(n * 12.9898) * 43758.5453) % MOODS.length)];
+  const now = pick(seg), next = pick(seg + 1);
+  const fade = Math.max(0, Math.min(1, (k - 0.88) / 0.12));
+  const w = { wave: 0, towels: 0, jump: 0, settled: 0 };
+  w[now] += 1 - fade; w[next] += fade;
+  return w;
+}
+
+const CROWD_VERTEX = `
+  float bob = 0.0;
+  bob += pow(max(0.0, cos(aAngle - uTime * 1.6)), 12.0) * 0.12 * uWave;
+  bob += abs(sin(uTime * 7.0 + aPhase * 6.2831)) * 0.07 * uJump * step(0.25, aPhase);
+  bob += sin(uTime * 1.2 + aPhase * 6.2831) * 0.006 * uSettled;
+  bob += sin(uTime * 5.0 + aPhase * 6.2831) * 0.012 * uTowels;
+  transformed.y += bob;
+`;
+
+function Crowd({ bp, fill, colors, towel = '#ffffff', cheer = false }: { bp: Blueprint; fill: number; colors: Color[]; towel?: string; cheer?: boolean }) {
   // A game-day preview can have the stands truly empty; otherwise a stadium always shows a few fans.
   const spots = useMemo(() => seatSpots(bp), [bp]);
   const shown = useMemo(() => seatsFilled(bp, spots, fill), [bp, spots, fill]);
-  const time = useMemo(() => ({ value: 0 }), []);
+  const u = useMemo(() => ({ uTime: { value: 0 }, uWave: { value: 1 }, uTowels: { value: 0 }, uJump: { value: 0 }, uSettled: { value: 0 } }), []);
+  const cheerRef = useRef(cheer);
+  cheerRef.current = cheer;
+  const head = `#include <common>\nattribute float aAngle;\nattribute float aPhase;\nuniform float uTime;\nuniform float uWave;\nuniform float uTowels;\nuniform float uJump;\nuniform float uSettled;`;
   const material = useMemo(() => {
     const m = new MeshStandardMaterial({ roughness: 0.7 });
     m.onBeforeCompile = shader => {
-      shader.uniforms.uTime = time;
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aAngle;\nuniform float uTime;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y += pow(max(0.0, cos(aAngle - uTime * 1.6)), 12.0) * 0.12;');
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', head).replace('#include <begin_vertex>', '#include <begin_vertex>\n' + CROWD_VERTEX);
     };
-    m.customProgramCacheKey = () => 'lp-crowd-wave';
+    m.customProgramCacheKey = () => 'lp-crowd-moods';
     return m;
-  }, [time]);
+  }, [u]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The towels: a small cloth over each fan's head, swung side to side, shown only in towel mood.
+  const towelMaterial = useMemo(() => {
+    const m = new MeshStandardMaterial({ color: towel, roughness: 0.8, side: DoubleSide });
+    m.onBeforeCompile = shader => {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', head).replace('#include <begin_vertex>', `#include <begin_vertex>
+        ${CROWD_VERTEX}
+        float swing = sin(uTime * 9.0 + aPhase * 6.2831);
+        transformed.x += swing * 0.035 * position.y * 12.0;
+        transformed *= step(0.35, aPhase) * uTowels;
+      `);
+    };
+    m.customProgramCacheKey = () => 'lp-crowd-towels';
+    return m;
+  }, [u, towel]); // eslint-disable-line react-hooks/exhaustive-deps
+  const attrs = useMemo(() => {
+    const r = rng(11);
+    return {
+      angle: new InstancedBufferAttribute(new Float32Array(shown.map(s => s.a)), 1),
+      phase: new InstancedBufferAttribute(new Float32Array(shown.map(() => r())), 1),
+    };
+  }, [shown]);
   const geometry = useMemo(() => {
     const g = new BoxGeometry(0.05, 0.09, 0.05);
-    g.setAttribute('aAngle', new InstancedBufferAttribute(new Float32Array(shown.map(s => s.a)), 1));
+    g.setAttribute('aAngle', attrs.angle); g.setAttribute('aPhase', attrs.phase);
     return g;
-  }, [shown]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  useEffect(() => () => material.dispose(), [material]);
+  }, [attrs]);
+  const towelGeometry = useMemo(() => {
+    // Above the head; its own origin at the fan's hands so it swings from there.
+    const g = new BoxGeometry(0.045, 0.035, 0.004).translate(0, 0.075, 0);
+    g.setAttribute('aAngle', attrs.angle); g.setAttribute('aPhase', attrs.phase);
+    return g;
+  }, [attrs]);
+  useEffect(() => () => { geometry.dispose(); towelGeometry.dispose(); }, [geometry, towelGeometry]);
+  useEffect(() => () => { material.dispose(); towelMaterial.dispose(); }, [material, towelMaterial]);
   const mesh = useRef<InstancedMesh>(null);
+  const towels = useRef<InstancedMesh>(null);
   useEffect(() => {
-    const m = mesh.current;
-    if (!m) return;
     const d = new Object3D(), r = rng(3);
-    shown.forEach((s, i) => {
-      d.position.set(s.x, s.y, s.z); d.updateMatrix(); m.setMatrixAt(i, d.matrix);
-      m.setColorAt(i, colors[Math.floor(r() * colors.length)]);
-    });
-    m.instanceMatrix.needsUpdate = true;
-    m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    for (const m of [mesh.current, towels.current]) {
+      if (!m) continue;
+      shown.forEach((s, i) => {
+        d.position.set(s.x, s.y, s.z); d.updateMatrix(); m.setMatrixAt(i, d.matrix);
+        if (m === mesh.current) m.setColorAt(i, colors[Math.floor(r() * colors.length)]);
+      });
+      m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere(); // its bounds from where the pieces now are, or it can be culled while in view
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
   }, [shown, colors]);
-  useFrame(({ clock }) => { time.value = clock.elapsedTime; });
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    u.uTime.value = t;
+    const w = moodWeights(t, cheerRef.current);
+    // Eased toward the target, so a big play builds rather than snaps.
+    const ease = (cur: number, to: number) => cur + (to - cur) * 0.06;
+    u.uWave.value = ease(u.uWave.value, w.wave);
+    u.uTowels.value = ease(u.uTowels.value, w.towels);
+    u.uJump.value = ease(u.uJump.value, w.jump);
+    u.uSettled.value = ease(u.uSettled.value, w.settled);
+  });
   if (!shown.length) return null;
-  return <instancedMesh ref={mesh} args={[geometry, material, shown.length]} key={shown.length} />;
+  return (
+    <>
+      <instancedMesh ref={mesh} args={[geometry, material, shown.length]} key={`c${shown.length}`} />
+      <instancedMesh ref={towels} args={[towelGeometry, towelMaterial, shown.length]} key={`t${shown.length}`} frustumCulled={false} />
+    </>
+  );
 }
 
 // ── The building ────────────────────────────────────────────────────────────
@@ -910,6 +989,18 @@ function BroadcastRig({ view }: { view: NonNullable<StadiumProps['view']> }) {
   return null;
 }
 
+/** Calls back once a few frames are drawn: the scene is built, its textures up, the stands rising. */
+function ReadySignal({ onReady }: { onReady: () => void }) {
+  const frames = useRef(0);
+  const done = useRef(false);
+  useFrame(() => {
+    if (done.current || ++frames.current < 20) return;
+    done.current = true;
+    onReady();
+  });
+  return null;
+}
+
 function FixedCamera({ target }: { target: [number, number, number] }) {
   const camera = useThree(s => s.camera);
   useEffect(() => { camera.lookAt(...target); camera.updateProjectionMatrix(); }, [camera, target]);
@@ -988,7 +1079,7 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
 
       {bp.berm && <Berm bp={bp} setting={look.setting} />}
       <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={p.wall} /></Rise>
-      <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={crowdColors} />
+      <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={crowdColors} towel={p.accent} cheer={Boolean(live?.celebrate)} />
       <Rise key={`ext${build}`} delay={0.1}><Facades bp={bp} look={look} p={p} night={sky.night} /></Rise>
       {bp.suites.length > 0 && <Rise key={`s${build}`}><Suites bp={bp} night={sky.night} /></Rise>}
       {bp.pressBox && <Rise key={`pb${build}`}><PressBox bp={bp} p={p} night={sky.night} /></Rise>}
@@ -1068,7 +1159,9 @@ export default function Stadium3D(props: StadiumProps) {
   }, []);
 
   return (
-    <div ref={box} className="h-full w-full">
+    // A stacking context of its own (`isolate`): the 3D labels (live cards and pins) set their own
+    // z-index, and without this they'd rise above whatever the page lays over the stadium.
+    <div ref={box} className="relative isolate h-full w-full">
       {ok === false ? (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-sky-200 to-emerald-200 text-center dark:from-slate-800 dark:to-emerald-950">
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
@@ -1081,6 +1174,7 @@ export default function Stadium3D(props: StadiumProps) {
           {!scripted() && !props.photo && <PerformanceMonitor flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
+          {props.onReady && <ReadySignal onReady={props.onReady} />}
           {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4} enablePan={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
           {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
