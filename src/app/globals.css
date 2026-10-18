@@ -162,7 +162,12 @@
        previous radial one collapsed to nothing a few hundred pixels in. */
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, hsl(0 0% 0% / 0.35) 82%, transparent 100%);
             mask-image: linear-gradient(to bottom, #000 0%, #000 58%, hsl(0 0% 0% / 0.35) 82%, transparent 100%);
-    animation: ambient-grid 36s linear infinite;
+    /* Held still. It used to drift and breathe, which repainted the whole
+       screen every frame on every page: measured, about 95% of an idle page's
+       CPU and GPU work, a steady drain on a laptop or phone battery for a
+       movement nobody noticed. Even an opacity-only breathe still cost the
+       screen a recomposite per frame. */
+    opacity: 0.75;
   }
 
   /* Light mode carries less — the grid competes with content on near-white. */
@@ -173,19 +178,6 @@
   /* The particle field replaces the grid rather than layering over it; both
      at once reads as clutter, and the canvas already carries its own lines. */
   html[data-bg='particles'] body::after  { display: none; }
-  html[data-motion='reduced'] body::after { animation: none; }
-
-  /* Drifts exactly one 64px cell over the cycle so the loop is seamless,
-     with a gentle brightness breathe layered on top. */
-  @keyframes ambient-grid {
-    0%   { background-position:  0    0,     0    0;    opacity: 0.9; }
-    50%  { background-position: 32px 32px,  32px 32px;  opacity: 0.55; }
-    100% { background-position: 64px 64px,  64px 64px;  opacity: 0.9; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    body::after { animation: none; }
-  }
 
   /* Async content arriving above the viewport pushes what you are reading.
      Anchoring holds your place instead. */
