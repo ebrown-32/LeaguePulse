@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseHost, gameDay, recordAt, type HostInput, type TeamGame } from '../src/lib/franchise/venue.ts';
+import { chooseHost, coinFlip, gameDay, recordAt, type HostInput, type TeamGame } from '../src/lib/franchise/venue.ts';
 
 const g = (season: string, week: number, score: number, opponentScore: number, stage: TeamGame['stage'] = 'regular'): TeamGame => ({ season, week, score, opponentScore, stage });
 const input = (o: Partial<HostInput> & { games?: Record<string, TeamGame[]> } = {}): HostInput => ({
@@ -12,21 +12,29 @@ test('ESPN’s own home team stands', () => {
   assert.deepEqual(chooseHost(input({ providerHome: 'bob' })), { host: 'bob', guest: 'alice', reason: 'espn' });
 });
 
-test('a first meeting goes to the better record so far', () => {
+test('a first meeting is a coin flip: random, but the same for the pair every time, in either order', () => {
+  const first = coinFlip('alice', 'bob');
+  assert.ok(first === 'alice' || first === 'bob');
+  assert.equal(coinFlip('bob', 'alice'), first);
+  // Records don't decide it.
   const games = { alice: [g('2026', 1, 100, 90), g('2026', 2, 80, 120)], bob: [g('2026', 1, 110, 90), g('2026', 2, 130, 100)] };
-  assert.deepEqual(chooseHost(input({ games })), { host: 'bob', guest: 'alice', reason: 'first-meeting' });
+  assert.equal(chooseHost(input({ games })).host, first);
+  assert.equal(chooseHost(input({ games })).reason, 'first-meeting');
+  // Across many pairs, both sides win the flip.
+  const hosts = Array.from({ length: 200 }, (_, i) => coinFlip(`a${i}`, `b${i}`).startsWith('a'));
+  const share = hosts.filter(Boolean).length / hosts.length;
+  assert.ok(share > 0.35 && share < 0.65, `first team hosted ${share}`);
 });
 
-test('regular-season meetings alternate, home and home', () => {
-  // Bob had the better record at their first meeting (2025 week 3), so hosted it; Alice hosted the next.
-  const games = { alice: [g('2025', 1, 80, 100), g('2025', 2, 80, 100)], bob: [g('2025', 1, 120, 100), g('2025', 2, 120, 100)] };
+test('regular-season meetings alternate from the coin flip, home and home', () => {
+  const first = coinFlip('alice', 'bob'), other = first === 'alice' ? 'bob' : 'alice';
   const one = [{ season: '2025', week: 3, stage: 'regular' as const }];
-  assert.equal(chooseHost(input({ games, meetings: one })).host, 'alice');
+  assert.equal(chooseHost(input({ meetings: one })).host, other);
   const two = [...one, { season: '2025', week: 11, stage: 'regular' as const }];
-  assert.equal(chooseHost(input({ games, meetings: two })).host, 'bob');
+  assert.equal(chooseHost(input({ meetings: two })).host, first);
   // Playoff meetings and this week's game don't count towards the alternation.
   const extra = [...two, { season: '2025', week: 15, stage: 'playoff' as const }, { season: '2026', week: 8, stage: 'regular' as const }];
-  assert.equal(chooseHost(input({ games, meetings: extra })).host, 'bob');
+  assert.equal(chooseHost(input({ meetings: extra })).host, first);
 });
 
 test('in the playoffs the higher seed hosts', () => {

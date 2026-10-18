@@ -37,7 +37,11 @@ export type OfficialVisual =
   | { type: 'photo'; photo: PhotoSpec }
   | { type: 'promo'; promo: PromoId; photo: PhotoSpec; when: string; opponent: string | null; color: string; stadium: string }
   | { type: 'ticket'; ticket: number; was: number | null; color: string; stadium: string; team: string; opponent: string | null; when: string }
-  | { type: 'logo'; url: string; color: string; team: string };
+  | { type: 'logo'; url: string; color: string; team: string }
+  /** A player's big day (lib/franchise/gameday). */
+  | { type: 'player'; playerId: string; name: string; position: string; nflTeam: string; points: number; line: string; color: string; team: string }
+  /** A final score (lib/franchise/gameday). */
+  | { type: 'final'; week: number; us: { name: string; score: number; color: string; avatar: string | null }; them: { name: string; score: number; color: string; avatar: string | null } };
 
 /** How long after one announcement of a kind before the next can go out. */
 const QUIET_MS: Record<Announcement['kind'], number> = {
@@ -147,6 +151,42 @@ async function nextHomeGame(franchiseId: string): Promise<{ when: string; oppone
   return { when: 'Our next home game', opponent: null, week, season };
 }
 
+/** Who a franchise's account is: its name, picture, color, stadium and hashtag. */
+export interface Face { franchiseId: string; team: string; avatar: string; color: string; stadium: string; tag: string }
+
+export async function faceOf(franchiseId: string): Promise<Face> {
+  const [{ currentSite }, store, { franchiseInfo }, { getTenant }, { defaultStadiumName }] = await Promise.all([
+    import('@/lib/archive/ingest'), import('./store'), import('./lookup'), import('@/lib/platform/tenants'), import('./stadiumName'),
+  ]);
+  const site = await currentSite();
+  const tenant = site === 'self' ? null : await getTenant(site);
+  const [f, info] = await Promise.all([
+    store.getFranchise(site, franchiseId),
+    tenant ? franchiseInfo(tenant, franchiseId).catch(() => null) : Promise.resolve(null),
+  ]);
+  const team = info?.teamName ?? 'The franchise';
+  return {
+    franchiseId, team, color: f.color || '#2a78d6', stadium: f.stadiumName || defaultStadiumName(franchiseId, team), tag: hashtagOf(team),
+    // The team's own picture from its league (an uploaded logo is for the stadium's midfield).
+    avatar: info?.avatar || `/api/franchises/${encodeURIComponent(franchiseId)}/logo`,
+  };
+}
+
+/** A post on The Feed from the franchise's own account. */
+export async function postAs(face: Face, o: { text: string; visual: OfficialVisual | null; event: string; publishAt?: number }): Promise<void> {
+  const now = Date.now();
+  const { addPost } = await import('@/lib/ai/store');
+  await addPost({
+    id: `official-${face.franchiseId}-${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+    personalityId: `franchise:${face.franchiseId}`,
+    personaName: face.team, personaHandle: handleOf(face.team), personaAccent: 'text-foreground', personaType: 'team',
+    personaAvatar: face.avatar,
+    kind: 'official',
+    content: { text: o.text, visual: o.visual, event: o.event, hostTeam: face.team },
+    createdAt: new Date(now).toISOString(), publishAt: new Date(o.publishAt ?? now).toISOString(), source: 'admin', subject: face.team,
+  });
+}
+
 export async function announce(franchiseId: string, a: Announcement): Promise<void> {
   try {
     const { getRedis } = await import('@/lib/redisClient');
@@ -155,21 +195,10 @@ export async function announce(franchiseId: string, a: Announcement): Promise<vo
     const quietKey = `franchise_announced:${franchiseId}:${a.kind}`;
     if (QUIET_MS[a.kind] && await redis.get(quietKey)) return;
 
-    const [{ currentSite }, store, { franchiseInfo }, { getTenant }, { defaultStadiumName }] = await Promise.all([
-      import('@/lib/archive/ingest'), import('./store'), import('./lookup'), import('@/lib/platform/tenants'), import('./stadiumName'),
-    ]);
-    const site = await currentSite();
-    const tenant = site === 'self' ? null : await getTenant(site);
-    const [f, info] = await Promise.all([
-      store.getFranchise(site, franchiseId),
-      tenant ? franchiseInfo(tenant, franchiseId).catch(() => null) : Promise.resolve(null),
-    ]);
-    const team = info?.teamName ?? 'The franchise';
-    const stadium = f.stadiumName || defaultStadiumName(franchiseId, team);
-    const color = f.color || '#2a78d6';
+    const face = await faceOf(franchiseId);
+    const { team, stadium, color, tag } = face;
     const game = await nextHomeGame(franchiseId);
     const seed = Math.floor(Date.now() / 1000) + franchiseId.length;
-    const tag = hashtagOf(team);
 
     const photo = (shot: Shot, hour: number, full = 0): PhotoSpec => ({
       shot, host: franchiseId, guest: franchiseId, season: game.season, week: game.week, hour, stands: full, lots: full,
@@ -189,18 +218,7 @@ export async function announce(franchiseId: string, a: Announcement): Promise<vo
       : a.kind === 'logo' ? { type: 'logo', url: a.url, color, team }
       : null;
 
-    const now = new Date().toISOString();
-    const { addPost } = await import('@/lib/ai/store');
-    await addPost({
-      id: `official-${franchiseId}-${Date.now().toString(36)}`,
-      personalityId: `franchise:${franchiseId}`,
-      personaName: team, personaHandle: handleOf(team), personaAccent: 'text-foreground', personaType: 'team',
-      // The team's own picture from its league (an uploaded logo is for the stadium's midfield).
-      personaAvatar: info?.avatar || `/api/franchises/${encodeURIComponent(franchiseId)}/logo`,
-      kind: 'official',
-      content: { text: copy(a, { team, stadium, tag, opponent: game.opponent, when: game.when, seed }), visual, event: a.kind, hostTeam: team },
-      createdAt: now, publishAt: now, source: 'admin', subject: team,
-    });
+    await postAs(face, { text: copy(a, { team, stadium, tag, opponent: game.opponent, when: game.when, seed }), visual, event: a.kind });
     if (QUIET_MS[a.kind]) await redis.set(quietKey, '1', Math.ceil(QUIET_MS[a.kind] / 1000));
   } catch (err) {
     console.error('[franchise/announce]', a.kind, err instanceof Error ? err.message : err);

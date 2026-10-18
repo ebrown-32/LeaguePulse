@@ -9,8 +9,8 @@
  *   playoffs        the higher seed hosts (the better regular-season record,
  *                   then points scored, as Sleeper seeds)
  *   regular season  the two alternate, home and home: whoever hosted the last
- *                   meeting travels. The first meeting ever goes to the team
- *                   with the better record at the time.
+ *                   meeting travels. The first meeting ever is a coin flip,
+ *                   seeded by the pair, so it is random but never changes.
  *
  * Every input comes from the league's history, so the same game always has the
  * same host, on every page and for every visitor.
@@ -83,6 +83,16 @@ function better(input: HostInput, season: string, week: number): string {
   return c > 0 ? input.a : c < 0 ? input.b : (input.a < input.b ? input.a : input.b);
 }
 
+/** The coin flip for a pair's first meeting: random, but the same flip for the same two teams every time. */
+export function coinFlip(a: string, b: string): string {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  let h = 2166136261;
+  for (const ch of `${x}|${y}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  // Mixed before the flip: the hash's lowest bit alone follows the letters' parity, not chance.
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return (h >>> 0) % 2 ? x : y;
+}
+
 export function chooseHost(input: HostInput): { host: string; guest: string; reason: HostReason } {
   const pair = (host: string, reason: HostReason) => ({ host, guest: host === input.a ? input.b : input.a, reason });
   if (input.providerHome === input.a || input.providerHome === input.b) return pair(input.providerHome, 'espn');
@@ -90,9 +100,9 @@ export function chooseHost(input: HostInput): { host: string; guest: string; rea
   const prior = input.meetings
     .filter(m => m.stage === 'regular' && before(m, input.season, input.week))
     .sort((x, y) => Number(x.season) - Number(y.season) || x.week - y.week);
-  if (!prior.length) return pair(better(input, input.season, input.week), 'first-meeting');
-  // The first meeting went to the better record then; they have swapped every regular-season meeting since.
-  const first = better(input, prior[0].season, prior[0].week);
+  // The first meeting went to the coin flip; they have swapped every regular-season meeting since.
+  const first = coinFlip(input.a, input.b);
+  if (!prior.length) return pair(first, 'first-meeting');
   const other = first === input.a ? input.b : input.a;
   return pair(prior.length % 2 === 0 ? first : other, 'alternate');
 }

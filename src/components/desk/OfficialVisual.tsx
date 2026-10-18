@@ -7,6 +7,7 @@
  */
 
 import StadiumPhoto from './StadiumPhoto';
+import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import type { PhotoSpec } from '@/lib/franchise/photo';
 
 type PromoId = 'beer' | 'fireworks' | 'bobblehead';
@@ -14,7 +15,10 @@ export type OfficialVisual =
   | { type: 'photo'; photo: PhotoSpec }
   | { type: 'promo'; promo: PromoId; photo: PhotoSpec; when: string; opponent: string | null; color: string; stadium: string }
   | { type: 'ticket'; ticket: number; was: number | null; color: string; stadium: string; team: string; opponent: string | null; when: string }
-  | { type: 'logo'; url: string; color: string; team: string };
+  | { type: 'logo'; url: string; color: string; team: string }
+  | { type: 'player'; playerId: string; name: string; position: string; nflTeam: string; points: number; line: string; color: string; team: string }
+  | { type: 'final'; week: number; us: Side; them: Side };
+type Side = { name: string; score: number; color: string; avatar: string | null };
 
 export default function OfficialVisualView({ visual, team }: { visual: OfficialVisual | null | undefined; team: string }) {
   if (!visual) return null;
@@ -23,6 +27,8 @@ export default function OfficialVisualView({ visual, team }: { visual: OfficialV
     case 'promo': return <PromoPoster v={visual} team={team} />;
     case 'ticket': return <Ticket v={visual} />;
     case 'logo': return <LogoReveal v={visual} />;
+    case 'player': return <PlayerCard v={visual} />;
+    case 'final': return <FinalBoard v={visual} />;
   }
 }
 
@@ -148,6 +154,60 @@ function LogoReveal({ v }: { v: Extract<OfficialVisual, { type: 'logo' }> }) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={v.url} alt={`${v.team}'s new logo`} className="h-[58%] w-auto rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]" />
       <span className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.3em] text-white/75">The new look</span>
+    </div>
+  );
+}
+
+/** A player's big day: his photo on the team's color, his points, his line. */
+function PlayerCard({ v }: { v: Extract<OfficialVisual, { type: 'player' }> }) {
+  const photo = playerPhoto({ playerId: v.playerId, position: v.position, nflTeam: v.nflTeam });
+  return (
+    <div className="relative mt-2.5 flex aspect-[16/9] overflow-hidden rounded-2xl border border-border text-white"
+      style={{ background: `linear-gradient(115deg, ${v.color} 0%, #0b0f14 78%)` }}>
+      <div className="pointer-events-none absolute -left-10 top-1/2 -translate-y-1/2 font-display text-[180px] font-black leading-none text-white/[0.06] sm:text-[240px]">
+        {Math.round(v.points)}
+      </div>
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-center p-4 sm:p-6">
+        <span className="w-fit bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.22em] text-black">Big day</span>
+        <p className="mt-2 truncate font-display text-[24px] font-black uppercase leading-[0.95] sm:text-[34px]">{v.name}</p>
+        <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">{v.position} · {v.nflTeam} · {v.team}</p>
+        <p className="mt-3 font-display text-[44px] font-black leading-none tabular-nums sm:text-[60px]">{v.points.toFixed(1)}<span className="ml-1.5 text-[14px] font-bold uppercase tracking-wider text-white/70 sm:text-[16px]">pts</span></p>
+        {v.line && <p className="mt-1.5 text-[12.5px] text-white/85 sm:text-[14px]">{v.line}</p>}
+      </div>
+      <div className="relative flex w-[42%] items-end justify-center">
+        {photo
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={photo} alt={v.name} className={v.position === 'DEF' ? 'mb-[18%] h-[56%] w-auto drop-shadow-xl' : 'h-[96%] w-auto object-contain object-bottom drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]'} />
+          : <span className="mb-[24%] font-display text-[56px] font-black text-white/80">{initialsOf(v.name)}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** A final score, broadcast style: both teams, the winner lit. */
+function FinalBoard({ v }: { v: Extract<OfficialVisual, { type: 'final' }> }) {
+  const won = v.us.score > v.them.score, lost = v.us.score < v.them.score;
+  const row = (s: Side, lit: boolean) => (
+    <div className={`flex items-center gap-3 px-4 py-3 sm:px-5 ${lit ? '' : 'opacity-60'}`}>
+      <span className="h-9 w-1.5 shrink-0" style={{ background: s.color }} />
+      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[12px] font-bold">
+        {initialsOf(s.name)}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {s.avatar && <img src={s.avatar} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      </span>
+      <span className="min-w-0 flex-1 truncate font-display text-[17px] font-bold sm:text-[20px]">{s.name}</span>
+      <span className="font-display text-[28px] font-black tabular-nums sm:text-[34px]">{s.score.toFixed(1)}</span>
+    </div>
+  );
+  return (
+    <div className="mt-2.5 overflow-hidden rounded-2xl border border-border bg-[#0b0f14] text-white">
+      <div className="flex items-center justify-between px-4 pt-3 text-[10.5px] font-black uppercase tracking-[0.24em] sm:px-5">
+        <span className="bg-white px-2 py-0.5 text-black">Final</span>
+        <span className="text-white/55">Week {v.week}</span>
+      </div>
+      {row(v.us, won || (!won && !lost))}
+      <div className="mx-4 h-px bg-white/10 sm:mx-5" />
+      {row(v.them, lost || (!won && !lost))}
     </div>
   );
 }

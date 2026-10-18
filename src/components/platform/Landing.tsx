@@ -163,7 +163,7 @@ function DemoMenuLink() {
 function DemoInvite() {
   const url = useDemoUrl();
   return (
-    <a href={url} target="_blank" rel="noopener" className="group mt-4 flex max-w-md items-center gap-3 rounded-2xl border border-border bg-card/70 p-3 pr-4 transition hover:border-primary/40 hover:bg-card">
+    <a href={url} target="_blank" rel="noopener" className="group mt-4 flex max-w-md md:max-w-2xl lg:max-w-none items-center gap-3 rounded-2xl border border-border bg-card/70 p-3 pr-4 transition hover:border-primary/40 hover:bg-card">
       <span className="flex -space-x-2">
         {['priya', 'rosa', 'gus'].map(k => (
           // eslint-disable-next-line @next/next/no-img-element
@@ -423,16 +423,16 @@ function Hero() {
           </h1>
         </motion.div>
 
-        <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
+        <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-2 lg:gap-12 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
           <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } }}>
-            <motion.p variants={rise} className="max-w-md text-[17px] leading-relaxed text-muted-foreground">
+            <motion.p variants={rise} className="max-w-md md:max-w-2xl lg:max-w-none text-[17px] leading-relaxed text-muted-foreground">
               {PLATFORM.name} turns your Sleeper or ESPN league into its own app on any device. Analytics that give you the edge, AI writers who cover your actual teams,
               live chances to win, a guide to which games to have on, and every stat back to your first draft.
               Everyone installs it from the link in two taps. No app store.
             </motion.p>
             {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
             <motion.div variants={rise}><DemoInvite /></motion.div>
-            <motion.ul variants={rise} className="mt-9 grid max-w-md grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-6 sm:grid-cols-4">
+            <motion.ul variants={rise} className="mt-9 grid max-w-md md:max-w-2xl lg:max-w-none grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-6 sm:grid-cols-4">
               {([[PhoneMark, 'Installs as an app', '#app'], [DeskMark, 'AI desk', '#desk'], [GameDayMark, 'Game Day', '#gameday'], [SheetMark, 'Analytics', '#analytics']] as const).map(([M, label, href]) => (
                 <li key={label}>
                   <a href={href} className="group flex items-center gap-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground sm:flex-col sm:items-start sm:gap-1.5">
@@ -459,7 +459,7 @@ function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
     <>
             <motion.form initial="hidden" animate="show" variants={rise}
               onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
-              className="mt-8 flex max-w-md flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
+              className="mt-8 flex max-w-md md:max-w-2xl lg:max-w-none flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sleeper username or league ID" aria-label="Sleeper username or league ID"
                 className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
               <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
