@@ -28,10 +28,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { LiveMatchup, LivePlay, LivePlayer } from '@/lib/live/liveTypes';
 import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import Avatar from '@/components/ui/Avatar';
+import HoneycombLoader from '@/components/ui/honeycomb-loader';
 
 /**
- * The broadcast angles, wide screens and phones apart: a phone looks down the field from an end
- * so its length runs up the tall screen. Any of them can be dragged from; the choice is remembered.
+ * The broadcast angles, wide screens and phones apart (each fitted to its screen's shape). Sideline
+ * is where everyone starts; any can be dragged from, and the choice is remembered.
  */
 type Angle = 'sideline' | 'high' | 'endzone' | 'blimp';
 const ANGLES: { id: Angle; label: string }[] = [
@@ -129,10 +130,13 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
     setNarrow(n);
     let saved: string | null = null;
     try { saved = localStorage.getItem(ANGLE_KEY); } catch { /* the default */ }
-    setAngle(ANGLES.some(x => x.id === saved) ? saved as Angle : n ? 'endzone' : 'sideline');
+    setAngle(ANGLES.some(x => x.id === saved) ? saved as Angle : 'sideline');
   }, []);
   const pickAngle = (a: Angle) => { setAngle(a); try { localStorage.setItem(ANGLE_KEY, a); } catch { /* this visit */ } };
   const liveOn = Boolean(venue && (venue.phase !== 'upcoming' || demo));
+  // The fullscreen view waits behind a loader until its stadium has drawn (and, live, the matchup has come in).
+  const [fullReady, setFullReady] = useState(false);
+  useEffect(() => { if (!full) setFullReady(false); }, [full]);
   // A card tapped on the field, shown up close.
   const [picked, setPicked] = useState<LivePlayer | null>(null);
   useEffect(() => { if (!full) setPicked(null); }, [full]);
@@ -154,6 +158,7 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
       live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, cardScale: narrow ? 0.62 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
+      onReady={full ? () => setFullReady(true) : undefined}
       view={full && playing ? { ...ANGLE_VIEW[angle ?? 'sideline'][narrow ? 'narrow' : 'wide'], still: true, broadcast: true }
         : full ? { position: [14, 7.5, 14], target: [0, 0.4, 0], fov: 40 } : { position: [10.5, 6.2, 10.5], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
@@ -199,6 +204,15 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
           <ScoreBug match={playing} onNow={onNow} host={{ avatar: host.avatar, color: ground?.color ?? '#2a78d6' }} guest={{ avatar: guest.avatar, color: guestColor }} />
         )}
         {playing && angle && <CameraMenu angle={angle} onPick={pickAngle} />}
+        <AnimatePresence>
+          {!(fullReady && (!liveOn || match)) && (
+            <motion.div key="loading" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: 'easeOut' }}
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-10 bg-[#070a0e]">
+              <HoneycombLoader />
+              <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-white/60">{liveOn ? 'Heading to the stadium' : 'Opening the gates'}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {picked && playing && (() => {
             const now = playing.players.find(p => p.playerId === picked.playerId) ?? picked;
@@ -461,7 +475,7 @@ export function Fullscreen({ onClose, label, children }: { onClose: () => void; 
       onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
       {children}
       <button onClick={onClose} aria-label="Close fullscreen"
-        className="absolute right-4 top-[calc(env(safe-area-inset-top)+1rem)] flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75">
+        className="absolute z-40 right-4 top-[calc(env(safe-area-inset-top)+1rem)] flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition hover:bg-black/75">
         <X className="h-5 w-5" />
       </button>
     </div>,
