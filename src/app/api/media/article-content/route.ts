@@ -10,6 +10,43 @@ export const runtime = 'nodejs';
 
 const cache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL_MS = 30 * 60 * 1000;
+/** Enough for a busy news day; the oldest go first beyond it. */
+const CACHE_MAX = 500;
+
+/**
+ * The publishers the media feeds link to (lib/mediaSources): the only sites this will fetch.
+ * Fetching any address it was handed made the server an open proxy, able to reach addresses
+ * only it can (localhost, the private network, cloud metadata). Redirects are followed by hand
+ * and checked against the same list at every hop.
+ */
+const ARTICLE_HOSTS = ['espn.com', 'yahoo.com', 'cbssports.com', 'nbcsports.com'];
+function allowed(raw: string): URL | null {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    if (u.username || u.password || (u.port && u.port !== '80' && u.port !== '443')) return null;
+    const host = u.hostname.toLowerCase();
+    return ARTICLE_HOSTS.some(h => host === h || host.endsWith(`.${h}`)) ? u : null;
+  } catch { return null; }
+}
+
+async function fetchArticle(start: URL): Promise<Response> {
+  let url = start;
+  for (let hop = 0; hop < 4; hop++) {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeaguePulse/1.0;)' },
+      signal: AbortSignal.timeout(8000), redirect: 'manual',
+    });
+    if (res.status < 300 || res.status >= 400) return res;
+    const next = allowed(new URL(res.headers.get('location') ?? '', url).toString());
+    if (!next) throw new Error('Redirected off the allowed sites');
+    url = next;
+  }
+  throw new Error('Too many redirects');
+}
+
+/** At most this much of a page is read: a news article is well under it. */
+const MAX_BYTES = 3_000_000;
 // Measured after collapsing whitespace, since a page full of empty nested
 // divs can rack up hundreds of "characters" of pure newlines/indentation
 // that look substantial by raw .length but render as nothing. Set well
@@ -91,19 +128,25 @@ function stripLeadingNoise(html: string): string {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-  if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
+  const raw = searchParams.get('url');
+  if (!raw) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
+  const target = allowed(raw);
+  if (!target) return NextResponse.json({ available: false }, { status: 400 });
+  const url = target.toString();
 
   const cached = cache.get(url);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return NextResponse.json(cached.data);
+  // Fresh fetches only (the cache above is free): a few a minute per visitor is plenty for reading.
+  const { rateLimit, clientIp } = await import('@/lib/ai/rateLimit');
+  const { ok } = await rateLimit('lp_article_rl_', clientIp(request), 30, 60_000);
+  if (!ok) return NextResponse.json({ error: 'Slow down a little.' }, { status: 429 });
+  if (cache.size > CACHE_MAX) for (const k of [...cache.keys()].slice(0, cache.size - CACHE_MAX)) cache.delete(k);
 
   try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeaguePulse/1.0;)' },
-      signal: AbortSignal.timeout(8000),
-    });
+    const response = await fetchArticle(target);
     if (!response.ok) throw new Error(`Source fetch failed: ${response.status}`);
-    const html = await response.text();
+    if (Number(response.headers.get('content-length') ?? 0) > MAX_BYTES) throw new Error('Too large');
+    const html = (await response.text()).slice(0, MAX_BYTES);
 
     const dom = new JSDOM(html, { url });
 

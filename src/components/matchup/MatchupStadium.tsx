@@ -31,8 +31,8 @@ import Avatar from '@/components/ui/Avatar';
 import HoneycombLoader from '@/components/ui/honeycomb-loader';
 
 /**
- * The broadcast angles, wide screens and phones apart (each fitted to its screen's shape). Sideline
- * is where everyone starts; any can be dragged from, and the choice is remembered.
+ * The broadcast angles, wide screens and phones apart (each fitted to its screen's shape). Every
+ * watch starts on the sideline; another angle, or dragging, lasts for that viewing.
  */
 type Angle = 'sideline' | 'high' | 'endzone' | 'blimp';
 const ANGLES: { id: Angle; label: string }[] = [
@@ -40,12 +40,12 @@ const ANGLES: { id: Angle; label: string }[] = [
 ];
 type View = { position: [number, number, number]; target: [number, number, number]; fov: number };
 const ANGLE_VIEW: Record<Angle, { wide: View; narrow: View }> = {
-  sideline: { wide: { position: [0, 3.6, 5.6], target: [0, 0, 0.2], fov: 46 }, narrow: { position: [0, 10.5, 15], target: [0, 0, 0.3], fov: 52 } },
+  // Sideline is the opening view: close enough to read the cards, the 50 in the middle, the ends at the edges.
+  sideline: { wide: { position: [0, 2.9, 4.4], target: [0, 0, 0.2], fov: 46 }, narrow: { position: [0, 4.4, 6.4], target: [0, 0, 0.2], fov: 52 } },
   high: { wide: { position: [0, 7.4, 6.2], target: [0, 0, 0], fov: 44 }, narrow: { position: [0, 13, 7.4], target: [0, 0, 0.3], fov: 52 } },
   endzone: { wide: { position: [-7.4, 3.8, 0.01], target: [0.6, 0, 0], fov: 46 }, narrow: { position: [-7.6, 9.4, 0.01], target: [0.3, 0, 0], fov: 52 } },
   blimp: { wide: { position: [0, 11.5, 0.9], target: [0, 0, 0], fov: 44 }, narrow: { position: [-1.4, 13.5, 0.01], target: [0, 0, 0], fov: 52 } },
 };
-const ANGLE_KEY = 'lp_broadcast_angle';
 
 const Stadium3D = dynamic(() => import('@/app/team/[userId]/tycoon/Stadium3D'), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-muted/40" /> });
 
@@ -122,17 +122,24 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
   }, []);
   const [demo, setDemo] = useState(false);
   // A portrait phone looks down the field from behind an end zone, so its length runs up the tall screen.
-  const [narrow, setNarrow] = useState(false);
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches);
+  // The camera fits the field to the screen's shape: any portrait screen (a phone, a tablet held upright) gets the tall framing.
+  const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
+  useEffect(() => {
+    const on = () => setPortrait(window.innerHeight > window.innerWidth);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   const [angle, setAngle] = useState<Angle | null>(null);
   useEffect(() => {
     setDemo(liveDemoRequested());
     const n = window.matchMedia('(max-width: 639px)').matches;
     setNarrow(n);
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(ANGLE_KEY); } catch { /* the default */ }
-    setAngle(ANGLES.some(x => x.id === saved) ? saved as Angle : 'sideline');
+    setAngle('sideline');
   }, []);
-  const pickAngle = (a: Angle) => { setAngle(a); try { localStorage.setItem(ANGLE_KEY, a); } catch { /* this visit */ } };
+  // Every watch starts on the sideline; another angle lasts for that viewing.
+  const pickAngle = (a: Angle) => setAngle(a);
+  useEffect(() => { if (!full) setAngle(a => (a ? 'sideline' : a)); }, [full]);
   const liveOn = Boolean(venue && (venue.phase !== 'upcoming' || demo));
   // The fullscreen view waits behind a loader until its stadium has drawn (and, live, the matchup has come in).
   const [fullReady, setFullReady] = useState(false);
@@ -155,19 +162,23 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
     <Stadium3D facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // In a live matchup the starters are the players on the field.
       field={playing ? 'empty' : day.stage === 'live' ? 'game' : day.stage === 'gates' ? 'warmup' : 'empty'}
-      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, cardScale: narrow ? 0.62 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
+      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: narrow || portrait ? 0.7 : 0.72, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
-      view={full && playing ? { ...ANGLE_VIEW[angle ?? 'sideline'][narrow ? 'narrow' : 'wide'], still: true, broadcast: true }
+      view={full && playing ? { ...ANGLE_VIEW[angle ?? 'sideline'][portrait ? 'narrow' : 'wide'], still: true, broadcast: true }
         : full ? { position: [14, 7.5, 14], target: [0, 0.4, 0], fov: 40 } : { position: [10.5, 6.2, 10.5], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
-  const words = host && guest && day ? (
+  const matchupLine = host && guest ? (
+    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/80">
+      {venue?.playoff ? 'Playoffs · ' : ''}{guest.teamName} @ {host.teamName}
+    </p>
+  ) : null;
+  // The caption; in the preview the matchup line sits apart, at the top left (see below).
+  const words = (withMatchup: boolean) => host && guest && day ? (
     <>
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
-        {venue?.playoff ? 'Playoffs · ' : ''}{guest.teamName} @ {host.teamName}
-      </p>
-      <p className="mt-0.5 font-display text-[17px] font-bold leading-tight sm:text-[19px]">{ground?.name || defaultStadiumName(host.userId, host.teamName)}</p>
+      {withMatchup && matchupLine}
+      <p className={cn('font-display text-[17px] font-bold leading-tight sm:text-[19px]', withMatchup && 'mt-0.5')}>{ground?.name || defaultStadiumName(host.userId, host.teamName)}</p>
       {playing ? <LiveLine match={playing} crowd={venue?.crowd ? { people, capacity: venue.crowd.capacity } : null} />
         : <p className="mt-1 text-[12px] leading-snug text-white/85">{caption(day.stage, day.hours, people)}</p>}
       {venue && seriesLine(venue, host.teamName, guest.teamName) && <p className="mt-0.5 text-[10.5px] font-medium text-white/65">{seriesLine(venue, host.teamName, guest.teamName)}</p>}
@@ -179,8 +190,15 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
       {/* One 3D view at a time: the small one steps aside while the big one is open. */}
       {!full && scene(false)}
       {!ground && <div className="h-full w-full animate-pulse" />}
-      {words && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3 pt-10 text-white">{words}</div>
+      {/* The matchup, top left, under its own shade so it reads over any sky. */}
+      {matchupLine && day && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-3 pr-32 text-white">
+          {matchupLine}
+          {playing?.demo && <span className="mt-1.5 inline-block rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">Demo data</span>}
+        </div>
+      )}
+      {words(false) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3 pt-10 text-white">{words(false)}</div>
       )}
       {ground && (playing ? (
         // Live: the way in to watch it, players and all.
@@ -195,11 +213,10 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
           <Maximize2 className="h-4 w-4" />
         </button>
       ))}
-      {playing?.demo && <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">Demo data</span>}
       {!full && <Banner celebrate={celebrate} compact />}
       {full && <Fullscreen onClose={() => setFull(false)} label={host && guest ? `${guest.teamName} @ ${host.teamName}` : 'Stadium'}>
         {scene(true)}
-        {words && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-5 pb-6 pt-16 text-white sm:px-8">{words}</div>}
+        {words(true) && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-5 pb-6 pt-16 text-white sm:px-8">{words(true)}</div>}
         {playing && host && guest && (
           <ScoreBug match={playing} onNow={onNow} host={{ avatar: host.avatar, color: ground?.color ?? '#2a78d6' }} guest={{ avatar: guest.avatar, color: guestColor }} />
         )}
@@ -378,7 +395,7 @@ function ScoreBug({ match, host, guest, onNow }: {
     </div>
   );
   return (
-    <div className="pointer-events-none absolute left-3 right-[4.25rem] top-[calc(env(safe-area-inset-top)+0.9rem)] sm:left-1/2 sm:right-auto sm:w-[min(80%,620px)] sm:-translate-x-1/2">
+    <div className="pointer-events-none absolute left-3 right-[4.25rem] top-[calc(env(safe-area-inset-top)+0.9rem)] sm:left-1/2 sm:right-auto sm:w-[min(calc(100%-11rem),620px)] sm:-translate-x-1/2">
       <div className="flex items-stretch overflow-hidden rounded-2xl bg-[#0b0f14]/80 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/12 backdrop-blur-xl">
         {side(match.guest, guest, lead < 0)}
         <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-x border-white/10 px-2 sm:px-3">
