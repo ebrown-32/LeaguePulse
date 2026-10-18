@@ -118,6 +118,13 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
     }
     return hostOf.get(k) === me.id;
   };
+  // The league's Games of the Week, where they were picked: those games draw a near sellout (BIG_GAME).
+  const { getCurrentLeagueId } = await import('@/config/league');
+  const { storedGameOfWeekPairs } = await import('@/lib/gameOfWeek');
+  const leagueId = await getCurrentLeagueId().catch(() => null);
+  const spotlight = leagueId
+    ? await storedGameOfWeekPairs(leagueId, [...weeks.keys()].map(k => { const [season, week] = k.split('-'); return { season, week: Number(week) }; })).catch(() => new Map<string, [string, string]>())
+    : new Map<string, [string, string]>();
   for (const [k, list] of [...weeks.entries()].sort(([a], [b]) => {
     const [sa, wa] = a.split('-').map(Number), [sb, wb] = b.split('-').map(Number);
     return sa - sb || wa - wb;
@@ -134,6 +141,7 @@ export async function leagueInputs(site: string): Promise<LeagueInputs | null> {
         rank: sorted.findIndex(x => x.id === me.id) + 1, teams: list.length,
         opponent: opp.name, oppWinPct: oppRec.g ? oppRec.w / oppRec.g : 0.5,
         home: hosted(me, opp),
+        ...(() => { const g = spotlight.get(k); return g && g.includes(me.id) && g.includes(opp.id) ? { big: true } : {}; })(),
       };
       games.set(me.id, [...(games.get(me.id) ?? []), game]);
       results.push([me.id, me.points > opp.points ? 1 : me.points === opp.points ? 0.5 : 0]);

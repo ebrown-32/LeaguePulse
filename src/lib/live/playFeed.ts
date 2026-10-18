@@ -33,6 +33,7 @@ export interface FeedPlay {
   side: 'mine' | 'theirs';
   /** Estimated fantasy points, or null where it cannot be estimated. */
   points: number | null;
+  yards: number | null;
 }
 
 type Scoring = Record<string, number>;
@@ -111,6 +112,7 @@ export async function playFeed(opts: {
           at: p.at, period: p.period, clock: p.clock, text: p.text, type: p.type,
           scoring: p.scoring, playerId: sid, role: part.role, side: side.get(sid)!,
           points: points == null ? null : Math.round(points * 10) / 10,
+          yards: p.yards,
         });
       }
     }

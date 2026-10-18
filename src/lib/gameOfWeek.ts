@@ -120,6 +120,26 @@ const WEIGHTS: Record<GotwSignal, number> = {
 const key = (leagueId: string, season: string, week: number) =>
   `lp_gotw_v2:${leagueId}:${season}:${week}`;
 
+/**
+ * The two franchises in each stored Game of the Week, for many weeks at once (one Redis call):
+ * `season-week` to the pair's user ids. Weeks never picked (before the feature, or not yet) are
+ * simply missing; nothing is computed here.
+ */
+export async function storedGameOfWeekPairs(leagueId: string, weeks: { season: string | number; week: number }[]): Promise<Map<string, [string, string]>> {
+  const out = new Map<string, [string, string]>();
+  const redis = getRedis().client;
+  if (!redis || !weeks.length) return out;
+  const raw = await redis.mget(weeks.map(w => key(leagueId, String(w.season), w.week))).catch(() => [] as (string | null)[]);
+  raw.forEach((r, i) => {
+    if (!r) return;
+    try {
+      const pick = JSON.parse(r) as GameOfWeek;
+      if (pick?.a?.userId && pick?.b?.userId) out.set(`${weeks[i].season}-${weeks[i].week}`, [String(pick.a.userId), String(pick.b.userId)]);
+    } catch { /* a broken entry is no pick */ }
+  });
+  return out;
+}
+
 /** The same starters, as if nobody had played yet. Byes stay byes. */
 function pregame(lines: StarterLine[]): StarterLine[] {
   return lines.map(l => (l.phase === 'played' || l.phase === 'playing'

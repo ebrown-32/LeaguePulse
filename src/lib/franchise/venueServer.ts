@@ -41,8 +41,12 @@ export async function venueFor(a: string, b: string, weekWanted?: number): Promi
   const [{ currentSite }, { economyOf }, { projectGame }] = await Promise.all([
     import('@/lib/archive/ingest'), import('@/lib/tycoon/service'), import('@/lib/tycoon/economy'),
   ]);
+  // The league's Game of the Week draws a near sellout (BIG_GAME in the economy).
+  const { storedGameOfWeekPairs } = await import('@/lib/gameOfWeek');
+  const pick = (await storedGameOfWeekPairs(leagueId, [{ season, week }]).catch(() => new Map<string, [string, string]>())).get(`${season}-${week}`);
+  const big = Boolean(pick && pick.includes(a) && pick.includes(b));
   const s = await economyOf(await currentSite(), host.host).catch(() => null);
-  const crowd = s ? projectGame(s, s.prices, { postseason: playoff, key: `${season}:${week}:${host.host}` }) : null;
+  const crowd = s ? projectGame(s, s.prices, { postseason: playoff, key: `${season}:${week}:${host.host}`, big }) : null;
   return {
     season, week, playoff, ...host,
     kickoff: firstKickoff(games.map(g => g.date)),

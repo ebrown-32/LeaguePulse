@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { simulate, projectGame, startingState, fairPrices, franchiseValue, shop, DAY, PROMOS, PROMO_MAX, type GameDay, type Decision } from '../src/lib/tycoon/economy.ts';
+import { simulate, projectGame, startingState, fairPrices, franchiseValue, shop, DAY, PROMOS, PROMO_MAX, BIG_GAME, type GameDay, type Decision } from '../src/lib/tycoon/economy.ts';
 import { facilityStats, nextLevel, EMPTY_FACILITIES } from '../src/lib/tycoon/catalog.ts';
 
 const start = Date.UTC(2026, 8, 9);
@@ -181,4 +181,22 @@ test('promotion nights: dollar beer trades the night’s food money for fans; th
   const broke = simulate({ games: [], decisions: [...drained, { at: start + DAY, kind: 'promo', promo: 'fireworks', score: 6 }], start, now: start + DAY, grandfatherBefore: start + DAY / 2 });
   assert.equal(broke.vc < PROMOS.fireworks.cost, true);
   assert.equal(broke.story.filter(e => e.kind === 'promo').length, 0);
+});
+
+test('a Game of the Week all but sells out and earns more, home and away; gouging still costs seats', () => {
+  const games = history(2, false); // a losing team, whose crowds are usually thin
+  const i = 20, g = games[i];
+  const at = (s: ReturnType<typeof replay>) => s.games.find(x => x.key === g.key)!;
+  const plain = replay(games), spot = replay(games.map((x, k) => (k === i ? { ...x, big: true } : x)));
+  assert.ok(at(spot).fill >= BIG_GAME.floor - 0.01, `fill ${at(spot).fill}`);
+  assert.ok(at(spot).attendance > at(plain).attendance);
+  assert.ok(at(spot).profit > at(plain).profit);
+  // On the road: no crowd of its own, but a bigger share.
+  const road = (big: boolean) => replay(games.map((x, k) => (k === i ? { ...x, home: false, ...(big ? { big: true } : {}) } : x)));
+  assert.ok(at(road(true)).revenue.road > at(road(false)).revenue.road);
+  // Tickets at three times fair: the spotlight doesn't fill those seats.
+  const s0 = startingState();
+  const fair = fairPrices(s0);
+  const gouged = projectGame(s0, { ...fair, ticket: fair.ticket * 3 }, { big: true });
+  assert.ok(gouged.fill < 0.6, `fill ${gouged.fill}`);
 });
