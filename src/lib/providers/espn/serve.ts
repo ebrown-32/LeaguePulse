@@ -15,8 +15,8 @@ import { parseEspnLeague, parseEspnUser } from '../ids';
 import { EspnError } from './client';
 import { seasonBase, seasonWeek, seasonTransactions, seasonExists } from './data';
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+const json = (body: unknown, status = 200, cache = 'no-store') =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': cache } });
 
 /** The ESPN league this request may read: the site's own. */
 async function ownEspnLeague(): Promise<string | null> {
@@ -34,11 +34,13 @@ export async function serveLeagueData(path: string): Promise<Response> {
   // The demo league (src/lib/demo): made up, so served to anyone.
   if (/^(?:(?:league|draft)\/demo-\d{4}|user\/demo-u-)/.test(path)) {
     const { serveDemo } = await import('@/lib/demo/serve');
-    const hit = await serveDemo(path).catch(err => {
+    const hit: { status: number; body: unknown; final?: boolean } = await serveDemo(path).catch(err => {
       console.error('[demo] could not serve', path, err instanceof Error ? err.message : err);
       return { status: 503, body: { error: 'Demo data is temporarily unavailable' } };
     });
-    return json(hit.body, hit.status);
+    // Made up and the same for everyone, so the CDN keeps it: a finished season for a day, the
+    // one under way a few seconds (its live week moves every 20 seconds at most; see demo/data).
+    return json(hit.body, hit.status, hit.status === 200 ? (hit.final ? 'public, max-age=3600, s-maxage=86400' : 'public, s-maxage=15, stale-while-revalidate=45') : 'no-store');
   }
   // A season the commissioner entered (src/lib/manual).
   if (/^(?:league|draft)\/manual-\d{4}/.test(path)) {

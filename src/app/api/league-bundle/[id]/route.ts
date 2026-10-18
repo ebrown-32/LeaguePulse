@@ -18,7 +18,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const own = await getLinkedLeagueIds().catch(() => [] as string[]);
   if (!own.includes(id)) return NextResponse.json({ error: 'Not this site’s league' }, { status: 404 });
-  const bundle = await getBundle(id);
+  // The demo league's seasons are played out here, not stored (src/lib/demo).
+  const bundle = id.startsWith('demo-')
+    ? await (await import('@/lib/demo/data')).demoBundle(id).catch(() => null)
+    : await getBundle(id);
   if (!bundle) return NextResponse.json({ live: true }, { status: 404, headers: { 'cache-control': 'no-store' } });
   return NextResponse.json(bundle, {
     // A finished season does not change. The URL carries the bundle format's
