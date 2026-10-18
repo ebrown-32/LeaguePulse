@@ -9,8 +9,14 @@
  *          the manager's moves, checked against the economy as it stands now
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import type { TrackId } from '@/lib/tycoon/catalog';
+import type { Announcement } from '@/lib/franchise/announce';
+
+/** The franchise's official post about a move (lib/franchise/announce), after the answer goes out. */
+function tell(franchiseId: string, a: Announcement) {
+  after(async () => (await import('@/lib/franchise/announce')).announce(franchiseId, a));
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +75,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (body.action === 'prices') {
     const ticket = num(body.prices?.ticket, 5, 500), concession = num(body.prices?.concession, 1, 50), parking = num(body.prices?.parking, 0, 200);
     if (ticket === null || concession === null || parking === null) return NextResponse.json({ error: 'Tickets $5 to $500, food $1 to $50, parking up to $200.' }, { status: 400 });
+    const { decisionsOf } = await import('@/lib/tycoon/service');
+    const before = (await decisionsOf(c.franchiseId)).filter(d => d.kind === 'prices').at(-1);
+    const was = before && before.kind === 'prices' ? before.prices.ticket : null;
     await recordDecision(c.franchiseId, { at: now, kind: 'prices', prices: { ticket, concession, parking } });
+    // Worth a post when the ticket moves a tenth or more (or is set for the first time).
+    if (was === null || Math.abs(ticket - was) / Math.max(1, was) >= 0.1) tell(c.franchiseId, { kind: 'prices', ticket, was });
     return NextResponse.json({ ok: true });
   }
 
@@ -88,6 +99,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (s.vc < p.cost) return NextResponse.json({ error: `${p.name} costs ${cash(p.cost)}. You have ${cash(s.vc)}.` }, { status: 400 });
     }
     await recordDecision(c.franchiseId, { at: now, kind: 'promo', promo: body.promo, score });
+    tell(c.franchiseId, { kind: 'promo', promo: body.promo, score });
     return NextResponse.json({ ok: true, promo: body.promo, score });
   }
 
@@ -99,6 +111,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!item.next) return NextResponse.json({ error: `${item.name} is fully built.` }, { status: 400 });
     if (!item.next.affordable) return NextResponse.json({ error: `That costs ${cash(item.next.cost)}. You have ${cash(s.vc)}.` }, { status: 400 });
     await recordDecision(c.franchiseId, { at: now, kind: 'build', track: body.track as TrackId });
+    tell(c.franchiseId, { kind: 'build', track: body.track as TrackId, name: item.next.name, blurb: item.next.blurb });
     return NextResponse.json({ ok: true, built: item.next.name });
   }
 

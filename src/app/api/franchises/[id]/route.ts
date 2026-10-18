@@ -7,7 +7,8 @@
  *   PUT { dataUri } / DELETE      the franchise's logo, same permission
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
+import type { Announcement } from '@/lib/franchise/announce';
 import { createHash } from 'node:crypto';
 import { normalizeLook } from '@/lib/franchise/model';
 
@@ -78,9 +79,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { site, store, franchiseId } = await context((await params).id);
   if (!(await canEdit(req, site, franchiseId))) return NextResponse.json({ error: 'Only this franchise’s manager can change it.' }, { status: 401 });
+  const before = await store.getFranchise(site, franchiseId);
   const error = await store.saveIdentity(site, franchiseId, await req.json().catch(() => null));
   if (error) return NextResponse.json({ error }, { status: 400 });
-  return NextResponse.json({ ok: true, franchise: await store.getFranchise(site, franchiseId) });
+  const now = await store.getFranchise(site, franchiseId);
+  // The franchise's official posts about what changed (lib/franchise/announce), after the answer goes out.
+  const news: Announcement[] = [];
+  if (now.stadiumName && now.stadiumName !== before.stadiumName) news.push({ kind: 'renamed', stadiumName: now.stadiumName, was: before.stadiumName ?? null });
+  if (now.color && now.color !== before.color) news.push({ kind: 'colors', color: now.color });
+  if (now.motto && now.motto !== before.motto) news.push({ kind: 'motto', motto: now.motto });
+  if (now.look && JSON.stringify(now.look) !== JSON.stringify(before.look)) news.push({ kind: 'look' });
+  if (news.length) after(async () => { const { announce } = await import('@/lib/franchise/announce'); for (const a of news) await announce(franchiseId, a); });
+  return NextResponse.json({ ok: true, franchise: now });
 }
 
 /** A logo: re-encoded here (square, 256 pixels, WebP), so what is stored is always a small, plain image. */
@@ -97,7 +107,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const dataUri = `data:image/webp;base64,${out.toString('base64')}`;
     const version = createHash('sha1').update(out).digest('hex').slice(0, 10);
     await store.setLogo(site, franchiseId, dataUri, version);
-    return NextResponse.json({ logoUrl: `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${version}` });
+    const logoUrl = `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${version}`;
+    after(async () => (await import('@/lib/franchise/announce')).announce(franchiseId, { kind: 'logo', url: logoUrl }));
+    return NextResponse.json({ logoUrl });
   } catch {
     return NextResponse.json({ error: 'That image could not be read.' }, { status: 400 });
   }
