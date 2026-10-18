@@ -70,7 +70,7 @@ export interface LiveScene {
 interface Spot { p: LivePlayer; x: number; z: number; dir: 1 | -1; lane: number }
 
 /** Where everyone on the field stands, in yards. */
-function layout(players: LivePlayer[]) {
+function layout(players: LivePlayer[], anyGameLive = false) {
   const onField = players.filter(p => (p.state === 'driving' || p.state === 'defending') && p.yardsToEndzone != null);
   // One lane per NFL drive (a side and a team), spread across the field.
   const groups = [...new Set(onField.map(p => `${p.side}:${p.nflTeam}`))].sort();
@@ -87,9 +87,9 @@ function layout(players: LivePlayer[]) {
     spots.push({ p, dir: attack, lane: g, x: ball - attack * (k * 2.5), z: laneZ + (k - (mates.length - 1) / 2) * 4.5 });
   }
   // Warming up before their game: each side on its own half (the end it defends), in rows of four.
-  // Only while nobody is playing: once any starter is on the field live, the field is theirs, and
-  // everyone still to play waits on the sideline.
-  const live = onField.length > 0;
+  // Only while no NFL game is being played anywhere: once one is on, the field is for live play,
+  // and everyone still to play waits on the sideline.
+  const live = anyGameLive || onField.length > 0 || players.some(p => p.state === 'sideline');
   const warming = live ? [] : players.filter(p => p.state === 'pregame');
   const warm = (['host', 'guest'] as const).flatMap(side => {
     const list = warming.filter(p => p.side === side);
@@ -110,7 +110,7 @@ function layout(players: LivePlayer[]) {
 export default function LiveField({ live }: { live: LiveScene }) {
   // Pins keep a fixed size on screen (no distance scaling); cards scale with the view.
   const df = live.pins || live.mini ? undefined : 5.2 * (live.cardScale ?? 1);
-  const { spots, warm, bench } = useMemo(() => layout(live.match.players), [live.match.players]);
+  const { spots, warm, bench } = useMemo(() => layout(live.match.players, Boolean(live.match.anyGameLive)), [live.match.players, live.match.anyGameLive]);
   const colorOf = (side: 'host' | 'guest') => (side === 'host' ? live.hostColor : live.guestColor);
   // A tapped card: the page shows it up close (onPick). A tap on the field (not a card) lets it go.
   const focus = live.picked ?? null;

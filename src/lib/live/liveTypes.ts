@@ -73,5 +73,7 @@ export interface LiveMatchup {
   plays: LivePlay[];
   /** A simulated feed for development (see liveMatchup's demo), never real. Shown as DEMO. */
   demo?: boolean;
+  /** Any NFL game in progress right now, ours or not: the field is for live play, not warm-ups. */
+  anyGameLive?: boolean;
   updatedAt: number;
 }
