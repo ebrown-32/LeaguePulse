@@ -17,12 +17,15 @@ export interface FeedPost {
   personaHandle: string;
   personaAccent: string;
   /** Media or fan, so the feed can separate writers from the group chat. */
-  personaType?: 'media' | 'fan';
+  /** A franchise's own account (lib/franchise/announce) is 'team'. */
+  personaType?: 'media' | 'fan' | 'team';
   /** Resolved DiceBear URL, stored with the post so an avatar change does not
    *  retroactively restyle old bylines. */
   personaAvatar?: string;
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-      | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo';
+      | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo'
+      /** A franchise's official post (lib/franchise/announce). */
+      | 'official';
   content: any;
   /** When it was generated. */
   createdAt: string;

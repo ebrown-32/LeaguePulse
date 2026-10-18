@@ -1,12 +1,13 @@
 'use client';
 
 import StadiumPhoto from './StadiumPhoto';
+import OfficialVisualView from './OfficialVisual';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users, Swords, Radio, CrownIcon,
   ArrowRight, Ticket, Zap, Sword, type Icon,
-  Camera,
+  Camera, Check,
 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/Avatar';
@@ -27,7 +28,9 @@ import PostReplies from './PostReplies';
  */
 type Kind =
   | 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
-  | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo';
+  | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo'
+  /** A franchise's official account (lib/franchise/announce). */
+  | 'official';
 
 /** Written while the games are on, and rendered inline so it reads as news
  *  breaking rather than as a document to open. */
@@ -40,7 +43,7 @@ export interface FeedPost {
   personaAccent: string;
   personaAvatar?: string;
   /** Fans are league members reacting, not writers filing. */
-  personaType?: 'media' | 'fan';
+  personaType?: 'media' | 'fan' | 'team';
   kind: Kind;
   content: any;
   createdAt: string;
@@ -66,6 +69,8 @@ const KIND_META: Record<Kind, { label: string; icon: Icon } | null> = {
   liveTake: { label: 'Live', icon: Radio },
   gameOfWeek: { label: 'Game of the Week', icon: CrownIcon },
   photo: { label: 'Photo', icon: Camera },
+  // The verified badge by the name says it.
+  official: null,
 };
 
 const SIGNAL_ICON: Record<string, Icon> = {
@@ -456,7 +461,8 @@ export function FeedPostCard({
   const isLive = LIVE_KINDS.has(post.kind);
   const isGotw = post.kind === 'gameOfWeek';
   const isPhoto = post.kind === 'photo';
-  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto;
+  const isOfficial = post.kind === 'official';
+  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto && !isOfficial;
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}
@@ -481,6 +487,12 @@ export function FeedPostCard({
               <span className={cn('truncate text-[15px] font-bold', post.personaAccent)}>
                 {post.personaName}
               </span>
+              {/* A franchise's own account: verified, as a team's would be. */}
+              {post.personaType === 'team' && (
+                <span title="Official franchise account" className="inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center self-center rounded-full bg-primary text-primary-foreground">
+                  <Check className="h-2.5 w-2.5" />
+                </span>
+              )}
               <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted-foreground">
                 {ago(visibleAt(post), now)}
               </span>
@@ -509,6 +521,9 @@ export function FeedPostCard({
                 {isPhoto ? post.content.caption : post.content.text}
               </p>
             )}
+
+            {/* A franchise's official post: its poster, photo, ticket or logo. */}
+            {isOfficial && <OfficialVisualView visual={post.content.visual} team={post.content.hostTeam ?? post.personaName} />}
 
             {/* A photograph from the stadium, developed from the real 3D view. */}
             {isPhoto && post.content.photo && (
