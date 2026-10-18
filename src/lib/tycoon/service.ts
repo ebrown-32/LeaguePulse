@@ -19,6 +19,11 @@ import { getRedis } from '@/lib/redisClient';
 import { ensureArchive, T } from '@/lib/archive/db';
 import { simulate, franchiseValue, DAY, REBALANCED_AT, type Decision, type EconomyState, type GameDay } from './economy';
 import { chooseHost, type MeetingResult, type TeamGame } from '@/lib/franchise/venue';
+import { DEMO_BANKROLL, DEMO_SLUG } from '@/lib/demo/site';
+import { TRACKS } from './catalog';
+
+/** What every upgrade on every track costs together, in VC. */
+const EVERY_UPGRADE = TRACKS.reduce((s, t) => s + t.levels.reduce((a, l) => a + l.cost, 0), 0);
 
 /**
  * ESPN's own home teams, for the season the league is playing now: `season-week-roster` -> home.
@@ -184,6 +189,9 @@ export async function economyOf(site: string, franchiseId: string, now = Date.no
   return simulate({
     games, decisions: await decisionsOf(franchiseId), titles: inputs.titles.get(franchiseId) ?? [],
     start: first ? kickoff(first.season) : end, now: end, grandfatherBefore: REBALANCED_AT,
+    // The demo's owners put in their bankroll each season (lib/demo/site), the day after its first
+    // week: after the old front office's off-season, which sweeps the bank down to a reserve.
+    grant: site === DEMO_SLUG ? { at: weekFinal(inputs.latestSeason, 1) + DAY, vc: Math.round(EVERY_UPGRADE * DEMO_BANKROLL) } : undefined,
   });
 }
 

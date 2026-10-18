@@ -26,8 +26,8 @@ import { bundleRefOf, lookup, toResponse, BUNDLE_VERSION, type BundleRef, type R
 import { applyManual, type ManualData } from '../manual/model.ts';
 
 const SLEEPER_V1 = 'https://api.sleeper.app/v1/';
-/** Ids this app answers itself: ESPN leagues, drafts and managers, and seasons a commissioner entered (`manual-<year>`). */
-const ESPN_PATH = /^(?:(?:league|draft)\/(?:espn-\d{1,12}-\d{4}|manual-\d{4})(?:[/?]|$)|user\/espn-\d{1,12}-u-)/;
+/** Ids this app answers itself: ESPN leagues, drafts and managers, seasons a commissioner entered (`manual-<year>`), and the demo league (`demo-<year>`, `demo-u-<key>`). */
+const ESPN_PATH = /^(?:(?:league|draft)\/(?:espn-\d{1,12}-\d{4}|manual-\d{4}|demo-\d{4})(?:[/?]|$)|user\/(?:espn-\d{1,12}-u-|demo-u-))/;
 
 export type LeagueDataServer = (path: string) => Promise<Response>;
 export type BundleLookup = (ref: BundleRef) => Promise<Recorded | undefined>;

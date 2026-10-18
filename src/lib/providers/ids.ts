@@ -25,6 +25,20 @@
 
 export const ESPN_PREFIX = 'espn-';
 
+/**
+ * The demo league (src/lib/demo): made-up managers drafting real NFL players, scored from the
+ * real games. Its seasons are demo-<season>, its managers demo-u-<key>; served by this app,
+ * in Sleeper's shapes, like an ESPN league.
+ */
+export const DEMO_PREFIX = 'demo-';
+export const demoLeagueId = (season: number | string) => `${DEMO_PREFIX}${season}`;
+export const demoUserId = (key: string) => `${DEMO_PREFIX}u-${key}`;
+export const isDemoId = (id: string | null | undefined): boolean => Boolean(id && id.startsWith(DEMO_PREFIX));
+export function parseDemoLeague(id: string): number | null {
+  const m = /^demo-(\d{4})$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
+
 export type Provider = 'sleeper' | 'espn';
 
 export function providerOf(id: string | null | undefined): Provider {

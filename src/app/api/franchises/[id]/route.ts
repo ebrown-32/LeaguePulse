@@ -57,7 +57,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       store.pendingClaims(site).catch(() => []),
     ]);
     const product = links.productOrigin(req);
-    const accounts = accountsEnabled() && site !== 'self';
+    // The demo league's teams are made up: no claiming, no managing (lib/demo).
+    const { DEMO_SLUG } = await import('@/lib/demo/site');
+    const accounts = accountsEnabled() && site !== 'self' && site !== DEMO_SLUG;
     return NextResponse.json({
       franchiseId,
       identity: { color: f.color ?? await leagueColor(site, franchiseId), motto: f.motto, bio: f.bio, stadiumName: f.stadiumName, look: f.look ? normalizeLook(f.look) : null, logoUrl: f.logoVersion ? `/api/franchises/${encodeURIComponent(franchiseId)}/logo?v=${f.logoVersion}` : null },

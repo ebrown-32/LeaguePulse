@@ -175,6 +175,7 @@ export default function OperatorPanel() {
             </div>
             <Leagues data={data} call={call} onChange={(msg) => { flash(msg); load(); }} />
             <AddLeague root={data.rootDomain} call={call} onDone={(msg) => { flash(msg); load(); }} />
+            <DemoLeague root={data.rootDomain} onDone={(msg) => { flash(msg); load(); }} />
           </>
         )}
       </main>
@@ -947,6 +948,44 @@ function Flag({ ok, label }: { ok: boolean; label: string }) {
 }
 
 /** The stored secret as an Authorization header (none when signed in with an account), for the one call outside the leagues API. */
+/**
+ * The demo league (lib/demo): made-up managers, real NFL games, at demo.<root>. Building it, or
+ * bringing it up to date after a change to how it's played, is one press; it's safe to repeat.
+ */
+function DemoLeague({ root, onDone }: { root: string; onDone: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ url: string; seasons: number; archive: string; bank: Record<string, string> } | null>(null);
+  const run = async () => {
+    setBusy(true); setError('');
+    try {
+      const r = await fetch('/api/platform/operator/demo', { method: 'POST', cache: 'no-store', headers: await currentAuth() });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error ?? `Request failed (${r.status})`);
+      setResult(d);
+      onDone(`The demo league is up at demo.${root}`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not set up the demo'); }
+    setBusy(false);
+  };
+  return (
+    <Panel id="demo" title="Demo league" meta={`demo.${root}`}>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Ten made-up managers drafting real NFL players since 2017, every week scored from the real games and live on Sundays.
+        Builds the site, its archive and its stadiums, then runs its media desk once. The first run takes a few minutes; run it again any time.
+      </p>
+      <button onClick={run} disabled={busy} className="mt-3 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground disabled:opacity-50">
+        {busy ? 'Building the demo…' : 'Set up the demo league'}
+      </button>
+      {error && <p className="mt-2 text-[12.5px] text-[hsl(var(--signal))]">{error}</p>}
+      {result && (
+        <p className="mt-2 text-[12.5px] text-muted-foreground">
+          {result.seasons} seasons. {result.archive} <a href={result.url} className="font-semibold text-foreground underline underline-offset-2">Open the demo</a>
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 async function currentAuth(): Promise<Record<string, string>> {
   try { const k = sessionStorage.getItem(KEY); return k ? { authorization: `Bearer ${k}` } : {}; } catch { return {}; }
 }
