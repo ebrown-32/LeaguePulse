@@ -214,14 +214,28 @@ function HostedStadium({ a, b, week, className }: { a: Team; b: Team; week?: num
   );
 }
 
+/**
+ * Where the matchup stands, in words. "Between games" only once someone has played and someone
+ * is still to play; before anyone has kicked off it's the pregame.
+ */
+function liveStatus(match: LiveMatchup, driving: number): string {
+  if (match.phase === 'final') return 'Final';
+  if (driving) return `${driving} starter${driving === 1 ? '' : 's'} on the field right now`;
+  const states = new Set(match.players.map(p => p.state));
+  if (states.has('sideline') || states.has('defending')) return 'Live';
+  const played = states.has('final'), toPlay = states.has('pregame');
+  if (toPlay && !played) return 'Pregame: nobody has kicked off yet';
+  if (toPlay) return 'Between games';
+  return 'Final';
+}
+
 /** The live score in the caption: who leads, by how much, what's on, and the crowd in the building. */
 function LiveLine({ match, crowd }: { match: LiveMatchup; crowd: { people: number; capacity: number } | null }) {
   const driving = match.players.filter(p => p.state === 'driving').length;
   return (
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug text-white/85">
       <span className="font-display text-[15px] font-black tabular-nums text-white">{match.guest.score.toFixed(1)} – {match.host.score.toFixed(1)}</span>
-      <span>{match.phase === 'final' ? 'Final' : driving ? `${driving} starter${driving === 1 ? '' : 's'} on the field right now`
-        : match.players.some(p => p.state === 'sideline') ? 'Live' : 'Between games'}</span>
+      <span>{liveStatus(match, driving)}</span>
       {crowd && <span className="basis-full text-[11.5px] text-white/70 sm:basis-auto">Attendance: {crowd.people.toLocaleString('en-US')}</span>}
     </p>
   );

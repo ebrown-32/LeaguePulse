@@ -227,7 +227,10 @@ export default function MatchupDetailModal({
                 read as a drag on the sheet. */}
             <div
               className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:px-6"
-              onPointerDownCapture={e => e.stopPropagation()}
+              // Only presses on the sheet itself: a fullscreen stadium opened from here is portaled out
+              // of the sheet but still routed through it by React, and stopping its presses here, in
+              // the capture phase, stopped them before they reached the 3D view's camera.
+              onPointerDownCapture={e => { if (e.currentTarget.contains(e.target as Node)) e.stopPropagation(); }}
             >
               {/* Where it's played, the same on every tab. */}
               <MatchupStadium a={target.a} b={target.b} week={target.week} className="mb-4 h-48 sm:h-60" />
