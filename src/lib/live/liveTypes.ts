@@ -36,6 +36,8 @@ export interface LivePlayer {
   game: string | null;
   /** The network their game is on ("CBS", "Prime Video"), from ESPN's scoreboard, when known. */
   channel: string | null;
+  /** When they play: the kickoff ("Sun 1p") before their game, the clock ("Q2 4:12") during it. */
+  when: string | null;
 }
 
 export interface LivePlay {

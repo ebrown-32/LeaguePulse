@@ -43,6 +43,11 @@ export interface LiveScene {
   cards: boolean;
   /** How big the cards draw, 1 by default; smaller on a phone, where the field is narrow. */
   cardScale?: number;
+  /**
+   * The small preview: each player a headshot pin, sized to the field, rather than a card (a card
+   * there is unreadable, and a dozen of them bury the stadium).
+   */
+  pins?: boolean;
   /** The latest big play, which sets off fireworks once per id. */
   celebrate?: { id: string; side: 'host' | 'guest'; td: boolean } | null;
   /** The play being replayed right now (one at a time, see useLiveMatchup). */
@@ -75,7 +80,10 @@ function layout(players: LivePlayer[]) {
     spots.push({ p, dir: attack, lane: g, x: ball - attack * (k * 2.5), z: laneZ + (k - (mates.length - 1) / 2) * 4.5 });
   }
   // Warming up before their game: each side on its own half (the end it defends), in rows of four.
-  const warming = players.filter(p => p.state === 'pregame');
+  // Only while nobody is playing: once any starter is on the field live, the field is theirs, and
+  // everyone still to play waits on the sideline.
+  const live = onField.length > 0;
+  const warming = live ? [] : players.filter(p => p.state === 'pregame');
   const warm = (['host', 'guest'] as const).flatMap(side => {
     const list = warming.filter(p => p.side === side);
     const toward = side === 'host' ? -1 : 1;
@@ -86,14 +94,15 @@ function layout(players: LivePlayer[]) {
   });
   // The sidelines: the host's near (+z), the visitors' across, spread along the bench area.
   const bench = (side: 'host' | 'guest') => {
-    const list = players.filter(p => p.side === side && !onField.includes(p) && p.state !== 'pregame');
+    const list = players.filter(p => p.side === side && !onField.includes(p) && !warming.includes(p));
     return list.map((p, i) => ({ p, x: list.length === 1 ? 0 : -34 + (i / (list.length - 1)) * 68, z: (side === 'host' ? 1 : -1) * SIDELINE }));
   };
   return { spots, groups, warm, bench: [...bench('host'), ...bench('guest')] };
 }
 
 export default function LiveField({ live }: { live: LiveScene }) {
-  const df = 5.2 * (live.cardScale ?? 1);
+  // Pins keep a fixed size on screen (no distance scaling); cards scale with the view.
+  const df = live.pins ? undefined : 5.2 * (live.cardScale ?? 1);
   const { spots, warm, bench } = useMemo(() => layout(live.match.players), [live.match.players]);
   const colorOf = (side: 'host' | 'guest') => (side === 'host' ? live.hostColor : live.guestColor);
   // A tapped card: the page shows it up close (onPick). A tap on the field (not a card) lets it go.
@@ -125,20 +134,20 @@ export default function LiveField({ live }: { live: LiveScene }) {
       {balls.map(s => <Drive key={`${s.p.side}${s.p.nflTeam}`} spot={s} color={colorOf(s.p.side)} defending={s.p.state === 'defending'} />)}
       {live.cards && spots.filter(s => s.p.playerId !== hidden).map(s => (
         <Html key={s.p.playerId} position={[s.x * U, 0.42, s.z * U]} center distanceFactor={df} zIndexRange={z(s.p.playerId, [30, 10])}>
-          <Card p={s.p} color={colorOf(s.p.side)} focused={focus === s.p.playerId} onTap={() => tap(s.p.playerId)} />
+          {live.pins ? <Pin p={s.p} color={colorOf(s.p.side)} /> : <Card p={s.p} color={colorOf(s.p.side)} focused={focus === s.p.playerId} onTap={live.onPick ? () => tap(s.p.playerId) : undefined} />}
         </Html>
       ))}
       {live.cards && warm.filter(w => w.p.playerId !== hidden).map((w, i) => (
         <Html key={w.p.playerId} position={[w.x * U, 0.3, w.z * U]} center distanceFactor={df} zIndexRange={z(w.p.playerId, [20, 10])}>
-          <Warmup delay={(i * 0.37) % 1.4}><Card p={w.p} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={() => tap(w.p.playerId)} /></Warmup>
+          <Warmup delay={(i * 0.37) % 1.4}>{live.pins ? <Pin p={w.p} color={colorOf(w.p.side)} /> : <Card p={w.p} color={colorOf(w.p.side)} focused={focus === w.p.playerId} onTap={live.onPick ? () => tap(w.p.playerId) : undefined} />}</Warmup>
         </Html>
       ))}
       {live.cards && bench.filter(b => b.p.playerId !== hidden).map(b => (
         <Html key={b.p.playerId} position={[b.x * U, 0.22, b.z * U]} center distanceFactor={df} zIndexRange={z(b.p.playerId, [9, 0])}>
-          <Card p={b.p} color={colorOf(b.p.side)} small focused={focus === b.p.playerId} onTap={() => tap(b.p.playerId)} />
+          {live.pins ? <Pin p={b.p} color={colorOf(b.p.side)} /> : <Card p={b.p} color={colorOf(b.p.side)} small focused={focus === b.p.playerId} onTap={live.onPick ? () => tap(b.p.playerId) : undefined} />}
         </Html>
       ))}
-      {reel && reelPlayer && <PlayReel key={`reel-${reel.id}`} play={reel} player={reelPlayer} spot={reelSpot} color={colorOf(reel.side)} df={df} />}
+      {reel && reelPlayer && <PlayReel key={`reel-${reel.id}`} play={reel} player={reelPlayer} spot={reelSpot} color={colorOf(reel.side)} df={df} pin={Boolean(live.pins)} />}
       {live.celebrate && <Fireworks key={`fw-${live.celebrate.id}`} delay={reel && reel.id === live.celebrate.id && reel.kind !== 'other' ? 1.4 : 0}
         x={(live.celebrate.side === 'host' ? 1 : -1) * 55} big={live.celebrate.td} colors={[colorOf(live.celebrate.side), '#f5c542', '#ffffff']} />}
     </group>
@@ -192,11 +201,26 @@ function Drive({ spot, color, defending }: { spot: Spot; color: string; defendin
   );
 }
 
-/** A gentle bounce, out of step with the next player's: stretching, jogging in place. */
+/** The pin in the small preview: their headshot ringed in their team's color, lit while they're on the field. */
+function Pin({ p, color }: { p: LivePlayer; color: string }) {
+  const photo = playerPhoto(p);
+  const live = p.state === 'driving' || p.state === 'defending';
+  return (
+    <div className="pointer-events-none relative h-[14px] w-[14px] select-none overflow-hidden rounded-full bg-[#0f151b]"
+      style={{ border: `1.5px solid ${color}`, boxShadow: live ? `0 0 7px ${color}, 0 0 0 1px #ffffffaa` : '0 1px 3px rgba(0,0,0,0.6)', opacity: live || p.state === 'pregame' ? 1 : 0.8 }}>
+      {photo
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={photo} alt="" className={`absolute left-1/2 -translate-x-1/2 ${p.position === 'DEF' ? 'top-1/2 h-[70%] -translate-y-1/2' : 'bottom-0 h-full'} w-auto`} />
+        : <span className="absolute inset-0 flex items-center justify-center text-[5px] font-black text-white">{initialsOf(p.name)}</span>}
+    </div>
+  );
+}
+
+/** A slow, slight float, out of step with the next player's: loose and easy before the game. */
 function Warmup({ delay, children }: { delay: number; children: React.ReactNode }) {
   return (
-    <div style={{ animation: `lp-warmup 1.4s ease-in-out ${delay}s infinite` }}>
-      <style>{'@keyframes lp-warmup { 0%, 100% { transform: translateY(0) } 45% { transform: translateY(-5px) rotate(-1.5deg) } 70% { transform: translateY(-2px) rotate(1deg) } }'}</style>
+    <div style={{ animation: `lp-warmup 3.2s ease-in-out ${delay * 2.2}s infinite` }}>
+      <style>{'@keyframes lp-warmup { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-1.5px) } }'}</style>
       {children}
     </div>
   );
@@ -216,7 +240,7 @@ function Card({ p, color, small = false, focused = false, highlight = false, onT
   const status = p.state === 'driving' ? (p.redZone ? 'Red zone' : p.downDistance?.split(' at ')[0] ?? 'Driving')
     : p.state === 'defending' ? 'On defense'
     : p.state === 'bye' ? 'Bye' : p.state === 'final' ? 'Final'
-    : p.state === 'pregame' ? `Warming up${p.game?.includes(' · ') ? ` · ${p.game.split(' · ')[1]}` : ''}` : 'Sideline';
+    : p.state === 'pregame' ? 'Warming up' : 'Sideline';
   const live = p.state === 'driving' || p.state === 'defending';
   return (
     <div onPointerDown={e => e.stopPropagation()} onClick={onTap} role={onTap ? 'button' : undefined}
@@ -232,7 +256,7 @@ function Card({ p, color, small = false, focused = false, highlight = false, onT
           <span className="absolute left-0.5 top-0.5 rounded px-0.5 text-[7px] font-black" style={{ background: color }}>{p.position}</span>
           {/* Where to watch them: their game's network, while it's on or coming up. */}
           {p.channel && (p.state !== 'final' && p.state !== 'bye') && (
-            <span className="absolute right-0.5 top-0.5 rounded bg-black/75 px-0.5 text-[6.5px] font-black tracking-wide text-white ring-1 ring-white/25">{p.channel}</span>
+            <span className="absolute right-0.5 top-0.5 rounded bg-black/75 px-0.5 text-[6.5px] font-black tracking-wide text-white ring-1 ring-white/25">{p.channel}{p.when ? ` · ${p.when}` : ''}</span>
           )}
         </div>
         <div className="px-1 pb-0.5 pt-px">
@@ -301,7 +325,7 @@ const ease = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) /
  * carrier's feet. On arrival the points pop; a touchdown lights the end zone and the scorer
  * stays there, bouncing, until the next play.
  */
-function PlayReel({ play, player, spot, color, df }: { play: LivePlay; player: LivePlayer; spot: Spot | null; color: string; df: number }) {
+function PlayReel({ play, player, spot, color, df, pin = false }: { play: LivePlay; player: LivePlayer; spot: Spot | null; color: string; df: number | undefined; pin?: boolean }) {
   const dir: 1 | -1 = play.side === 'host' ? 1 : -1;
   const yards = Math.max(1, Math.min(99, Math.abs(play.yards ?? 12)));
   // The end: in the end zone on a score, else where their ball is now, else a gain from their own 40.
@@ -374,7 +398,7 @@ function PlayReel({ play, player, spot, color, df }: { play: LivePlay; player: L
       <group ref={card}>
         <Html center distanceFactor={df} zIndexRange={[500, 450]}>
           <div className="relative">
-            {arrived && (
+            {arrived && !pin && (
               <div className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap text-center" style={{ animation: 'lp-pop 0.5s cubic-bezier(.2,1.6,.4,1)' }}>
                 <style>{'@keyframes lp-pop { from { transform: translate(-50%, 8px) scale(0.5); opacity: 0 } to { transform: translate(-50%, 0) scale(1); opacity: 1 } }'}</style>
                 <span className="rounded-md px-1.5 py-0.5 text-[10px] font-black text-black shadow-lg" style={{ background: play.scoring ? '#ffd44d' : '#ffffff' }}>
@@ -382,10 +406,13 @@ function PlayReel({ play, player, spot, color, df }: { play: LivePlay; player: L
                 </span>
               </div>
             )}
-            <Card p={{ ...player, state: runner ? 'driving' : player.state }} color={color} highlight />
+            {pin
+              ? <Pin p={{ ...player, state: 'driving' }} color={color} />
+              : <Card p={{ ...player, state: runner ? 'driving' : player.state }} color={color} highlight />}
           </div>
         </Html>
       </group>
     </group>
   );
 }
+
