@@ -166,7 +166,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
     <Stadium3D facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // In a live matchup the starters are the players on the field.
       field={playing ? 'empty' : day.stage === 'live' ? 'game' : day.stage === 'gates' ? 'warmup' : 'empty'}
-      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: narrow || portrait ? 0.7 : 0.72, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
+      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: 0.85, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
@@ -443,9 +443,9 @@ function BugStrip({ match, host, guest }: { match: LiveMatchup; host: { color: s
   const p = match.hostWinProb;
   if (p == null) return null;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
-  // Desktop only: on a phone the score bug stands alone.
+  // Desktop only: on a phone, upright or on its side (a short screen), the score bug stands alone.
   return (
-    <div className="mt-1.5 rounded-xl bg-[#0b0f14]/70 px-2.5 py-1.5 ring-1 ring-white/10 backdrop-blur-xl max-sm:hidden">
+    <div className="mt-1.5 rounded-xl bg-[#0b0f14]/70 px-2.5 py-1.5 ring-1 ring-white/10 backdrop-blur-xl max-sm:hidden [@media(max-height:500px)]:hidden">
       <p className="text-center text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">Win chance</p>
       <div className="mt-1 flex items-center gap-2 text-[11px] font-black tabular-nums text-white">
         <span className="w-8">{pct(1 - p)}</span>
