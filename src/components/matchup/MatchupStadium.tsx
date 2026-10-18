@@ -29,17 +29,18 @@ import type { LiveMatchup, LivePlay, LivePlayer } from '@/lib/live/liveTypes';
 import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import Avatar from '@/components/ui/Avatar';
 import HoneycombLoader from '@/components/ui/honeycomb-loader';
+import { BEAT_MS, directorShot } from './director';
 
 /**
  * The broadcast angles, wide screens and phones apart (each fitted to its screen's shape). Every
  * watch starts on the sideline; another angle, or dragging, lasts for that viewing.
  */
-type Angle = 'sideline' | 'high' | 'endzone' | 'blimp';
+type Angle = 'director' | 'sideline' | 'high' | 'endzone' | 'blimp';
 const ANGLES: { id: Angle; label: string }[] = [
-  { id: 'sideline', label: 'Sideline' }, { id: 'high', label: 'High' }, { id: 'endzone', label: 'End zone' }, { id: 'blimp', label: 'Blimp' },
+  { id: 'director', label: 'Director (auto)' }, { id: 'sideline', label: 'Sideline' }, { id: 'high', label: 'High' }, { id: 'endzone', label: 'End zone' }, { id: 'blimp', label: 'Blimp' },
 ];
 type View = { position: [number, number, number]; target: [number, number, number]; fov: number };
-const ANGLE_VIEW: Record<Angle, { wide: View; narrow: View }> = {
+const ANGLE_VIEW: Record<Exclude<Angle, 'director'>, { wide: View; narrow: View }> = {
   // Sideline is the opening view: close enough to read the cards, the 50 in the middle, the ends at the edges.
   sideline: { wide: { position: [0, 2.9, 4.4], target: [0, 0, 0.2], fov: 46 }, narrow: { position: [0, 4.4, 6.4], target: [0, 0, 0.2], fov: 52 } },
   high: { wide: { position: [0, 7.4, 6.2], target: [0, 0, 0], fov: 44 }, narrow: { position: [0, 13, 7.4], target: [0, 0, 0.3], fov: 52 } },
@@ -110,7 +111,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
     return () => { cancelled = true; };
   }, [a.userId, b.userId, week]);
   const hostTeam = venue ? (venue.host === a.userId ? a : b) : null;
-  const ground = useHostGround(venue?.host ?? null, venue?.guest ?? null, hostTeam?.avatar);
+  const ground = useHostGround(venue?.host ?? null, venue?.guest ?? null);
 
   const day = useMemo(() => (venue ? gameDay(now, venue.kickoff, venue.phase, venue.crowd?.fill ?? 0.8) : null), [venue, now]);
 
@@ -153,6 +154,15 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
   useEffect(() => { if (!full) setPicked(null); }, [full]);
   const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full });
   const playing = match && match.phase !== 'upcoming' ? match : null;
+  // The director (see director.ts) moves on to its next shot every beat while it has the camera.
+  const directing = full && angle === 'director';
+  const [beat, setBeat] = useState(0);
+  useEffect(() => {
+    if (!directing) return;
+    const t = setInterval(() => setBeat(n => n + 1), BEAT_MS);
+    return () => clearInterval(t);
+  }, [directing]);
+  const shot = directing && playing ? directorShot({ match: playing, reel: reel?.play ?? null, portrait, beat }) : null;
   // On right now: one of the starters' games is in progress (the week can be "live" on a quiet Saturday).
   const onNow = Boolean(playing && playing.phase === 'live' && playing.players.some(p => p.state === 'driving' || p.state === 'defending' || p.state === 'sideline'));
 
@@ -170,7 +180,7 @@ function HostedStadium({ a, b, week, className, prompt = false }: { a: Team; b: 
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
-      view={full && playing ? { ...ANGLE_VIEW[angle ?? 'sideline'][portrait ? 'narrow' : 'wide'], still: true, broadcast: true }
+      view={full && playing ? { ...(shot ?? ANGLE_VIEW[angle && angle !== 'director' ? angle : 'sideline'][portrait ? 'narrow' : 'wide']), still: true, broadcast: true }
         : full ? { position: [14, 7.5, 14], target: [0, 0.4, 0], fov: 40 } : { position: [10.5, 6.2, 10.5], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
   const matchupLine = host && guest ? (
@@ -461,7 +471,7 @@ function BugStrip({ match, host, guest }: { match: LiveMatchup; host: { color: s
 
 /**
  * The camera angle, tucked into a small menu beside the close button: a camera button that opens
- * the four angles. Dragging still looks around from any of them.
+ * the angles, and the director, which works the camera itself. Dragging still looks around from any of them.
  */
 function CameraMenu({ angle, onPick }: { angle: Angle; onPick: (a: Angle) => void }) {
   const [open, setOpen] = useState(false);

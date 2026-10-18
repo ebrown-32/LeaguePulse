@@ -25,7 +25,7 @@ export interface Ground {
 
 const cache = new Map<string, Promise<Ground | null>>();
 
-export function loadGround(host: string, guest: string, hostAvatar?: string | null): Promise<Ground | null> {
+export function loadGround(host: string, guest: string): Promise<Ground | null> {
   const key = `${host}|${guest}`;
   if (!cache.has(key)) {
     const json = (u: string) => fetch(u).then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -38,7 +38,7 @@ export function loadGround(host: string, guest: string, hostAvatar?: string | nu
         name: franchise?.identity?.stadiumName ?? null, color: franchise?.identity?.color ?? null,
         // Nobody has dressed it yet: the franchise's own stadium, as on its page.
         look: franchise?.identity?.look ? normalizeLook(franchise.identity.look) : seededLook(host),
-        logo: fieldLogo(franchise?.identity?.logoUrl, hostAvatar ?? null),
+        logo: fieldLogo(franchise?.identity?.logoUrl, host),
         guestColor: visitor?.identity?.color ?? null,
       };
     }));
@@ -47,13 +47,13 @@ export function loadGround(host: string, guest: string, hostAvatar?: string | nu
 }
 
 /** The host's ground: undefined while it loads, null when there is none to draw (no Franchise HQ here). */
-export function useHostGround(host: string | null, guest: string | null, hostAvatar?: string | null): Ground | null | undefined {
+export function useHostGround(host: string | null, guest: string | null): Ground | null | undefined {
   const [ground, setGround] = useState<Ground | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     setGround(undefined);
-    if (host && guest) loadGround(host, guest, hostAvatar).then(g => { if (!cancelled) setGround(g); });
+    if (host && guest) loadGround(host, guest).then(g => { if (!cancelled) setGround(g); });
     return () => { cancelled = true; };
-  }, [host, guest, hostAvatar]);
+  }, [host, guest]);
   return ground;
 }

@@ -206,11 +206,8 @@ export default function TeamProfileView({ userId }: { userId: string }) {
         <div className="pointer-events-none absolute -left-10 -top-10 -z-10 h-40 w-64 rounded-full opacity-25 blur-3xl"
           style={{ background: color ?? 'hsl(var(--primary))' }} />
         <div className="shrink-0">
-          {identity?.identity.logoUrl
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={identity.identity.logoUrl} alt="" width={80} height={80} className="h-16 w-16 rounded-2xl object-cover sm:h-20 sm:w-20"
-                style={color ? { boxShadow: `0 0 0 3px ${color}` } : undefined} />
-            : <Avatar avatarId={data.avatar} size={80} className="!h-16 !w-16 rounded-2xl sm:!h-20 sm:!w-20" />}
+          {/* The team's own picture from Sleeper or ESPN; an uploaded logo is for the stadium's midfield. */}
+          <Avatar avatarId={data.avatar} size={80} className="!h-16 !w-16 rounded-2xl sm:!h-20 sm:!w-20" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
@@ -275,7 +272,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
       </Section>
 
       <FranchiseHQ franchiseId={userId} mode="public" color={color} teamName={data.teamName}
-        logo={fieldLogo(identity?.identity.logoUrl, data.avatar)} look={identity?.identity.look ?? null} stadiumName={identity?.identity.stadiumName ?? null}>
+        logo={fieldLogo(identity?.identity.logoUrl, userId)} look={identity?.identity.look ?? null} stadiumName={identity?.identity.stadiumName ?? null}>
 
         <Section scope="team" id="career" icon={TrendingUp} title="Career" index={2}
           summary={`${fmtRecord(career.wins, career.losses, career.ties)} regular season, ${career.playoffWins}-${career.playoffLosses} playoffs, ${career.playoffAppearances} playoff berth${career.playoffAppearances === 1 ? '' : 's'}`}>

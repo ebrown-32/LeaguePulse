@@ -45,11 +45,11 @@ function next() {
   notify();
 }
 
-function develop(spec: PhotoSpec, hostTeam: string, hostAvatar: string | null): Promise<string | null> {
+function develop(spec: PhotoSpec, hostTeam: string): Promise<string | null> {
   const key = keyOf(spec);
   const have = stored(key);
   if (have) return Promise.resolve(have);
-  return loadGround(spec.host, spec.guest, hostAvatar).then(ground => new Promise<string | null>(resolve => {
+  return loadGround(spec.host, spec.guest).then(ground => new Promise<string | null>(resolve => {
     if (!ground) return resolve(null);
     const view = photoView(spec.shot, ground.facilities, ground.look, spec.stands > 0.5 && (spec.shot === 'crowd' || spec.shot === 'aerial'));
     queue.push({ key, spec, ground, view, hostTeam, done: url => {
@@ -92,8 +92,8 @@ function Darkroom() {
 
 let darkroomMounted = false;
 
-export default function StadiumPhoto({ spec, hostTeam, hostAvatar, persona, className }: {
-  spec: PhotoSpec; hostTeam: string; hostAvatar?: string | null;
+export default function StadiumPhoto({ spec, hostTeam, persona, className }: {
+  spec: PhotoSpec; hostTeam: string;
   /** The writer, for an interview: their face in the frame. */
   persona?: { name: string; avatar?: string };
   className?: string;
@@ -115,9 +115,9 @@ export default function StadiumPhoto({ spec, hostTeam, hostAvatar, persona, clas
     if (!near || url !== undefined) return;
     if (!darkroomMounted) { darkroomMounted = true; setMountRoom(true); }
     let cancelled = false;
-    develop(spec, hostTeam, hostAvatar ?? null).then(u => { if (!cancelled) setUrl(u); });
+    develop(spec, hostTeam).then(u => { if (!cancelled) setUrl(u); });
     return () => { cancelled = true; };
-  }, [near, url, spec, hostTeam, hostAvatar]);
+  }, [near, url, spec, hostTeam]);
 
   if (url === null) return null;
   // The picture with the writer in it for a selfie; framed to the post, or over the whole screen.
