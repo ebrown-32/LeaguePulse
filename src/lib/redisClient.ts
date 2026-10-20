@@ -84,6 +84,8 @@ const SHARED_PREFIXES = [
   'lp_live_',
   // The demo league's scored weeks, from the real NFL games (src/lib/demo/data.ts).
   'lp_demo_',
+  // Trade market values, one copy a league format (src/lib/trades/values.ts).
+  'lp_fc_values',
 ];
 
 /**

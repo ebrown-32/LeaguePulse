@@ -304,6 +304,16 @@
     to   { background-position:  220% 0; }
   }
 
+  /* Trade Finder's "New" badge: a few passes of light, then still. */
+  .tf-shimmer {
+    background-image: linear-gradient(100deg, transparent 20%, hsl(var(--primary) / 0.35) 50%, transparent 80%);
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: lp-shimmer 1.4s ease-in-out 3;
+  }
+  html[data-motion='reduced'] .tf-shimmer { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .tf-shimmer { animation: none; } }
+
   /* Held still rather than hidden: the placeholder still has to hold the
      layout, it just stops moving. */
   html[data-motion='reduced'] .lp-skeleton { animation: none; }
