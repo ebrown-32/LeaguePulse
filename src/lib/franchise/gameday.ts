@@ -112,6 +112,11 @@ export async function gamedayPosts(games: LiveGame[]): Promise<GamedayResult> {
     weekStats(season, week),
   ]);
   if (!matchups.length) return out;
+  // Nobody has scored yet: the week hasn't started. (Early on a Tuesday the fantasy week has moved on
+  // while ESPN's scoreboard still shows last week's games, all over: without this, every matchup
+  // looked finished at 0-0.)
+  const scored = matchups.some((m: any) => ((m.starters ?? []) as string[]).some(id => Number(m.players_points?.[id] ?? 0) !== 0));
+  if (!scored) return out;
 
   const byTeam = new Map<string, LiveGame>();
   for (const g of games) { byTeam.set(g.home.abbr, g); byTeam.set(g.away.abbr, g); }
@@ -177,6 +182,8 @@ export async function gamedayPosts(games: LiveGame[]): Promise<GamedayResult> {
     if (!(await settledFor(`m:${mid}`, FINAL_SETTLE_MS))) continue;
     const score = (m: any) => Number(m.custom_points ?? m.points ?? 0);
     const [x, y] = [...pair].sort((a, b) => score(b) - score(a));
+    // A side on 0 hasn't played: not a final, whatever the scoreboard says.
+    if (score(x) <= 0 || score(y) <= 0) continue;
     const tie = score(x) === score(y);
     const [fx, fy] = await Promise.all([face(ownerOf(x.roster_id)), face(ownerOf(y.roster_id))]);
     const star = (m: any) => {
@@ -184,11 +191,19 @@ export async function gamedayPosts(games: LiveGame[]): Promise<GamedayResult> {
       const p = best ? directory[best[0]] : null;
       return best ? { name: p?.full_name || (p ? `${p.first_name} ${p.last_name}` : best[0]), pts: best[1] } : null;
     };
+    // Not every team posts its final. The winner usually does, always after a blowout or a nail-biter;
+    // the loser now and then: often after a heartbreaker, sometimes to laugh off a blowout, rarely
+    // otherwise. In a tie, one of them. Decided once per team and week, so a rerun says the same.
+    const margin = Math.abs(score(x) - score(y));
+    const chance = (won: boolean) => tie ? 0.5 : won ? (margin >= 35 || margin < 5 ? 1 : 0.8) : margin < 5 ? 0.6 : margin >= 35 ? 0.4 : 0.25;
+    const posts = (id: string, won: boolean) => (seedOf(`final|${id}|${season}|${week}`) % 1000) / 1000 < chance(won);
+    const sides = ([[x, y, fx, fy], [y, x, fy, fx]] as const).filter(([, , mf], i) => posts(mf.franchiseId, i === 0));
+    if (tie && sides.length === 2) sides.pop();
     // The winner first, the loser a few minutes later, as accounts do.
-    for (const [i, [me, them, mf, tf]] of ([[x, y, fx, fy], [y, x, fy, fx]] as const).entries()) {
+    for (const [i, [me, them, mf, tf]] of sides.entries()) {
       const s = star(me);
       await postAs(mf, {
-        text: finalText({ us: mf.team, them: tf.team, a: score(me), b: score(them), won: i === 0 && !tie, tie, star: s?.name ?? null, starPts: s?.pts ?? 0, tag: mf.tag, seed: seedOf(`${mf.franchiseId}${week}`) }),
+        text: finalText({ us: mf.team, them: tf.team, a: score(me), b: score(them), won: me === x && !tie, tie, star: s?.name ?? null, starPts: s?.pts ?? 0, tag: mf.tag, seed: seedOf(`${mf.franchiseId}${week}`) }),
         visual: {
           type: 'final', week,
           us: { name: mf.team, score: score(me), color: mf.color, avatar: mf.avatar },
