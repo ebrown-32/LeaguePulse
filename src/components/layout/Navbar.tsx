@@ -26,6 +26,7 @@ import {
   BarChart3,
   Radio,
   Stadium,
+  ArrowLeftRight,
 } from '@/components/icons';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Logo from '@/components/ui/Logo';
@@ -67,6 +68,7 @@ const MORE_NAV: NavItem[] = [
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
   { name: 'Weekly Report', href: '/report',      icon: ClipboardCheck },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
+  { name: 'Trade Finder', href: '/trades',       icon: ArrowLeftRight },
   { name: 'Standings',    href: '/standings',    icon: ListOrdered  },
   { name: 'Rosters',      href: '/rosters',      icon: Shirt        },
   // Power Rankings (/analyzer) is built and working but unlinked: the free
@@ -116,6 +118,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'History',       href: '/history',      icon: Database       },
       { name: 'Franchises',    href: '/franchises',   icon: Stadium        },
       { name: 'Rivalries',     href: '/rivalries',    icon: Sword          },
+      { name: 'Trade Finder',  href: '/trades',       icon: ArrowLeftRight },
       { name: 'Schedule Lab',  href: '/schedule-lab', icon: Shuffle        },
       { name: 'Simulator',     href: '/simulator',    icon: FlaskConical   },
       { name: 'Analytics',     href: '/analytics',    icon: BarChart3      },

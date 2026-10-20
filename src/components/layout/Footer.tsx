@@ -21,7 +21,7 @@ import AccountChip from './AccountChip';
 type Item = [label: string, href: string];
 const GROUPS: { label: string; items: Item[] }[] = [
   { label: 'This week', items: [['Game Day', '/live'], ['Matchups', '/matchups'], ['Standings', '/standings'], ['Weekly Report', '/report']] },
-  { label: 'Dig in', items: [['History', '/history'], ['Franchises', '/franchises'], ['Rivalries', '/rivalries'], ['Next Gen', '/next-gen']] },
+  { label: 'Dig in', items: [['History', '/history'], ['Franchises', '/franchises'], ['Rivalries', '/rivalries'], ['Trade Finder', '/trades'], ['Next Gen', '/next-gen']] },
   { label: 'Catch up', items: [['The Feed', '/desk'], ['Media', '/media'], ['Transactions', '/transactions']] },
   { label: 'Look it up', items: [['Rosters', '/rosters'], ['Drafts', '/drafts'], ['Player Rankings', '/rankings'], ['Constitution', '/constitution']] },
 ];
