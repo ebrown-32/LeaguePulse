@@ -169,7 +169,7 @@ function PlayerCard({ v }: { v: Extract<OfficialVisual, { type: 'player' }> }) {
       </div>
       <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-center p-4 sm:p-6">
         <span className="w-fit bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.22em] text-black">Big day</span>
-        <p className="mt-2 truncate font-display text-[24px] font-black uppercase leading-[0.95] sm:text-[34px]">{v.name}</p>
+        <p className={`mt-2 font-display font-black uppercase leading-[0.95] ${v.name.length > 15 ? 'text-[19px] sm:text-[26px]' : 'text-[24px] sm:text-[34px]'}`}>{v.name}</p>
         <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">{v.position} · {v.nflTeam} · {v.team}</p>
         <p className="mt-3 font-display text-[44px] font-black leading-none tabular-nums sm:text-[60px]">{v.points.toFixed(1)}<span className="ml-1.5 text-[14px] font-bold uppercase tracking-wider text-white/70 sm:text-[16px]">pts</span></p>
         {v.line && <p className="mt-1.5 text-[12.5px] text-white/85 sm:text-[14px]">{v.line}</p>}

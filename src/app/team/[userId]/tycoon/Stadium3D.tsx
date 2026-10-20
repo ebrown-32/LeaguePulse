@@ -41,7 +41,7 @@ import { Grounds, GROUND } from './Grounds';
 import { HAZE } from './campusLook';
 import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
-import { along, Boxes, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
+import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
 
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
@@ -333,20 +333,50 @@ function Crowd({ bp, fill, colors, towel = '#ffffff', cheer = false }: { bp: Blu
 const outerAt = (s: Stand, a: number) => outerOf(s.decks(a));
 const topAt = (s: Stand, a: number) => topOf(s.decks(a));
 
+/** Memorial's stone and brick, whatever facade is picked: the look is the style's own. */
+const LIMESTONE = '#dccba6', BRICK = '#9a4632';
+/** How high the brick ground floor runs on a wall this tall. */
+const brickBand = (h: number) => Math.min(0.95, Math.max(0.42, h * 0.3));
+
+/** Memorial's stone pavilions: square towers with windows, under pyramid caps. */
+function Pavilions({ at, night }: { at: [number, number, number, number][]; night: number }) {
+  return (
+    <group>
+      {at.map(([x, z, h, ry], i) => (
+        <group key={i} position={[x, 0, z]} rotation-y={ry}>
+          <mesh position={[0, h / 2, 0]} castShadow><boxGeometry args={[0.52, h, 0.5]} /><meshStandardMaterial color={LIMESTONE} roughness={0.9} /></mesh>
+          <mesh position={[0, Math.min(0.9, h * 0.3) / 2, 0.255]}><boxGeometry args={[0.53, Math.min(0.9, h * 0.3), 0.01]} /><meshStandardMaterial color={BRICK} roughness={0.95} /></mesh>
+          {/* A tall window up the face, toward the field and away from it. */}
+          {[0.256, -0.256].map(zz => (
+            <mesh key={zz} position={[0, h * 0.62, zz]}><boxGeometry args={[0.16, h * 0.42, 0.01]} /><meshStandardMaterial color="#39404a" emissive="#ffd59a" emissiveIntensity={0.05 + night * 1.1} /></mesh>
+          ))}
+          <mesh position={[0, h + 0.03, 0]}><boxGeometry args={[0.62, 0.06, 0.6]} /><meshStandardMaterial color="#efe5cf" /></mesh>
+          <mesh position={[0, h + 0.2, 0]} rotation-y={Math.PI / 4}><coneGeometry args={[0.42, 0.3, 4]} /><meshStandardMaterial color="#cbb88f" roughness={0.8} /></mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: Palette; night: number }) {
   const f = { ...FACADE[look.facade], wall: p.wall, trim: p.trim };
+  // A stand with a building behind it (bp.bulk): its outside is the building's, further out.
+  const outW = (s: Blueprint['stands'][number], a: number) => outerAt(s, a) + (bp.bulk[s.id] ?? 0);
   const o = bp.outline;
   const walled = bp.stands.filter(s => s.wallFrom !== null);
   const { columns, poles, flags } = useMemo(() => {
     const columns: Item[] = [], poles: Item[] = [], flags: Item[] = [];
     for (const s of walled) {
       const from = s.wallFrom ?? 0;
-      for (const pt of along(o, s.from, s.to, a => outerAt(s, a) + 0.08, 0.42)) {
+      for (const pt of along(o, s.from, s.to, a => outW(s, a) + 0.08, 0.42)) {
         const h = topAt(s, pt.a) - from;
-        columns.push({ x: pt.x, y: from + h / 2, z: pt.z, ry: -pt.a, sy: h });
+        columns.push({ x: pt.x, y: from + h / 2, z: pt.z, ry: pt.ry, sy: h });
       }
-      if (look.style === 'dome') continue;
-      along(o, s.from, s.to, a => outerAt(s, a) + 0.02, 1.1).forEach((pt, i) => {
+      // Flags fly from the rim, except under a roof, which they'd poke through.
+      const roofed = bp.roof && (bp.roof.kind === 'gable' ? bp.roof.stands.includes(s.id) : true);
+      // Memorial's stone and brick fly no flags along the rim.
+      if (look.style === 'dome' || roofed || bp.arches) continue;
+      along(o, s.from, s.to, a => outW(s, a) + 0.02, 1.1).forEach((pt, i) => {
         const t = topAt(s, pt.a);
         poles.push({ x: pt.x, y: t + 0.22, z: pt.z });
         flags.push({ x: pt.x + Math.cos(pt.a) * 0.001, y: t + 0.37, z: pt.z, ry: -pt.a + Math.PI / 2, c: i % 2 ? p.accent : p.team });
@@ -355,12 +385,57 @@ function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: 
     return { columns, poles, flags };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bp, look.style, p.team, p.accent]);
+  // Memorial's outside: limestone, over a red brick ground floor with an arched opening in every
+  // bay, and rows of windows in the stone above; all lit from inside at night.
+  const arches = useMemo(() => {
+    const panes: Item[] = [], crowns: Item[] = [], windows: Item[] = [];
+    if (!bp.arches) return { panes, crowns, windows };
+    for (const s of walled) {
+      const from = s.wallFrom ?? 0;
+      // Midway between each pair of columns (placed as the columns are, along the same wall).
+      const cols = along(o, s.from, s.to, a => outW(s, a) + 0.07, 0.42);
+      for (const pt of cols.slice(1).map((c, i) => ({ x: (c.x + cols[i].x) / 2, z: (c.z + cols[i].z) / 2, a: (c.a + cols[i].a) / 2, ry: c.ry }))) {
+        const h = topAt(s, pt.a) - from;
+        if (h < 0.5) continue;
+        const band = brickBand(h), ph = band * 0.62, y = from + 0.04 + ph / 2;
+        panes.push({ x: pt.x, y, z: pt.z, ry: pt.ry, sy: ph });
+        crowns.push({ x: pt.x, y: y + ph / 2 + 0.03, z: pt.z, ry: pt.ry });
+        // Windows in the stone: a row every so often up the wall, two to a bay, side by side along it.
+        const tx = Math.sin(pt.ry), tz = Math.cos(pt.ry);
+        for (let wy = from + band + 0.22; wy < from + h * 0.86; wy += 0.32) {
+          for (const off of [-0.1, 0.1]) windows.push({ x: pt.x + tx * off, y: wy, z: pt.z + tz * off, ry: pt.ry });
+        }
+      }
+    }
+    return { panes, crowns, windows };
+  }, [bp, walled, o]);
+  // The ends of each building, closing it between the seats and its outside wall.
+  const bulkEnds = useMemo(() => {
+    const out: Item[] = [];
+    for (const s of walled) {
+      const d = bp.bulk[s.id] ?? 0;
+      if (!d) continue;
+      // Each end in two: full height behind the seats, where the building is; and under the decks,
+      // from their front down to the ground, only as high as the seats begin, so nothing pokes above them.
+      for (const a of [s.from, s.to]) {
+        const decks = s.decks(a), [dx, dz] = o.dir(a), len = Math.hypot(dx, dz), ry = Math.atan2(dx, dz);
+        const slab = (r0: number, r1: number, h: number) => {
+          const [x, z] = o.around(a, (r0 + r1) / 2);
+          out.push({ x, y: h / 2, z, ry, sy: h, sz: (r1 - r0) * len });
+        };
+        const back = outerAt(s, a);
+        slab(back - 0.02, back + d + 0.04, topAt(s, a) - 0.04);
+        slab(decks[0].inner - 0.32, back - 0.02, decks[0].floor ?? decks[0].base);
+      }
+    }
+    return out;
+  }, [bp, walled, o]);
   const gates = useMemo(() => {
     if (bp.berm) return [];
     const out: { x: number; z: number; ry: number }[] = [];
     for (const s of walled) for (const a of [0, Math.PI / 2, Math.PI, 1.5 * Math.PI, TAU]) {
       if (a < s.from + 0.1 || a > s.to - 0.1 || topAt(s, a) < 0.95 || (a === TAU && s.from < 0.1)) continue;
-      const [x, z] = o.around(a, outerAt(s, a) + 0.2);
+      const [x, z] = o.around(a, outW(s, a) + 0.2);
       out.push({ x, z, ry: -a + Math.PI / 2 });
     }
     return out;
@@ -370,20 +445,58 @@ function Facades({ bp, look, p, night }: { bp: Blueprint; look: StadiumLook; p: 
     <group>
       {walled.map(s => (
         <group key={s.id}>
-          <Ribbon o={o} from={s.from} to={s.to} cast k={`${bp.style}${s.id}${topAt(s, s.from)}${outerAt(s, s.from)}`}
-            profile={a => [[outerAt(s, a) + 0.04, s.wallFrom ?? 0], [outerAt(s, a) + 0.04, topAt(s, a)]]}>
-            {f.glass
+          <Ribbon o={o} from={s.from} to={s.to} cast k={`${bp.style}${s.id}${topAt(s, s.from)}${outW(s, s.from)}`}
+            profile={a => [[outW(s, a) + 0.04, s.wallFrom ?? 0], [outW(s, a) + 0.04, topAt(s, a)]]}>
+            {bp.arches
+              ? <meshStandardMaterial color={LIMESTONE} roughness={0.92} side={DoubleSide} />
+              : f.glass
               ? <meshPhysicalMaterial color={f.wall} metalness={f.metal} roughness={f.rough} transparent opacity={0.72} side={DoubleSide} emissive="#ffd99a" emissiveIntensity={night * 0.35} />
               : <meshStandardMaterial color={f.wall} metalness={f.metal} roughness={f.rough} side={DoubleSide} />}
           </Ribbon>
+          {/* A building's roof, from the back of the seats out to its outside wall. */}
+          {(bp.bulk[s.id] ?? 0) > 0 && (
+            <Ribbon o={o} from={s.from} to={s.to} cast k={`bulkroof${bp.style}${s.id}${topAt(s, s.from)}${outW(s, s.from)}`}
+              profile={a => [[outerAt(s, a) - 0.02, topAt(s, a) - 0.04], [outW(s, a) + 0.06, topAt(s, a) - 0.04]]}>
+              <meshStandardMaterial color={bp.arches ? '#cbb994' : f.trim} side={DoubleSide} />
+            </Ribbon>
+          )}
           {/* A lit band of windows near the top. */}
-          <Ribbon o={o} from={s.from} to={s.to} k={`win${bp.style}${s.id}${topAt(s, s.from)}${outerAt(s, s.from)}`}
-            profile={a => { const t = topAt(s, a), y = (s.wallFrom ?? 0) + (t - (s.wallFrom ?? 0)) * 0.76; return [[outerAt(s, a) + 0.05, y], [outerAt(s, a) + 0.05, y + 0.1]]; }}>
+          <Ribbon o={o} from={s.from} to={s.to} k={`win${bp.style}${s.id}${topAt(s, s.from)}${outW(s, s.from)}`}
+            profile={a => { const t = topAt(s, a), y = (s.wallFrom ?? 0) + (t - (s.wallFrom ?? 0)) * 0.76; return [[outW(s, a) + 0.05, y], [outW(s, a) + 0.05, y + 0.1]]; }}>
             <meshStandardMaterial color="#1e2a36" emissive="#ffd28a" emissiveIntensity={0.15 + night * 1.2} side={DoubleSide} />
           </Ribbon>
         </group>
       ))}
-      <Boxes items={columns} size={[0.1, 1, 0.1]} color={f.trim} />
+      <Boxes items={columns} size={[0.1, 1, 0.1]} color={bp.arches ? '#ece2cb' : f.trim} />
+      {bulkEnds.length > 0 && <Boxes items={bulkEnds} size={[0.06, 1, 1]} color={bp.arches ? '#dccba6' : f.wall} />}
+      {arches.panes.length > 0 && (
+        <>
+          {/* The brick ground floor, with a limestone sill along its top. */}
+          {walled.map(s => (
+            <group key={`brick${s.id}`}>
+              <Ribbon o={o} from={s.from} to={s.to} k={`brick${bp.style}${s.id}${topAt(s, s.from)}`}
+                profile={a => { const from = s.wallFrom ?? 0, h = topAt(s, a) - from; return [[outW(s, a) + 0.05, from], [outW(s, a) + 0.05, from + brickBand(h)]]; }}>
+                <meshStandardMaterial color={BRICK} roughness={0.95} side={DoubleSide} />
+              </Ribbon>
+              <Ribbon o={o} from={s.from} to={s.to} k={`sill${bp.style}${s.id}${topAt(s, s.from)}`}
+                profile={a => { const from = s.wallFrom ?? 0, y = from + brickBand(topAt(s, a) - from); return [[outW(s, a) + 0.08, y], [outW(s, a) + 0.08, y + 0.05]]; }}>
+                <meshStandardMaterial color="#efe5cf" side={DoubleSide} />
+              </Ribbon>
+            </group>
+          ))}
+          <Instanced items={arches.windows} emissive="#ffd59a" emissiveIntensity={0.05 + night * 1.1} color="#3a4048"><boxGeometry args={[0.03, 0.13, 0.1]} /></Instanced>
+          <Instanced items={arches.panes} emissive="#ffcf87" emissiveIntensity={0.1 + night * 1.1} color="#2a2420"><boxGeometry args={[0.03, 1, 0.2]} /></Instanced>
+          {/* A stepped top over each window: the arch, in brick. */}
+          <Instanced items={arches.crowns} emissive="#ffcf87" emissiveIntensity={0.1 + night * 1.1} color="#2a2420"><boxGeometry args={[0.03, 0.07, 0.12]} /></Instanced>
+          {/* The cornice: a stone band along the top of the brick. */}
+          {walled.map(s => (
+            <Ribbon key={`cornice${s.id}`} o={o} from={s.from} to={s.to} k={`cornice${bp.style}${s.id}${topAt(s, s.from)}`}
+              profile={a => [[outW(s, a) + 0.09, topAt(s, a) - 0.12], [outW(s, a) + 0.09, topAt(s, a) - 0.02]]}>
+              <meshStandardMaterial color={f.trim} side={DoubleSide} />
+            </Ribbon>
+          ))}
+        </>
+      )}
       <Boxes items={poles} size={[0.02, 0.44, 0.02]} color={p.steel} cast={false} />
       <Boxes items={flags} size={[0.22, 0.13, 0.01]} cast={false} />
       {gates.map((g, i) => (
@@ -415,22 +528,33 @@ function Suites({ bp, night }: { bp: Blueprint; night: number }) {
   );
 }
 
-function PressBox({ bp, p, night }: { bp: Blueprint; p: Palette; night: number }) {
-  const pb = bp.pressBox, s = pb && bp.stands.find(x => x.id === pb.stand);
-  if (!pb || !s) return null;
-  const from = s.from + 0.12, to = s.to - 0.12, H = pb.height, o = bp.outline;
-  const k = `pb${H}${topAt(s, from)}`;
+function PressBox({ bp, pb, p, night }: { bp: Blueprint; pb: Blueprint['pressBoxes'][number]; p: Palette; night: number }) {
+  const s = bp.stands.find(x => x.id === pb.stand);
+  const from = (s?.from ?? 0) + 0.12, to = (s?.to ?? 0) - 0.12, H = pb.height, o = bp.outline;
+  // A building on the back of the stand: solid all round, sitting down into the top rows, a glass
+  // front facing the field, a roof slab with a lip, and a wall at each end.
+  const D = 0.5, sink = 0.22, wall = bp.arches ? '#dccba6' : p.trim;
+  const ends = useMemo(() => (s ? [from, to].map(a => {
+    const [x, z] = o.around(a, outerAt(s, a) - D / 2 + 0.03), t = topAt(s, a);
+    return { x, y: t - sink + (H + sink) / 2, z, ry: -a, sy: H + sink };
+  }) : []), [o, s, from, to, H]);
+  if (!s) return null;
+  const k = `pb${H}${topAt(s, from)}${outerAt(s, from)}`;
   return (
     <group>
-      <Ribbon o={o} from={from} to={to} k={k} profile={a => [[outerAt(s, a) - 0.42, topAt(s, a)], [outerAt(s, a) - 0.42, topAt(s, a) + H]]}>
-        <meshPhysicalMaterial color="#a8d8ff" transparent opacity={0.65} roughness={0.05} side={DoubleSide} emissive="#ffd89a" emissiveIntensity={0.2 + night * 0.9} />
+      <Ribbon o={o} from={from} to={to} k={`${k}w`} cast
+        profile={a => { const r = outerAt(s, a), t = topAt(s, a); return [[r - D + 0.05, t - sink], [r - D + 0.05, t + H], [r + 0.05, t + H], [r + 0.05, t - sink], [r - D + 0.05, t - sink]]; }}>
+        <meshStandardMaterial color={wall} side={DoubleSide} />
       </Ribbon>
-      <Ribbon o={o} from={from} to={to} k={`${k}s`} cast profile={a => [[outerAt(s, a) - 0.48, topAt(s, a) + H], [outerAt(s, a) + 0.06, topAt(s, a) + H]]}>
+      <Ribbon o={o} from={from + 0.01} to={to - 0.01} k={`${k}g`}
+        profile={a => { const r = outerAt(s, a), t = topAt(s, a); return [[r - D + 0.04, t + 0.05], [r - D + 0.04, t + H - 0.06]]; }}>
+        <meshPhysicalMaterial color="#a8d8ff" transparent opacity={0.8} roughness={0.05} side={DoubleSide} emissive="#ffd89a" emissiveIntensity={0.2 + night * 0.9} />
+      </Ribbon>
+      <Ribbon o={o} from={from - 0.01} to={to + 0.01} k={`${k}r`} cast
+        profile={a => { const r = outerAt(s, a), t = topAt(s, a); return [[r - D - 0.02, t + H], [r - D - 0.02, t + H + 0.05], [r + 0.09, t + H + 0.05], [r + 0.09, t + H]]; }}>
         <meshStandardMaterial color={p.trim} side={DoubleSide} />
       </Ribbon>
-      <Ribbon o={o} from={from} to={to} k={`${k}b`} profile={a => [[outerAt(s, a) + 0.04, topAt(s, a)], [outerAt(s, a) + 0.04, topAt(s, a) + H]]}>
-        <meshStandardMaterial color={p.trim} side={DoubleSide} />
-      </Ribbon>
+      <Boxes items={ends} size={[0.05, 1, D]} color={wall} />
     </group>
   );
 }
@@ -821,6 +945,25 @@ function Boards({ bp, p, text, look, score = null }: { bp: Blueprint; p: Palette
   return <group>{bp.boards.map(one)}</group>;
 }
 
+/** The twin towers at the gates (Twin Towers): white, with a flag pole on each dome. */
+function TwinTowers({ at, p, night }: { at: [number, number, number][]; p: Palette; night: number }) {
+  return (
+    <group>
+      {at.map(([x, z, h], i) => (
+        <group key={i} position={[x, 0, z]}>
+          <mesh position={[0, h * 0.3, 0]} castShadow><boxGeometry args={[0.95, h * 0.6, 0.95]} /><meshStandardMaterial color="#f1ede4" roughness={0.9} /></mesh>
+          <mesh position={[0, h * 0.72, 0]} castShadow><cylinderGeometry args={[0.36, 0.44, h * 0.24, 8]} /><meshStandardMaterial color="#f1ede4" roughness={0.9} /></mesh>
+          {/* Windows down the face, lit at night. */}
+          <mesh position={[0, h * 0.38, 0.48]}><boxGeometry args={[0.22, h * 0.36, 0.02]} /><meshStandardMaterial color="#2a2f36" emissive="#ffd59a" emissiveIntensity={night * 1.2} /></mesh>
+          <mesh position={[0, h * 0.84 + 0.02, 0]}><sphereGeometry args={[0.36, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2]} /><meshStandardMaterial color="#e8e2d4" roughness={0.6} /></mesh>
+          <mesh position={[0, h * 0.84 + 0.5, 0]}><cylinderGeometry args={[0.012, 0.012, 0.55, 6]} /><meshStandardMaterial color="#c8ccd0" /></mesh>
+          <mesh position={[0.12, h * 0.84 + 0.68, 0]}><boxGeometry args={[0.22, 0.13, 0.01]} /><meshStandardMaterial color={i ? p.accent : p.team} /></mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function LightTowers({ at, color, on }: { at: [number, number, number][]; color: string; on: boolean }) {
   // The glow is the lamps' own: a point light per tower would cost every pixel on screen four more lights.
   const { poles, heads } = useMemo(() => {
@@ -1135,7 +1278,9 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
       <Crowd key={`crowd${build}`} bp={bp} fill={fill} colors={crowdColors} towel={p.accent} cheer={Boolean(live?.celebrate)} />
       <Rise key={`ext${build}`} delay={0.1}><Facades bp={bp} look={look} p={p} night={sky.night} /></Rise>
       {bp.suites.length > 0 && <Rise key={`s${build}`}><Suites bp={bp} night={sky.night} /></Rise>}
-      {bp.pressBox && <Rise key={`pb${build}`}><PressBox bp={bp} p={p} night={sky.night} /></Rise>}
+      {bp.pressBoxes.map(pb => <Rise key={`pb${pb.stand}${build}`}><PressBox bp={bp} pb={pb} p={p} night={sky.night} /></Rise>)}
+      {bp.twinTowers.length > 0 && <Rise key={`tt${build}`} delay={0.2}><TwinTowers at={bp.twinTowers} p={p} night={sky.night} /></Rise>}
+      {bp.pavilions.length > 0 && <Rise key={`pav${build}`} delay={0.2}><Pavilions at={bp.pavilions} night={sky.night} /></Rise>}
       {bp.colonnade && <Rise key={`col${build}`} delay={0.2}><Colonnade bp={bp} look={look} p={p} /></Rise>}
       {bp.torch && <Torch at={bp.torch} />}
 

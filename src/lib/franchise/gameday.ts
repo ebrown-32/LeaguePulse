@@ -155,7 +155,7 @@ export async function gamedayPosts(games: LiveGame[]): Promise<GamedayResult> {
       const line = statLine(x.pos, stats[x.pid]);
       const f = await face(fid);
       await postAs(f, {
-        text: highlightText({ name, last, line: line || `${pts(x.points)} points`, points: x.points, team: f.team, tag: f.tag, seed: seedOf(`${fid}${x.pid}${week}`) }),
+        text: highlightText({ name, last, line: line || `${pts(x.points)} points`, points: x.points, team: f.team, tag: f.tag, seed: seedOf(`${week}`) + out.highlights }), // the league's posts this run take turns through the lines
         visual: { type: 'player', playerId: x.pid, name, position: x.pos, nflTeam: String(p.team ?? x.pid), points: x.points, line, color: f.color, team: f.team },
         event: 'highlight',
       });

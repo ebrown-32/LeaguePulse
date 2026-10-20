@@ -95,6 +95,45 @@ export const STYLES: Record<StadiumStyle, StyleInfo> = {
       atmosphere: 'A torch on top of the colonnade, lit for every game.',
     },
   },
+  memorial: {
+    // After Nebraska's Memorial Stadium: four stands that meet at the corners, brick and arches outside.
+    name: 'Memorial',
+    tagline: 'Brick arches, towering sidelines, and a sea of color on Saturdays.',
+    movingRoof: false,
+    builds: {
+      stadium: 'Stacks another deck on both sideline stands and the ends; the home side always stands tallest.',
+      seating: 'Every stand gets deeper, end zones included.',
+      suites: 'Skyboxes along both sidelines, under press boxes on top of both stands.',
+      videoboard: 'A giant board over the south end zone, then one over the north.',
+      atmosphere: 'Light towers at the ends of both sideline stands.',
+    },
+  },
+  wall: {
+    // After Dortmund's south stand: one end a single towering terrace.
+    name: 'The Wall',
+    tagline: 'One end zone is a single towering terrace. The loudest seats anywhere.',
+    movingRoof: false,
+    builds: {
+      stadium: 'The wall climbs higher; the other three sides add a tier, all open to the sky.',
+      seating: 'Deeper tiers, and a steeper wall.',
+      suites: 'Suites along both sidelines.',
+      videoboard: 'A board over the far end zone, facing the wall.',
+      atmosphere: 'Light towers in the four corners.',
+    },
+  },
+  twintowers: {
+    // After the old Wembley: a low oval behind two white towers.
+    name: 'Twin Towers',
+    tagline: 'A low oval behind two white domed towers at the gates. Pure history.',
+    movingRoof: false,
+    builds: {
+      stadium: 'Another tier around the oval, and a canopy over it from the Cathedral up; the towers grow with it.',
+      seating: 'Deeper tiers all the way around.',
+      suites: 'A ring of suites between the tiers.',
+      videoboard: 'A board over the east end, facing the towers.',
+      atmosphere: 'Light towers in the corners, and the towers lit at night.',
+    },
+  },
 };
 
 export const STYLE_ORDER = Object.keys(STYLES) as StadiumStyle[];

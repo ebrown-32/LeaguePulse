@@ -108,9 +108,14 @@ export function Rise({ children, delay = 0 }: { children: React.ReactNode; delay
 }
 
 /** Points spaced about `step` apart along a sweep of the outline at size r(a). */
-export function along(o: Outline, from: number, to: number, r: (a: number) => number, step: number): { x: number; z: number; a: number }[] {
-  // Measure the sweep's length first, then place evenly by length.
-  const N = 200, pts: { x: number; z: number; a: number; s: number }[] = [];
+/**
+ * Points evenly spaced along a sweep, each with `ry`: the turn that points a box's local x straight out
+ * from the wall (its local z along it), on any outline, square or round.
+ */
+export function along(o: Outline, from: number, to: number, r: (a: number) => number, step: number): { x: number; z: number; a: number; ry: number }[] {
+  // Measure the sweep's length first, then place evenly by length, between the samples (on a squarish
+  // outline most of a straight side's length falls in a few of them, so snapping to one bunches things up).
+  const N = 800, pts: { x: number; z: number; a: number; s: number }[] = [];
   let s = 0, prev: [number, number] | null = null;
   for (let i = 0; i <= N; i++) {
     const a = from + ((to - from) * i) / N;
@@ -119,12 +124,17 @@ export function along(o: Outline, from: number, to: number, r: (a: number) => nu
     pts.push({ x: p[0], z: p[1], a, s }); prev = p;
   }
   const count = Math.max(1, Math.round(s / step));
-  const out: { x: number; z: number; a: number }[] = [];
+  const out: { x: number; z: number; a: number; ry: number }[] = [];
   let j = 0;
   for (let n = 0; n < count; n++) {
     const want = ((n + 0.5) / count) * s;
-    while (j < pts.length - 1 && pts[j + 1].s < want) j++;
-    out.push(pts[j]);
+    while (j < pts.length - 2 && pts[j + 1].s < want) j++;
+    const p = pts[j], q = pts[j + 1] ?? p, t = q.s > p.s ? (want - p.s) / (q.s - p.s) : 0;
+    const x = p.x + (q.x - p.x) * t, z = p.z + (q.z - p.z) * t;
+    // Outward: perpendicular to the wall, away from the middle.
+    let nx = q.z - p.z, nz = -(q.x - p.x);
+    if (nx * x + nz * z < 0) { nx = -nx; nz = -nz; }
+    out.push({ x, z, a: p.a + (q.a - p.a) * t, ry: Math.atan2(-nz, nx) });
   }
   return out;
 }
