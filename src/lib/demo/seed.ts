@@ -17,6 +17,7 @@ import { nflClock } from './data';
 import { FIRST_SEASON } from './settings';
 import type { Tenant } from '@/lib/platform/tenants';
 import type { TrackId } from '@/lib/tycoon/catalog';
+import type { StadiumLook } from '@/lib/franchise/model';
 
 import { DEMO_SLUG } from './site';
 export { DEMO_SLUG, isDemoSite } from './site';
@@ -80,8 +81,18 @@ export async function setUpDemo(): Promise<DemoSetup> {
 
     // Who they are.
     const { saveIdentity } = await import('@/lib/franchise/store');
+    // A few showcase the signature styles: the commissioner's Memorial in brick under a sea of red,
+    // The Wall, and the Twin Towers. The rest keep their own seeded looks.
+    const { seededLook } = await import('@/lib/franchise/seededLook');
+    const SHOWCASE: Record<string, Partial<StadiumLook>> = {
+      gus: { style: 'memorial', facade: 'brick', crowd: 'colorout', lights: 'warm', district: 'college', plaza: 'brick' },
+      priya: { style: 'wall', facade: 'steel', crowd: 'colorout', lights: 'white', district: 'downtown' },
+      hank: { style: 'twintowers', facade: 'stone', crowd: 'mixed', lights: 'warm', district: 'suburbs' },
+    };
     for (const c of CAST) {
-      const error = await saveIdentity(DEMO_SLUG, demoUserId(c.key), { color: c.color, motto: c.motto, bio: c.bio, stadiumName: c.stadium });
+      const id = demoUserId(c.key);
+      const look = SHOWCASE[c.key] ? { ...seededLook(id), ...SHOWCASE[c.key] } : undefined;
+      const error = await saveIdentity(DEMO_SLUG, id, { color: c.color, motto: c.motto, bio: c.bio, stadiumName: c.stadium, ...(look ? { look } : {}) });
       if (error) throw new Error(`${c.team}: ${error}`);
     }
 

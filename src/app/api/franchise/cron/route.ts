@@ -11,8 +11,11 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const BUDGET_MS = 240_000;
-/** A game that ended within this long is still worth posting about. */
-const RECENT_MS = 14 * 3_600_000;
+/**
+ * A game that kicked off within this long is still worth posting about: through Monday for
+ * Sunday's games, so a missed run (a deploy, an outage) catches up rather than skipping them.
+ */
+const RECENT_MS = 36 * 3_600_000;
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();

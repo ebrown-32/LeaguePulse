@@ -108,8 +108,16 @@ export interface Blueprint {
   boards: Board[];
   /** Glass suites: in front of a deck of a stand, over a sweep. */
   suites: { stand: string; deck: number; from: number; to: number }[];
-  /** A press box along the top of a stand. */
-  pressBox: { stand: string; height: number } | null;
+  /** Press boxes along the top of stands. */
+  pressBoxes: { stand: string; height: number }[];
+  /** Tall arched windows along the brick outside (Memorial). */
+  arches: boolean;
+  /** A building behind a stand, this much deeper than its seats, its outside the stand's (Memorial's sidelines). */
+  bulk: Record<string, number>;
+  /** Square stone pavilions with pyramid caps along the outside (Memorial): x, z, height, facing. */
+  pavilions: [number, number, number, number][];
+  /** White domed towers at the gates (Twin Towers): x, z, height. */
+  twinTowers: [number, number, number][];
   /** A grass berm the bowl is sunk into: from r up at height h, down to the ground `run` further out. */
   berm: { r: number; h: number; run: number } | null;
   colonnade: { from: number; to: number; r: number; base: number; h: number } | null;
@@ -123,15 +131,19 @@ function deckHeights(f: Facilities, n: number): number[] {
   return Array.from({ length: n }, (_, i) => 0.55 + 0.12 * f.seating + (i === 0 ? 0.1 : 0));
 }
 
-/** Decks stacked from `inner`, each scaled by k (taller and deeper together), `gaps` the room under each deck (0.08 after the first, by default). */
-function stack(inner: number, heights: number[], k: number, gaps: number[] = [], start = PODIUM): Deck[] {
+/**
+ * Decks stacked from `inner`, each scaled by k (taller and deeper together), `gaps` the room under
+ * each deck (0.08 after the first, by default). `rake` stretches the decks back without raising
+ * them: above 1, a gentler slope that runs further back.
+ */
+function stack(inner: number, heights: number[], k: number, gaps: number[] = [], start = PODIUM, rake = 1): Deck[] {
   const out: Deck[] = [];
   let r = inner, y = start;
   heights.forEach((h, i) => {
     const gap = gaps[i] ?? (i > 0 ? 0.08 : 0);
     const floor = y;
     y += gap;
-    const height = h * k, depth = h * 0.9 * k;
+    const height = h * k, depth = h * 0.9 * k * rake;
     out.push({ inner: r, depth, base: y, height, ...(gap > 0 ? { floor } : {}) });
     r += depth + 0.06; y += height;
   });
@@ -144,7 +156,7 @@ export const topOf = (d: Deck[]) => { const l = d.at(-1)!; return l.base + l.hei
 /** Turned to face midfield from (x, z). */
 const facing = (x: number, z: number) => Math.atan2(-x, -z);
 
-const SQUARE: Record<StadiumLook['style'], number> = { bowl: 4, horseshoe: 4, grandstand: 9, dome: 2.6, cantilever: 5, coliseum: 2.2 };
+const SQUARE: Record<StadiumLook['style'], number> = { bowl: 4, horseshoe: 4, grandstand: 9, dome: 2.6, cantilever: 5, coliseum: 2.2, memorial: 8, wall: 6, twintowers: 2.4 };
 
 /** Board sizes by video board level (1 to 3). */
 const BOARD = [[0.9, 0.35], [1.4, 0.55], [2.2, 0.85], [3.2, 1.15]];
@@ -161,7 +173,7 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
 
   const bp: Blueprint = {
     style, outline, inner, stands: [], footprint: inner, top: PODIUM, roof: null, towers: [], boards: [], suites: [],
-    pressBox: null, berm: null, colonnade: null, torch: null, ribbon: null,
+    pressBoxes: [], berm: null, colonnade: null, torch: null, ribbon: null, arches: false, twinTowers: [], pavilions: [], bulk: {},
   };
   const ring = (id: string, decks: (a: number) => Deck[], from = 0, to = TAU, wallFrom: number | null = 0): Stand =>
     ({ id, from, to, rows: 6, decks, wallFrom });
@@ -219,7 +231,7 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
       }
       measure(bp);
       const pressBox = f.suites > 0 ? 0.16 + 0.07 * f.suites : 0;
-      if (pressBox) bp.pressBox = { stand: 'home', height: pressBox };
+      if (pressBox) bp.pressBoxes.push({ stand: 'home', height: pressBox });
       bp.roof = { kind: 'gable', stands: ['home', 'away'], lift: 0.3 + pressBox };
       if (f.videoboard > 0) {
         const [x] = outline.around(0, inner + (f.seating > 0 ? 0.9 + 0.12 * f.seating : 0.5));
@@ -286,6 +298,141 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
         if (f.atmosphere > 0) bp.torch = [cx, y + bh / 2 + 0.24, 0];
       } else if (f.atmosphere > 0) bp.torch = [cx, beam + 0.08, 0];
       if (f.suites > 0 && n > 1) for (const c of [Math.PI / 2, 1.5 * Math.PI]) bp.suites.push({ stand: 'upper', deck: 0, from: c - 0.8, to: c + 0.8 });
+      break;
+    }
+    case 'memorial': {
+      // After Nebraska's Memorial Stadium, laid out from an aerial against the field: a cross, not a
+      // bowl. The end zones stick out furthest along the field, deep and gently raked, with their
+      // corners chamfered; the sideline buildings stick out furthest to the sides; the corners
+      // between them stay open. Each sideline is a lower bowl, the upper decks behind it (three tiers
+      // on the home side, west; two on the visitors'), and a big limestone building out to one line.
+      // Corner sections of seating wrap behind the lower bowl's ends, next to the upper decks.
+      //
+      // Each piece covers just the sweep that gives it its measured width along the field (spanFor),
+      // and the end zones run back, angle by angle, to their chamfered outline (endOuter).
+      const LOWER_Z = 4.2, LOWER_X = 4.6, UPPER_X = 5.2, HOME_Z = 5.9, AWAY_Z = 5.5, WALL_Z = 7.6;
+      const END_X = 8.8, END_Z = 5.3, CHAMFER_Z = 3.4;
+      // The north end (the smaller board's) stands apart from the rest, and runs deeper and lower.
+      const NORTH_X = 9.8, NORTH_GAP = 0.16;
+      const e = 2 / SQUARE.memorial;
+      /** Radians either side of a sideline in which something out at radius r reaches ±x along the field. */
+      const spanFor = (x: number, r: number) => Math.PI / 2 - Math.acos(Math.min(1, (x / (r * OVAL)) ** (1 / e)));
+      /** Decks from radius `from` reaching back to radius `to`: the rake is whatever gets them there. */
+      const raked = (from: number, to: number, decks: number[], k: number, gaps: number[] = [], start = PODIUM) => {
+        const depth = decks.reduce((sum, h) => sum + h * 0.9 * k, 0);
+        return stack(from, decks, k, gaps, start, Math.max(0.5, (to - from - 0.06 * (decks.length - 1)) / depth));
+      };
+      const endOuter = (a: number, far = END_X) => {
+        const [dx, dz] = outline.dir(a), ax = Math.abs(dx), az = Math.abs(dz);
+        const hits = [ax > 1e-6 ? far / ax : Infinity, (far + CHAMFER_Z) / (ax + az), az > 1e-6 ? END_Z / az : Infinity];
+        return Math.max(inner + 0.8, Math.min(...hits));
+      };
+
+      const lower = () => raked(inner, LOWER_Z, [heights[0]], 1);
+      const lowerTop = topOf(lower());
+      const homeUpper = heights.slice(1, 3), awayUpper = heights.slice(1, 2);
+      const tiers = (decks: number[]) => decks.map((_, i) => (i === 0 ? suiteGap + 0.16 : 0.34 + 0.04 * f.suites));
+      const home = homeUpper.length ? () => raked(LOWER_Z + 0.3, HOME_Z, homeUpper, 1.45, tiers(homeUpper), lowerTop + 0.12) : null;
+      const away = awayUpper.length ? () => raked(LOWER_Z + 0.3, AWAY_Z, awayUpper, 1.3, tiers(awayUpper), lowerTop + 0.12) : null;
+      const north = (a = Math.PI) => raked(inner, endOuter(a, NORTH_X), heights, 0.7);
+      const south = (a = 0) => raked(inner, endOuter(a), heights, 0.82);
+      const endTop = topOf(south());
+      const corner = (a: number) => raked(LOWER_Z + 0.25, Math.max(endOuter(a), LOWER_Z + 1.2), [Math.max(0.6, endTop - lowerTop)], 1, [], lowerTop);
+
+      const dL = spanFor(LOWER_X, LOWER_Z), aE = Math.PI / 2 - dL;
+      const dW = home ? spanFor(UPPER_X, HOME_Z) : dL, dE = away ? spanFor(UPPER_X, AWAY_Z) : dL;
+      bp.stands.push(ring('westLower', lower, 1.5 * Math.PI - dL, 1.5 * Math.PI + dL));
+      bp.stands.push(ring('eastLower', lower, Math.PI / 2 - dL, Math.PI / 2 + dL));
+      if (home) bp.stands.push(ring('west', home, 1.5 * Math.PI - dW, 1.5 * Math.PI + dW));
+      if (away) bp.stands.push(ring('east', away, Math.PI / 2 - dE, Math.PI / 2 + dE));
+      bp.stands.push(ring('north', a => north(a), Math.PI - aE + NORTH_GAP, Math.PI + aE - NORTH_GAP));
+      bp.stands.push(ring('south', a => south(a), -aE, aE));
+      // The corner sections, behind the lower bowl's ends, between the south end and the upper decks.
+      // None at the north end, which stands apart.
+      const corners: [number, number][] = [[aE, Math.PI / 2 - dE], [1.5 * Math.PI + dW, TAU - aE]];
+      corners.forEach(([from, to], i) => { if (to - from > 0.01) bp.stands.push(ring(`corner${i}`, corner, from, to)); });
+      measure(bp);
+      // The buildings behind the upper decks, out to the same line on both sidelines.
+      bp.bulk[home ? 'west' : 'westLower'] = WALL_Z - (home ? HOME_Z : LOWER_Z);
+      bp.bulk[away ? 'east' : 'eastLower'] = WALL_Z - (away ? AWAY_Z : LOWER_Z);
+      bp.footprint = Math.max(bp.footprint, WALL_Z);
+      bp.arches = true;
+      const has = (id: string) => bp.stands.some(x => x.id === id);
+      bp.pressBoxes.push({ stand: has('west') ? 'west' : 'westLower', height: 0.48 + 0.08 * f.suites });
+      bp.pressBoxes.push({ stand: has('east') ? 'east' : 'eastLower', height: 0.34 + 0.06 * f.suites });
+      if (level >= 2) bp.pressBoxes.push({ stand: 'north', height: 0.22 + 0.05 * f.suites });
+      // The club and suites: glass across the front of each sideline structure, over its concourse.
+      if (f.suites > 0) for (const id of ['west', 'east']) if (has(id)) bp.suites.push({ stand: id, deck: 0, from: 0, to: TAU });
+      if (f.suites > 0 && homeUpper.length > 1) bp.suites.push({ stand: 'west', deck: 1, from: 0, to: TAU });
+      // Square stone pavilions with pyramid caps: at the ends of each sideline building and along its
+      // face, and where the end zones' far edges meet their chamfers.
+      for (const id of ['west', 'east', 'westLower', 'eastLower']) {
+        const st = bp.stands.find(x => x.id === id);
+        if (!st || bp.bulk[id] === undefined) continue;
+        // Evenly along the face by distance (on this squarish outline, equal angles are far from equal
+        // lengths): at its two ends and a third of the way in from each.
+        const out = (a: number) => outline.around(a, outerOf(st.decks(a)) + bp.bulk[id] + 0.12);
+        const N = 400, cum = [0];
+        for (let i = 1; i <= N; i++) {
+          const p = out(st.from + ((st.to - st.from) * (i - 1)) / N), q = out(st.from + ((st.to - st.from) * i) / N);
+          cum.push(cum[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
+        }
+        const at = (t: number) => { const want = t * cum[N]; const i = cum.findIndex(c => c >= want); return st.from + ((st.to - st.from) * Math.max(0, i)) / N; };
+        for (const a of [0.01, 1 / 3, 2 / 3, 0.99].map(at)) {
+          const d = st.decks(a), [x, z] = outline.around(a, outerOf(d) + bp.bulk[id] + 0.12);
+          bp.pavilions.push([x, z, topOf(d) + 0.45, facing(x, z)]);
+        }
+      }
+      for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const x = sx * ((sx > 0 ? END_X : NORTH_X) + 0.1), z = sz * CHAMFER_Z;
+        bp.pavilions.push([x, z, (sx > 0 ? endTop : topOf(north())) + 0.3, facing(x, z)]);
+      }
+      // Lights behind the four corners.
+      bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
+      if (f.videoboard > 0) {
+        // The big board stands behind the south end, on its own posts.
+        const x = END_X + 0.45, w = bw * 1.6, h = bh * 1.6, reach = topOf(south()) + 0.25;
+        bp.boards.push({ x, y: reach + h / 2, z: 0, ry: facing(x, 0), w, h, kind: 'screen', mount: 'posts', reach, frame: 'stone' });
+      }
+      if (f.videoboard >= 2) {
+        // A second board over the north end, on the stand.
+        const x = -(NORTH_X - 0.1), top = topOf(north()), bottom = top + 0.3 + (level >= 2 ? 0.22 + 0.05 * f.suites : 0);
+        bp.boards.push({ x, y: bottom + (bh * 0.9) / 2, z: 0, ry: facing(x, 0), w: bw * 0.9, h: bh * 0.9, kind: 'screen', mount: 'truss', reach: bottom - top + 0.04, frame: 'stone' });
+      }
+      break;
+    }
+    case 'wall': {
+      // After Dortmund's south stand: the west end a single towering terrace, steeper and taller
+      // than everything else; two tiers on the other three sides; one roof over all of it.
+      // The wall keeps the bowl's number of decks (the seats are drawn deck by deck), stacked with no
+      // gaps between them and taller, so it reads as one unbroken terrace.
+      const isWall = (a: number) => Math.cos(a) < -0.72;
+      const lift = 1.12 * (1.05 + 0.05 * f.seating) * (1 + (0.08 * (n - 1)) / heights.reduce((s, h) => s + h, 0));
+      const wallDecks = () => stack(inner, heights.map(h => h * lift), 1, heights.map(() => 0));
+      bp.stands.push(ring('bowl', a => (isWall(a) ? wallDecks() : stack(inner, heights, 0.92, gaps))));
+      measure(bp);
+      // Open to the sky, so the wall stands in full view.
+      bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
+      if (f.videoboard > 0) {
+        // Over the east end, facing the wall: on the east stand's top, not the wall's.
+        const east = stack(inner, heights, 0.92, gaps), [x, z] = outline.around(0, outerOf(east) - 0.12), bottom = topOf(east) + 0.3;
+        bp.boards.push({ x, y: bottom + bh / 2, z, ry: facing(x, z), w: bw, h: bh, kind: 'screen', mount: 'truss', reach: bottom - topOf(east) + 0.04, frame: 'steel' });
+      }
+      if (f.suites > 0 && n > 1) for (const c of [Math.PI / 2, 1.5 * Math.PI]) bp.suites.push({ stand: 'bowl', deck: 1, from: c - 0.7, to: c + 0.7 });
+      break;
+    }
+    case 'twintowers': {
+      // After the old Wembley: a low oval, and two white towers with domes at the main gates.
+      bp.stands.push(ring('bowl', () => stack(inner, heights, 0.86, gaps)));
+      measure(bp);
+      if (level >= 3) bp.roof = { kind: 'canopy', span: 0.8 + 0.3 * (level - 3) };
+      // At the main entrance on the near sideline, as on Wembley Way, flanking the gates.
+      const [, tz] = outline.around(Math.PI / 2, bp.footprint + 0.3);
+      const th = Math.max(2.1, bp.top + 1.2);
+      bp.twinTowers = [[-1.5, tz, th], [1.5, tz, th]];
+      bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
+      if (f.videoboard > 0) bp.boards.push(boardOver(0, level >= 3 ? 0.62 : 0.3));
+      if (f.suites > 0 && n > 1) bp.suites.push({ stand: 'bowl', deck: 1, from: 0, to: TAU });
       break;
     }
   }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blueprint, FIELD_CORNER, seatsFilled, seatSpots, TAU, roofClosed } from '../src/lib/franchise/stadiumBlueprint.ts';
+import { blueprint, FIELD_CORNER, seatsFilled, seatSpots, TAU, roofClosed, topOf } from '../src/lib/franchise/stadiumBlueprint.ts';
 import { LOOK_OPTIONS, normalizeLook, checkIdentity, DEFAULT_LOOK } from '../src/lib/franchise/model.ts';
 import { EMPTY_FACILITIES, type Facilities } from '../src/lib/tycoon/catalog.ts';
 
@@ -35,7 +35,7 @@ test('every style grows with the stadium level', () => {
 test('the same upgrades are built differently by style', () => {
   assert.equal(blueprint('dome', MAX).boards[0].kind, 'cube');
   assert.equal(blueprint('grandstand', at(2, { videoboard: 1 })).boards[0].kind, 'scoreboard');
-  assert.ok(blueprint('grandstand', at(2, { suites: 1 })).pressBox);
+  assert.equal(blueprint('grandstand', at(2, { suites: 1 })).pressBoxes.length, 1);
   assert.equal(blueprint('bowl', at(2, { suites: 1 })).suites[0].to - blueprint('bowl', at(2, { suites: 1 })).suites[0].from, TAU);
   assert.equal(blueprint('horseshoe', MAX).boards[0].mount, 'tower');
   assert.ok(blueprint('coliseum', MAX).torch && blueprint('coliseum', MAX).colonnade);
@@ -103,7 +103,12 @@ test('every board is held up by something that reaches what it stands on', () =>
       assert.ok(b.reach > 0, `${style} ${b.mount} reach`);
       const bottom = b.y - b.h / 2;
       if (b.mount === 'posts' || b.mount === 'tower') assert.ok(Math.abs(bottom - b.reach) < 1e-9, `${style} stands on the ground`);
-      if (b.mount === 'truss') assert.ok(Math.abs(bottom - b.reach - (bp.top - 0.04)) < 1e-9, `${style} truss lands on the stands`);
+      if (b.mount === 'truss') {
+        // On top of the stands: the highest point, or the top of the stand at its own end of the field.
+        const ends = bp.stands.flatMap(s => [0, Math.PI, TAU].filter(a => a >= s.from && a <= s.to).map(a => topOf(s.decks(a))));
+        const lands = bottom - b.reach + 0.04;
+        assert.ok([bp.top, ...ends].some(t => Math.abs(lands - t) < 1e-9), `${style} truss lands on the stands`);
+      }
       if (b.mount === 'piers') assert.ok(Math.abs(bottom - b.reach - (bp.colonnade!.base + bp.colonnade!.h + 0.22)) < 1e-9, `${style} piers land on the colonnade`);
       if (b.mount === 'cables' && bp.roof?.kind === 'dome') assert.ok(Math.abs(b.y + b.h / 2 + b.reach - (bp.top + (bp.footprint + 0.05) * bp.roof.rise)) < 1e-9, 'cables reach the crown');
     }

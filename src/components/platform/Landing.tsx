@@ -428,7 +428,6 @@ function Hero() {
             <motion.p variants={rise} className="max-w-md md:max-w-2xl lg:max-w-none text-[17px] leading-relaxed text-muted-foreground">
               {PLATFORM.name} turns your Sleeper or ESPN league into its own app on any device. Analytics that give you the edge, AI writers who cover your actual teams,
               live chances to win, a guide to which games to have on, and every stat back to your first draft.
-              Everyone installs it from the link in two taps. No app store.
             </motion.p>
             {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
             <motion.div variants={rise}><DemoInvite /></motion.div>

@@ -27,7 +27,7 @@ export interface Claim {
  * one grows with the upgrades); the rest dresses it.
  */
 export interface StadiumLook {
-  style: 'bowl' | 'horseshoe' | 'grandstand' | 'dome' | 'cantilever' | 'coliseum';
+  style: 'bowl' | 'horseshoe' | 'grandstand' | 'dome' | 'cantilever' | 'coliseum' | 'memorial' | 'wall' | 'twintowers';
   facade: 'concrete' | 'brick' | 'glass' | 'steel' | 'stone';
   /** The second team color, for trim, split seats, flags and the end zone lettering. Null picks white or black to suit. */
   accent: string | null;
@@ -61,7 +61,7 @@ export type ColorSlot = (typeof COLOR_SLOTS)[number];
 export const FEATURES = ['statue', 'fountain', 'foodtrucks', 'banners', 'ferriswheel'] as const;
 export type Feature = (typeof FEATURES)[number];
 export const LOOK_OPTIONS = {
-  style: ['bowl', 'horseshoe', 'grandstand', 'dome', 'cantilever', 'coliseum'],
+  style: ['bowl', 'horseshoe', 'grandstand', 'dome', 'cantilever', 'coliseum', 'memorial', 'wall', 'twintowers'],
   facade: ['concrete', 'brick', 'glass', 'steel', 'stone'],
   seats: ['team', 'split', 'classic', 'mono', 'ombre', 'checker'],
   turf: ['stripes', 'checker', 'plain'],
