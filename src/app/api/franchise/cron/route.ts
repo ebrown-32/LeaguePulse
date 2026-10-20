@@ -1,7 +1,7 @@
 /**
- * The franchises' game-day posts (lib/franchise/gameday): big days and final scores, from their
- * own accounts. Runs every fifteen minutes; outside the NFL's game windows it looks at the
- * shared scoreboard once and stops.
+ * Every fifteen minutes, for every league: the media desk's coverage of new trades, all year
+ * (lib/ai/tradeWatch), and around the games, the franchises' game-day posts from their own
+ * accounts (lib/franchise/gameday): big days and final scores.
  */
 
 import { NextResponse } from 'next/server';
@@ -26,11 +26,16 @@ export async function GET(req: Request) {
   const { espnScoreboard } = await import('@/lib/live/espn');
   const games = await espnScoreboard().catch(() => []);
   const now = Date.now();
+  // Game-day posts only around the games; trades are covered all year (lib/ai/tradeWatch).
   const relevant = games.some(g => g.state === 'in' || (g.state === 'post' && now - Date.parse(g.kickoff) < RECENT_MS));
-  if (!relevant) return NextResponse.json({ skipped: 'no games on or just over' });
 
-  const { gamedayPosts } = await import('@/lib/franchise/gameday');
-  if (!hosted) return NextResponse.json({ league: 'self', ...(await gamedayPosts(games)) });
+  const [{ gamedayPosts }, { coverNewTrades }] = await Promise.all([import('@/lib/franchise/gameday'), import('@/lib/ai/tradeWatch')]);
+  const oneLeague = async () => {
+    const trades = await coverNewTrades().catch(err => ({ graded: 0, error: err instanceof Error ? err.message : String(err) }));
+    const gameday = relevant ? await gamedayPosts(games) : { skipped: 'no games on or just over' };
+    return { trades, gameday };
+  };
+  if (!hosted) return NextResponse.json({ league: 'self', ...(await oneLeague()) });
 
   const [{ listTenants, isLive }, { runAsTenant }] = await Promise.all([import('@/lib/platform/tenants'), import('@/lib/tenant/context')]);
   const deadline = now + BUDGET_MS;
@@ -38,7 +43,7 @@ export async function GET(req: Request) {
   for (const t of (await listTenants()).filter(isLive)) {
     if (Date.now() > deadline) { results.push({ league: t.slug, skipped: 'out of time' }); continue; }
     try {
-      results.push({ league: t.slug, ...(await runAsTenant(t, () => gamedayPosts(games))) });
+      results.push({ league: t.slug, ...(await runAsTenant(t, oneLeague)) });
     } catch (err) {
       results.push({ league: t.slug, error: err instanceof Error ? err.message : String(err) });
     }

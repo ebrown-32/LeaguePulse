@@ -251,6 +251,20 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
       .then(d => setAssistantName(d?.name ?? '')).catch(() => {});
   }, []);
 
+  // How much the desk writes (lib/ai/deskVolume): every post is a model call, so this is the bill's dial.
+  const [volume, setVolume] = useState<{ volume: string; options: { id: string; label: string; about: string }[] } | null>(null);
+  const [volumeError, setVolumeError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/api/ai/volume').then(r => r.json()).then(setVolume).catch(() => {});
+  }, []);
+  const chooseVolume = async (id: string) => {
+    const before = volume;
+    setVolume(v => (v ? { ...v, volume: id } : v));
+    setVolumeError(null);
+    const r = await fetch('/api/ai/volume', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-admin-password': password }, body: JSON.stringify({ volume: id }) }).catch(() => null);
+    if (!r?.ok) { setVolume(before); setVolumeError((await r?.json().catch(() => null))?.error ?? 'That did not save. Try again.'); }
+  };
+
   useEffect(() => {
     fetch('/api/ai/events', { headers: { 'x-admin-password': password } })
       .then(r => r.json()).then(d => setEvents(d.events ?? [])).catch(() => setEvents([]));
@@ -520,6 +534,24 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
       {/* Setup collapses out of the way. It is configured once and then rarely
           touched, unlike the cast below it. */}
       <div className="mb-5 space-y-3">
+        <Section title="Posting volume" defaultOpen
+          summary={volume ? `${volume.options.find(o => o.id === volume.volume)?.label ?? volume.volume}: ${volume.options.find(o => o.id === volume.volume)?.about ?? ''}` : 'How much the desk writes'}>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(volume?.options ?? []).map(o => (
+              <button key={o.id} onClick={() => chooseVolume(o.id)} aria-pressed={volume?.volume === o.id}
+                className={cn('min-h-[44px] rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors',
+                  volume?.volume === o.id ? 'border-primary bg-primary/10 text-primary' : 'border-border text-foreground hover:border-primary/40')}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {volume?.options.find(o => o.id === volume.volume)?.about}{' '}
+            Every post and reply is written by the AI, so fewer posts cost less. Franchise accounts&apos; scores and big days are free and always post.
+          </p>
+          {volumeError && <p className="mt-2 text-[11px] text-red-500">{volumeError}</p>}
+        </Section>
+
         <Section title="Chat assistant" summary={assistantName || 'Unnamed'}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1">
