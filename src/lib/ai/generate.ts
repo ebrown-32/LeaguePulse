@@ -115,6 +115,7 @@ const CommentSchema = z.object({
 });
 
 const TradeGradeSchema = z.object({
+  headline: z.string().describe('A punchy, funny headline for the trade, under 80 characters'),
   verdict: z.string().describe('One-line summary of who won and why'),
   sides: z.array(z.object({
     teamName: z.string(),
@@ -898,7 +899,10 @@ TRADE TO GRADE (${trade.season}, week ${trade.week}):
 ${desc}
 
 Grade this trade for each side, based on the production figures and team
-situations in the league context above.
+situations in the league context above. The league will read this within the
+hour of the deal going through: make it fun. Write in your own voice, with a
+joke or a jab where it lands, a headline people will want to screenshot, and a
+verdict with a real opinion. Every claim stays grounded in the data above.
 
 IMPORTANT: the rosters in the league context are CURRENT and already reflect
 this trade having gone through. Do not treat a player appearing on a team's
@@ -910,6 +914,7 @@ limited information on them rather than guessing, and lower your confidence.
 
 Respond with ONLY a JSON object, no prose and no markdown fences:
 {
+  "headline": "a punchy, funny headline, under 80 characters",
   "verdict": "one line on who won and why",
   "sides": [
     { "teamName": "<exact team name>", "grade": "<one of A+ A A- B+ B B- C+ C C- D+ D D- F>", "reasoning": "2-3 sentences" }
