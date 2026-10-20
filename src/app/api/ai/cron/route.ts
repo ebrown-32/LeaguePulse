@@ -1,4 +1,5 @@
 import { bearerMatches } from '@/lib/platform/operator';
+import { getDeskVolume, seasonalCadence, type Cadence } from '@/lib/ai/deskVolume';
 import { personaAvatarUrl } from '@/lib/ai/avatar';
 import { NextResponse } from 'next/server';
 import { isAIConfigured } from '@/lib/ai/claude';
@@ -73,7 +74,8 @@ const num = (key: string, fallback: number) => {
 // AI_ARTICLES_PER_DAY is no longer read: a run leads with at most one
 // substantial piece, rotating article -> power rankings -> predictions, and
 // fills the rest with short posts.
-const POSTS_PER_RUN   = Math.min(num('AI_POSTS_PER_RUN', num('AI_POSTS_PER_DAY', 2)), 8);
+// How many posts a run writes, replies too, how far apart runs and live takes are: the league's
+// desk volume (lib/ai/deskVolume), `full` being the deployment's AI_* settings described here.
 /**
  * Window one run's posts and replies are spread across.
  *
@@ -108,12 +110,10 @@ const TIME_BUDGET_MS = 40_000;
  * same scoreboard over and over. Ninety minutes is roughly a quarter and a
  * half of real football, which is long enough for the picture to change.
  */
-const LIVE_COOLDOWN_MS = num('AI_LIVE_COOLDOWN_MINUTES', 90) * 60 * 1000;
 
 /** Replies written per run. Short calls, so a few is cheap; they are walked out
  *  across the run's window, so a comment section fills the way one does when
  *  people are actually reading. */
-const REPLIES_PER_RUN = num('AI_REPLIES_PER_RUN', 3);
 
 /**
  * Minimum gap between batches.
@@ -123,7 +123,6 @@ const REPLIES_PER_RUN = num('AI_REPLIES_PER_RUN', 3);
  * that come too soon. Two and a half hours admits the poke three hours after
  * the last run, since the run itself takes seconds past its poke.
  */
-const RERUN_GUARD_MS  = num('AI_RERUN_GUARD_HOURS', 2.5) * 60 * 60 * 1000;
 
 /**
  * How long a substantial piece holds the lead.
@@ -217,7 +216,7 @@ function pick<T>(list: T[]): T {
  *      scored. Sleeper exposes no game clock, so points are the only real
  *      evidence that football is being played.
  */
-async function runLiveCoverage(force: boolean) {
+async function runLiveCoverage(force: boolean, cad: Cadence) {
   const nflState = await getNFLState().catch(() => null);
   const week = Number(nflState?.week ?? 0);
   const seasonType = String(nflState?.season_type ?? '');
@@ -235,7 +234,7 @@ async function runLiveCoverage(force: boolean) {
   const recent = await getPosts(20);
   const lastLive = recent.find(p => p.kind === 'kickoff' || p.kind === 'liveTake');
   const since = lastLive ? Date.now() - new Date(lastLive.createdAt).getTime() : Infinity;
-  if (!force && since < LIVE_COOLDOWN_MS) {
+  if (!force && since < cad.liveMinutes * 60_000) {
     return NextResponse.json({
       skipped: 'live-cooldown',
       minutesSinceLastLivePost: Math.round(since / 60_000),
@@ -371,20 +370,49 @@ async function runForLeague(request: Request): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const force = params.get('force') === '1';
 
+  // How much this league's desk writes (its admin's choice). Off is off, except for an admin's
+  // own "Run scheduler", which writes at the light setting.
+  const volume = await getDeskVolume();
+  if (volume === 'off' && !force) return NextResponse.json({ skipped: 'desk-off' });
+  // Out of season, very little: the season's phase from the league's status and the NFL's calendar.
+  const phase = await (async () => {
+    const [{ getCurrentLeagueId }, { getLeagueInfo }, { resolvePhase }] = await Promise.all([
+      import('@/config/league'), import('@/lib/api'), import('@/lib/ai/seasonPhase'),
+    ]);
+    const [state, league] = await Promise.all([
+      getNFLState().catch(() => null),
+      getCurrentLeagueId().then(id => getLeagueInfo(id)).catch(() => null),
+    ]);
+    return resolvePhase(state, league).phase;
+  })().catch(() => 'mid');
+  const cad = seasonalCadence(volume === 'off' ? 'light' : volume, phase);
+
   // Game-day coverage runs on its own cadence and its own guards.
-  if (params.get('mode') === 'live') return runLiveCoverage(force);
+  if (params.get('mode') === 'live') return runLiveCoverage(force, cad);
 
   const sinceGenerated = Date.now() - (await lastGeneratedAt());
-  if (!force && sinceGenerated < RERUN_GUARD_MS) {
+  const rerunMs = cad.rerunHours * 3_600_000;
+  if (!force && sinceGenerated < rerunMs) {
     return NextResponse.json({
       skipped: 'too-soon-since-last-batch',
       hoursSinceLastBatch: Math.round(sinceGenerated / 3_600_000),
-      minimumGapHours: Math.round(RERUN_GUARD_MS / 3_600_000),
+      minimumGapHours: Math.round(rerunMs / 3_600_000),
     });
   }
   if (!force && isQuiet(Date.now())) {
     return NextResponse.json({ skipped: 'quiet-hours', easternHour: easternHour(Date.now()) });
   }
+
+  // The day's posts and replies so far (by the desk, not the franchise accounts): this run writes
+  // only what's left of the league's daily allowance.
+  const etDay = (t: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
+  const today = etDay(Date.now());
+  const todays = (await getPosts(100)).filter(p => p.kind !== 'official' && p.personaType !== 'team' && etDay(new Date(p.createdAt).getTime()) === today);
+  const postsLeft = Math.max(0, cad.postsPerDay - todays.filter(p => !p.replyTo).length);
+  const repliesLeft = Math.max(0, cad.repliesPerDay - todays.filter(p => p.replyTo).length);
+  if (!force && postsLeft === 0 && repliesLeft === 0) return NextResponse.json({ skipped: 'daily-allowance-used' });
+  const runPosts = force ? cad.posts : Math.min(cad.posts, postsLeft);
+  const runReplies = force ? cad.replies : Math.min(cad.replies, repliesLeft);
 
   // Who the next column is about.
   //
@@ -442,7 +470,7 @@ async function runForLeague(request: Request): Promise<Response> {
   const startAt = hasBacklog
     ? Math.min(pendingUntil + 60_000, Date.now() + 90 * 60_000)
     : Date.now();
-  const times = clampToWaking(scheduleTimes(POSTS_PER_RUN, startAt));
+  const times = clampToWaking(scheduleTimes(runPosts, startAt));
 
   type PlannedKind =
     'article' | 'tweet' | 'powerRankings' | 'predictions' | 'matchupPreview' | 'gameOfWeek' | 'photo';
@@ -504,7 +532,7 @@ async function runForLeague(request: Request): Promise<Response> {
 
   // Spread each persona around rather than letting one dominate the day.
   const rotation = [...people].sort(() => Math.random() - 0.5);
-  for (let i = 0; i < POSTS_PER_RUN; i++) {
+  for (let i = 0; i < runPosts; i++) {
     const kind: PlannedKind = i === 0 && lead ? lead : 'tweet';
     let pool = poolFor(kind);
     if (!pool.length) pool = postWriters.length ? postWriters : articleWriters;
@@ -624,7 +652,7 @@ async function runForLeague(request: Request): Promise<Response> {
 
     // Walked out across the run's window rather than all at once, so a
     // comment section fills the way one does when people are reading.
-    const chosen = targets.slice(0, REPLIES_PER_RUN);
+    const chosen = targets.slice(0, runReplies);
     for (let i = 0; i < chosen.length; i++) {
       const { post } = chosen[i];
       if (Date.now() - startedAt > TIME_BUDGET_MS) break;
@@ -645,7 +673,7 @@ async function runForLeague(request: Request): Promise<Response> {
 
   return NextResponse.json({
     posted: written.length,
-    requested: POSTS_PER_RUN,
+    requested: runPosts,
     ...(deferred ? { deferred, note: 'Ran out of time; the rest roll into the next run.' } : {}),
     spreadHours: SPREAD_HOURS,
     written,
