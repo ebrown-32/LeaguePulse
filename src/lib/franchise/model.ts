@@ -29,6 +29,11 @@ export interface Claim {
 export interface StadiumLook {
   style: 'bowl' | 'horseshoe' | 'grandstand' | 'dome' | 'cantilever' | 'coliseum' | 'memorial' | 'wall' | 'twintowers';
   facade: 'concrete' | 'brick' | 'glass' | 'steel' | 'stone';
+  /**
+   * The stadium's own main color, what everything is painted from (seats, end zones, the field
+   * wall's stripe, the crowd). Null uses the franchise's identity color.
+   */
+  primary: string | null;
   /** The second team color, for trim, split seats, flags and the end zone lettering. Null picks white or black to suit. */
   accent: string | null;
   /** The seats' pattern: by deck, by section, classic blue and gray, all dark, fading up the decks, or checkered. */
@@ -77,7 +82,7 @@ export const LOOK_OPTIONS = {
 } as const;
 type Choice = keyof typeof LOOK_OPTIONS;
 export const DEFAULT_LOOK: StadiumLook = {
-  style: 'bowl', facade: 'concrete', accent: null, seats: 'team', turf: 'stripes', field: 'green', endZone: 'color',
+  style: 'bowl', facade: 'concrete', primary: null, accent: null, seats: 'team', turf: 'stripes', field: 'green', endZone: 'color',
   endZoneText: null, roof: 'auto', lights: 'warm', crowd: 'mixed', setting: 'city',
   district: 'downtown', tailgate: 'chill', plaza: 'concrete', features: ['banners'], colors: {},
 };
@@ -95,6 +100,7 @@ export function normalizeLook(input: unknown): StadiumLook {
     if ((LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) (out as Record<string, unknown>)[k] = l[k];
   }
   if (l.turf === 'classic') { out.turf = 'plain'; if (!l.endZone) out.endZone = 'argyle'; }
+  if (typeof l.primary === 'string' && HEX.test(l.primary)) out.primary = l.primary.toLowerCase();
   if (typeof l.accent === 'string' && HEX.test(l.accent)) out.accent = l.accent.toLowerCase();
   if (typeof l.endZoneText === 'string') out.endZoneText = cleanEndZone(l.endZoneText);
   if (Array.isArray(l.features)) out.features = FEATURES.filter(f => (l.features as unknown[]).includes(f));
@@ -166,6 +172,7 @@ export function checkIdentity(input: unknown): Partial<FranchiseIdentity> | stri
       for (const k of Object.keys(LOOK_OPTIONS) as Choice[]) {
         if (l[k] !== undefined && !(LOOK_OPTIONS[k] as readonly string[]).includes(String(l[k]))) return `Pick a ${k === 'endZone' ? 'end zone' : k} from the list.`;
       }
+      if (l.primary !== undefined && l.primary !== null && l.primary !== '' && !HEX.test(String(l.primary))) return 'Pick a primary color.';
       if (l.accent !== undefined && l.accent !== null && l.accent !== '' && !HEX.test(String(l.accent))) return 'Pick an accent color.';
       if (l.colors !== undefined && l.colors !== null) {
         if (typeof l.colors !== 'object' || Array.isArray(l.colors)) return 'Pick colors with the color picker.';

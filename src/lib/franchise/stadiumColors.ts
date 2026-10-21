@@ -1,6 +1,7 @@
 /**
  * Every color a stadium is painted in, decided in one place: what each part
- * comes out as on its own (from the team color, the accent, the facade, the
+ * comes out as on its own (from the stadium's main color, which is the
+ * franchise's unless the manager picked one, the accent, the facade, the
  * seat pattern and the style), and the manager's own color for any part they
  * paint themselves (StadiumLook.colors). The 3D view draws from this, and the
  * studio shows the same colors on its swatches, so "Auto" is never a guess.
@@ -39,11 +40,16 @@ export function lightness(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** The accent: the manager's, or white or black to suit the team color. */
-export const accentOf = (look: Pick<StadiumLook, 'accent'>, team: string) => look.accent ?? (lightness(team) > 0.6 ? '#1b1d21' : '#f4f4f2');
+/** The stadium's main color: the manager's pick for it, or the franchise's own color. */
+export const primaryOf = (look: Partial<Pick<StadiumLook, 'primary'>>, team: string) => look.primary ?? team;
+
+/** The accent: the manager's, or white or black to suit the stadium's main color. */
+export const accentOf = (look: Pick<StadiumLook, 'accent'> & Partial<Pick<StadiumLook, 'primary'>>, team: string) =>
+  look.accent ?? (lightness(primaryOf(look, team)) > 0.6 ? '#1b1d21' : '#f4f4f2');
 
 /** What each part comes out as when the manager leaves it alone. */
-export function autoColors(look: StadiumLook, team: string): Record<ColorSlot, string> {
+export function autoColors(look: StadiumLook, franchise: string): Record<ColorSlot, string> {
+  const team = primaryOf(look, franchise);
   const accent = accentOf(look, team), gray = '#9aa0a6';
   const seats: Record<StadiumLook['seats'], [string, string]> = {
     team: [mixHex(team, gray, 0.2), mixHex(team, '#ffffff', 0.22)],

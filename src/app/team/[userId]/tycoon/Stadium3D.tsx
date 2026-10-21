@@ -30,7 +30,7 @@ import {
   BoxGeometry, CanvasTexture, Color, DoubleSide, Plane, type Material, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
   type Group, type InstancedMesh, type Matrix4, type Mesh,
 } from 'three';
-import type { Facilities } from '@/lib/tycoon/catalog';
+import type { Facilities, TrackId } from '@/lib/tycoon/catalog';
 import { normalizeLook, type StadiumLook } from '@/lib/franchise/model';
 import { accentOf, FACADE, stadiumColors } from '@/lib/franchise/stadiumColors';
 import {
@@ -38,6 +38,7 @@ import {
 } from '@/lib/franchise/stadiumBlueprint';
 import { fieldColors, Gridiron, inkOn, type FieldScene } from './Gridiron';
 import { Grounds, GROUND } from './Grounds';
+import { ConcessionStands, focusShot, plazaSpots, Restrooms, WIDE, type Shot } from './plazaBuildings';
 import { HAZE } from './campusLook';
 import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
@@ -45,6 +46,8 @@ import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item
 
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
+  /** An upgrade being looked at (previewed in the studio): the camera flies to it, and back when it's cleared. */
+  focus?: TrackId | null;
   /** Painted in the end zones and at midfield; the stadium's name otherwise. */
   teamName?: string;
   /** The team's logo for midfield, same-origin (see Gridiron). */
@@ -1069,10 +1072,11 @@ function ShadowRig({ dirty }: { dirty: string }) {
  * When the page sets `window.__lpCam` to { from, to, dur, start } (each pose an
  * orbit around a target: radius, azimuth and elevation in radians, the target,
  * a field of view), the camera eases from one pose to the other instead of
- * following the orbit controls. Never in production builds.
+ * following the orbit controls. `focus` films an upgrade as its preview shows
+ * it, cutaway and all. Never in production builds.
  */
 type CamPose = { r: number; az: number; el: number; target: [number, number, number]; fov?: number };
-type CamShot = { from: CamPose; to: CamPose; dur: number; start: number };
+type CamShot = { from: CamPose; to: CamPose; dur: number; start: number; focus?: TrackId };
 const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && !!(window as unknown as { __lpCam?: CamShot }).__lpCam;
 
 /** A photograph's camera: exactly where it was put, looking at its subject, at any height (the orbit controls keep above 15 degrees). */
@@ -1080,6 +1084,78 @@ const scripted = () => process.env.NODE_ENV !== 'production' && typeof window !=
 /** How far the broadcast view can slide (two fingers, or a right drag): either goal line, a little either side of midfield. */
 const PAN_LIMIT = { x: 3.5, z: 1.2 };
 const FIELD_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => new Vector3(x * 3.7, 0, z * 2.05));
+
+/**
+ * Flies the camera to an upgrade being previewed (plazaBuildings.focusShot), and back to the wide view
+ * when it's put down. The visitor can still turn the camera once it's there.
+ */
+function FocusRig({ shot }: { shot: Shot | null }) {
+  const camera = useThree(st => st.camera);
+  const controls = useThree(st => st.controls) as unknown as { target: Vector3; update: () => void } | null;
+  const invalidate = useThree(st => st.invalidate);
+  const glide = useRef<{ from: Vector3; to: Vector3; fromT: Vector3; toT: Vector3; t: number } | null>(null);
+  const key = shot ? JSON.stringify(shot) : '';
+  const first = useRef(true);
+  useEffect(() => {
+    // Nothing to fly to on first sight: the camera starts where it starts.
+    if (first.current) { first.current = false; if (!shot) return; }
+    const to = shot ?? WIDE;
+    glide.current = {
+      from: camera.position.clone(), to: new Vector3(...to.position),
+      fromT: controls?.target.clone() ?? new Vector3(0, 0.8, 0), toT: new Vector3(...to.target), t: 0,
+    };
+    invalidate();
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A cutaway, for what's inside the stadium (the restrooms under the stands): everything both nearer
+  // the camera than the subject and above `cut` is clipped, as the broadcast view clears the field.
+  const gl = useThree(st => st.gl);
+  const scene = useThree(st => st.scene);
+  const planes = useMemo(() => [new Plane(), new Plane(new Vector3(0, -1, 0), 0)], []);
+  const dressed = useRef(new Set<Material>());
+  const forward = useMemo(() => new Vector3(), []);
+  const subject = useMemo(() => new Vector3(), []);
+  const frames = useRef(0);
+  const cutting = Boolean(shot?.cut);
+  useEffect(() => {
+    if (cutting) { gl.localClippingEnabled = true; return; }
+    for (const m of dressed.current) { m.clippingPlanes = null; m.clipIntersection = false; m.needsUpdate = true; }
+    dressed.current.clear();
+    invalidate();
+  }, [cutting, gl, invalidate]);
+  useEffect(() => () => { for (const m of dressed.current) { m.clippingPlanes = null; m.clipIntersection = false; m.needsUpdate = true; } }, []);
+
+  useFrame((_, dt) => {
+    const g = glide.current;
+    if (g) {
+      g.t = Math.min(1, g.t + dt / 1.4);
+      const e = g.t * g.t * (3 - 2 * g.t);
+      camera.position.lerpVectors(g.from, g.to, e);
+      controls?.target.lerpVectors(g.fromT, g.toT, e);
+      controls?.update();
+      if (g.t >= 1) glide.current = null;
+      invalidate();
+    }
+    if (!shot?.cut) return;
+    camera.getWorldDirection(forward);
+    subject.set(...shot.target);
+    const depth = subject.sub(camera.position).dot(forward) + 0.25;
+    planes[0].normal.copy(forward);
+    planes[0].constant = -(forward.dot(camera.position) + depth);
+    planes[1].constant = shot.cut;
+    if (frames.current++ % 20 === 0) {
+      scene.traverse(o => {
+        const mats = (o as { material?: Material | Material[] }).material;
+        if (!mats) return;
+        for (const m of Array.isArray(mats) ? mats : [mats]) {
+          if (dressed.current.has(m)) continue;
+          m.clippingPlanes = planes; m.clipIntersection = true; m.needsUpdate = true;
+          dressed.current.add(m);
+        }
+      });
+    }
+  });
+  return null;
+}
 
 /**
  * The broadcast view: glides the camera to a new view when it changes, and keeps the field in plain
@@ -1221,10 +1297,12 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, name, teamName, logo, look: chosen, hour, quality, live }: StadiumProps & { hour: number; quality: Quality }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view }: StadiumProps & { hour: number; quality: Quality }) {
   const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
+  // The stadium's main color: the manager's pick for it, or the franchise's own.
+  const color = look.primary ?? identity;
   const sky = skyFor(hour);
   const tone = useMemo(() => ({ horizon: sky.sky, zenith: sky.zenith, sun: sky.sun, glow: sky.sunColor, night: sky.night }), [hour]); // eslint-disable-line react-hooks/exhaustive-deps
   const bp = useMemo(() => blueprint(look.style, f), [look.style, f]);
@@ -1241,6 +1319,9 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
   const lightsOn = sky.lightsOn || indoors;
   const fascia = look.style === 'cantilever' ? mix(color, '#1b1d21', 0.2) : p.trim;
   const plaza = bp.footprint;
+  const spots = useMemo(() => plazaSpots(bp, f.concessions, f.restrooms), [bp, f.concessions, f.restrooms]);
+  const filmed = scripted() ? (window as unknown as { __lpCam?: CamShot }).__lpCam?.focus ?? null : null;
+  const shot = useMemo(() => ((focus ?? filmed) ? focusShot((focus ?? filmed)!, bp, spots) : null), [focus, filmed, bp, spots]);
   // The live matchup's score for the boards, with the latest big play flashed across them.
   const liveScore = useMemo<ScoreScreen | null>(() => (live ? {
     host: { name: live.match.host.name, score: live.match.host.score, color: live.hostColor },
@@ -1297,20 +1378,8 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
       <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={lightsOn ? 9 + sky.night * 12 : 0} distance={16} color={p.light} />
 
       {/* Concessions and restrooms line the plaza; the store sits by the west gate. */}
-      <Rise key={`c${f.concessions}${build}`}>
-        <Boxes items={Array.from({ length: f.concessions * 6 }, (_, i) => {
-          const a = (i / Math.max(1, f.concessions * 6)) * TAU + 0.2;
-          const [x, z] = o.around(a, plaza + 0.75);
-          return { x, y: 0.14, z, ry: -a, c: i % 2 ? p.accent : color };
-        })} size={[0.3, 0.28, 0.22]} />
-      </Rise>
-      <Rise key={`r${f.restrooms}${build}`}>
-        <Boxes items={Array.from({ length: f.restrooms * 4 }, (_, i) => {
-          const a = (i / Math.max(1, f.restrooms * 4)) * TAU + 0.6;
-          const [x, z] = o.around(a, plaza + 1.05);
-          return { x, y: 0.12, z, ry: -a };
-        })} size={[0.24, 0.24, 0.24]} color="#4a90d9" />
-      </Rise>
+      <Rise key={`c${f.concessions}${build}`}><ConcessionStands spots={spots.stands} team={color} accent={p.accent} /></Rise>
+      <Rise key={`r${f.restrooms}${build}`}><Restrooms spots={spots.blocks} level={f.restrooms} night={sky.night} /></Rise>
       {f.store > 0 && (
         <Rise key={`st${f.store}${build}`}>
           <group position={[-(plaza + 0.95) * OVAL, 0, 0.9]}>
@@ -1320,6 +1389,7 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color, na
         </Rise>
       )}
       <People bp={bp} fill={lots} colors={crowdColors} />
+      {!photo && !view?.broadcast && <FocusRig shot={shot} />}
       {/* Watching a game, the cannons only go off for a score. */}
       {f.atmosphere >= 3 && (live
         ? live.celebrate?.td && <Pyro key={`pyro-${live.celebrate.id}`} bp={bp} once />
@@ -1390,7 +1460,7 @@ export default function Stadium3D(props: StadiumProps) {
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
           <Scene {...props} hour={hour} quality={quality} />
           {props.onReady && <ReadySignal onReady={props.onReady} />}
-          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still} autoRotateSpeed={0.4 * (60 / fps)} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
+          {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still && !props.focus} autoRotateSpeed={0.4 * (60 / fps)} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.focus ? 0.8 : props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
           {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
       ) : null}
