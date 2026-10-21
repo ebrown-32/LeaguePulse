@@ -10,7 +10,9 @@ import { useEffect, useState } from 'react';
 import { animate, motion } from 'framer-motion';
 import { ArrowLeftRight, Share2, Sparkles, TrendingDown, TrendingUp } from '@/components/icons';
 import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
+import type { Story } from '@/lib/trades/engine';
 import type { FinderPlayer, FinderSide, FinderTeam, FinderTrade } from '@/lib/trades/finder';
+import type { LeagueKind } from '@/lib/trades/values';
 import { cn } from '@/lib/utils';
 
 export const POSITION_TEXT: Record<string, string> = {
@@ -27,17 +29,62 @@ const toneOf = (g: string) =>
 const seedOf = (s: string) => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
 const VERBS = ['lands', 'goes and gets', 'pries loose', 'brings in', 'swings for'];
 
-/** A headline and a line from the numbers: the biggest name, who gets him, and why it works. */
+const COUNT = ['', 'one', 'two', 'three', 'four', 'five', 'six'];
+const isPick = (p: FinderPlayer) => p.position === 'PICK';
+
+/** What kind of deal, for the chip on the card. A plain upgrade needs no chip. */
+export const STORY_LABEL: Record<Story, string | null> = {
+  'buy-low': 'Buy low', 'sell-high': 'Sell high', consolidate: 'Consolidation', picks: 'Draft picks',
+  swap: 'Position swap', 'multi-team': null, upgrade: null,
+};
+const labelOf = (t: FinderTrade) => (t.story === 'multi-team' ? `${t.sides.length}-team deal` : STORY_LABEL[t.story]);
+
+/** A headline and a line from the numbers, told as the kind of deal it is. */
 export function copyOf(trade: FinderTrade, teamOf: Map<number, FinderTeam>) {
   const name = (rid: number) => teamOf.get(rid)?.name ?? `Team ${rid}`;
-  const star = trade.sides.flatMap(s => s.gets).sort((a, b) => b.value - a.value)[0];
+  const players = trade.sides.flatMap(s => s.gets).filter(p => !isPick(p));
+  const star = [...players].sort((a, b) => b.value - a.value)[0] ?? trade.sides[0].gets[0];
   const getter = trade.sides.find(s => s.gets.includes(star)) ?? trade.sides[0];
-  const headline = trade.kind === 'three'
-    ? `Three-way: ${star.name} to ${name(getter.rosterId)}`
-    : `${name(getter.rosterId)} ${VERBS[seedOf(trade.id) % VERBS.length]} ${star.name}`;
+  const other = trade.sides.find(s => s !== getter) ?? getter;
+  const verb = VERBS[seedOf(trade.id) % VERBS.length];
+
+  let headline: string;
+  switch (trade.story) {
+    case 'multi-team': headline = trade.sides.length === 3
+      ? `${star.name} lands with ${name(getter.rosterId)} in a three-team deal`
+      : `${star.name} heads to ${name(getter.rosterId)} as ${COUNT[trade.sides.length]} teams swap starters`;
+      break;
+    case 'buy-low': headline = `${name(getter.rosterId)} grabs ${star.name} on the dip`; break;
+    case 'sell-high': {
+      const riser = [...players].sort((a, b) => (b.trend ?? 0) - (a.trend ?? 0))[0];
+      const seller = trade.sides.find(s => s.gives.some(p => p.id === riser.id)) ?? other;
+      headline = `${name(seller.rosterId)} cashes in ${riser.name} at peak value`;
+      break;
+    }
+    case 'consolidate': {
+      const c = trade.sides.find(s => s.gets.length === 1 && s.gives.length >= 2) ?? getter;
+      headline = `${name(c.rosterId)} turns ${COUNT[c.gives.length] ?? c.gives.length} into ${c.gets[0].name}`;
+      break;
+    }
+    case 'picks': {
+      const buyer = trade.sides.find(s => s.gives.some(isPick)) ?? getter;
+      const target = buyer.gets.filter(p => !isPick(p)).sort((a, b) => b.value - a.value)[0];
+      headline = target ? `${name(buyer.rosterId)} spends draft capital on ${target.name}` : `${name(buyer.rosterId)} ${verb} ${star.name}`;
+      break;
+    }
+    case 'swap': {
+      const [a, b] = trade.sides;
+      headline = `${name(a.rosterId)} and ${name(b.rosterId)} swap a ${a.gives[0].position} for a ${a.gets[0].position}`;
+      break;
+    }
+    default: headline = `${name(getter.rosterId)} ${verb} ${star.name}`;
+  }
+
   const now = trade.sides.filter(s => s.lineupDelta > 0.3), later = trade.sides.filter(s => s.lineupDelta <= 0.3);
+  const n = trade.sides.length;
   const line = !later.length
-    ? (trade.kind === 'three' ? 'All three starting lineups get better.' : 'Both starting lineups get better.')
+    ? (n > 2 ? `All ${COUNT[n]} starting lineups get better.` : 'Both starting lineups get better.')
+    : n > 3 ? `${now.length} of ${n} starting lineups get better; the rest bank value.`
     : `${now.map(s => name(s.rosterId)).join(' and ')} ${now.length > 1 ? 'score' : 'scores'} more now; ${later.map(s => name(s.rosterId)).join(' and ')} ${later.length > 1 ? 'bank' : 'banks'} value.`;
   return { headline, line };
 }
@@ -83,13 +130,31 @@ function GradeRing({ grade, balance, active }: { grade: string; balance: number;
   );
 }
 
-function PlayerRow({ p, active, i, from, roomy }: { p: FinderPlayer; active: boolean; i: number; from: number; roomy: boolean }) {
+function PlayerRow({ p, active, i, from, roomy, kind }: { p: FinderPlayer; active: boolean; i: number; from: number; roomy: boolean; kind: LeagueKind }) {
+  const motionProps = {
+    initial: false as const, animate: active ? { opacity: 1, x: 0 } : { opacity: 0, x: from * 24 },
+    transition: { type: 'spring' as const, stiffness: 260, damping: 26, delay: 0.3 + i * 0.08 },
+  };
+  if (isPick(p)) {
+    // A draft pick: a ticket with its round, the year and where it's likely to land.
+    const [year, round] = p.name.split(' ');
+    return (
+      <motion.li className="flex min-w-0 items-center gap-2" {...motionProps}>
+        <div className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-gradient-to-br from-primary/25 to-primary/5 text-primary ring-1 ring-primary/30 sm:h-10 sm:w-10">
+          <span className="text-[11px] font-black leading-none">{round}</span>
+          <span className="text-[7px] font-bold tracking-wider opacity-80">{year}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-semibold leading-tight text-foreground sm:text-sm">{p.name} pick</p>
+          <p className="truncate text-[10px] text-muted-foreground sm:text-[11px]">{p.note ?? 'Draft pick'}</p>
+        </div>
+      </motion.li>
+    );
+  }
   const photo = playerPhoto({ playerId: p.id, position: p.position, nflTeam: p.nflTeam });
   const moving = p.trend != null && Math.abs(p.trend) >= 150;
   return (
-    <motion.li className="flex min-w-0 items-center gap-2"
-      initial={false} animate={active ? { opacity: 1, x: 0 } : { opacity: 0, x: from * 24 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 26, delay: 0.3 + i * 0.08 }}>
+    <motion.li className="flex min-w-0 items-center gap-2" {...motionProps}>
       <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border sm:h-10 sm:w-10">
         {photo
           ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -99,7 +164,7 @@ function PlayerRow({ p, active, i, from, roomy }: { p: FinderPlayer; active: boo
         <p className="truncate text-[13px] font-semibold leading-tight text-foreground sm:text-sm">{p.name}</p>
         <p className="flex items-center gap-1 truncate text-[10px] text-muted-foreground sm:text-[11px]">
           <span className={cn('font-bold', POSITION_TEXT[p.position])}>{p.position}</span>
-          <span>· {p.nflTeam} · {p.ppw.toFixed(1)}/wk</span>
+          <span>· {p.nflTeam}{kind !== 'redraft' && p.age ? ` · ${p.age}y` : ''} · {p.ppw.toFixed(1)}/wk</span>
           {moving && (p.trend! > 0
             ? <span className={cn('items-center gap-0.5 font-semibold text-emerald-500', roomy ? 'flex' : 'hidden sm:flex')}><TrendingUp className="h-3 w-3" />{p.trend!.toLocaleString()}</span>
             : <span className={cn('items-center gap-0.5 font-semibold text-rose-500', roomy ? 'flex' : 'hidden sm:flex')}><TrendingDown className="h-3 w-3" />{Math.abs(p.trend!).toLocaleString()}</span>)}
@@ -109,7 +174,7 @@ function PlayerRow({ p, active, i, from, roomy }: { p: FinderPlayer; active: boo
   );
 }
 
-function SideBlock({ side, team, active, i, row }: { side: FinderSide; team?: FinderTeam; active: boolean; i: number; row: boolean }) {
+function SideBlock({ side, team, active, i, row, kind }: { side: FinderSide; team?: FinderTeam; active: boolean; i: number; row: boolean; kind: LeagueKind }) {
   // Two-team sides come in from their own corner; three-team rows rise in turn.
   const from = row ? 0 : i === 0 ? -1 : 1;
   const chip = (good: boolean) => cn('rounded-md px-1.5 py-0.5 tabular-nums',
@@ -131,7 +196,7 @@ function SideBlock({ side, team, active, i, row }: { side: FinderSide; team?: Fi
       <div className="min-w-0">
         <p className={cn('mb-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground', row && 'max-sm:hidden')}>Gets</p>
         <ul className="space-y-1.5">
-          {side.gets.map((p, j) => <PlayerRow key={p.id} p={p} active={active} i={i * 2 + j} from={from} roomy={row} />)}
+          {side.gets.map((p, j) => <PlayerRow key={p.id} p={p} active={active} i={i * 2 + j} from={from} roomy={row} kind={kind} />)}
         </ul>
         <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold sm:text-[11px]">
           <span className={chip(side.lineupDelta > 0.05)}><CountUp to={side.lineupDelta} active={active} decimals={1} /> pts/wk</span>
@@ -142,12 +207,60 @@ function SideBlock({ side, team, active, i, row }: { side: FinderSide; team?: Fi
   );
 }
 
-export default function TradeCard({ trade, teamOf, active, first }: {
-  trade: FinderTrade; teamOf: Map<number, FinderTeam>; active: boolean; first: boolean;
+/**
+ * Four to six teams in a loop: a row a team, each getting the player the team above it sends (the
+ * first gets the last one's), tied together by a line that draws down the chain as it plays in.
+ */
+function Chain({ trade, teamOf, active }: { trade: FinderTrade; teamOf: Map<number, FinderTeam>; active: boolean }) {
+  const n = trade.sides.length;
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col justify-center">
+      <ol className="relative space-y-1 sm:space-y-2">
+        <motion.span aria-hidden className="absolute left-[16px] top-5 bottom-5 w-0.5 origin-top rounded-full bg-gradient-to-b from-primary/70 via-primary/40 to-primary/70 sm:left-[21px]"
+          initial={false} animate={{ scaleY: active ? 1 : 0 }} transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }} />
+        {trade.sides.map((s, i) => {
+          const team = teamOf.get(s.rosterId), from = teamOf.get(trade.sides[(i - 1 + n) % n].rosterId);
+          const p = s.gets[0];
+          const photo = p.position === 'PICK' ? null : playerPhoto({ playerId: p.id, position: p.position, nflTeam: p.nflTeam });
+          return (
+            <motion.li key={s.rosterId} className="relative flex min-w-0 items-center gap-2 rounded-xl border border-border bg-background/60 p-1 pr-1.5 backdrop-blur-sm sm:gap-3 sm:p-2 sm:pr-2"
+              initial={false} animate={active ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26, delay: 0.15 + i * 0.09 }}>
+              <span className="relative z-10 ml-0.5 rounded-full ring-4 ring-card sm:ml-0"><TeamAvatar team={team} size={24} /></span>
+              <div className="w-[5rem] min-w-0 shrink-0 sm:w-36">
+                <p className="truncate text-[11px] font-semibold leading-tight text-foreground sm:text-[13px]">{team?.name ?? `Team ${s.rosterId}`}</p>
+                <p className="hidden text-[10px] text-muted-foreground sm:block">{team?.record}</p>
+              </div>
+              <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border sm:h-8 sm:w-8">
+                {photo
+                  ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  : <span className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">{initialsOf(p.name)}</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold leading-tight text-foreground sm:text-[13px]">{p.name}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  <span className={cn('font-bold', POSITION_TEXT[p.position])}>{p.position}</span> · from {from?.name ?? 'the last team'}
+                </p>
+              </div>
+              <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums sm:text-[11px]',
+                s.lineupDelta > 0.05 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
+                <CountUp to={s.lineupDelta} active={active} decimals={1} />
+              </span>
+            </motion.li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 hidden text-center text-[10px] text-muted-foreground sm:block">Each team gets the player from the one above; points a week in green.</p>
+    </div>
+  );
+}
+
+export default function TradeCard({ trade, teamOf, active, first, kind }: {
+  trade: FinderTrade; teamOf: Map<number, FinderTeam>; active: boolean; first: boolean; kind: LeagueKind;
 }) {
   const { headline, line } = copyOf(trade, teamOf);
   const tone = toneOf(trade.grade);
-  const three = trade.kind === 'three';
+  const multi = trade.kind === 'multi', chain = trade.sides.length >= 4;
   const share = async () => {
     const url = `${window.location.origin}/trades`;
     try {
@@ -173,16 +286,17 @@ export default function TradeCard({ trade, teamOf, active, first }: {
                 <Sparkles className="h-3 w-3" /> New
               </span>
             )}
-            {three && <span className="text-[9px] font-bold uppercase tracking-widest text-primary">Three-team deal</span>}
+            {labelOf(trade) && <span className="text-[9px] font-bold uppercase tracking-widest text-primary">{labelOf(trade)}</span>}
           </div>
           <h2 className="text-base font-bold leading-snug text-foreground sm:text-xl">{headline}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{line}</p>
         </motion.div>
       </div>
 
-      <div className={cn('relative grid min-h-0 flex-1 content-center gap-2.5 sm:gap-3', three ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 gap-x-5 sm:gap-x-8')}>
-        {trade.sides.map((s, i) => <SideBlock key={s.rosterId} side={s} team={teamOf.get(s.rosterId)} active={active} i={i} row={three} />)}
-        {!three && (
+      {chain ? <Chain trade={trade} teamOf={teamOf} active={active} /> : (
+      <div className={cn('relative grid min-h-0 flex-1 content-center gap-2.5 sm:gap-3', multi ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 gap-x-5 sm:gap-x-8')}>
+        {trade.sides.map((s, i) => <SideBlock key={s.rosterId} side={s} team={teamOf.get(s.rosterId)} active={active} i={i} row={multi} kind={kind} />)}
+        {!multi && (
           <motion.div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-lg"
             initial={false} animate={active ? { rotate: 180, scale: 1 } : { rotate: 0, scale: 0.6 }}
             transition={{ type: 'spring', stiffness: 200, damping: 16, delay: 0.35 }}>
@@ -190,6 +304,7 @@ export default function TradeCard({ trade, teamOf, active, first }: {
           </motion.div>
         )}
       </div>
+      )}
 
       <div className="relative flex items-center justify-between text-xs text-muted-foreground">
         {first

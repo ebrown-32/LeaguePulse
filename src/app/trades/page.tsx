@@ -5,7 +5,7 @@ export const metadata = { title: 'Trade Finder | League Pulse' };
 
 export default function TradesPage() {
   return (
-    <PageLayout title="Trade Finder" subtitle="Trades your league should make, graded for fairness. Swipe to see the next one." className="max-w-3xl">
+    <PageLayout title="Trade Finder" subtitle="Trade ideas, just to get you started. Swipe to see the next one." className="max-w-3xl">
       <TradeFinder />
       {/* FantasyCalc's terms: a visible link on every page showing their values or anything
           derived from them, in the HTML the server sends (lib/trades/values). */}

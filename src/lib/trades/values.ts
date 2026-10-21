@@ -2,6 +2,11 @@
  * What every player is worth on the trade market, for this league's format: the value behind
  * Trade Finder's fairness grades (lib/trades/engine).
  *
+ *   redraft  this season's values
+ *   dynasty  dynasty values, which price in age and the years ahead, and draft picks
+ *   keeper   mostly this season's, with a share of the dynasty value for what a player is worth
+ *            kept: a quarter of it
+ *
  *   FantasyCalc     values from millions of real trades, by format (redraft or dynasty, one QB or
  *                   superflex, league size, PPR). GET /values/current, the only endpoint their
  *                   terms allow. Free with attribution under 1,000 monthly users: every page that
@@ -15,8 +20,6 @@
  * Cached for six hours, shared by every league in the same format. FantasyCalc asks that the
  * values are refreshed at most once every three hours. Server only.
  */
-
-import { getRedis } from '@/lib/redisClient';
 
 export interface Format {
   dynasty: boolean;
@@ -35,7 +38,25 @@ export interface MarketValues {
   byName: Record<string, number>;
   /** FantasyCalc's thirty-day trend by Sleeper id, where it has one. */
   trend: Record<string, number>;
+  /** Age by Sleeper id, where FantasyCalc has it. */
+  age: Record<string, number>;
+  /** Dynasty draft picks by FantasyCalc's name for them: "2027 1st (Early)", "2028 2nd". */
+  picks: Record<string, number>;
   fetchedAt: number;
+}
+
+export type LeagueKind = 'redraft' | 'keeper' | 'dynasty';
+
+/**
+ * Redraft, keeper or dynasty, from Sleeper's settings.type (0, 1, 2). ESPN has no dynasty type;
+ * its leagues arrive as keeper leagues with a keeper count (providers/espn/translate), and one
+ * that keeps eight or more is run as a dynasty.
+ */
+export function leagueKind(league: any): LeagueKind {
+  const type = Number(league?.settings?.type ?? 0);
+  if (type === 2) return 'dynasty';
+  if (type === 1) return Number(league?.settings?.max_keepers ?? 0) >= 8 ? 'dynasty' : 'keeper';
+  return 'redraft';
 }
 
 const TTL_S = 6 * 3600;
@@ -50,7 +71,7 @@ export function formatOf(league: any): Format {
   const qbs = slots.filter(s => s === 'QB').length;
   const rec = Number(league?.scoring_settings?.rec ?? 1);
   return {
-    dynasty: Number(league?.settings?.type) === 2,
+    dynasty: leagueKind(league) === 'dynasty',
     numQbs: slots.includes('SUPER_FLEX') || qbs >= 2 ? 2 : 1,
     numTeams: Math.min(16, Math.max(6, Number(league?.total_rosters) || 10)),
     ppr: rec >= 0.75 ? 1 : rec >= 0.25 ? 0.5 : 0,
@@ -60,7 +81,7 @@ export function formatOf(league: any): Format {
 export const nameKey = (name: string, position: string) =>
   `${name.toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '')}|${position}`;
 
-const keyOf = (f: Format) => `lp_fc_values:${f.dynasty ? 'd' : 'r'}${f.numQbs}q${f.numTeams}t${f.ppr}p`;
+const keyOf = (f: Format) => `lp_fc_values_v2:${f.dynasty ? 'd' : 'r'}${f.numQbs}q${f.numTeams}t${f.ppr}p`;
 const memo = new Map<string, MarketValues>();
 
 export async function marketValues(f: Format): Promise<MarketValues | null> {
@@ -68,6 +89,7 @@ export async function marketValues(f: Format): Promise<MarketValues | null> {
   const mem = memo.get(key);
   if (mem && Date.now() - mem.fetchedAt < TTL_S * 1000) return mem;
 
+  const { getRedis } = await import('@/lib/redisClient');
   const redis = getRedis().client;
   const cached = await redis?.get(key).catch(() => null);
   if (cached) {
@@ -87,6 +109,25 @@ export async function marketValues(f: Format): Promise<MarketValues | null> {
   return fresh;
 }
 
+/** The values for this league: its format, and for a keeper league the blend of redraft and dynasty. */
+export async function leagueMarket(league: any): Promise<{ kind: LeagueKind; market: MarketValues } | null> {
+  const kind = leagueKind(league);
+  const f = formatOf(league);
+  if (kind !== 'keeper') {
+    const market = await marketValues(f);
+    return market && { kind, market };
+  }
+  const [now, later] = await Promise.all([marketValues(f), marketValues({ ...f, dynasty: true })]);
+  if (!now) return null;
+  if (!later) return { kind, market: now };
+  const blend = (a: Record<string, number>, b: Record<string, number>) =>
+    Object.fromEntries(Object.entries(a).map(([k, v]) => [k, Math.round(0.75 * v + 0.25 * (b[k] ?? 0))]));
+  return {
+    kind,
+    market: { ...now, byId: blend(now.byId, later.byId), byName: blend(now.byName, later.byName), age: { ...later.age, ...now.age }, picks: {} },
+  };
+}
+
 async function fromFantasyCalc(f: Format): Promise<MarketValues | null> {
   const qs = new URLSearchParams({ isDynasty: String(f.dynasty), numQbs: String(f.numQbs), numTeams: String(f.numTeams), ppr: String(f.ppr) });
   try {
@@ -94,11 +135,13 @@ async function fromFantasyCalc(f: Format): Promise<MarketValues | null> {
     if (!res.ok) return null;
     const rows = await res.json();
     if (!Array.isArray(rows) || !rows.length) return null;
-    const out: MarketValues = { source: 'FantasyCalc', byId: {}, byName: {}, trend: {}, fetchedAt: Date.now() };
+    const out: MarketValues = { source: 'FantasyCalc', byId: {}, byName: {}, trend: {}, age: {}, picks: {}, fetchedAt: Date.now() };
     for (const r of rows) {
       const value = Number(r?.value);
       const p = r?.player;
       if (!p || !Number.isFinite(value)) continue;
+      if (p.position === 'PICK') { if (p.name) out.picks[p.name] = value; continue; }
+      if (p.sleeperId && Number.isFinite(Number(p.maybeAge))) out.age[String(p.sleeperId)] = Math.floor(Number(p.maybeAge));
       if (p.sleeperId) {
         out.byId[String(p.sleeperId)] = value;
         if (Number.isFinite(Number(r.trend30Day))) out.trend[String(p.sleeperId)] = Number(r.trend30Day);
@@ -121,7 +164,7 @@ async function fromDynastyProcess(f: Format): Promise<MarketValues | null> {
     const at = (c: string) => cols.indexOf(c);
     const [iName, iPos, iVal] = [at('player'), at('pos'), at(f.numQbs === 2 ? 'value_2qb' : 'value_1qb')];
     if (iName < 0 || iPos < 0 || iVal < 0) return null;
-    const out: MarketValues = { source: 'DynastyProcess', byId: {}, byName: {}, trend: {}, fetchedAt: Date.now() };
+    const out: MarketValues = { source: 'DynastyProcess', byId: {}, byName: {}, trend: {}, age: {}, picks: {}, fetchedAt: Date.now() };
     for (const line of lines.slice(1)) {
       const row = parseCsvLine(line);
       const value = Number(row[iVal]);

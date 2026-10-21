@@ -6,21 +6,29 @@
  * a new round starts on a new shuffle. The trades come a page at a time from /api/trades/finder.
  *
  * Filters: teams, what they're after (points now or value later), positions coming back, fair
- * deals only, three-team deals only.
+ * deals only, how many teams are in it, and a creativity dial from safe to wild.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
+import { AnimatePresence, MotionConfig, motion, useIsPresent } from 'framer-motion';
 import { RefreshCw, SlidersHorizontal, X } from '@/components/icons';
 import type { Goal } from '@/lib/trades/feed';
 import type { FinderMeta, FinderPage, FinderTeam, FinderTrade } from '@/lib/trades/finder';
+import type { LeagueKind } from '@/lib/trades/values';
 import { cn } from '@/lib/utils';
 import TradeCard, { POSITION_TEXT, TeamAvatar } from './TradeCard';
 
 type Item = { kind: 'trade'; key: string; trade: FinderTrade } | { kind: 'round'; key: string; round: number };
 
-interface Filters { teams: number[]; positions: string[]; goal: Goal; fair: boolean; three: boolean }
-const NO_FILTERS: Filters = { teams: [], positions: [], goal: 'any', fair: false, three: false };
+interface Filters { teams: number[]; positions: string[]; goal: Goal; fair: boolean; size: number; picks: boolean; creativity: number }
+const NO_FILTERS: Filters = { teams: [], positions: [], goal: 'any', fair: false, size: 0, picks: false, creativity: 50 };
+const SIZES: { id: number; label: string }[] = [{ id: 0, label: 'Any' }, ...[2, 3, 4, 5, 6].map(n => ({ id: n, label: String(n) }))];
+const creativityOf = (c: number) =>
+  c <= 20 ? { label: 'Safe', about: 'Simple, even swaps first.' }
+  : c < 45 ? { label: 'Steady', about: 'Mostly straightforward deals, a few twists.' }
+  : c <= 55 ? { label: 'Balanced', about: 'A mix of simple swaps and bolder ideas.' }
+  : c < 80 ? { label: 'Bold', about: 'Consolidations, buy-lows and multi-piece deals come first.' }
+  : { label: 'Wild', about: 'The most inventive trades in the league first: five and six team loops, picks, blockbusters.' };
 const GOALS: { id: Goal; label: string; about: string }[] = [
   { id: 'any', label: 'Anything', about: 'Every trade that helps both sides.' },
   { id: 'now', label: 'Win now', about: 'Trades that put more points in the lineup this season.' },
@@ -28,6 +36,18 @@ const GOALS: { id: Goal; label: string; about: string }[] = [
 ];
 const POSITIONS = ['QB', 'RB', 'WR', 'TE'];
 const PAGE = 12;
+
+/** The filters as the feed's query string (api/trades/finder). */
+function filterParams(f: Filters, qs = new URLSearchParams()): URLSearchParams {
+  if (f.teams.length) qs.set('teams', f.teams.join(','));
+  if (f.positions.length) qs.set('pos', f.positions.join(','));
+  if (f.goal !== 'any') qs.set('goal', f.goal);
+  if (f.fair) qs.set('fair', '1');
+  if (f.size) qs.set('size', String(f.size));
+  if (f.creativity !== 50) qs.set('creativity', String(f.creativity));
+  if (f.picks) qs.set('picks', '1');
+  return qs;
+}
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 const ago = (t: number) => {
@@ -52,12 +72,7 @@ export default function TradeFinder() {
     if (c.loading) return;
     c.loading = true;
     const gen = c.gen;
-    const qs = new URLSearchParams({ seed: String(c.seed), offset: String(c.offset), limit: String(PAGE) });
-    if (filters.teams.length) qs.set('teams', filters.teams.join(','));
-    if (filters.positions.length) qs.set('pos', filters.positions.join(','));
-    if (filters.goal !== 'any') qs.set('goal', filters.goal);
-    if (filters.fair) qs.set('fair', '1');
-    if (filters.three) qs.set('three', '1');
+    const qs = filterParams(filters, new URLSearchParams({ seed: String(c.seed), offset: String(c.offset), limit: String(PAGE) }));
     try {
       const r = await fetch(`/api/trades/finder?${qs}`);
       const page = await r.json() as FinderPage & { error?: string };
@@ -120,7 +135,7 @@ export default function TradeFinder() {
   useEffect(() => { setReduced(document.documentElement.dataset.motion === 'reduced'); }, []);
 
   const teamOf = useMemo(() => new Map((meta?.teams ?? []).map(t => [t.rosterId, t])), [meta]);
-  const active = filters.teams.length + filters.positions.length + (filters.goal !== 'any' ? 1 : 0) + (filters.fair ? 1 : 0) + (filters.three ? 1 : 0);
+  const active = filters.teams.length + filters.positions.length + (filters.goal !== 'any' ? 1 : 0) + (filters.fair ? 1 : 0) + (filters.size ? 1 : 0) + (filters.picks ? 1 : 0) + (filters.creativity !== 50 ? 1 : 0);
 
   if (error && !items.length) return <Empty title="No trades right now" body={error} />;
 
@@ -128,7 +143,7 @@ export default function TradeFinder() {
     <MotionConfig reducedMotion={reduced ? 'always' : 'user'}>
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Pulse meta={meta} total={total} filtered={active > 0} />
+          <Pulse meta={meta} total={total} filtered={active - (filters.creativity !== 50 ? 1 : 0) > 0} />
           <button onClick={() => setSheet(true)}
             className={cn('ml-auto flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
               active ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground')}>
@@ -153,7 +168,7 @@ export default function TradeFinder() {
               const near = Math.abs(i - index) <= 2;
               if (!near) return <section key={it.key} className="h-full snap-start" />;
               return it.kind === 'trade'
-                ? <TradeCard key={it.key} trade={it.trade} teamOf={teamOf} active={i === index} first={i === 0} />
+                ? <TradeCard key={it.key} trade={it.trade} teamOf={teamOf} active={i === index} first={i === 0} kind={meta?.kind ?? 'redraft'} />
                 : <RoundCard key={it.key} round={it.round} active={i === index} />;
             })}
           </div>
@@ -163,7 +178,8 @@ export default function TradeFinder() {
 
       <AnimatePresence>
         {sheet && meta && (
-          <FilterSheet teams={meta.teams} filters={filters} onChange={setFilters} onClose={() => setSheet(false)} />
+          <FilterSheet teams={meta.teams} kind={meta.kind} initial={filters}
+            onApply={f => { if (JSON.stringify(f) !== JSON.stringify(filters)) setFilters(f); setSheet(false); }} />
         )}
       </AnimatePresence>
     </MotionConfig>
@@ -183,6 +199,7 @@ function Pulse({ meta, total, filtered }: { meta: FinderMeta | null; total: numb
         </span>
         {count.toLocaleString()} {filtered ? 'matching' : 'trades in play'}
       </span>
+      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold">{meta.kind[0].toUpperCase() + meta.kind.slice(1)} values</span>
       {meta.freshCount > 0 && <span className="font-semibold text-primary">{meta.freshCount.toLocaleString()} new</span>}
       <span className="hidden sm:inline">Rosters checked {ago(meta.builtAt)}</span>
     </div>
@@ -195,7 +212,9 @@ function ActiveFilters({ filters, teamOf, onChange }: { filters: Filters; teamOf
     ...(filters.goal !== 'any' ? [{ key: 'goal', label: GOALS.find(g => g.id === filters.goal)!.label, clear: { ...filters, goal: 'any' as Goal } }] : []),
     ...filters.positions.map(p => ({ key: p, label: `Gets a ${p}`, clear: { ...filters, positions: filters.positions.filter(x => x !== p) } })),
     ...(filters.fair ? [{ key: 'fair', label: 'B or better', clear: { ...filters, fair: false } }] : []),
-    ...(filters.three ? [{ key: 'three', label: '3-team', clear: { ...filters, three: false } }] : []),
+    ...(filters.size ? [{ key: 'size', label: `${filters.size} teams`, clear: { ...filters, size: 0 } }] : []),
+    ...(filters.creativity !== 50 ? [{ key: 'creativity', label: creativityOf(filters.creativity).label, clear: { ...filters, creativity: 50 } }] : []),
+    ...(filters.picks ? [{ key: 'picks', label: 'With picks', clear: { ...filters, picks: false } }] : []),
   ];
   if (!chips.length) return null;
   return (
@@ -213,7 +232,23 @@ function ActiveFilters({ filters, teamOf, onChange }: { filters: Filters; teamOf
   );
 }
 
-function FilterSheet({ teams, filters, onChange, onClose }: { teams: FinderTeam[]; filters: Filters; onChange: (f: Filters) => void; onClose: () => void }) {
+/**
+ * The filters, as a draft: nothing changes behind the sheet until it closes, so picking several
+ * teams doesn't reload the feed under your thumb. The button counts the matches as you go.
+ */
+function FilterSheet({ teams, kind, initial, onApply }: { teams: FinderTeam[]; kind: LeagueKind; initial: Filters; onApply: (f: Filters) => void }) {
+  const [filters, onChange] = useState(initial);
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/trades/finder?${filterParams(filters, new URLSearchParams({ seed: '1', limit: '1' }))}`, { signal: ctl.signal })
+        .then(r => r.json()).then(d => setCount(typeof d.total === 'number' ? d.total : null)).catch(() => {});
+    }, 200);
+    return () => { clearTimeout(t); ctl.abort(); };
+  }, [filters]);
+  const onClose = () => onApply(filters);
+  const present = useIsPresent();
   const toggle = <K extends 'teams' | 'positions'>(k: K, v: Filters[K][number]) => {
     const list = filters[k] as (typeof v)[];
     onChange({ ...filters, [k]: list.includes(v) ? list.filter(x => x !== v) : [...list, v] });
@@ -221,11 +256,14 @@ function FilterSheet({ teams, filters, onChange, onClose }: { teams: FinderTeam[
   const pill = (on: boolean) => cn('rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
     on ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground');
   return (
-    <motion.div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    // Closing, it lets go of the pointer at once: its exit plays while the feed reloads behind it, and
+    // an invisible sheet was swallowing taps meant for the page (the filter chips' x among them).
+    <motion.div className={cn('fixed inset-0 z-[60] flex items-end justify-center sm:items-center', !present && 'pointer-events-none')}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.div role="dialog" aria-label="Filters"
         className="relative max-h-[85svh] w-full overflow-y-auto rounded-t-3xl border border-border bg-card p-5 pb-8 shadow-2xl sm:max-w-lg sm:rounded-3xl sm:pb-5"
-        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0, transition: { duration: 0.18, ease: 'easeIn' } }}
         transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border sm:hidden" />
         <div className="mb-4 flex items-center justify-between">
@@ -247,7 +285,7 @@ function FilterSheet({ teams, filters, onChange, onClose }: { teams: FinderTeam[
 
         <Label>{filters.teams.length ? (filters.teams.length > 1 ? 'They want' : 'They want') : 'Looking for'}</Label>
         <div className="mb-1.5 flex flex-wrap gap-1.5">
-          {GOALS.map(g => <button key={g.id} onClick={() => onChange({ ...filters, goal: g.id })} className={pill(filters.goal === g.id)}>{g.label}</button>)}
+          {GOALS.filter(g => kind !== 'redraft' || g.id !== 'later').map(g => <button key={g.id} onClick={() => onChange({ ...filters, goal: g.id })} className={pill(filters.goal === g.id)}>{g.label}</button>)}
         </div>
         <p className="mb-5 text-[11px] text-muted-foreground">{GOALS.find(g => g.id === filters.goal)!.about}</p>
 
@@ -258,15 +296,56 @@ function FilterSheet({ teams, filters, onChange, onClose }: { teams: FinderTeam[
           ))}
         </div>
 
+        <Label>Teams involved</Label>
+        <div className="mb-5 inline-flex rounded-full border border-border p-0.5">
+          {SIZES.map(z => (
+            <button key={z.id} onClick={() => onChange({ ...filters, size: z.id })}
+              className={cn('relative min-w-[2.5rem] rounded-full px-3 py-1.5 text-xs font-semibold transition-colors', filters.size === z.id ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
+              {filters.size === z.id && <motion.span layoutId="tf-size" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 400, damping: 32 }} />}
+              <span className="relative">{z.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <Creativity value={filters.creativity} onChange={c => onChange({ ...filters, creativity: c })} />
+
         <Label>Deal</Label>
         <div className="mb-6 flex flex-wrap gap-1.5">
           <button onClick={() => onChange({ ...filters, fair: !filters.fair })} className={pill(filters.fair)}>B or better</button>
-          <button onClick={() => onChange({ ...filters, three: !filters.three })} className={pill(filters.three)}>3-team only</button>
+          {kind === 'dynasty' && <button onClick={() => onChange({ ...filters, picks: !filters.picks })} className={pill(filters.picks)}>With picks</button>}
         </div>
 
-        <button onClick={onClose} className="w-full rounded-full bg-foreground py-3 text-sm font-bold text-background">Show trades</button>
+        <button onClick={onClose} disabled={count === 0}
+          className="w-full rounded-full bg-foreground py-3 text-sm font-bold text-background transition-opacity disabled:opacity-40">
+          {count === null ? 'Show trades' : count === 0 ? 'No trades match' : `Show ${count.toLocaleString()} trade${count === 1 ? '' : 's'}`}
+        </button>
       </motion.div>
     </motion.div>
+  );
+}
+
+/** The creativity dial: safe to wild. */
+function Creativity({ value, onChange }: { value: number; onChange: (c: number) => void }) {
+  const draft = value;
+  const { label, about } = creativityOf(draft);
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex items-baseline justify-between">
+        <Label>Creativity</Label>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span key={label} className="text-xs font-bold text-primary"
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+            {label}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+      <input type="range" min={0} max={100} step={1} value={draft} aria-label="Creativity"
+        onChange={e => onChange(Number(e.target.value))}
+        className="tf-range w-full"
+        style={{ ['--tf-fill' as string]: `${draft}%` }} />
+      <div className="mt-1 flex justify-between text-[10px] font-medium text-muted-foreground"><span>Safe</span><span>Wild</span></div>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{about}</p>
+    </div>
   );
 }
 
