@@ -1,7 +1,8 @@
 /**
  * Franchises, from the archive: every manager who has played in the league,
  * across every season, and the parts of a franchise's story that need every
- * season at once (its drafts, its trade partners, its best and worst days).
+ * season at once (its drafts, its trade partners, its best and worst days, its
+ * legend).
  *
  * The same rules as the rest of the site: records are each season's
  * standings (median results included where the league plays them), a title
@@ -126,3 +127,67 @@ export async function franchiseStory(site: string, franchiseId: string): Promise
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** One of the players who have scored the most points for a franchise, all time: its statues (LegendStatues). */
+export interface FranchiseLegend {
+  playerId: string;
+  name: string;
+  position: string | null;
+  nflTeam: string | null;
+  /** 1 for the most points. */
+  rank: number;
+  /** Points scored in the franchise's starting lineup, every season, playoffs included. */
+  points: number;
+  games: number;
+  seasons: number;
+  /** Season by season with the franchise, oldest first. */
+  bySeason: { season: number; points: number; games: number }[];
+  /** Their biggest game for the franchise. */
+  best: { season: number; week: number; points: number } | null;
+}
+
+/**
+ * The franchise's legends: every starter's points in every game it has played, summed by player,
+ * the `n` highest. Only what a player scored while starting for this franchise counts, so a star
+ * it had for one season doesn't outrank the one who carried it for six. Team defenses aren't
+ * players, so they don't count.
+ */
+export async function franchiseLegends(site: string, franchiseId: string, n = 3): Promise<FranchiseLegend[] | null> {
+  const db = await ensureArchive().catch(() => null);
+  if (!db) return null;
+  const { rows } = await db.query(`
+    SELECT s.season, a.week, st.value #>> '{}' AS player_id, coalesce((sp.value #>> '{}')::numeric, 0)::float AS points
+    FROM ${T('matchups')} a
+    JOIN ${T('teams')} me ON me.site = a.site AND me.season_id = a.season_id AND me.roster_id = a.roster_id AND me.owner_id = $2
+    JOIN ${T('seasons')} s ON s.site = a.site AND s.season_id = a.season_id
+    CROSS JOIN LATERAL jsonb_array_elements(a.starters) WITH ORDINALITY st(value, i)
+    JOIN LATERAL jsonb_array_elements(a.starters_points) WITH ORDINALITY sp(value, j) ON sp.j = st.i
+    WHERE a.site = $1 AND jsonb_typeof(a.starters) = 'array' AND jsonb_typeof(a.starters_points) = 'array'`, [site, franchiseId]);
+  const by = new Map<string, { points: number; games: number; seasons: Map<number, { points: number; games: number }>; best: FranchiseLegend['best'] }>();
+  for (const r of rows) {
+    const id = String(r.player_id ?? '');
+    // Empty slots, and team defenses (their ids are the team's letters).
+    if (!id || id === '0' || /^[A-Z]{2,3}$/.test(id)) continue;
+    const p = by.get(id) ?? { points: 0, games: 0, seasons: new Map(), best: null };
+    p.points += r.points; p.games += 1;
+    const se = p.seasons.get(r.season) ?? { points: 0, games: 0 };
+    se.points += r.points; se.games += 1;
+    p.seasons.set(r.season, se);
+    if (!p.best || r.points > p.best.points) p.best = { season: r.season, week: r.week, points: round(r.points) };
+    by.set(id, p);
+  }
+  const top = [...by.entries()].filter(([, p]) => p.points > 0).sort((a, b) => b[1].points - a[1].points);
+  if (!top.length) return [];
+  const ids = top.slice(0, n + 4).map(([id]) => id);
+  const players = await db.query(`SELECT player_id, full_name, position, team FROM ${T('players')} WHERE player_id = ANY($1)`, [ids]);
+  const info = new Map(players.rows.map(p => [p.player_id, p]));
+  return top
+    .filter(([id]) => info.get(id)?.position !== 'DEF')
+    .slice(0, n)
+    .map(([id, p], i) => ({
+      playerId: id, name: info.get(id)?.full_name ?? id, position: info.get(id)?.position ?? null, nflTeam: info.get(id)?.team ?? null,
+      rank: i + 1, points: round(p.points), games: p.games, seasons: p.seasons.size,
+      bySeason: [...p.seasons.entries()].sort((a, b) => a[0] - b[0]).map(([season, v]) => ({ season, points: round(v.points), games: v.games })),
+      best: p.best,
+    }));
+}

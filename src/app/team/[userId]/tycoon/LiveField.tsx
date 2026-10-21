@@ -100,10 +100,16 @@ function layout(players: LivePlayer[], anyGameLive = false) {
       return { p, x: toward * (14 + row * 14), z: (col - (inRow - 1) / 2) * 13 };
     });
   });
-  // The sidelines: the host's near (+z), the visitors' across, spread along the bench area.
+  // The sidelines: the host's near (+z), the visitors' across, spread along the bench area. A full
+  // roster stands two deep, staggered, so the cards don't overlap.
   const bench = (side: 'host' | 'guest') => {
     const list = players.filter(p => p.side === side && !onField.includes(p) && !warming.includes(p));
-    return list.map((p, i) => ({ p, x: list.length === 1 ? 0 : -34 + (i / (list.length - 1)) * 68, z: (side === 'host' ? 1 : -1) * SIDELINE }));
+    const deep = list.length > 9 ? 2 : 1, per = Math.ceil(list.length / deep);
+    return list.map((p, i) => {
+      const row = deep === 2 ? i % 2 : 0, k = deep === 2 ? Math.floor(i / 2) : i;
+      const along = per <= 1 ? 0 : -34 + (k / (per - 1)) * 68 + (row ? 68 / (per - 1) / 2 : 0);
+      return { p, x: Math.min(36, along), z: (side === 'host' ? 1 : -1) * (SIDELINE + row * 6) };
+    });
   };
   return { spots, groups, warm, bench: [...bench('host'), ...bench('guest')] };
 }

@@ -24,6 +24,7 @@
  */
 
 import { OVAL, type Outline } from './stadiumBlueprint.ts';
+import { featureSpots } from './plazaPlan.ts';
 import type { StadiumLook } from './model';
 
 export interface Rect { x: number; z: number; w: number; d: number }
@@ -401,9 +402,10 @@ export function campusPlan({ outline, footprint, parking, fill, look }: CampusIn
 
   // ── Extras on the plaza and by the avenues ────────────────────────────────
   const has = (f: StadiumLook['features'][number]) => look.features.includes(f);
-  const onPlaza = (a: number) => { const [x, z] = outline.around(a, footprint + 0.78); return { x, z, ry: -a + Math.PI / 2 }; };
-  if (has('statue')) plan.statue = onPlaza(Math.PI / 2 + 0.32);
-  if (has('fountain')) plan.fountain = onPlaza(Math.PI / 2 - 0.32);
+  // Either side of the main gate, where the plaza's layout (plazaPlan) keeps room for them.
+  const feature = featureSpots(outline, footprint);
+  if (has('statue')) plan.statue = { x: feature.statue.x, z: feature.statue.z, ry: feature.statue.ry + Math.PI / 2 };
+  if (has('fountain')) plan.fountain = { x: feature.fountain.x, z: feature.fountain.z, ry: 0 };
   if (has('foodtrucks')) {
     for (let i = 0; i < 6; i++) {
       const side = i % 2 ? 1 : -1, z = ringOut + 1.2 + Math.floor(i / 2) * 1.5;
@@ -643,15 +645,7 @@ export function campusPlan({ outline, footprint, parking, fill, look }: CampusIn
     else (mountains || r() < 0.45 ? plan.pines : plan.trees).push({ x, z, s });
   }
 
-  // Garden plaza: planters with shrubs and trees around the stadium.
-  if (look.plaza === 'garden') {
-    for (let i = 0; i < 28; i++) {
-      const a = ((i + 0.5) / 28) * Math.PI * 2;
-      if (gates.some(gt => Math.abs(Math.atan2(Math.sin(gt - a), Math.cos(gt - a))) < 0.18)) continue;
-      const [x, z] = outline.around(a, footprint + 1.05);
-      (i % 3 === 0 ? plan.trees : plan.shrubs).push({ x, z, s: i % 3 === 0 ? 0.6 : 0.9 });
-    }
-  }
+  // A garden plaza's planters are the plaza's own (plazaPlan), between the promenades.
 
   // ── Traffic, keeping right ────────────────────────────────────────────────
   // The ring is two lanes: the inner one runs with the stadium on its right, all the way round. The outer

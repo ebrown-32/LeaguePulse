@@ -25,9 +25,9 @@
  * loop each.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { AdditiveBlending, BackSide, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, Object3D, ShaderMaterial, Vector3, type Group, type InstancedMesh, type Matrix4, type Mesh } from 'three';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { AdditiveBlending, BackSide, BufferGeometry, CanvasTexture, Color, DoubleSide, SRGBColorSpace, Float32BufferAttribute, Object3D, ShaderMaterial, Vector3, type Group, type InstancedMesh, type Matrix4, type Mesh } from 'three';
 import { OVAL, type Outline } from '@/lib/franchise/stadiumBlueprint';
 import type { StadiumLook } from '@/lib/franchise/model';
 import { campusPlan, EDGE, pointAt, signalPhase, STEP, type CampusPlan, type Route, type Segment, type Tint } from '@/lib/franchise/campusPlan';
@@ -690,35 +690,38 @@ function Traffic({ routes, night, detail }: { routes: Route[]; night: number; de
 
 // ── Extras ──────────────────────────────────────────────────────────────────
 
-function Statue({ at, team }: { at: { x: number; z: number; ry?: number }; team: string }) {
-  const bronze = <meshStandardMaterial color="#8c6a3a" metalness={0.35} roughness={0.45} />;
-  return (
-    <group position={[at.x, 0, at.z]} rotation-y={at.ry ?? 0}>
-      <mesh position={[0, 0.16, 0]} castShadow><boxGeometry args={[0.42, 0.32, 0.42]} /><meshStandardMaterial color="#d6d0c4" /></mesh>
-      <mesh position={[0, 0.2, 0.213]}><planeGeometry args={[0.3, 0.12]} /><meshStandardMaterial color={team} /></mesh>
-      {/* A player mid stiff-arm, ball tucked. */}
-      <mesh position={[0, 0.5, 0]} rotation-z={0.15} castShadow><capsuleGeometry args={[0.07, 0.26, 4, 8]} />{bronze}</mesh>
-      <mesh position={[0.02, 0.72, 0]}><sphereGeometry args={[0.07, 12, 10]} />{bronze}</mesh>
-      <mesh position={[-0.13, 0.62, 0]} rotation-z={1.2}><capsuleGeometry args={[0.025, 0.2, 4, 6]} />{bronze}</mesh>
-      <mesh position={[0.09, 0.5, 0.04]} rotation-x={0.6}><sphereGeometry args={[0.05, 10, 8]} />{bronze}</mesh>
-      {[-1, 1].map(s => <mesh key={s} position={[s * 0.05, 0.35, s * 0.05]} rotation-x={s * 0.4}><capsuleGeometry args={[0.03, 0.18, 4, 6]} />{bronze}</mesh>)}
-    </group>
-  );
-}
-
+/** A two-tier fountain: a stone basin, an upper bowl spilling into it, a ring of arcing jets and a plume on top. */
 function Fountain({ at }: { at: { x: number; z: number } }) {
-  const jets = useRef<Group>(null);
-  useFrame(({ clock }) => {
-    jets.current?.children.forEach((c, i) => { c.scale.y = 0.75 + Math.sin(clock.elapsedTime * 3 + i * 1.7) * 0.25; });
+  const jets = useRef<Group>(null), plume = useRef<Mesh>(null);
+  // Its own clock, so the water never jumps when frames are slow or the view scrolls back into sight.
+  const t = useRef(0);
+  useFrame((_, delta) => {
+    t.current += Math.min(delta, 0.1);
+    jets.current?.children.forEach((c, i) => { c.scale.y = 0.85 + Math.sin(t.current * 2.4 + i * 1.1) * 0.15; });
+    if (plume.current) plume.current.scale.y = 0.8 + Math.sin(t.current * 3.1) * 0.2;
   });
+  const stone = <meshStandardMaterial color="#d9d3c6" roughness={0.85} />;
+  const water = <meshStandardMaterial color="#5f9fc6" roughness={0.08} metalness={0.15} />;
+  const spray = <meshStandardMaterial color="#e3f2fa" transparent opacity={0.7} roughness={0.2} />;
   return (
     <group position={[at.x, 0, at.z]}>
-      <mesh position={[0, 0.05, 0]}><cylinderGeometry args={[0.46, 0.5, 0.1, 28]} /><meshStandardMaterial color="#d6d0c4" /></mesh>
-      <mesh position={[0, 0.101, 0]} rotation-x={-Math.PI / 2}><circleGeometry args={[0.42, 28]} /><meshStandardMaterial color="#4f8fb8" roughness={0.1} metalness={0.2} /></mesh>
+      <mesh position={[0, 0.04, 0]} castShadow receiveShadow><cylinderGeometry args={[0.4, 0.42, 0.08, 32]} />{stone}</mesh>
+      <mesh position={[0, 0.081, 0]} rotation-x={-Math.PI / 2}><circleGeometry args={[0.355, 32]} />{water}</mesh>
+      <mesh position={[0, 0.15, 0]}><cylinderGeometry args={[0.045, 0.06, 0.16, 12]} />{stone}</mesh>
+      <mesh position={[0, 0.245, 0]} castShadow><cylinderGeometry args={[0.16, 0.07, 0.05, 24]} />{stone}</mesh>
+      <mesh position={[0, 0.271, 0]} rotation-x={-Math.PI / 2}><circleGeometry args={[0.14, 24]} />{water}</mesh>
+      {/* Water spilling over the upper bowl's lip. */}
+      <mesh position={[0, 0.2, 0]}><cylinderGeometry args={[0.165, 0.2, 0.09, 24, 1, true]} /><meshStandardMaterial color="#d8edf8" transparent opacity={0.35} side={DoubleSide} /></mesh>
+      <mesh ref={plume} position={[0, 0.27, 0]}><coneGeometry args={[0.025, 0.32, 10]} />{spray}</mesh>
       <group ref={jets}>
-        {[0, 1, 2, 3, 4].map(i => {
-          const a = (i / 5) * Math.PI * 2, d = i === 0 ? 0 : 0.22;
-          return <mesh key={i} position={[Math.cos(a) * d, 0.1, Math.sin(a) * d]}><coneGeometry args={[0.03, i === 0 ? 0.5 : 0.28, 8]} /><meshStandardMaterial color="#cfe8f5" transparent opacity={0.75} /></mesh>;
+        {Array.from({ length: 8 }, (_, i) => {
+          const a = (i / 8) * Math.PI * 2;
+          // From the basin's edge, leaning in toward the middle.
+          return (
+            <group key={i} position={[Math.cos(a) * 0.3, 0.08, Math.sin(a) * 0.3]} rotation={[0, -a, 0]}>
+              <mesh position={[-0.05, 0.09, 0]} rotation-z={0.5}><coneGeometry args={[0.012, 0.2, 6]} />{spray}</mesh>
+            </group>
+          );
         })}
       </group>
     </group>
@@ -1058,7 +1061,7 @@ export function Grounds({ o, footprint, parking, fill, night, sky, look, team, a
       <Walkers routes={plan.fans} fill={fill} colors={crowd} detail={detail} />
       <Traffic routes={plan.traffic} night={night} detail={detail} />
       <Signals plan={plan} />
-      {plan.statue && <Statue at={plan.statue} team={team} />}
+      {/* The legends' statues are the stadium's (LegendStatues), placed with the rest of the plaza. */}
       {plan.fountain && <Fountain at={plan.fountain} />}
       {plan.trucks.length > 0 && <FoodTrucks trucks={plan.trucks} team={team} accent={accent} />}
       {plan.ferris && <FerrisWheel at={plan.ferris} team={team} accent={accent} night={night} />}

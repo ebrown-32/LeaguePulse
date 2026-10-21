@@ -181,7 +181,7 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false 
   // The overview stands back as far as the stadium needs: framed for a Proving Ground, further out for a Cathedral or a Monolith.
   const fit = ground ? Math.max(1, blueprint(ground.look.style, ground.facilities).footprint / 4.7) : 1;
   const scene = (full: boolean) => ground && host && day ? (
-    <Stadium3D facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
+    <Stadium3D franchiseId={venue?.host} facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // A preview is a glance: 30 frames a second is smooth for a crowd and a slow orbit, at half the battery.
       fps={full ? 60 : 30}
       // In a live matchup the starters are the players on the field.

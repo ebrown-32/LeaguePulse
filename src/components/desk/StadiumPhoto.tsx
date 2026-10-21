@@ -83,7 +83,7 @@ function Darkroom() {
   return (
     // On screen (a view off screen stops drawing) but unseen and out of the way.
     <div ref={box} aria-hidden style={{ position: 'fixed', left: 0, top: 0, width: W, height: H, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-      <Stadium3D key={job.key} photo facilities={ground.facilities} fill={spec.stands} lots={spec.lots} visitors={ground.guestColor ?? undefined}
+      <Stadium3D key={job.key} photo franchiseId={spec.host} facilities={ground.facilities} fill={spec.stands} lots={spec.lots} visitors={ground.guestColor ?? undefined}
         field={view.field} color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={job.hostTeam} logo={ground.logo} look={ground.look}
         hour={spec.hour} view={{ position: view.position, target: view.target, fov: view.fov, still: true }} />
     </div>
