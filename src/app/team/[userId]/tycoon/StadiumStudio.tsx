@@ -94,7 +94,7 @@ export function lookSummary(look: StadiumLook): string {
   return `${STYLES[look.style].name}, ${LOOK_LABELS.facade[look.facade].toLowerCase()}, ${LOOK_LABELS.setting[look.setting].toLowerCase()}`;
 }
 
-export function StadiumStudio({ franchiseId, auth, look, name, hour, color, teamName, facilities, fullBuild, compact = false, onLook, onName, onHour, onFullBuild, onFullscreen, saved, onSaved, build }: {
+export function StadiumStudio({ franchiseId, auth, look, name, hour, color: identity, teamName, facilities, fullBuild, compact = false, onLook, onName, onHour, onFullBuild, onFullscreen, saved, onSaved, build }: {
   franchiseId: string; auth: Record<string, string> | null; look: StadiumLook; name: string; hour: number | undefined;
   color: string; teamName: string; facilities: Facilities; fullBuild: boolean;
   /** In a narrow panel (fullscreen): one column, and the save bar stays in view. */
@@ -139,6 +139,8 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
       accent: Math.random() < 0.3 ? null : pick(ACCENTS),
     });
   };
+  // The stadium's main color: the manager's pick, or the franchise's own. Everything here is shown in it.
+  const color = look.primary ?? identity;
   const accent = look.accent ?? '#ffffff';
 
   return (
@@ -197,6 +199,20 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color, team
 
           {tab === 'colors' && (
             <div className={cn('grid gap-5', !compact && 'md:grid-cols-2')}>
+              <Field label="Primary color" hint="The stadium's main color: seats, end zones, the field wall and the crowd. Your franchise color unless you pick another.">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => set('primary', null)} aria-pressed={look.primary === null}
+                    className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition', look.primary === null ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground')}>
+                    <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: identity }} /> Franchise color
+                  </button>
+                  {PRIMARIES.map(c => <Swatch key={c} color={c} selected={look.primary === c} onPick={() => set('primary', c)} />)}
+                  <label className="relative h-8 w-8 cursor-pointer overflow-hidden rounded-full border border-border" title="Any color"
+                    style={{ background: 'conic-gradient(#f43f5e,#f59e0b,#84cc16,#06b6d4,#6366f1,#d946ef,#f43f5e)' }}>
+                    <input type="color" value={color} onChange={e => set('primary', e.target.value.toLowerCase())} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Pick any primary color" />
+                    {look.primary && !PRIMARIES.includes(look.primary) && <span className="absolute inset-1.5 rounded-full border-2 border-white" style={{ background: look.primary }} />}
+                  </label>
+                </div>
+              </Field>
               <Field label="Accent color" hint="Your second color: trim, two-tone seats, flags and end zone lettering.">
                 <div className="flex flex-wrap items-center gap-2">
                   <button onClick={() => set('accent', null)} aria-pressed={look.accent === null}
@@ -436,6 +452,8 @@ const PAINT_LABELS: Record<ColorSlot, { label: string; note: string }> = {
   posts: { label: 'Goalposts', note: 'Classic yellow, or anything else.' },
   lights: { label: 'Light color', note: 'The floodlights and the glow at night.' },
 };
+/** Main colors to start from: the usual team colors. */
+const PRIMARIES = ['#c8102e', '#7a1f2b', '#f26a21', '#d4a017', '#1f7a3a', '#00a3ad', '#1f4fa8', '#1f2a44', '#5b2a86', '#15181c'];
 const QUICK = ['#ffffff', '#f3ead7', '#c9ced3', '#6b7280', '#15181c', '#c8102e', '#f26a21', '#d4a017', '#1f7a3a', '#00a3ad', '#1f4fa8', '#1f2a44', '#5b2a86', '#e64d8b'];
 
 /** Whole-stadium color themes to start from, made from the team's own colors. */
@@ -799,7 +817,10 @@ function BuildTab({ build, style, compact }: { build: NonNullable<Parameters<typ
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <p className="font-display text-[28px] font-extrabold leading-none tabular-nums">{cash(vc)} <span className="text-[14px] font-bold text-muted-foreground">in the bank</span></p>
-        <p className="text-[12px] text-muted-foreground">{ready ? `${ready} upgrade${ready === 1 ? '' : 's'} ready to build. ` : ''}Tap one to see it on your stadium.</p>
+        <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          {ready ? `${ready} upgrade${ready === 1 ? '' : 's'} ready to build. ` : ''}
+          <EyeIcon className="h-3.5 w-3.5 text-primary" /> Tap one to preview it on your stadium.
+        </p>
       </div>
       {error && <p className="text-[13px] font-medium text-destructive">{error}</p>}
       <ul className={cn('grid gap-2', !compact && 'md:grid-cols-2')}>
@@ -818,7 +839,15 @@ function BuildTab({ build, style, compact }: { build: NonNullable<Parameters<typ
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="text-[13.5px] font-semibold">{item.name}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-[13.5px] font-semibold">{item.name}</span>
+                      {n && !item.blocked && (
+                        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition',
+                          on ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary')}>
+                          <EyeIcon className="h-3 w-3" /> {on ? 'Previewing' : 'Preview'}
+                        </span>
+                      )}
+                    </span>
                     <span className="flex gap-0.5" aria-label={`Level ${item.level} of ${item.max}`}>
                       {Array.from({ length: item.max }, (_, k) => (
                         <motion.span key={k} initial={false} animate={{ scale: k < item.level ? 1 : 0.8 }}

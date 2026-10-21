@@ -176,7 +176,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const facilitiesShown = previewing ? FULLY_BUILT
     : previewItem ? { ...t.stadium.facilities, [previewItem.track]: previewItem.next!.level } : t.stadium.facilities;
   const stadium = (
-    <Stadium3D facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
+    <Stadium3D focus={previewItem?.track ?? null} facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
       teamName={teamName} logo={logo} look={lookNow} hour={hour} />
   );
   const studio = (compact: boolean) => (

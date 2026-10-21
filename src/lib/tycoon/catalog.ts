@@ -75,9 +75,9 @@ export const TRACKS: Track[] = [
   {
     id: 'restrooms', name: 'Restrooms', about: 'Nobody notices good restrooms. Everyone notices bad ones.',
     levels: [
-      { name: 'More stalls', cost: 90, upkeep: 4_000, blurb: 'The halftime line moves.' },
-      { name: 'Renovated restrooms', cost: 380, upkeep: 12_000, blurb: 'Clean, bright, quick.' },
-      { name: 'Spa-grade restrooms', cost: 1_100, upkeep: 30_000, blurb: 'Fans talk about them. Really.' },
+      { name: 'More stalls', cost: 90, upkeep: 4_000, blurb: 'Two more blocks, stalls and a longer trough. The halftime line moves.' },
+      { name: 'Renovated restrooms', cost: 380, upkeep: 12_000, blurb: 'Stainless troughs, white tile, real lights. Clean, bright, quick.' },
+      { name: 'Spa-grade restrooms', cost: 1_100, upkeep: 30_000, blurb: 'Gold troughs on a bed of ice, marble floors, a plant. Fans talk about them. Really.' },
     ],
   },
   {
