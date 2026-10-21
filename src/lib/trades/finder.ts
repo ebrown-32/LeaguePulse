@@ -16,9 +16,10 @@
  */
 
 import { getRedis } from '@/lib/redisClient';
-import { equivalent, adjusted, fairnessGrade, searchTrades, type TFTeam } from './engine';
+import { equivalent, adjusted, fairnessGrade, lineupPoints, searchTrades, PICK, type Story, type TFPlayer, type TFTeam } from './engine';
 import { feedOrder, type FeedFilters, type FeedTrade } from './feed';
-import { formatOf, marketValues, nameKey } from './values';
+import { leaguePicks, type TradedPick } from './picks';
+import { leagueMarket, nameKey, type LeagueKind } from './values';
 
 export interface FinderPlayer {
   id: string;
@@ -29,6 +30,9 @@ export interface FinderPlayer {
   ppw: number;
   /** Market value's change over thirty days, where FantasyCalc has it. */
   trend: number | null;
+  age: number | null;
+  /** A draft pick's detail: "Early · via Taco Tuesday Titans". */
+  note: string | null;
 }
 
 export interface FinderSide {
@@ -44,11 +48,12 @@ export interface FinderSide {
 
 export interface FinderTrade {
   id: string;
-  kind: 'two' | 'three';
+  kind: 'two' | 'multi';
   grade: string;
   balance: number;
   /** New since the last rebuild. */
   fresh: boolean;
+  story: Story;
   sides: FinderSide[];
 }
 
@@ -61,6 +66,7 @@ export interface FinderTeam {
 
 export interface FinderMeta {
   teams: FinderTeam[];
+  kind: LeagueKind;
   source: 'FantasyCalc' | 'DynastyProcess';
   /** Weeks the projections cover, or null when they came from market value alone. */
   weeks: number[] | null;
@@ -79,7 +85,7 @@ export interface FinderPage {
   meta: FinderMeta;
 }
 
-type PlayerRow = [name: string, position: string, nflTeam: string, value: number, ppw: number, trend: number | null];
+type PlayerRow = [name: string, position: string, nflTeam: string, value: number, ppw: number, trend: number | null, age: number | null, note: string | null];
 
 interface Pool {
   fingerprint: string;
@@ -87,6 +93,7 @@ interface Pool {
   /** The rebuild before this one: trades born after it are fresh. */
   previousAt: number;
   valuesAt: number;
+  kind: LeagueKind;
   source: FinderMeta['source'];
   weeks: number[] | null;
   teams: FinderTeam[];
@@ -94,7 +101,7 @@ interface Pool {
   trades: FeedTrade[];
 }
 
-const KEY = 'trade_finder_pool_v1';
+const KEY = 'trade_finder_pool_v7';
 const LOCK = 'trade_finder_building';
 const CHECK_MS = 5 * 60_000;
 const REBUILD_MS = 3600_000;
@@ -143,7 +150,7 @@ async function getPool(): Promise<Pool | null> {
   if (stored && redis && await redis.get(LOCK).catch(() => null)) return stored;
   await redis?.set(LOCK, '1', 90).catch(() => {});
   try {
-    const pool = await build(league, rosters, users, fingerprint, stored);
+    const pool = await build(leagueId, league, rosters, users, fingerprint, stored);
     if (!pool) return stored;
     memo.pool = pool; memo.checkedAt = now;
     await redis?.set(KEY, JSON.stringify({ ...pool, checkedAt: now }), 7 * 86_400).catch(() => {});
@@ -153,9 +160,10 @@ async function getPool(): Promise<Pool | null> {
   }
 }
 
-async function build(league: any, rosters: any[], users: any[], fingerprint: string, previous: Pool | null): Promise<Pool | null> {
-  const market = await marketValues(formatOf(league));
-  if (!market) return null;
+async function build(leagueId: string, league: any, rosters: any[], users: any[], fingerprint: string, previous: Pool | null): Promise<Pool | null> {
+  const values = await leagueMarket(league);
+  if (!values) return null;
+  const { kind, market } = values;
   const [api, { getPlayersDirectory }, { weeklyProjectionsFor, fantasyPositions }, { teamAvatar }] = await Promise.all([
     import('@/lib/api'), import('@/lib/playerStats'), import('@/lib/sim/weeklyProjections'), import('@/lib/teamAvatar'),
   ]);
@@ -180,16 +188,43 @@ async function build(league: any, rosters: any[], users: any[], fingerprint: str
   const players: Record<string, PlayerRow> = {};
   const teams: TFTeam[] = rosters.map((r: any) => ({
     rosterId: Number(r.roster_id),
-    players: (r.players ?? []).map((id: string) => {
+    players: (r.players ?? []).map((id: string): TFPlayer => {
       const d = directory[id] ?? {};
       const name = d.full_name || [d.first_name, d.last_name].filter(Boolean).join(' ') || id;
       const position = d.position ?? '';
       const value = market.byId[id] ?? market.byName[nameKey(name, position)] ?? 0;
       const ppw = ppwOf(id, value);
-      players[id] = [name, position, d.team ?? 'FA', Math.round(value), round(ppw), market.trend[id] ?? null];
-      return { id, name, position, nflTeam: d.team ?? 'FA', value, ppw };
+      const trend = market.trend[id] ?? null;
+      players[id] = [name, position, d.team ?? 'FA', Math.round(value), round(ppw), trend, market.age[id] ?? (Number(d.age) || null), null];
+      return { id, name, position, nflTeam: d.team ?? 'FA', value, ppw, trend };
     }),
   }));
+
+  // A dynasty league trades its draft picks too.
+  if (kind === 'dynasty' && Object.keys(market.picks).length) {
+    const { leagueFetch } = await import('@/lib/providers/leagueFetch');
+    const traded: TradedPick[] = await leagueFetch(`https://api.sleeper.app/v1/league/${leagueId}/traded_picks`)
+      .then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const season = Number(league.season);
+    const seasons = [...(league.status === 'pre_draft' ? [season] : []), season + 1, season + 2, season + 3].slice(0, 3).map(String);
+    const nameOf = (rid: number) => {
+      const u = users.find((x: any) => String(x.user_id) === String(rosters.find((r: any) => Number(r.roster_id) === rid)?.owner_id));
+      return u?.metadata?.team_name || u?.display_name || `Team ${rid}`;
+    };
+    const picks = leaguePicks({
+      seasons, rounds: Math.min(4, Number(league.settings?.draft_rounds ?? 4)), rosterIds: teams.map(t => t.rosterId),
+      traded: Array.isArray(traded) ? traded : [],
+      strength: new Map(teams.map(t => [t.rosterId, lineupPoints(t.players, slots)])),
+      values: market.picks,
+    });
+    for (const pk of picks) {
+      const team = teams.find(t => t.rosterId === pk.ownerRosterId);
+      if (!team) continue;
+      const note = [pk.tier, pk.originalRosterId !== pk.ownerRosterId ? `via ${nameOf(pk.originalRosterId)}` : null].filter(Boolean).join(' · ') || null;
+      players[pk.id] = [pk.name, PICK, '', Math.round(pk.value), 0, null, null, note];
+      team.players.push({ id: pk.id, name: pk.name, position: PICK, nflTeam: '', value: pk.value, ppw: 0 });
+    }
+  }
 
   const now = Date.now();
   const born = new Map((previous?.trades ?? []).map(t => [t.id, t.born]));
@@ -207,7 +242,7 @@ async function build(league: any, rosters: any[], users: any[], fingerprint: str
 
   const user = (owner: string) => users.find((u: any) => String(u.user_id) === owner);
   return {
-    fingerprint, builtAt: now, previousAt: previous?.builtAt ?? now, valuesAt: market.fetchedAt,
+    fingerprint, builtAt: now, previousAt: previous?.builtAt ?? now, valuesAt: market.fetchedAt, kind,
     source: market.source, weeks: projected ? weeks : null,
     teams: rosters.map((r: any) => {
       const u = user(String(r.owner_id ?? ''));
@@ -231,13 +266,13 @@ export async function tradeFeed(q: FeedFilters & { seed: number; offset: number;
   const order = feedOrder(pool.trades, q, q.seed, positionOf, freshSince);
   const page = order.slice(q.offset, q.offset + q.limit);
   const player = (id: string): FinderPlayer => {
-    const [name, position, nflTeam, value, ppw, trend] = pool.players[id] ?? [id, '', 'FA', 0, 0, null];
-    return { id, name, position, nflTeam, value, ppw, trend };
+    const [name, position, nflTeam, value, ppw, trend, age, note] = pool.players[id] ?? [id, '', 'FA', 0, 0, null, null, null];
+    return { id, name, position, nflTeam, value, ppw, trend, age: age ?? null, note: note ?? null };
   };
   const adjOf = (ids: string[]) => ids.reduce((s, id) => s + adjusted(pool.players[id]?.[3] ?? 0), 0);
   return {
     trades: page.map(t => ({
-      id: t.id, kind: t.kind, grade: fairnessGrade(t.balance), balance: t.balance, fresh: t.born > freshSince,
+      id: t.id, kind: t.kind, grade: fairnessGrade(t.balance), balance: t.balance, fresh: t.born > freshSince, story: t.story,
       sides: t.sides.map(s => ({
         rosterId: s.rosterId, gets: s.gets.map(player), gives: s.gives.map(player), lineupDelta: s.lineupDelta,
         marketDelta: Math.round(equivalent(adjOf(s.gets)) - equivalent(adjOf(s.gives))),
@@ -246,7 +281,7 @@ export async function tradeFeed(q: FeedFilters & { seed: number; offset: number;
     total: order.length,
     exhausted: q.offset + q.limit >= order.length,
     meta: {
-      teams: pool.teams, source: pool.source, weeks: pool.weeks, builtAt: pool.builtAt, valuesAt: pool.valuesAt,
+      teams: pool.teams, kind: pool.kind, source: pool.source, weeks: pool.weeks, builtAt: pool.builtAt, valuesAt: pool.valuesAt,
       poolSize: pool.trades.length, freshCount: pool.trades.filter(t => t.born > freshSince).length,
     },
   };

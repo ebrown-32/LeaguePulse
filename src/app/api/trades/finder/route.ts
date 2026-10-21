@@ -5,7 +5,7 @@ import type { Goal } from '@/lib/trades/feed';
 // A page of Trade Finder's feed for the league in the request (lib/trades/finder). The pool behind
 // it is kept in storage, so a page is a storage read and a sort.
 //   ?seed  the visit's shuffle   ?offset&limit  the page
-//   ?teams=1,4  ?pos=RB,WR  ?goal=now|later  ?fair=1  ?three=1
+//   ?teams=1,4  ?pos=RB,WR  ?goal=now|later  ?fair=1  ?size=2..6  ?picks=1  ?creativity=0..100
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
       positions: list(q.get('pos')).filter(p => ['QB', 'RB', 'WR', 'TE'].includes(p)),
       goal: (goal === 'now' || goal === 'later' ? goal : 'any') as Goal,
       fair: q.get('fair') === '1',
-      three: q.get('three') === '1',
+      size: [2, 3, 4, 5, 6].includes(Number(q.get('size'))) ? Number(q.get('size')) : 0,
+      creativity: Math.min(100, Math.max(0, Number(q.get('creativity') ?? 50) || 0)) / 100,
+      picks: q.get('picks') === '1',
     });
     if (!page) return NextResponse.json({ error: 'No trade values for this league yet' }, { status: 503 });
     return NextResponse.json(page);

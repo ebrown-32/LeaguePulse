@@ -312,6 +312,16 @@
     animation: lp-shimmer 1.4s ease-in-out 3;
   }
   html[data-motion='reduced'] .tf-shimmer { animation: none; }
+
+  /* Trade Finder's creativity dial: a filled track and a round thumb, in the theme's colours. */
+  .tf-range { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px; cursor: pointer;
+    background: linear-gradient(to right, hsl(var(--primary)) var(--tf-fill), hsl(var(--border)) var(--tf-fill)); }
+  .tf-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 9999px;
+    background: hsl(var(--background)); border: 3px solid hsl(var(--primary)); box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+    transition: transform 0.15s ease; }
+  .tf-range:active::-webkit-slider-thumb { transform: scale(1.15); }
+  .tf-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px;
+    background: hsl(var(--background)); border: 3px solid hsl(var(--primary)); }
   @media (prefers-reduced-motion: reduce) { .tf-shimmer { animation: none; } }
 
   /* Held still rather than hidden: the placeholder still has to hold the
