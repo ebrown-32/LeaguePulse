@@ -5,7 +5,8 @@
  * color, motto, bio) and the business (prices, building, the books), apart
  * from the public franchise page.
  *
- * Getting in takes a manager pass (or the league admin's). Arriving without
+ * Getting in takes a manager pass, or the league admin's sign-in: an admin may edit any member's
+ * identity and stadium (the business, prices and building, stays the manager's). Arriving without
  * one, it goes once through the product site, which mints one for the signed-
  * in manager and comes straight back here; anyone else is told so.
  */
@@ -77,6 +78,12 @@ export default function ManageView({ franchiseId }: { franchiseId: string }) {
         </div>
         <a href={publicPath} className="rounded-full border border-border px-4 py-2 text-[13px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">View public page</a>
       </motion.div>
+      {auth['x-admin-password'] && (
+        <p className="rounded-xl border border-primary/30 bg-primary/[0.06] px-4 py-3 text-[13px] text-foreground">
+          <span className="font-semibold">Editing as the league admin.</span>{' '}
+          <span className="text-muted-foreground">You can change this franchise&apos;s identity and its stadium. Prices and building stay with its manager.</span>
+        </p>
+      )}
       <FranchiseHQ franchiseId={franchiseId} mode="manage" auth={auth} color={color} teamName={teamName}
         logo={fieldLogo(info.identity.logoUrl, franchiseId)} look={info.identity.look} stadiumName={info.identity.stadiumName} onLookSaved={reload}
         identity={
