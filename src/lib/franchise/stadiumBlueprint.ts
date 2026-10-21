@@ -387,8 +387,14 @@ export function blueprint(style: StadiumLook['style'], f: Facilities): Blueprint
         const x = sx * ((sx > 0 ? END_X : NORTH_X) + 0.1), z = sz * CHAMFER_Z;
         bp.pavilions.push([x, z, (sx > 0 ? endTop : topOf(north())) + 0.3, facing(x, z)]);
       }
-      // Lights behind the four corners.
-      bp.towers = towersAt([1, 3, 5, 7].map(k => (k * Math.PI) / 4));
+      // Light banks on top of the sideline stands, as the real one has: its square plan puts the
+      // corners far out in the lots, where towers would light nothing.
+      // On the roofs of the buildings behind the sidelines, a third and two thirds along each.
+      bp.towers = bp.stands.filter(st => (bp.bulk[st.id] ?? 0) > 0).flatMap(st => [0.25, 0.75].map(t => {
+        const a = st.from + (st.to - st.from) * t, d = st.decks(a);
+        const [x, z] = outline.around(a, outerOf(d) + bp.bulk[st.id] * 0.5);
+        return [x, z, topOf(d) + 0.9] as [number, number, number];
+      }));
       if (f.videoboard > 0) {
         // The big board stands behind the south end, on its own posts.
         const x = END_X + 0.45, w = bw * 1.6, h = bh * 1.6, reach = topOf(south()) + 0.25;

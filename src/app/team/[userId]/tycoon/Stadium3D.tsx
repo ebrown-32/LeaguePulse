@@ -23,9 +23,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, Stars } from '@react-three/drei';
 import LiveField, { type LiveScene } from './LiveField';
+import RosterSideline from './RosterSideline';
 import {
   BoxGeometry, CanvasTexture, Color, DoubleSide, Plane, type Material, InstancedBufferAttribute, MeshStandardMaterial, Object3D, SphereGeometry, SRGBColorSpace, Vector3,
   type Group, type InstancedMesh, type Matrix4, type Mesh,
@@ -38,16 +40,29 @@ import {
 } from '@/lib/franchise/stadiumBlueprint';
 import { fieldColors, Gridiron, inkOn, type FieldScene } from './Gridiron';
 import { Grounds, GROUND } from './Grounds';
-import { ConcessionStands, focusShot, plazaSpots, Restrooms, WIDE, type Shot } from './plazaBuildings';
+import LegendCard from './LegendCard';
+import { LegendStatues } from './LegendStatues';
+import type { FranchiseLegend } from '@/lib/archive/franchises';
+import { ConcessionStands, focusShot, PlazaCrowd, PlazaFurniture, PlazaGround, plazaLayout, Restrooms, TeamStore, WIDE, type Shot } from './plazaBuildings';
 import { HAZE } from './campusLook';
 import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
 import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
 
+export type { RosterPlayer as SidelinePlayer } from './RosterSideline';
+import type { RosterPlayer as SidelinePlayer } from './RosterSideline';
+
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
   /** An upgrade being looked at (previewed in the studio): the camera flies to it, and back when it's cleared. */
   focus?: TrackId | null;
+  /** Whose stadium it is: the statues around it are of the franchise's legends (LegendStatues). */
+  franchiseId?: string;
+  /**
+   * The team on show, when there's no game: its roster's player cards lined up on the home
+   * sideline, the way they wait there in Watch Live (LiveField's roster).
+   */
+  sideline?: SidelinePlayer[] | null;
   /** Painted in the end zones and at midfield; the stadium's name otherwise. */
   teamName?: string;
   /** The team's logo for midfield, same-origin (see Gridiron). */
@@ -986,34 +1001,6 @@ function LightTowers({ at, color, on }: { at: [number, number, number][]; color:
   );
 }
 
-/** People strolling the plaza: more of them the bigger the crowd. */
-function People({ bp, fill, colors }: { bp: Blueprint; fill: number; colors: Color[] }) {
-  const mesh = useRef<InstancedMesh>(null);
-  const radius = bp.footprint + 0.2, o = bp.outline;
-  const folk = useMemo(() => {
-    const r = rng(41);
-    const n = Math.round(40 + fill * 120);
-    return Array.from({ length: n }, () => ({ a: r() * TAU, d: radius + 0.2 + r() * 0.9, speed: (r() - 0.5) * 0.12, c: colors[Math.floor(r() * colors.length)] }));
-  }, [radius, fill, colors]);
-  const dummy = useMemo(() => new Object3D(), []);
-  useEffect(() => {
-    const m = mesh.current; if (!m) return;
-    folk.forEach((f, i) => m.setColorAt(i, f.c));
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [folk]);
-  useFrame(({ clock }) => {
-    const m = mesh.current; if (!m) return;
-    const t = clock.elapsedTime;
-    folk.forEach((f, i) => {
-      const [x, z] = o.around(f.a + t * f.speed, f.d);
-      dummy.position.set(x, 0.09 + Math.abs(Math.sin(t * 6 + i)) * 0.01, z);
-      dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
-    });
-    m.instanceMatrix.needsUpdate = true;
-  });
-  return <instancedMesh ref={mesh} args={[undefined, undefined, folk.length]} key={folk.length} frustumCulled={false}><capsuleGeometry args={[0.035, 0.1, 3, 6]} /><meshStandardMaterial roughness={0.8} /></instancedMesh>;
-}
-
 /**
  * The pyro cannons around the bowl. On a franchise's own page they fire on a loop, showing off the
  * upgrade; during a live game (`once`) they fire a single volley, mounted afresh for each score.
@@ -1297,7 +1284,7 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view }: StadiumProps & { hour: number; quality: Quality }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view, franchiseId, onLegend, sideline }: StadiumProps & { hour: number; quality: Quality; onLegend?: (l: FranchiseLegend) => void }) {
   const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
@@ -1319,9 +1306,10 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
   const lightsOn = sky.lightsOn || indoors;
   const fascia = look.style === 'cantilever' ? mix(color, '#1b1d21', 0.2) : p.trim;
   const plaza = bp.footprint;
-  const spots = useMemo(() => plazaSpots(bp, f.concessions, f.restrooms), [bp, f.concessions, f.restrooms]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const layout = useMemo(() => plazaLayout(bp, f, look), [bp, f, look.features.join(), look.plaza]);
   const filmed = scripted() ? (window as unknown as { __lpCam?: CamShot }).__lpCam?.focus ?? null : null;
-  const shot = useMemo(() => ((focus ?? filmed) ? focusShot((focus ?? filmed)!, bp, spots) : null), [focus, filmed, bp, spots]);
+  const shot = useMemo(() => ((focus ?? filmed) ? focusShot((focus ?? filmed)!, bp, layout) : null), [focus, filmed, bp, layout]);
   // The live matchup's score for the boards, with the latest big play flashed across them.
   const liveScore = useMemo<ScoreScreen | null>(() => (live ? {
     host: { name: live.match.host.name, score: live.match.host.score, color: live.hostColor },
@@ -1329,6 +1317,9 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
     status: live.match.demo ? 'Demo' : live.match.phase === 'final' ? 'Final' : live.match.phase === 'live' ? `Live · Week ${live.match.week}` : `Week ${live.match.week}`,
     flash: live.celebrate ? (live.celebrate.td ? 'TOUCHDOWN!' : 'BIG PLAY!') : null,
   } : null), [live]);
+
+  // The roster on the home sideline, as Watch Live has a team waiting there; up to the wall in front of the stands.
+  const sidelineZ = useMemo(() => Math.abs(bp.outline.around(Math.PI / 2, bp.inner)[1]), [bp]);
 
   // A fragment, not a group: the sky color and the fog attach to their parent, and only the scene draws them.
   return (
@@ -1352,7 +1343,8 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
           <meshStandardMaterial color={p.team} emissive={p.team} emissiveIntensity={0.9} side={DoubleSide} />
         </Ribbon>
       )}
-      <Gridiron look={look} color={color} team={team} logo={logo} visitors={visitors} scene={field} />
+      {/* With the roster on the sideline, the field stays clear: the cards are the team. */}
+      <Gridiron look={look} color={color} team={team} logo={logo} visitors={visitors} scene={!live && !photo && sideline?.length ? 'empty' : field} />
 
       {bp.berm && <Berm bp={bp} setting={look.setting} />}
       <Rise key={build}><Stands bp={bp} p={p} fascia={fascia} wall={p.wall} /></Rise>
@@ -1372,23 +1364,28 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
 
       {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} score={liveScore} /></Rise>}
       {live && live.match.phase !== 'upcoming' && <LiveField live={live} />}
+      {!live && !photo && sideline && sideline.length > 0 && <RosterSideline players={sideline} color={color} sidelineZ={sidelineZ} />}
       <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
       {/* With the lights on, the bowl glows. */}
       {/* Always there, only dimmed by day: adding or removing a light recompiles every material in the scene, a visible hitch. */}
-      <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={lightsOn ? 9 + sky.night * 12 : 0} distance={16} color={p.light} />
+      {/* Reaching the field from over the tallest stands: a bigger bowl's light carries further. */}
+      <pointLight position={[0, indoors ? bp.top * 0.85 : bp.top + 2.5, 0]} intensity={lightsOn ? 11 + sky.night * 17 : 0}
+        distance={Math.max(16, bp.top + bp.footprint * 1.6)} decay={1.7} color={p.light} />
 
       {/* Concessions and restrooms line the plaza; the store sits by the west gate. */}
-      <Rise key={`c${f.concessions}${build}`}><ConcessionStands spots={spots.stands} team={color} accent={p.accent} /></Rise>
-      <Rise key={`r${f.restrooms}${build}`}><Restrooms spots={spots.blocks} level={f.restrooms} night={sky.night} /></Rise>
-      {f.store > 0 && (
-        <Rise key={`st${f.store}${build}`}>
-          <group position={[-(plaza + 0.95) * OVAL, 0, 0.9]}>
-            <mesh position={[0, 0.18 * f.store, 0]} castShadow><boxGeometry args={[0.7 + 0.25 * f.store, 0.36 * f.store, 0.6]} /><meshStandardMaterial color="#f7f3ec" /></mesh>
-            <mesh position={[0.36 + 0.13 * f.store, 0.22 * f.store, 0]}><boxGeometry args={[0.02, 0.16, 0.45]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.4 + sky.night} /></mesh>
-          </group>
-        </Rise>
+      {layout.plan.statues.length > 0 && (
+        <LegendStatues spots={layout.plan.statues} franchiseId={franchiseId} teamName={team} team={color} accent={p.accent} onPick={photo ? undefined : onLegend} />
       )}
-      <People bp={bp} fill={lots} colors={crowdColors} />
+      <PlazaGround bp={bp} plan={layout.plan} paving={GROUND[look.setting].plaza} team={color} accent={p.accent} />
+      <Rise key={`fu${build}${look.features.join()}${look.plaza}`}>
+        <PlazaFurniture plan={layout.plan} team={color} accent={p.accent} night={sky.night} banners={look.features.includes('banners')} garden={look.plaza === 'garden'} />
+      </Rise>
+      <Rise key={`c${f.concessions}${build}`}><ConcessionStands spots={layout.plan.stands} team={color} accent={p.accent} /></Rise>
+      <Rise key={`r${f.restrooms}${build}`}><Restrooms spots={layout.blocks} level={f.restrooms} night={sky.night} /></Rise>
+      {layout.plan.store && f.store > 0 && (
+        <Rise key={`st${f.store}${build}`}><TeamStore at={layout.plan.store} level={f.store} team={color} accent={p.accent} night={sky.night} /></Rise>
+      )}
+      <PlazaCrowd bp={bp} plan={layout.plan} fill={lots} colors={crowdColors} />
       {!photo && !view?.broadcast && <FocusRig shot={shot} />}
       {/* Watching a game, the cannons only go off for a score. */}
       {f.atmosphere >= 3 && (live
@@ -1438,6 +1435,8 @@ export default function Stadium3D(props: StadiumProps) {
   };
   useEffect(() => () => { if (calm.current) clearTimeout(calm.current); }, []);
   const fps = handled ? 60 : Math.min(60, props.fps ?? 60);
+  // A legend's statue tapped: their story, over the stadium.
+  const [legend, setLegend] = useState<FranchiseLegend | null>(null);
 
   return (
     // A stacking context of its own (`isolate`): the 3D labels (live cards and pins) set their own
@@ -1458,12 +1457,15 @@ export default function Stadium3D(props: StadiumProps) {
           {/* Measured against the pace it's held to, so a stadium held to 30 isn't taken for a slow one. */}
           {!scripted() && !props.photo && <PerformanceMonitor key={fps} bounds={() => [fps - 8, fps + 30]} flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}
-          <Scene {...props} hour={hour} quality={quality} />
+          <Scene {...props} hour={hour} quality={quality} onLegend={setLegend} />
           {props.onReady && <ReadySignal onReady={props.onReady} />}
           {scripted() ? <ScriptedCamera /> : props.photo ? <FixedCamera target={props.view?.target ?? [0, 0.8, 0]} /> : <OrbitControls makeDefault autoRotate={!props.view?.still && !props.focus} autoRotateSpeed={0.4 * (60 / fps)} enablePan={Boolean(props.view?.broadcast)} screenSpacePanning={false} minDistance={props.focus ? 0.8 : props.view ? (props.view.broadcast ? 2 : 3) : 9} maxDistance={34} maxPolarAngle={props.view?.broadcast ? 1.45 : 1.3} target={props.view?.target ?? [0, 0.8, 0]} />}
           {props.view?.broadcast && !props.photo && !scripted() && <BroadcastRig view={props.view} />}
         </Canvas>
       ) : null}
+      <AnimatePresence>
+        {legend && <LegendCard key={legend.playerId} legend={legend} team={props.look?.primary ?? props.color} onClose={() => setLegend(null)} />}
+      </AnimatePresence>
     </div>
   );
 }

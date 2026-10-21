@@ -26,6 +26,7 @@ import { FULLY_BUILT, lookSummary, PreviewControls, StadiumStudio } from './Stad
 import { CHART_VARS, CrowdsChart, DemandCharts, InterestChart, RevenueChart, VCChart } from './charts';
 import GamePlan, { LevelUp } from './GamePlan';
 
+import type { SidelinePlayer } from './Stadium3D';
 const Stadium3D = dynamic(() => import('./Stadium3D'), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-muted/40" /> });
 
 export interface Game {
@@ -105,6 +106,15 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
     fetch(url, { headers: auth ?? {}, cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => d && setT(d)).catch(() => {});
   }, [url, auth]);
   useEffect(load, [load]);
+  // On the public page, the team itself: its roster on the stadium's home sideline.
+  const [roster, setRoster] = useState<SidelinePlayer[] | null>(null);
+  useEffect(() => {
+    if (mode !== 'public') return;
+    let live = true;
+    fetch(`/api/franchises/${encodeURIComponent(franchiseId)}/roster`).then(r => (r.ok ? r.json() : null))
+      .then(d => { if (live && Array.isArray(d?.players)) setRoster(d.players); }).catch(() => {});
+    return () => { live = false; };
+  }, [mode, franchiseId]);
 
   const [hint, setHint] = useState(true);
   // A link to the franchise's #stadium (the franchises list) opens the stadium fullscreen.
@@ -176,7 +186,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const facilitiesShown = previewing ? FULLY_BUILT
     : previewItem ? { ...t.stadium.facilities, [previewItem.track]: previewItem.next!.level } : t.stadium.facilities;
   const stadium = (
-    <Stadium3D focus={previewItem?.track ?? null} facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
+    <Stadium3D franchiseId={franchiseId} sideline={mode === 'public' ? roster : null} focus={previewItem?.track ?? null} facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
       teamName={teamName} logo={logo} look={lookNow} hour={hour} />
   );
   const studio = (compact: boolean) => (
