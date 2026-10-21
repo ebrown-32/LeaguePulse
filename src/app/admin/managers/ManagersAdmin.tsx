@@ -2,12 +2,13 @@
 
 /**
  * Managers, in the admin: claims on the league's franchises waiting for an
- * answer, and who manages which franchise now. See lib/franchise.
+ * answer, who manages which franchise now, and a way into any franchise to edit
+ * its identity and stadium as the admin. See lib/franchise.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Users } from '@/components/icons';
+import { Check, Pencil, Users } from '@/components/icons';
 import type { Claim } from '@/lib/franchise/model';
 
 interface Invite { franchiseId: string; teamName: string; email: string; invitedAt: string; link: string }
@@ -170,6 +171,28 @@ export default function ManagersAdmin({ adminPassword, onChange }: { adminPasswo
             </ul>
           </details>
         )}
+      </section>
+      <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+        <h3 className="text-base font-bold tracking-tight">Edit a franchise</h3>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          Change any team&apos;s logo, color, motto, bio, stadium name and stadium, managed or not. Prices and building stay with each team&apos;s manager, and your edits don&apos;t post to the Feed as the team.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {teams.map(t => (
+            // The same tab: the admin sign-in is this tab's, and the franchise page reads it from here.
+            <a key={t.franchiseId} href={`/team/${encodeURIComponent(t.franchiseId)}/manage`}
+              className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3.5 py-2.5 transition hover:border-foreground/30">
+              <span className="min-w-0">
+                <span className="block truncate text-[14px] font-semibold">{t.name}</span>
+                <span className="block text-[12px] text-muted-foreground">{t.managed ? 'Has a manager' : 'No manager yet'}</span>
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold text-muted-foreground group-hover:text-foreground">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </span>
+            </a>
+          ))}
+          {!teams.length && <p className="text-[13.5px] text-muted-foreground">No teams found yet.</p>}
+        </div>
       </section>
       {error && <p className="text-[13px] text-destructive">{error}</p>}
     </div>

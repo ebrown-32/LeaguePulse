@@ -170,7 +170,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
       .finally(() => setLoading(false));
   }, [userId]);
 
-  const { info: identity, mine, me } = useFranchise(userId);
+  const { info: identity, mine, admin, me } = useFranchise(userId);
 
   if (loading) return <Skeleton />;
 
@@ -212,7 +212,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
             <h1 className="truncate font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{data.teamName}</h1>
-            {mine && <ManageLink franchiseId={userId} />}
+            {(mine || admin) && <ManageLink franchiseId={userId} admin={!mine} />}
           </div>
           <p className="mt-0.5 text-[13.5px] text-muted-foreground">
             {fmtRecord(career.wins, career.losses, career.ties)} in the regular season{career.playoffWins + career.playoffLosses > 0 ? `, ${career.playoffWins}-${career.playoffLosses} in the playoffs` : ''}, {data.seasonsPlayed} season{data.seasonsPlayed !== 1 ? 's' : ''} ({seasonRange})

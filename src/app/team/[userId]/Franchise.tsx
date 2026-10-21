@@ -50,6 +50,8 @@ export function useFranchise(franchiseId: string) {
   const [info, setInfo] = useState<FranchiseInfo | null>(null);
   const [auth, setAuth] = useState<Record<string, string> | null>(null);
   const [mine, setMine] = useState(false);
+  /** Signed in to this league's admin, in this tab: they may edit any franchise's identity and stadium. */
+  const [admin, setAdmin] = useState(false);
   /** Signed in to LeaguePulse here (the footer's account), whoever manages this franchise. */
   const [me, setMe] = useState<{ name: string } | null>(null);
 
@@ -63,6 +65,7 @@ export function useFranchise(franchiseId: string) {
     let manager: string | null = m?.[1] ?? null, admin: string | null = null;
     try { manager ??= sessionStorage.getItem(passKey(franchiseId)); admin = sessionStorage.getItem('lp_admin_pass'); } catch { /* none */ }
     setAuth(manager ? { 'x-manager-pass': manager } : admin ? { 'x-admin-password': admin } : null);
+    setAdmin(!manager && Boolean(admin));
     if (manager) { setMine(true); return; }
     let visitor: string | null = null;
     try { visitor = localStorage.getItem('lp_visitor'); } catch { /* none */ }
@@ -84,15 +87,16 @@ export function useFranchise(franchiseId: string) {
   }, [franchiseId]);
   useEffect(load, [load]);
 
-  return { info, auth, mine, me, reload: load };
+  return { info, auth, mine, admin, me, reload: load };
 }
 
 export const managePath = (franchiseId: string) => `/team/${encodeURIComponent(franchiseId)}/manage`;
 
 /** The way into the manage page: a quiet pencil, for the franchise's own manager. */
-export function ManageLink({ franchiseId }: { franchiseId: string }) {
+export function ManageLink({ franchiseId, admin = false }: { franchiseId: string; admin?: boolean }) {
+  const label = admin ? 'Edit this franchise as the league admin' : 'Manage your franchise';
   return (
-    <a href={managePath(franchiseId)} aria-label="Manage your franchise" title="Manage your franchise"
+    <a href={managePath(franchiseId)} aria-label={label} title={label}
       className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-foreground/30 hover:bg-muted hover:text-foreground">
       <Pencil className="h-3.5 w-3.5" />
     </a>

@@ -38,13 +38,14 @@ async function leagueColor(site: string, franchiseId: string): Promise<string | 
   return seededColors(ids.filter(id => !picked.get(id)?.color)).get(franchiseId) ?? null;
 }
 
-/** May this request edit the franchise? Its manager's pass, or the league's admin. */
-async function canEdit(req: Request, site: string, franchiseId: string): Promise<boolean> {
+/** Who may edit the franchise: its manager (their pass), or the league's admin; null for anyone else. */
+async function editor(req: Request, site: string, franchiseId: string): Promise<'manager' | 'admin' | null> {
   const { verifyManagerPass } = await import('@/lib/franchise/managerPass');
-  if (await verifyManagerPass(req.headers.get('x-manager-pass'), site, franchiseId).catch(() => false)) return true;
+  if (await verifyManagerPass(req.headers.get('x-manager-pass'), site, franchiseId).catch(() => false)) return 'manager';
   const { isAdminRequest } = await import('@/lib/tenant/admin');
-  return req.headers.get('x-admin-password') ? isAdminRequest(req) : false;
+  return req.headers.get('x-admin-password') && await isAdminRequest(req) ? 'admin' : null;
 }
+const canEdit = async (req: Request, site: string, franchiseId: string) => (await editor(req, site, franchiseId)) !== null;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -78,7 +79,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { site, store, franchiseId } = await context((await params).id);
-  if (!(await canEdit(req, site, franchiseId))) return NextResponse.json({ error: 'Only this franchise’s manager can change it.' }, { status: 401 });
+  const who = await editor(req, site, franchiseId);
+  if (!who) return NextResponse.json({ error: 'Only this franchise’s manager can change it.' }, { status: 401 });
   const before = await store.getFranchise(site, franchiseId);
   const error = await store.saveIdentity(site, franchiseId, await req.json().catch(() => null));
   if (error) return NextResponse.json({ error }, { status: 400 });
@@ -89,7 +91,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (now.color && now.color !== before.color) news.push({ kind: 'colors', color: now.color });
   if (now.motto && now.motto !== before.motto) news.push({ kind: 'motto', motto: now.motto });
   if (now.look && JSON.stringify(now.look) !== JSON.stringify(before.look)) news.push({ kind: 'look' });
-  if (news.length) after(async () => { const { announce } = await import('@/lib/franchise/announce'); for (const a of news) await announce(franchiseId, a); });
+  // The franchise announces its own changes; the admin tidying a member's page doesn't post as them.
+  if (news.length && who === 'manager') after(async () => { const { announce } = await import('@/lib/franchise/announce'); for (const a of news) await announce(franchiseId, a); });
   return NextResponse.json({ ok: true, franchise: now });
 }
 
