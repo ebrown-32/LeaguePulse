@@ -4,6 +4,7 @@
  * accounts (lib/franchise/gameday): big days and final scores.
  */
 
+import { withCron } from '@/lib/ops/monitor';
 import { NextResponse } from 'next/server';
 import { bearerMatches } from '@/lib/platform/operator';
 
@@ -17,7 +18,7 @@ const BUDGET_MS = 240_000;
  */
 const RECENT_MS = 36 * 3_600_000;
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   const hosted = process.env.LP_HOSTED === '1';
   // Open locally without a secret, like the other jobs; never on the hosted product.
@@ -50,3 +51,6 @@ export async function GET(req: Request) {
   }
   return NextResponse.json({ ms: Date.now() - now, results });
 }
+
+/** Each run recorded for the back office (lib/ops/monitor). */
+export const GET = withCron('franchise', run);

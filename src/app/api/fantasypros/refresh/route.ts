@@ -1,3 +1,4 @@
+import { withCron } from '@/lib/ops/monitor';
 import { bearerMatches } from '@/lib/platform/operator';
 import { NextResponse } from 'next/server';
 import { refreshRankings } from '@/lib/fantasyProsRefresh';
@@ -61,7 +62,7 @@ async function fanOut(request: Request): Promise<Response> {
   return NextResponse.json({ leagues: results.length, results });
 }
 
-export async function GET(request: Request) {
+async function refresh(request: Request) {
   if (!(await authorized(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const bySecret = bearerMatches(request, process.env.CRON_SECRET);
 
@@ -79,3 +80,6 @@ export async function GET(request: Request) {
   }
   return run(bySecret ? 'schedule' : 'admin');
 }
+
+/** Each run recorded for the back office (lib/ops/monitor). */
+export const GET = withCron('fantasypros', refresh);

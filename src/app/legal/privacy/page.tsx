@@ -5,11 +5,12 @@ export const metadata = { title: `Privacy Policy | ${PLATFORM.name}` };
 
 export default function PrivacyPage() {
   const n = PLATFORM.name;
+  const analytics = Boolean(process.env.NEXT_PUBLIC_MIXPANEL_TOKEN?.trim());
   const contact = PLATFORM.supportEmail
     ? <a href={`mailto:${PLATFORM.supportEmail}`}>{PLATFORM.supportEmail}</a>
     : 'the support address on our site';
   return (
-    <LegalPage title="Privacy Policy" updated="October 13, 2026">
+    <LegalPage title="Privacy Policy" updated="October 21, 2026">
       <p>This policy explains what {n} collects, why, and who it is shared with. We don&apos;t sell personal data and we don&apos;t run advertising.</p>
 
       <h2>What we collect</h2>
@@ -27,10 +28,18 @@ export default function PrivacyPage() {
 
       <h2>Your browser</h2>
       <p>
-        We don&apos;t use advertising or tracking cookies. Your browser stores a few preferences locally, such as
+        We don&apos;t use advertising cookies. Your browser stores a few preferences locally, such as
         the admin tab you last opened, posts you liked, saved analytics reports and dismissed banners. That data
         stays on your device.
       </p>
+      {analytics && (
+        <p>
+          To learn what works and what&apos;s broken, we use product analytics: which pages you open, what you tap,
+          and recordings of how pages are used. Everything typed into a form is hidden from those recordings. When
+          you&apos;re signed in, this is tied to your account&apos;s id, never your name or email. Your browser&apos;s
+          Do Not Track setting turns it off.
+        </p>
+      )}
 
       <h2>Who we share it with</h2>
       <p>Only the services that run {n}, for that purpose:</p>
@@ -38,6 +47,7 @@ export default function PrivacyPage() {
         <li><strong>Vercel</strong> hosts the site and keeps standard request logs, which include IP addresses, for a limited time.</li>
         <li><strong>Upstash</strong> stores site data.</li>
         <li><strong>Stripe</strong> processes payments.</li>
+        {analytics && <li><strong>Mixpanel</strong> receives the product analytics described above.</li>}
         <li><strong>Anthropic</strong> receives league data and questions when AI features run, under your own API key and your agreement with Anthropic.</li>
       </ul>
       <p>We also request data from Sleeper and ESPN. For a private ESPN league that request carries the league&apos;s ESPN cookies, as described above; otherwise we don&apos;t send them anything about you.</p>

@@ -15,6 +15,7 @@ import { RefreshCw, SlidersHorizontal, X } from '@/components/icons';
 import type { Goal } from '@/lib/trades/feed';
 import type { FinderMeta, FinderPage, FinderTeam, FinderTrade } from '@/lib/trades/finder';
 import type { LeagueKind } from '@/lib/trades/values';
+import { track } from '@/lib/mixpanel';
 import { cn } from '@/lib/utils';
 import TradeCard, { POSITION_TEXT, TeamAvatar } from './TradeCard';
 
@@ -78,6 +79,13 @@ export default function TradeFinder() {
       const page = await r.json() as FinderPage & { error?: string };
       if (!r.ok) throw new Error(page.error);
       if (gen !== c.gen) return; // The filters changed while this was in flight.
+      // Once per set of filters: what people ask the finder for, and whether it had answers.
+      if (c.offset === 0 && c.round === 1) {
+        track('trade_finder_searched', {
+          teams_filtered: filters.teams.length, positions: filters.positions.join(',') || 'any', goal: filters.goal,
+          fair_only: filters.fair, deal_size: filters.size || 'any', picks: filters.picks, creativity: filters.creativity, results: page.total,
+        });
+      }
       setMeta(page.meta);
       setTotal(page.total);
       const fresh: Item[] = page.trades.map(t => ({ kind: 'trade', key: `${c.round}:${t.id}`, trade: t }));

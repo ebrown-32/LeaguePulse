@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { initMixpanel, track } from '@/lib/mixpanel';
+import { initMixpanel, track, type SuperProps } from '@/lib/mixpanel';
 
 const PAGE_NAMES: Record<string, string> = {
   '/':             'Home',
@@ -17,15 +17,17 @@ const PAGE_NAMES: Record<string, string> = {
   '/constitution': 'Constitution',
 };
 
-export default function Analytics() {
+/** `props` go with every event (lib/mixpanel): the surface, and on a league's site which league. */
+export default function Analytics({ props }: { props?: SuperProps }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    initMixpanel();
+    initMixpanel(props);
     track('page_viewed', {
       page_name: PAGE_NAMES[pathname] ?? pathname,
       path: pathname,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   return null;

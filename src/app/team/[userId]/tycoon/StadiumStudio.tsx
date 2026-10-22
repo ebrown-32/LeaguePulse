@@ -30,6 +30,7 @@ import { STYLE_ORDER, STYLES, type StadiumStyle } from '@/lib/franchise/stadiumS
 import { blueprint, outerOf, OVAL, type Blueprint } from '@/lib/franchise/stadiumBlueprint';
 import { TRACK, type Facilities, type TrackId } from '@/lib/tycoon/catalog';
 import { cash } from '@/lib/tycoon/economy';
+import { track } from '@/lib/mixpanel';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -123,7 +124,7 @@ export function StadiumStudio({ franchiseId, auth, look, name, hour, color: iden
       body: JSON.stringify({ stadiumName: name, look }),
     }).catch(() => null);
     const d = await r?.json().catch(() => null);
-    if (r?.ok) { setMsg({ ok: true, text: 'Saved. Everyone sees it now.' }); onSaved?.(); }
+    if (r?.ok) { track('stadium_saved', { style: look.style, facade: look.facade, renamed: name !== saved.name }); setMsg({ ok: true, text: 'Saved. Everyone sees it now.' }); onSaved?.(); }
     else setMsg({ ok: false, text: r?.status === 401 ? 'Your editing pass has expired. Open the franchise again from your LeaguePulse account.' : d?.error ?? 'That did not save.' });
     setBusy(false);
   };

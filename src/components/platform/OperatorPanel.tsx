@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * The operator's panel: every league on the platform, at /operator on the
- * product domain.
+ * The operator's panel, at /operator on the product domain: every league on the platform
+ * (Leagues), how the platform is doing (Monitor: health, other services' calls and limits, AI
+ * spend, errors), and the bugs and ideas people send in (Feedback). See OpsPanels.
  *
  * Opens for a signed-in operator account (LP_OPERATOR_EMAILS), or with
  * LP_OPERATOR_SECRET kept for the browser tab only (sessionStorage). Every
@@ -16,6 +17,7 @@ import { UserButton, useUser } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 import { productDisplay } from './fonts';
 import { Logomark, Route, Tick } from './marks';
+import { FeedbackInbox, Monitor, useNewFeedback } from './OpsPanels';
 
 /** Accounts are on when Clerk is configured (hosted only); the user chip needs its provider. */
 const accountsOn = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
@@ -59,6 +61,12 @@ export default function OperatorPanel() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
+  const [tab, setTab] = useState<'leagues' | 'monitor' | 'feedback'>(() => {
+    if (typeof window === 'undefined') return 'leagues';
+    const h = window.location.hash.slice(1);
+    return h === 'monitor' || h === 'feedback' ? h : 'leagues';
+  });
+  const pick = (t: typeof tab) => { setTab(t); try { history.replaceState(null, '', t === 'leagues' ? window.location.pathname : `#${t}`); } catch { /* fine */ } };
 
   const call = useCallback(async (method: string, body?: unknown, auth = secret) => {
     const r = await fetch('/api/platform/operator/leagues', {
@@ -151,6 +159,10 @@ export default function OperatorPanel() {
       </div>
 
       <main className="relative mx-auto -mt-16 max-w-6xl space-y-5 px-4 sm:px-5">
+        <Tabs tab={tab} onPick={pick} auth={secret} />
+        {tab === 'monitor' && <Monitor auth={secret} />}
+        {tab === 'feedback' && <FeedbackInbox auth={secret} />}
+        {tab === 'leagues' && <>
         {error && <p className="rounded-2xl border border-[hsl(var(--signal)/0.4)] bg-card px-4 py-3 text-[13.5px] shadow-sm">{error}</p>}
         {!data && !error && <div className="h-40 animate-pulse rounded-[22px] bg-card shadow-sm" />}
         {data && (
@@ -178,6 +190,7 @@ export default function OperatorPanel() {
             <DemoLeague root={data.rootDomain} onDone={(msg) => { flash(msg); load(); }} />
           </>
         )}
+        </>}
       </main>
 
       <AnimatePresence>
@@ -188,6 +201,26 @@ export default function OperatorPanel() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** The panel's three tabs; Feedback carries how many are new. */
+function Tabs({ tab, onPick, auth }: { tab: 'leagues' | 'monitor' | 'feedback'; onPick: (t: 'leagues' | 'monitor' | 'feedback') => void; auth: string | null }) {
+  const [fresh] = useNewFeedback(auth);
+  const tabs = [{ id: 'leagues', label: 'Leagues' }, { id: 'monitor', label: 'Monitor' }, { id: 'feedback', label: 'Feedback' }] as const;
+  return (
+    <div role="tablist" className="inline-flex rounded-full border border-border bg-card p-1 shadow-sm">
+      {tabs.map(t => (
+        <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => onPick(t.id)}
+          className={cn('relative rounded-full px-4 py-1.5 text-[13px] font-semibold transition', tab === t.id ? 'text-background' : 'text-muted-foreground hover:text-foreground')}>
+          {tab === t.id && <motion.span layoutId="op-tab" className="absolute inset-0 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 400, damping: 32 }} />}
+          <span className="relative inline-flex items-center gap-1.5">
+            {t.label}
+            {t.id === 'feedback' && fresh > 0 && <span className="rounded-full bg-[hsl(var(--signal))] px-1.5 text-[10.5px] font-bold text-white">{fresh}</span>}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

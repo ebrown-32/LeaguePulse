@@ -15,6 +15,7 @@
  * Without DATABASE_URL (a self-hosted copy that never set one up) it does nothing.
  */
 
+import { withCron } from '@/lib/ops/monitor';
 import { NextResponse } from 'next/server';
 import { bearerMatches } from '@/lib/platform/operator';
 
@@ -24,7 +25,7 @@ export const maxDuration = 300;
 const BUDGET_MS = 240_000;
 const EVERY_HOURS = Number(process.env.LP_ARCHIVE_EVERY_HOURS) || 20;
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   const hosted = process.env.LP_HOSTED === '1';
   // Open locally without a secret, like the other jobs; never on the hosted product.
@@ -71,3 +72,6 @@ export async function GET(req: Request) {
   }
   return NextResponse.json({ due: leagues.length, ms: Date.now() - started, results });
 }
+
+/** Each run recorded for the back office (lib/ops/monitor). */
+export const GET = withCron('archive', run);
