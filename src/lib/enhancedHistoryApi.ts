@@ -19,7 +19,15 @@ export interface EnhancedHistoricalRecord {
   type: 'championship' | 'playoff' | 'highScore' | 'lowScore' | 'winStreak' | 
         'blowout' | 'closeGame' | 'consistency' | 'explosiveness' | 'seasonHigh' | 'seasonLow' | 
         'playoffAppearance' | 'regularSeasonChamp' | 'perfectSeason' | 'mostImproved' | 'biggestUpset' |
-        'runnerUp' | 'championshipGame' | 'playoffHighScore' | 'playoffLowScore';
+        'runnerUp' | 'championshipGame' | 'playoffHighScore' | 'playoffLowScore' |
+        // Games: the most points that still lost, the fewest that still won, both teams together.
+        'highScoreLoss' | 'lowScoreWin' | 'shootout' |
+        // Players: the best game a starter gave, and the best one left on the bench.
+        'playerGame' | 'benchGame' |
+        // Regular seasons, once finished.
+        'seasonPoints' | 'seasonPointsLow' | 'seasonRecord' | 'pointsAgainst' |
+        // Regular-season games in a row, carried from one season into the next.
+        'gameWinStreak' | 'gameLossStreak';
   season: string;
   week?: number;
   userId: string;
@@ -37,9 +45,20 @@ export interface EnhancedHistoricalRecord {
     streak?: number;
     previousValue?: number;
     pointsFor?: number;
+    /** A player's record: who (named once the top ten are known), and where they lined up. */
+    playerId?: string;
+    player?: string;
+    position?: string;
+    /** A streak's first and last game, and whether it is still going. */
+    from?: string;
+    to?: string;
+    active?: boolean;
   };
   isAllTime?: boolean;
+  /** A game in the title bracket, placement games included (lib/playoffsCore's rule). */
   isPlayoff?: boolean;
+  /** A playoff-week game outside the title bracket: the consolation bracket. */
+  isConsolation?: boolean;
   contextualRank?: number; // Ranking within this record type
 }
 
@@ -154,6 +173,8 @@ export async function generateEnhancedLeagueHistory(
     progressCallback?.(10, 'Initializing data structures...');
     const records: EnhancedHistoricalRecord[] = [];
     const userStatsMap = new Map<string, EnhancedUserStats>();
+    // Every regular-season result, for the streaks that run across seasons.
+    const gameLog = new Map<string, GameResult[]>();
     const seasonStats: { [season: string]: any } = {};
     
     // Step 3: Get current NFL state to determine active season
@@ -168,7 +189,7 @@ export async function generateEnhancedLeagueHistory(
       
       try {
         progressCallback?.(progress, `Processing season ${i + 1} of ${totalLeagues}...`);
-        await processLeagueSeason(leagueId, currentSeason, records, userStatsMap, seasonStats);
+        await processLeagueSeason(leagueId, currentSeason, records, userStatsMap, seasonStats, gameLog);
       } catch (error) {
         console.error(`Error processing league ${leagueId}:`, error);
         // Continue processing other leagues
@@ -182,6 +203,7 @@ export async function generateEnhancedLeagueHistory(
     } catch {
       // Streak calculation is non-critical; continue without it
     }
+    generateGameStreaks(gameLog, userStatsMap, records);
     
     // Step 6: Calculate derived statistics and rankings
     progressCallback?.(90, 'Calculating derived statistics...');
@@ -189,6 +211,11 @@ export async function generateEnhancedLeagueHistory(
     
     // Step 7: Generate contextual rankings for records
     progressCallback?.(95, 'Generating record rankings...');
+    // Player records keep a few spares, so one whose player can't be named gives way to the next.
+    assignRecordRankings(records, type => (type === 'playerGame' || type === 'benchGame' ? 20 : 10));
+    await namePlayerRecords(records).catch(() => {
+      for (let i = records.length - 1; i >= 0; i--) if (records[i].details?.playerId) records.splice(i, 1);
+    });
     assignRecordRankings(records);
     
     // Step 8: Calculate league metadata
@@ -216,7 +243,8 @@ async function processLeagueSeason(
   currentSeason: string,
   records: EnhancedHistoricalRecord[],
   userStatsMap: Map<string, EnhancedUserStats>,
-  seasonStats: { [season: string]: any }
+  seasonStats: { [season: string]: any },
+  gameLog: Map<string, GameResult[]>
 ): Promise<void> {
   // Get league info and validate
   const league = await getLeagueInfo(leagueId);
@@ -336,6 +364,8 @@ async function processLeagueSeason(
   processTransactionsForSeason(allTransactions, users, rosters, userStatsMap);
 
   // Process matchups and calculate stats
+  // Season records count only once it's over, so a season in progress can't hold "fewest points".
+  const seasonDone = league.season !== currentSeason || league.status === 'complete';
   await processMatchupsForSeason(
     league,
     users,
@@ -343,7 +373,9 @@ async function processLeagueSeason(
     allMatchups,
     records,
     userStatsMap,
-    seasonStats[league.season]
+    seasonStats[league.season],
+    gameLog,
+    seasonDone
   );
 
   // Process roster data for accurate win/loss records (accounts for median games)
@@ -351,6 +383,30 @@ async function processLeagueSeason(
 
   // Determine champions and playoff participants
   await determineChampionsAndPlayoffs(league, rosters, userStatsMap, records);
+}
+
+type GamePhase = 'regular' | 'playoff' | 'consolation';
+type PhaseOf = (week: number, rosterId: number) => GamePhase;
+
+/**
+ * Which kind of game a team played in a week. Playoff weeks hold title-bracket games (placement
+ * games such as third place included) and consolation games; only the bracket tells them apart,
+ * by who met whom. Without a bracket, every playoff-week game counts as the playoffs, as before.
+ */
+async function phasesFor(league: any, allMatchups: any[][]): Promise<PhaseOf> {
+  const start = league.settings.playoff_week_start || 15;
+  const bracket = await getPlayoffBracket(league.league_id).catch(() => null);
+  const winners: any[] | null = Array.isArray(bracket?.winners_bracket) ? bracket.winners_bracket : null;
+  const pair = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+  const title = new Set((winners ?? []).filter(m => m?.t1 != null && m?.t2 != null).map(m => pair(Number(m.t1), Number(m.t2))));
+  return (week, rosterId) => {
+    if (week < start) return 'regular';
+    if (!winners) return 'playoff';
+    const rows = allMatchups[week - 1] ?? [];
+    const mine = rows.find((m: any) => m.roster_id === rosterId);
+    const them = mine?.matchup_id != null ? rows.find((m: any) => m.matchup_id === mine.matchup_id && m.roster_id !== rosterId) : null;
+    return them && title.has(pair(rosterId, them.roster_id)) ? 'playoff' : 'consolation';
+  };
 }
 
 // Enhanced matchup processing with accurate team name assignment
@@ -361,9 +417,11 @@ async function processMatchupsForSeason(
   allMatchups: any[][],
   records: EnhancedHistoricalRecord[],
   userStatsMap: Map<string, EnhancedUserStats>,
-  seasonStats: any
+  seasonStats: any,
+  gameLog: Map<string, GameResult[]>,
+  seasonDone: boolean
 ): Promise<void> {
-  const playoffWeekStart = league.settings.playoff_week_start || 15;
+  const phaseOf = await phasesFor(league, allMatchups);
   const userSeasonScores = new Map<string, number[]>();
   
   // Initialize user season scores
@@ -375,8 +433,7 @@ async function processMatchupsForSeason(
   for (let weekIndex = 0; weekIndex < allMatchups.length; weekIndex++) {
     const weekMatchups = allMatchups[weekIndex];
     const weekNumber = weekIndex + 1;
-    const isPlayoff = weekNumber >= playoffWeekStart;
-    
+
     if (!weekMatchups || weekMatchups.length === 0) continue;
 
     // Group matchups by matchup_id for head-to-head games
@@ -399,7 +456,7 @@ async function processMatchupsForSeason(
           rosters,
           league,
           weekNumber,
-          isPlayoff,
+          phaseOf(weekNumber, group[0].roster_id),
           userStatsMap,
           seasonStats,
           records,
@@ -444,7 +501,8 @@ async function processMatchupsForSeason(
   }
 
   // Generate weekly high/low score records
-  generateWeeklyScoreRecords(allMatchups, users, rosters, league, records);
+  generateWeeklyScoreRecords(allMatchups, users, rosters, league, records, phaseOf);
+  generateMoreRecords(league, users, rosters, allMatchups, records, gameLog, seasonDone, phaseOf);
 }
 
 // Process head-to-head matchup with accurate team assignment
@@ -454,13 +512,14 @@ async function processHeadToHeadMatchup(
   rosters: any[],
   league: any,
   weekNumber: number,
-  isPlayoff: boolean,
+  phase: GamePhase,
   userStatsMap: Map<string, EnhancedUserStats>,
   seasonStats: any,
   records: EnhancedHistoricalRecord[],
   _userSeasonScores: Map<string, number[]>
 ): Promise<void> {
   const [team1, team2] = matchup;
+  const isPlayoff = phase === 'playoff', isConsolation = phase === 'consolation';
   const user1 = findUserByRoster(team1.roster_id, users, rosters);
   const user2 = findUserByRoster(team2.roster_id, users, rosters);
   
@@ -523,7 +582,8 @@ async function processHeadToHeadMatchup(
         opponent: loser.display_name,
         margin
       },
-      isPlayoff
+      isPlayoff,
+      isConsolation
     });
   }
   
@@ -544,7 +604,8 @@ async function processHeadToHeadMatchup(
         opponent: loser.display_name,
         margin
       },
-      isPlayoff
+      isPlayoff,
+      isConsolation
     });
   }
 
@@ -648,27 +709,27 @@ function generateWeeklyScoreRecords(
   users: any[],
   rosters: any[],
   league: any,
-  records: EnhancedHistoricalRecord[]
+  records: EnhancedHistoricalRecord[],
+  phaseOf: PhaseOf
 ): void {
-  const weeklyHighScores: { score: number; user: any; week: number; isPlayoff: boolean }[] = [];
-  const weeklyLowScores: { score: number; user: any; week: number; isPlayoff: boolean }[] = [];
-  const playoffHighScores: { score: number; user: any; week: number }[] = [];
-  const playoffLowScores: { score: number; user: any; week: number }[] = [];
+  type Score = { score: number; user: any; week: number; phase: GamePhase };
+  const weeklyHighScores: Score[] = [];
+  const weeklyLowScores: Score[] = [];
   
   allMatchups.forEach((weekMatchups, weekIndex) => {
     if (!weekMatchups || weekMatchups.length === 0) return;
 
     const weekNumber = weekIndex + 1;
-    const isPlayoff = weekNumber >= (league.settings.playoff_week_start || 15);
 
-    // Collect all scores for this week
-    const weekScores: { score: number; user: any }[] = [];
-    
+    // Collect all scores for this week: games only, so a week an eliminated team had no matchup
+    // (its points still counted by the provider) is no record.
+    const weekScores: { score: number; user: any; phase: GamePhase }[] = [];
+
     weekMatchups.forEach(matchup => {
-      if (typeof matchup.points === 'number' && matchup.points > 0) {
+      if (typeof matchup.points === 'number' && matchup.points > 0 && matchup.matchup_id != null) {
         const user = findUserByRoster(matchup.roster_id, users, rosters);
         if (user) {
-          weekScores.push({ score: matchup.points, user });
+          weekScores.push({ score: matchup.points, user, phase: phaseOf(weekNumber, matchup.roster_id) });
         }
       }
     });
@@ -679,25 +740,19 @@ function generateWeeklyScoreRecords(
     weekScores.sort((a, b) => b.score - a.score);
     
     // Add all scores to respective arrays for global ranking
-    weekScores.forEach(({ score, user }) => {
-      weeklyHighScores.push({ score, user, week: weekNumber, isPlayoff });
-      weeklyLowScores.push({ score, user, week: weekNumber, isPlayoff });
-      
-      if (isPlayoff) {
-        playoffHighScores.push({ score, user, week: weekNumber });
-        playoffLowScores.push({ score, user, week: weekNumber });
-      }
+    weekScores.forEach(({ score, user, phase }) => {
+      weeklyHighScores.push({ score, user, week: weekNumber, phase });
+      weeklyLowScores.push({ score, user, week: weekNumber, phase });
     });
   });
 
   // Sort and take top/bottom scores across all weeks
   weeklyHighScores.sort((a, b) => b.score - a.score);
   weeklyLowScores.sort((a, b) => a.score - b.score);
-  playoffHighScores.sort((a, b) => b.score - a.score);
-  playoffLowScores.sort((a, b) => a.score - b.score);
 
   // Generate high score records (top 50 to ensure we have enough good ones)
-  weeklyHighScores.slice(0, 50).forEach(({ score, user, week, isPlayoff }) => {
+  const tag = (phase: GamePhase) => (phase === 'playoff' ? ' (Playoffs)' : phase === 'consolation' ? ' (Consolation)' : '');
+  weeklyHighScores.slice(0, 50).forEach(({ score, user, week, phase }) => {
     records.push({
       type: 'highScore',
       season: league.season,
@@ -706,8 +761,9 @@ function generateWeeklyScoreRecords(
       username: user.display_name,
       avatar: teamAvatar(user),
       value: score,
-      description: `${user.display_name} scored ${score.toFixed(2)} points in Week ${week}${isPlayoff ? ' (Playoffs)' : ''}`,
-      isPlayoff
+      description: `${user.display_name} scored ${score.toFixed(2)} points in Week ${week}${tag(phase)}`,
+      isPlayoff: phase === 'playoff',
+      isConsolation: phase === 'consolation'
     });
   });
 
@@ -715,7 +771,7 @@ function generateWeeklyScoreRecords(
   weeklyLowScores
     .filter(({ score }) => score > 0 && score < 200) // Filter out bye weeks and impossibly high scores
     .slice(0, 50)
-    .forEach(({ score, user, week, isPlayoff }) => {
+    .forEach(({ score, user, week, phase }) => {
       records.push({
         type: 'lowScore',
         season: league.season,
@@ -724,8 +780,9 @@ function generateWeeklyScoreRecords(
         username: user.display_name,
         avatar: teamAvatar(user),
         value: score,
-        description: `${user.display_name} scored only ${score.toFixed(2)} points in Week ${week}${isPlayoff ? ' (Playoffs)' : ''}`,
-        isPlayoff
+        description: `${user.display_name} scored only ${score.toFixed(2)} points in Week ${week}${tag(phase)}`,
+        isPlayoff: phase === 'playoff',
+        isConsolation: phase === 'consolation'
       });
     });
 }
@@ -986,6 +1043,8 @@ async function generateWinLossStreaks(
     currentWinStreak: number;
     longestWinStreak: number;
     winStreakSeasons: string[];
+    /** The seasons of the longest run, kept when a later losing season ends the current one. */
+    longestSeasons: string[];
   }>();
 
   // Initialize tracking for all users
@@ -993,7 +1052,8 @@ async function generateWinLossStreaks(
     userStreaks.set(userStats.userId, {
       currentWinStreak: 0,
       longestWinStreak: 0,
-      winStreakSeasons: []
+      winStreakSeasons: [],
+      longestSeasons: []
     });
   }
 
@@ -1034,6 +1094,7 @@ async function generateWinLossStreaks(
           
           if (userStreak.currentWinStreak > userStreak.longestWinStreak) {
             userStreak.longestWinStreak = userStreak.currentWinStreak;
+            userStreak.longestSeasons = [...userStreak.winStreakSeasons];
           }
         } else {
           // Losing season - reset win streak
@@ -1056,9 +1117,10 @@ async function generateWinLossStreaks(
 
     // Add win streak records
     if (streak.longestWinStreak >= 2) {
+      const from = streak.longestSeasons[0], to = streak.longestSeasons[streak.longestSeasons.length - 1];
       records.push({
         type: 'winStreak',
-        season: streak.winStreakSeasons[streak.winStreakSeasons.length - 1] || 'Multiple',
+        season: to || 'Multiple',
         userId,
         username: userStats.username,
         avatar: userStats.avatar,
@@ -1066,7 +1128,8 @@ async function generateWinLossStreaks(
         description: `${userStats.username} had ${streak.longestWinStreak} consecutive winning seasons`,
         details: {
           streak: streak.longestWinStreak,
-          record: `${streak.longestWinStreak} winning seasons`
+          record: `${streak.longestWinStreak} winning seasons`,
+          ...(from && to && { from, to, active: streak.winStreakSeasons[streak.winStreakSeasons.length - 1] === to }),
         }
       });
     }
@@ -1126,8 +1189,179 @@ async function calculateDerivedStats(
   }
 }
 
+// ─── More records: games, players, seasons, streaks ──────────────────────────
+
+interface GameResult { season: string; week: number; result: 'W' | 'L' | 'T' }
+
+const pts = (n: number) => n.toFixed(2);
+
+/**
+ * The records a season's matchups hold beyond the high and low scores: the
+ * most points that still lost and the fewest that still won, shootouts, the
+ * best game a starter gave and the best left on the bench. Season totals count
+ * only a finished regular season, so a season in progress can't hold "fewest
+ * points". Head-to-head results go into the game log for the streaks.
+ */
+function generateMoreRecords(
+  league: any,
+  users: any[],
+  rosters: any[],
+  allMatchups: any[][],
+  records: EnhancedHistoricalRecord[],
+  gameLog: Map<string, GameResult[]>,
+  seasonDone: boolean,
+  phaseOf: PhaseOf
+): void {
+  const season = String(league.season);
+  const totals = new Map<string, { user: any; pf: number; pa: number }>();
+  const base = (user: any, week: number, phase: GamePhase) => ({
+    season, week, userId: user.user_id, username: user.display_name, avatar: teamAvatar(user),
+    isPlayoff: phase === 'playoff', isConsolation: phase === 'consolation',
+  });
+
+  allMatchups.forEach((weekMatchups, i) => {
+    const week = i + 1;
+    const played = (weekMatchups ?? []).filter(m => m.matchup_id != null && typeof m.points === 'number' && m.points > 0);
+
+    // Players: each team's best starter, and its best player on the bench.
+    for (const m of played) {
+      const user = findUserByRoster(m.roster_id, users, rosters);
+      if (!user || !m.players_points) continue;
+      const starters = new Set<string>((m.starters ?? []).filter((id: string) => id && id !== '0'));
+      let best: [string, number] | null = null, benched: [string, number] | null = null;
+      for (const [id, v] of Object.entries(m.players_points as Record<string, number>)) {
+        if (!id || id === '0' || typeof v !== 'number') continue;
+        if (starters.has(id)) { if (!best || v > best[1]) best = [id, v]; }
+        else if (!benched || v > benched[1]) benched = [id, v];
+      }
+      if (best && best[1] > 0) {
+        records.push({ ...base(user, week, phaseOf(week, m.roster_id)), type: 'playerGame', value: best[1],
+          description: `scored ${pts(best[1])} in Week ${week}`, details: { playerId: best[0] } });
+      }
+      if (benched && benched[1] > 0) {
+        records.push({ ...base(user, week, phaseOf(week, m.roster_id)), type: 'benchGame', value: benched[1],
+          description: `scored ${pts(benched[1])} on the bench in Week ${week}`, details: { playerId: benched[0] } });
+      }
+    }
+
+    // Games: two teams sharing a matchup.
+    const groups = new Map<number, any[]>();
+    for (const m of played) groups.set(m.matchup_id, [...(groups.get(m.matchup_id) ?? []), m]);
+    for (const [, game] of groups) {
+      if (game.length !== 2) continue;
+      const [a, b] = game[0].points >= game[1].points ? game : [game[1], game[0]];
+      const ua = findUserByRoster(a.roster_id, users, rosters), ub = findUserByRoster(b.roster_id, users, rosters);
+      if (!ua || !ub) continue;
+      const scores = { winnerScore: a.points, loserScore: b.points, margin: a.points - b.points };
+      const phase = phaseOf(week, a.roster_id);
+      const tie = a.points === b.points;
+
+      records.push({ ...base(ua, week, phase), type: 'shootout', value: a.points + b.points,
+        description: `${ua.display_name} and ${ub.display_name} combined for ${pts(a.points + b.points)} points in Week ${week}`,
+        details: { ...scores, opponent: ub.display_name } });
+      if (!tie) {
+        records.push({ ...base(ub, week, phase), type: 'highScoreLoss', value: b.points,
+          description: `${ub.display_name} scored ${pts(b.points)} and still lost to ${ua.display_name} in Week ${week}`,
+          details: { ...scores, opponent: ua.display_name } });
+        records.push({ ...base(ua, week, phase), type: 'lowScoreWin', value: a.points,
+          description: `${ua.display_name} beat ${ub.display_name} with only ${pts(a.points)} in Week ${week}`,
+          details: { ...scores, opponent: ub.display_name } });
+      }
+
+      if (phase !== 'regular') continue;
+      for (const [u, us, them] of [[ua, a.points, b.points], [ub, b.points, a.points]] as const) {
+        const log = gameLog.get(u.user_id) ?? [];
+        log.push({ season, week, result: us > them ? 'W' : us < them ? 'L' : 'T' });
+        gameLog.set(u.user_id, log);
+        const t = totals.get(u.user_id) ?? { user: u, pf: 0, pa: 0 };
+        t.pf += us; t.pa += them;
+        totals.set(u.user_id, t);
+      }
+    }
+  });
+
+  if (!seasonDone) return;
+
+  // Seasons: regular-season points, and the record the league app keeps (median games included).
+  for (const { user, pf, pa } of totals.values()) {
+    records.push({ ...base(user, 0, 'regular'), week: undefined, type: 'seasonPoints', value: pf,
+      description: `${user.display_name} scored ${pts(pf)} points in the ${season} regular season`, details: { pointsFor: pf } });
+    records.push({ ...base(user, 0, 'regular'), week: undefined, type: 'seasonPointsLow', value: pf,
+      description: `${user.display_name} scored just ${pts(pf)} points in the ${season} regular season`, details: { pointsFor: pf } });
+    records.push({ ...base(user, 0, 'regular'), week: undefined, type: 'pointsAgainst', value: pa,
+      description: `${user.display_name} had ${pts(pa)} points scored against them in the ${season} regular season`, details: { pointsFor: pf } });
+  }
+  for (const roster of rosters) {
+    const user = findUserByRoster(roster.roster_id, users, rosters);
+    const w = roster.settings?.wins ?? 0, l = roster.settings?.losses ?? 0, t = roster.settings?.ties ?? 0;
+    if (!user || w + l + t === 0) continue;
+    const record = `${w}-${l}${t ? `-${t}` : ''}`;
+    records.push({ ...base(user, 0, 'regular'), week: undefined, type: 'seasonRecord', value: (w + t / 2) / (w + l + t),
+      description: `${user.display_name} went ${record} in the ${season} regular season`, details: { record } });
+  }
+}
+
+/** Each manager's longest run of regular-season wins, and of losses, across every season. */
+function generateGameStreaks(
+  gameLog: Map<string, GameResult[]>,
+  userStatsMap: Map<string, EnhancedUserStats>,
+  records: EnhancedHistoricalRecord[]
+): void {
+  const label = (g: GameResult) => `${g.season} Week ${g.week}`;
+  for (const [userId, games] of gameLog) {
+    const stats = userStatsMap.get(userId);
+    if (!stats || games.length === 0) continue;
+    games.sort((a, b) => Number(a.season) - Number(b.season) || a.week - b.week);
+    for (const [kind, type] of [['W', 'gameWinStreak'], ['L', 'gameLossStreak']] as const) {
+      let best = { len: 0, start: 0, end: 0 }, run = 0;
+      games.forEach((g, i) => {
+        run = g.result === kind ? run + 1 : 0;
+        if (run > best.len) best = { len: run, start: i - run + 1, end: i };
+      });
+      if (best.len < 3) continue;
+      const from = games[best.start], to = games[best.end];
+      const active = best.end === games.length - 1;
+      records.push({
+        type, season: to.season, userId, username: stats.username, avatar: stats.avatar, value: best.len,
+        description: `${stats.username} ${kind === 'W' ? 'won' : 'lost'} ${best.len} regular-season games in a row, ${label(from)} to ${label(to)}${active ? ', and counting' : ''}`,
+        details: { streak: best.len, from: label(from), to: label(to), active },
+      });
+    }
+  }
+}
+
+/** Names for the players behind the player records, from Sleeper's directory (server) or /api/players/names (browser). */
+async function namePlayerRecords(records: EnhancedHistoricalRecord[]): Promise<void> {
+  const ids = [...new Set(records.map(r => r.details?.playerId).filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return;
+  let players: Record<string, { name: string; position: string | null }> = {};
+  if (typeof window === 'undefined') {
+    const { getPlayersDirectory } = await import('@/lib/playerStats');
+    const dir = await getPlayersDirectory();
+    for (const id of ids) {
+      const p = dir[id];
+      const name = p ? (p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ')) : '';
+      if (name) players[id] = { name, position: p.position ?? null };
+    }
+  } else {
+    const res = await fetch(`/api/players/names?ids=${encodeURIComponent(ids.join(','))}`);
+    if (!res.ok) throw new Error('No player names');
+    players = (await res.json()).players ?? {};
+  }
+  // A player with no name can't be shown as a record; it gives way to the next best.
+  for (let i = records.length - 1; i >= 0; i--) {
+    const r = records[i];
+    const id = r.details?.playerId;
+    if (!id) continue;
+    const p = players[id];
+    if (!p) { records.splice(i, 1); continue; }
+    r.details = { ...r.details, player: p.name, position: p.position ?? undefined };
+    r.description = `${p.name} ${r.description} for ${r.username}`;
+  }
+}
+
 // Assign contextual rankings to records and limit to top 10 per category
-function assignRecordRankings(records: EnhancedHistoricalRecord[]): void {
+function assignRecordRankings(records: EnhancedHistoricalRecord[], keep: (type: string) => number = () => 10): void {
   const recordsByType = new Map<string, EnhancedHistoricalRecord[]>();
   
   // Group records by type
@@ -1142,14 +1376,14 @@ function assignRecordRankings(records: EnhancedHistoricalRecord[]): void {
   recordsByType.forEach((typeRecords, type) => {
     // Sort based on record type
     typeRecords.sort((a, b) => {
-      if (type === 'lowScore' || type === 'playoffLowScore' || type === 'closeGame') {
+      if (type === 'lowScore' || type === 'playoffLowScore' || type === 'closeGame' || type === 'lowScoreWin' || type === 'seasonPointsLow') {
         return a.value - b.value; // Lower is better
       }
       return b.value - a.value; // Higher is better
     });
 
     // Take only top 10 and assign rankings
-    const top10 = typeRecords.slice(0, 10);
+    const top10 = typeRecords.slice(0, keep(type));
     top10.forEach((record, index) => {
       record.contextualRank = index + 1;
     });

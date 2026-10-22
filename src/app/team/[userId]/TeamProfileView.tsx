@@ -28,11 +28,15 @@ function ordinal(n: number) {
 
 const RECORD_LABELS: Record<string, string> = {
   highScore: 'Highest Score', lowScore: 'Lowest Score', blowout: 'Biggest Blowout',
-  closeGame: 'Closest Win', winStreak: 'Win Streak', championship: 'Championship',
+  closeGame: 'Closest Win', winStreak: 'Winning Seasons', championship: 'Championship',
   runnerUp: 'Runner-Up', regularSeasonChamp: 'Regular Season Title', playoffAppearance: 'Playoff Berth',
   perfectSeason: 'Perfect Season', mostImproved: 'Most Improved', biggestUpset: 'Biggest Upset',
   championshipGame: 'Championship Game', playoffHighScore: 'Playoff High', playoffLowScore: 'Playoff Low',
   consistency: 'Consistency', explosiveness: 'Explosiveness', seasonHigh: 'Season High', seasonLow: 'Season Low',
+  shootout: 'Shootout', highScoreLoss: 'Most Points in a Loss', lowScoreWin: 'Fewest Points in a Win',
+  playerGame: 'Best Player Game', benchGame: 'Left on the Bench',
+  seasonPoints: 'Most Points in a Season', seasonPointsLow: 'Fewest Points in a Season', seasonRecord: 'Best Record',
+  pointsAgainst: 'Toughest Schedule', gameWinStreak: 'Win Streak', gameLossStreak: 'Losing Streak',
 };
 
 

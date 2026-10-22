@@ -523,7 +523,8 @@ export function FeedPostCard({
             )}
 
             {/* A franchise's official post: its poster, photo, ticket or logo. */}
-            {isOfficial && <OfficialVisualView visual={post.content.visual} team={post.content.hostTeam ?? post.personaName} />}
+            {/* A record card goes with a writer's post about a broken record too (lib/ai/recordWatch). */}
+            {(isOfficial || post.content?.visual?.type === 'record') && <OfficialVisualView visual={post.content.visual} team={post.content.hostTeam ?? post.personaName} />}
 
             {/* A photograph from the stadium, developed from the real 3D view. */}
             {isPhoto && post.content.photo && (

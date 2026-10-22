@@ -17,7 +17,11 @@ export type OfficialVisual =
   | { type: 'ticket'; ticket: number; was: number | null; color: string; stadium: string; team: string; opponent: string | null; when: string }
   | { type: 'logo'; url: string; color: string; team: string }
   | { type: 'player'; playerId: string; name: string; position: string; nflTeam: string; points: number; line: string; color: string; team: string }
-  | { type: 'final'; week: number; us: Side; them: Side };
+  | { type: 'final'; week: number; us: Side; them: Side }
+  /** A league record that just fell (lib/ai/recordWatch): the new mark, and the one it beat. */
+  | { type: 'record'; label: string; value: string; unit: string; holder: string; when: string; good: boolean; color: string;
+      was: { value: string; holder: string; when: string } | null;
+      player?: { id: string; name: string; position: string; nflTeam: string } };
 type Side = { name: string; score: number; color: string; avatar: string | null };
 
 export default function OfficialVisualView({ visual, team }: { visual: OfficialVisual | null | undefined; team: string }) {
@@ -29,6 +33,7 @@ export default function OfficialVisualView({ visual, team }: { visual: OfficialV
     case 'logo': return <LogoReveal v={visual} />;
     case 'player': return <PlayerCard v={visual} />;
     case 'final': return <FinalBoard v={visual} />;
+    case 'record': return <RecordCard v={visual} />;
   }
 }
 
@@ -208,6 +213,38 @@ function FinalBoard({ v }: { v: Extract<OfficialVisual, { type: 'final' }> }) {
       {row(v.us, won || (!won && !lost))}
       <div className="mx-4 h-px bg-white/10 sm:mx-5" />
       {row(v.them, lost || (!won && !lost))}
+    </div>
+  );
+}
+
+/** A league record that just fell: the mark, who holds it, and the old one struck through. */
+function RecordCard({ v }: { v: Extract<OfficialVisual, { type: 'record' }> }) {
+  const photo = v.player ? playerPhoto({ playerId: v.player.id, position: v.player.position, nflTeam: v.player.nflTeam }) : null;
+  return (
+    <div className="relative mt-2.5 flex overflow-hidden rounded-2xl border border-border text-white"
+      style={{ background: `linear-gradient(115deg, ${v.color} 0%, #0b0f14 80%)` }}>
+      <div className="relative z-10 min-w-0 flex-1 p-4 sm:p-6">
+        <span className={`w-fit px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.22em] ${v.good ? 'bg-white text-black' : 'border border-white/60 text-white'}`}>
+          League record
+        </span>
+        <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">{v.label}</p>
+        <p className="mt-1 font-display text-[44px] font-black leading-none tabular-nums sm:text-[60px]">
+          {v.value}{v.unit && <span className="ml-1.5 text-[14px] font-bold uppercase tracking-wider text-white/70 sm:text-[16px]">{v.unit}</span>}
+        </p>
+        <p className="mt-2 truncate font-display text-[17px] font-bold sm:text-[20px]">{v.player ? `${v.player.name}, ${v.holder}` : v.holder}</p>
+        <p className="text-[12px] text-white/70">{v.when}</p>
+        {v.was && (
+          <p className="mt-3 border-t border-white/15 pt-2 text-[12px] text-white/65">
+            Old record: <span className="line-through tabular-nums">{v.was.value}</span>, {v.was.holder}, {v.was.when}
+          </p>
+        )}
+      </div>
+      {photo && (
+        <div className="relative flex w-[34%] max-w-[200px] items-end justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photo} alt={v.player!.name} className="h-[90%] w-auto object-contain object-bottom drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]" />
+        </div>
+      )}
     </div>
   );
 }

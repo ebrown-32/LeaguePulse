@@ -14,6 +14,17 @@ import {
   Users,
   Activity,
   GitBranch,
+  Rocket,
+  Target,
+  Ticket,
+  Star,
+  Sofa,
+  TrendingUp,
+  ListOrdered,
+  Swords,
+  Repeat2,
+  CloudRain,
+  CalendarDays,
 } from '@/components/icons';
 import PlayoffsTab from './PlayoffsTab';
 import { playoffRecords, recordNotes } from '@/lib/playoffsCore';
@@ -39,12 +50,35 @@ type Tab = 'managers' | 'champions' | 'playoffs' | 'records' | 'activity';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
+const RECORD_GROUPS = [
+  { id: 'games',   label: 'Games' },
+  { id: 'players', label: 'Players' },
+  { id: 'seasons', label: 'Seasons' },
+  { id: 'streaks', label: 'Streaks' },
+] as const;
+
+/**
+ * Every list in the record book. `unit` is what the number is, `higher` which
+ * way is the record, and `note` says plainly what counts.
+ */
 const RECORD_CATEGORIES = [
-  { type: 'highScore',          label: 'Highest Score',    icon: Flame,              unit: 'pts',    higher: true  },
-  { type: 'lowScore',           label: 'Lowest Score',     icon: TrendingDown, unit: 'pts',    higher: false },
-  { type: 'blowout',            label: 'Biggest Blowouts', icon: Zap,              unit: 'margin', higher: true  },
-  { type: 'closeGame',          label: 'Closest Games',    icon: Heart,             unit: 'margin', higher: false },
-{ type: 'regularSeasonChamp', label: 'Reg Season Title', icon: ShieldCheck,       unit: 'wins',   higher: true  },
+  { group: 'games',   type: 'highScore',          label: 'Highest Score',     icon: Flame,        unit: 'pts',     higher: true,  note: 'The most points in a week.' },
+  { group: 'games',   type: 'lowScore',           label: 'Lowest Score',      icon: TrendingDown, unit: 'pts',     higher: false, note: 'The fewest points in a week.' },
+  { group: 'games',   type: 'blowout',            label: 'Biggest Blowouts',  icon: Zap,          unit: 'margin',  higher: true,  note: 'The widest margins of victory.' },
+  { group: 'games',   type: 'closeGame',          label: 'Closest Games',     icon: Heart,        unit: 'margin',  higher: false, note: 'Decided by the fewest points.' },
+  { group: 'games',   type: 'shootout',           label: 'Shootouts',         icon: Rocket,       unit: 'pts',     higher: true,  note: 'The most points both teams scored in one game.' },
+  { group: 'games',   type: 'highScoreLoss',      label: 'Robbed',            icon: Target,       unit: 'pts',     higher: true,  note: 'The most points that still lost.' },
+  { group: 'games',   type: 'lowScoreWin',        label: 'Stole One',         icon: Ticket,       unit: 'pts',     higher: false, note: 'The fewest points that still won.' },
+  { group: 'players', type: 'playerGame',         label: 'Best Player Games', icon: Star,         unit: 'pts',     higher: true,  note: 'The most points a starter scored in a week.' },
+  { group: 'players', type: 'benchGame',          label: 'Left on the Bench', icon: Sofa,         unit: 'pts',     higher: true,  note: 'The most points scored by a player who was on the bench.' },
+  { group: 'seasons', type: 'seasonPoints',       label: 'Most Points',       icon: TrendingUp,   unit: 'pts',     higher: true,  note: 'Regular-season points, finished seasons only.' },
+  { group: 'seasons', type: 'seasonPointsLow',    label: 'Fewest Points',     icon: TrendingDown, unit: 'pts',     higher: false, note: 'Regular-season points, finished seasons only.' },
+  { group: 'seasons', type: 'seasonRecord',       label: 'Best Records',      icon: ListOrdered,  unit: 'record',  higher: true,  note: 'Regular-season record as the league app keeps it, median games included.' },
+  { group: 'seasons', type: 'pointsAgainst',      label: 'Toughest Schedule', icon: Swords,       unit: 'pts',     higher: true,  note: 'The most points opponents scored against a team in a regular season.' },
+  { group: 'seasons', type: 'regularSeasonChamp', label: 'Reg Season Title',  icon: ShieldCheck,  unit: 'wins',    higher: true,  note: 'The best team at the end of the regular season.' },
+  { group: 'streaks', type: 'gameWinStreak',      label: 'Win Streaks',       icon: Repeat2,      unit: 'games',   higher: true,  note: 'Regular-season wins in a row, carried from one season into the next.' },
+  { group: 'streaks', type: 'gameLossStreak',     label: 'Losing Streaks',    icon: CloudRain,    unit: 'games',   higher: true,  note: 'Regular-season losses in a row, carried from one season into the next.' },
+  { group: 'streaks', type: 'winStreak',          label: 'Winning Seasons',   icon: CalendarDays, unit: 'seasons', higher: true,  note: 'Seasons in a row with a winning record.' },
 ] as const;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -599,9 +633,20 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
           {/* ══ Record Book ══════════════════════════════════════════════ */}
           <div className={`space-y-4 ${activeTab !== 'records' ? 'hidden' : ''}`}>
 
-              {/* Category pills (horizontal scroll) */}
+              {/* Groups, then that group's lists (each row scrolls sideways on a phone) */}
+              <div role="tablist" aria-label="Kind of record" className="inline-flex rounded-xl border border-border bg-card p-1">
+                {RECORD_GROUPS.map(g => (
+                  <button key={g.id} role="tab" aria-selected={activeCategory.group === g.id}
+                    onClick={() => setActiveRecord(RECORD_CATEGORIES.find(c => c.group === g.id)!.type)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      activeCategory.group === g.id ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                    }`}>
+                    {g.label}
+                  </button>
+                ))}
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                {RECORD_CATEGORIES.map(cat => {
+                {RECORD_CATEGORIES.filter(c => c.group === activeCategory.group).map(cat => {
                   const CatIcon = cat.icon;
                   return (
                     <button
@@ -620,6 +665,8 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                 })}
               </div>
 
+              <p className="text-xs text-muted-foreground">{activeCategory.note}</p>
+
               {/* Leaderboard */}
               <div className="space-y-1.5">
                   {categoryRecords.length === 0 ? (
@@ -635,6 +682,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                       const displayValue =
                         activeCategory.unit === 'pts'    ? formatPoints(record.value) :
                         activeCategory.unit === 'margin' ? record.value.toFixed(2)    :
+                        activeCategory.unit === 'record' ? record.details?.record ?? '' :
                                                            String(record.value);
 
                       const barWidth = activeCategory.higher
@@ -662,16 +710,34 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                                   Playoffs
                                 </span>
                               )}
+                              {record.isConsolation && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/80 border border-dashed border-border">
+                                  Consolation
+                                </span>
+                              )}
                             </div>
 
                             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                              <span>{record.season}{record.week ? ` · Week ${record.week}` : ''}</span>
+                              {record.details?.player && (
+                                <span className="font-medium text-foreground/80">{record.details.player}{record.details.position ? ` (${record.details.position})` : ''}</span>
+                              )}
+                              {record.details?.from && record.details.to ? (
+                                <span>{record.details.from} to {record.details.to}</span>
+                              ) : (
+                                <span>{record.season}{record.week ? ` · Week ${record.week}` : ''}</span>
+                              )}
+                              {record.details?.active && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/30">Active</span>
+                              )}
+                              {activeCategory.unit === 'record' && (
+                                <span className="text-muted-foreground/60 font-mono">{record.value.toFixed(3).replace(/^0/, '')}</span>
+                              )}
                               {record.details?.opponent && (
                                 <span className="text-muted-foreground/60">vs {record.details.opponent}</span>
                               )}
                               {record.details?.winnerScore !== undefined && record.details?.loserScore !== undefined && (
                                 <span className="text-muted-foreground/60 font-mono">
-                                  {record.details.winnerScore.toFixed(1)},{record.details.loserScore.toFixed(1)}
+                                  {(() => { const d = record.details!.winnerScore!.toFixed(1) === record.details!.loserScore!.toFixed(1) ? 2 : 1; return `${record.details!.winnerScore!.toFixed(d)}-${record.details!.loserScore!.toFixed(d)}`; })()}
                                 </span>
                               )}
                             </div>
@@ -691,7 +757,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                               {displayValue}
                             </div>
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">
-                              {activeCategory.unit || 'record'}
+                              {activeCategory.unit === 'record' ? 'record' : activeCategory.unit}
                             </div>
                           </div>
                         </Link>
