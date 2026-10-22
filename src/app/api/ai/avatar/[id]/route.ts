@@ -39,8 +39,9 @@ export async function GET(
       'Content-Type': decoded.mediaType,
       // The caller appends ?v=<hash of the bytes>, so a given URL can never
       // describe different images and is safe to cache hard. Changing the
-      // portrait changes the hash and therefore the URL.
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      // portrait changes the hash and therefore the URL. s-maxage lets Vercel's CDN keep it too:
+      // without it every new visitor reached this function, which reads the whole cast.
+      'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
       'Content-Disposition': 'inline',
       'X-Content-Type-Options': 'nosniff',
     },
