@@ -40,7 +40,11 @@ function flush() {
   const r = getRedis().client;
   if (!n || !r) return;
   const k = key(minute());
-  r.incrby(k, n).then(total => { if (total === n) return r.expire(k, 120); }).catch(() => {});
+  r.incrby(k, n).then(total => {
+    // The back office keeps each hour's busiest minute (lib/ops/monitor).
+    import('@/lib/ops/monitor').then(m => m.noteSleeperMinute(total)).catch(() => {});
+    if (total === n) return r.expire(k, 120);
+  }).catch(() => {});
 }
 
 /** Count calls a page made. Never waits. */

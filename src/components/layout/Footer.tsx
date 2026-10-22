@@ -6,6 +6,7 @@ import { PLATFORM } from '@/lib/platform/config';
 import { LeaguePulseLockup } from '@/components/ui/LeaguePulseBrand';
 import InstallAppCard from './InstallAppCard';
 import AccountChip from './AccountChip';
+import FeedbackButton from './FeedbackButton';
 
 /**
  * A league site's footer, the league's own: its name and badge, its pages in
@@ -63,6 +64,8 @@ export default async function Footer() {
               Every season, rivalry and record of {leagueName}, in one place.
             </p>
             <InstallAppCard />
+            {/* Bugs and ideas, to the back office's inbox (lib/ops/feedback). */}
+            {hosted && <FeedbackButton />}
           </div>
 
           <nav aria-label="League pages" className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">

@@ -14,6 +14,7 @@ import { runAsTenant } from '@/lib/tenant/context';
 import { adminPasswordSet } from '@/lib/tenant/admin';
 import ClaimAdmin from '@/components/platform/ClaimAdmin';
 import { PLATFORM } from '@/lib/platform/config';
+import TrackOnce from '@/components/analytics/TrackOnce';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,12 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
           </>
         ) : (
           <>
+            {tenant && session.status === 'complete' && (
+              <TrackOnce event="league_site_purchased" once={session.id} props={{
+                plan: session.metadata?.plan, tier: session.metadata?.tier, signed_in: Boolean(session.metadata?.userId),
+                provider: tenant.leagueId.startsWith('espn-') ? 'espn' : 'sleeper',
+              }} />
+            )}
             <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-primary">{tenant ? 'You are live' : 'Setting up'}</p>
             <h1 className="mt-3 font-display text-[30px] font-bold leading-tight">{session.metadata?.leagueName || 'Your league'}</h1>
             <p className="mt-3 text-[14px] text-muted-foreground">

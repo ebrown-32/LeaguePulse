@@ -86,6 +86,8 @@ const SHARED_PREFIXES = [
   'lp_demo_',
   // Trade market values, one copy a league format (src/lib/trades/values.ts).
   'lp_fc_values',
+  // The back office's watch over the platform (src/lib/ops/monitor.ts) and its feedback inbox (src/lib/ops/feedback.ts).
+  'lp_ops', 'lp_feedback',
 ];
 
 /**

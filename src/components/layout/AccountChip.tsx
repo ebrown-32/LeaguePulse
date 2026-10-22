@@ -13,11 +13,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { identify, resetIdentity } from '@/lib/mixpanel';
 
 const KEY = 'lp_visitor';
 
 interface Me {
-  accounts: boolean; signedIn?: boolean; product?: string; signIn?: string;
+  accounts: boolean; signedIn?: boolean; id?: string; product?: string; signIn?: string;
   name?: string; image?: string | null; role?: 'owner' | 'admin' | null;
   links?: { account: string; admin: string | null; franchise: string | null; editFranchise: string | null };
 }
@@ -42,6 +43,7 @@ export default function AccountChip({ compact = false, className }: { compact?: 
         if (!d) return;
         // An expired or foreign pass: forget it.
         if (pass && d.signedIn === false) { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }
+        if (d.signedIn && d.id) identify(d.id, { league_role: d.role ?? 'member' });
         setMe(d);
       })
       .catch(() => {});
@@ -73,7 +75,7 @@ export default function AccountChip({ compact = false, className }: { compact?: 
     );
   }
 
-  const signOut = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } setMe({ ...me, signedIn: false }); setOpen(false); };
+  const signOut = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } resetIdentity(); setMe({ ...me, signedIn: false }); setOpen(false); };
   const items = [
     me.links?.franchise && { label: 'Your franchise', href: me.links.franchise },
     me.links?.editFranchise && { label: 'Manage your franchise', href: me.links.editFranchise },

@@ -15,6 +15,7 @@ import ParticleField from '@/components/ParticleField';
 import type { Metadata } from 'next';
 import { defaultTheme } from '@/lib/themeConfig';
 import ProductAuth from '@/components/platform/ProductAuth';
+import ProductIdentity from '@/components/analytics/ProductIdentity';
 import { appIconUrl } from '@/lib/appIconUrl';
 import RouteProgress from '@/components/layout/RouteProgress';
 import AppLoader from '@/components/layout/AppLoader';
@@ -129,8 +130,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en" className="dark" suppressHydrationWarning>
         <body className={`${displayFont.variable} ${bodyFont.variable} min-h-screen antialiased`}>
+          <Analytics props={{ surface: 'product', hosted: 'yes' }} />
           {(await import('@/lib/platform/account')).accountsEnabled()
-            ? <ProductAuth>{children}</ProductAuth>
+            ? <ProductAuth>{children}<ProductIdentity /></ProductAuth>
             : children}
         </body>
       </html>
@@ -142,6 +144,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // than a league site with nothing to load.
   let tenantLeague: string | null = null;
   let tenantName: string | null = null;
+  // For analytics (lib/mixpanel): which league's site this is. Public, like the address.
+  let analytics: Record<string, string> = { surface: 'league', hosted: process.env.LP_HOSTED === '1' ? 'yes' : 'no' };
   // The demo site (lib/demo): its strip, with the way to the product site.
   let demoProduct: string | null = null;
   if (process.env.LP_HOSTED === '1') {
@@ -162,6 +166,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // public, so nothing secret is exposed.
     tenantLeague = tenant.leagueId;
     tenantName = tenant.leagueName?.trim() || null;
+    analytics = { ...analytics, league: tenant.slug, provider: tenant.leagueId.startsWith('espn-') ? 'espn' : 'sleeper', plan: tenant.tier ?? 'standard' };
     const { DEMO_SLUG } = await import('@/lib/demo/site');
     if (tenant.slug === DEMO_SLUG) {
       const [{ headers }, { productOriginFor }] = await Promise.all([import('next/headers'), import('@/lib/franchise/links')]);
@@ -198,7 +203,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeProvider defaultTheme={demoProduct ? 'dark' : 'light'}>
           {/* The install prompt previews the very icon the phone will get. */}
           <InstallPromptProvider logoUrl={appIconUrl(theme.logoUrl, 192)} leagueName={theme.leagueName ?? tenantName}>
-            <Analytics />
+            <Analytics props={analytics} />
             <div className="flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
               <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />

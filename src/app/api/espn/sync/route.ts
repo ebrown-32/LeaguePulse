@@ -10,6 +10,7 @@
  * this run is first in line the next. Finished seasons are skipped.
  */
 
+import { withCron } from '@/lib/ops/monitor';
 import { NextResponse } from 'next/server';
 import { bearerMatches } from '@/lib/platform/operator';
 import { parseEspnLeague } from '@/lib/providers/ids';
@@ -33,7 +34,7 @@ async function syncOne(lid: string, rootSeason: number) {
   return { season, ...(await syncLeague(lid, season)) };
 }
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   const hosted = process.env.LP_HOSTED === '1';
   // Open locally without a secret, like the AI scheduler; never on the hosted product.
@@ -68,3 +69,6 @@ export async function GET(req: Request) {
   }
   return NextResponse.json({ leagues: results.length, ms: Date.now() - started, results });
 }
+
+/** Each run recorded for the back office (lib/ops/monitor). */
+export const GET = withCron('espn-sync', run);

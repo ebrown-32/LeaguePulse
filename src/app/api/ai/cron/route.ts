@@ -1,3 +1,4 @@
+import { withCron } from '@/lib/ops/monitor';
 import { bearerMatches } from '@/lib/platform/operator';
 import { getDeskVolume, seasonalCadence, type Cadence } from '@/lib/ai/deskVolume';
 import { personaAvatarUrl } from '@/lib/ai/avatar';
@@ -335,7 +336,7 @@ async function fanOut(request: Request): Promise<Response> {
   return NextResponse.json({ leagues: results.length, results });
 }
 
-export async function GET(request: Request) {
+async function run(request: Request) {
   if (!(await authorized(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -681,3 +682,6 @@ async function runForLeague(request: Request): Promise<Response> {
     ...(failures.length ? { failures } : {}),
   });
 }
+
+/** Each run recorded for the back office (lib/ops/monitor). */
+export const GET = withCron('ai', run);

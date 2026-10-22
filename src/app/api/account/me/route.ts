@@ -32,7 +32,8 @@ export async function GET(req: Request) {
   const admin = t && role ? `${product}/api/platform/account/open?slug=${encodeURIComponent(t.slug)}` : null;
   return NextResponse.json({
     accounts: true, signedIn: true, product, signIn,
-    name: me.name, image: me.image, role, setup,
+    // Their account id, for analytics on this site (lib/mixpanel); no name or email goes there.
+    id: me.userId, name: me.name, image: me.image, role, setup,
     links: {
       account: `${product}/account`,
       admin,
