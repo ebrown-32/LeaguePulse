@@ -174,6 +174,33 @@ export async function storageHealth(): Promise<{ backend: string; writable: bool
  */
 const POSTS_LIST_KEY = 'lp_ai_posts_v2';
 
+/**
+ * Bandwidth: every open feed polls every 45 seconds, and the whole list is up to 100 posts. Read
+ * from Redis each time, a few phones left open on a league's site used up a month of the
+ * database's transfer in days. So each change to the list bumps a revision, and a server keeps
+ * the list it last read with the revision it read it at: a poll that finds the same revision
+ * costs one tiny read. Writers bump the revision after the list changes and readers read it
+ * before the list, so a copy is never kept under a revision newer than its contents.
+ */
+const POSTS_REV_KEY = 'lp_ai_posts_rev';
+const POSTS_MEMO = new Map<string, { rev: string; posts: FeedPost[] }>();
+/** The cast, likewise: it carries every uploaded portrait, so it's large and read often. */
+const PEOPLE_REV_KEY = 'lp_ai_personalities_rev';
+const PEOPLE_MEMO = new Map<string, { rev: string; cast: Personality[] | null }>();
+
+/** Which league's copy: memos are per process and every league shares the process. */
+async function memoSlot(): Promise<string> {
+  const { currentTenant } = await import('@/lib/tenant/context');
+  return (await currentTenant().catch(() => null))?.slug ?? '';
+}
+
+/** The revision now, starting one if there isn't one yet. */
+async function revisionOf(client: NonNullable<ReturnType<typeof getRedis>['client']>, key: string): Promise<string> {
+  return (await client.get(key)) ?? String(await client.incrby(key, 1));
+}
+const bump = (client: NonNullable<ReturnType<typeof getRedis>['client']>, key: string) =>
+  client.incrby(key, 1).catch(() => 0);
+
 /** Serialises the file backend's read-modify-write, which has the same hazard
  *  within a process even though there is no network in between. */
 let fileWriteChain: Promise<unknown> = Promise.resolve();
@@ -211,6 +238,7 @@ async function migrateLegacyPosts(client: NonNullable<ReturnType<typeof getRedis
     await client.lpush(POSTS_LIST_KEY, JSON.stringify(post));
   }
   await client.ltrim(POSTS_LIST_KEY, 0, MAX_POSTS - 1);
+  await bump(client, POSTS_REV_KEY);
 }
 
 /** Every stored post, newest first, before any publish-time filtering. */
@@ -218,8 +246,13 @@ async function readPosts(): Promise<FeedPost[]> {
   const { client } = getRedis();
   if (client) {
     try {
+      const [slot, rev] = await Promise.all([memoSlot(), revisionOf(client, POSTS_REV_KEY)]);
+      const hit = POSTS_MEMO.get(slot);
+      if (hit?.rev === rev) return hit.posts;
       await migrateLegacyPosts(client);
-      return parsePosts(await client.lrange(POSTS_LIST_KEY, 0, MAX_POSTS - 1));
+      const posts = parsePosts(await client.lrange(POSTS_LIST_KEY, 0, MAX_POSTS - 1));
+      POSTS_MEMO.set(slot, { rev, posts });
+      return posts;
     } catch {
       return [];
     }
@@ -283,6 +316,7 @@ export async function addPost(post: FeedPost): Promise<void> {
       // publish that lands at the same moment.
       await client.lpush(POSTS_LIST_KEY, JSON.stringify(post));
       await client.ltrim(POSTS_LIST_KEY, 0, MAX_POSTS - 1);
+      await bump(client, POSTS_REV_KEY);
       return;
     } catch (err) {
       throw new StorageUnavailableError(
@@ -309,6 +343,7 @@ export async function deletePost(id: string): Promise<boolean> {
     });
     if (!member) return false;
     await client.lrem(POSTS_LIST_KEY, 1, member);
+    await bump(client, POSTS_REV_KEY);
     return true;
   }
   return serialised(async () => {
@@ -505,13 +540,24 @@ function withoutSupersededCopies(saved: Personality[]): Personality[] {
  * idempotent, so a concurrent read repeating the write costs nothing.
  */
 async function readCast(): Promise<Personality[] | null> {
+  const { client } = getRedis();
+  const [slot, rev] = client
+    ? await Promise.all([memoSlot(), revisionOf(client, PEOPLE_REV_KEY).catch(() => null)])
+    : ['', null];
+  const hit = rev ? PEOPLE_MEMO.get(slot) : undefined;
+  if (hit && hit.rev === rev) return hit.cast;
+
   const saved = await readJson<Personality[] | null>(PEOPLE_KEY, PEOPLE_FILE, null);
-  if (!saved?.length) return saved;
-  const cleaned = withoutSupersededCopies(saved);
-  if (cleaned.length !== saved.length) {
-    await writeJson(PEOPLE_KEY, PEOPLE_FILE, cleaned).catch(() => { /* next read retries */ });
+  let cast = saved;
+  if (saved?.length) {
+    const cleaned = withoutSupersededCopies(saved);
+    if (cleaned.length !== saved.length) {
+      await writeJson(PEOPLE_KEY, PEOPLE_FILE, cleaned).catch(() => { /* next read retries */ });
+    }
+    cast = cleaned;
   }
-  return cleaned;
+  if (rev) PEOPLE_MEMO.set(slot, { rev, cast });
+  return cast;
 }
 
 export async function getPersonalities(): Promise<Personality[]> {
@@ -555,4 +601,6 @@ export async function getPersonalitiesForAdmin(): Promise<Personality[]> {
 
 export async function savePersonalities(list: Personality[]): Promise<void> {
   await writeJson(PEOPLE_KEY, PEOPLE_FILE, list);
+  const { client } = getRedis();
+  if (client) await bump(client, PEOPLE_REV_KEY);
 }
