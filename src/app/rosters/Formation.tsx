@@ -9,6 +9,8 @@
  * The formation is read from positions alone, which is all a fantasy lineup
  * knows: receivers split out wide, tight ends on the line, quarterbacks under
  * center, backs behind them. A flex starter simply lines up at its position.
+ * Past four on the line, the inside receivers drop back into the slot. A row
+ * with more than four cards shrinks them to fit, so none runs off a phone's field.
  * Switching teams, the new squad runs out into its spots.
  */
 
@@ -37,16 +39,24 @@ export interface FormationProps {
   onOpen: (p: AnalysisPlayer) => void;
 }
 
+/** The most cards on the line before the inside receivers move to the slot. */
+const LINE_MAX = 4;
+
 /** Starters into rows, front of the formation to back. */
 function lineUp(starters: AnalysisPlayer[]) {
   const by = (pos: string[]) => starters.filter(p => pos.includes(p.position));
   const wr = by(['WR']), te = by(['TE']);
+  // A crowded line keeps one receiver out wide on each side; the rest line up in the slot.
+  const crowded = wr.length + te.length > LINE_MAX && wr.length > 2;
+  const wide = crowded ? [wr[0], wr[1]] : wr;
+  const slot = crowded ? wr.slice(2) : [];
   // Receivers split evenly to each side, tight ends inside them on the line.
-  const left = wr.slice(0, Math.ceil(wr.length / 2)), right = wr.slice(Math.ceil(wr.length / 2));
+  const left = wide.slice(0, Math.ceil(wide.length / 2)), right = wide.slice(Math.ceil(wide.length / 2));
   const teLeft = te.slice(0, Math.floor(te.length / 2)), teRight = te.slice(Math.floor(te.length / 2));
   const known = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
   return {
     line: { left, teLeft, teRight, right },
+    slot,
     qb: by(['QB']),
     backs: by(['RB']),
     special: [...by(['K']), ...by(['DEF']), ...starters.filter(p => !known.has(p.position))],
@@ -55,6 +65,9 @@ function lineUp(starters: AnalysisPlayer[]) {
 
 export default function Formation({ starters, bench, lead, leadLabel, decimals, teamKey, onOpen }: FormationProps) {
   const rows = useMemo(() => lineUp(starters), [starters]);
+  // How many cards share a row, which sets their width (see PlayerCard); four or fewer keeps the usual size.
+  const across = (n: number) => ({ ['--n' as string]: Math.max(LINE_MAX, n) });
+  const { left, teLeft, teRight, right } = rows.line;
   const best = Math.max(1, ...[...starters, ...bench].map(p => lead(p) ?? 0));
   // Each wave runs out a beat after the one in front of it.
   let order = 0;
@@ -64,13 +77,16 @@ export default function Formation({ starters, bench, lead, leadLabel, decimals, 
   );
 
   return (
-    <div className="space-y-4">
+    // A container, so cards size to the field rather than the screen. --pad and --gap are the
+    // field's padding (and border) and the line's gap at each width.
+    <div className="space-y-4 [--gap:6px] [--max:clamp(64px,18.5vw,108px)] [--pad:18px] [container-type:inline-size] sm:[--gap:12px] sm:[--pad:50px] lg:[--max:136px]"
+      style={across(0)}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={teamKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.15 } }}>
           <Field>
             <div className="relative flex flex-col gap-3 px-2 pb-5 pt-5 sm:gap-5 sm:px-6 sm:pb-8 sm:pt-8">
               {/* The line: receivers out wide, tight ends and the (drawn) line in the middle. */}
-              <div className="flex items-end justify-between gap-1.5 sm:gap-3">
+              <div className="flex items-end justify-between gap-1.5 sm:gap-3" style={across(left.length + teLeft.length + teRight.length + right.length)}>
                 <div className="flex gap-1.5 sm:gap-3">{rows.line.left.map(p => card(p))}</div>
                 <div className="flex items-end gap-1.5 sm:gap-3">
                   {rows.line.teLeft.map(p => card(p))}
@@ -79,8 +95,9 @@ export default function Formation({ starters, bench, lead, leadLabel, decimals, 
                 </div>
                 <div className="flex gap-1.5 sm:gap-3">{rows.line.right.map(p => card(p))}</div>
               </div>
-              {rows.qb.length > 0 && <div className="flex justify-center gap-2 sm:gap-4">{rows.qb.map(p => card(p))}</div>}
-              {rows.backs.length > 0 && <div className={cn('flex justify-center sm:gap-14', rows.backs.length > 3 ? 'gap-1.5' : 'gap-6')}>{rows.backs.map(p => card(p))}</div>}
+              {rows.slot.length > 0 && <div className="flex justify-center gap-1.5 sm:gap-3" style={across(rows.slot.length)}>{rows.slot.map(p => card(p))}</div>}
+              {rows.qb.length > 0 && <div className="flex justify-center gap-2 sm:gap-4" style={across(rows.qb.length)}>{rows.qb.map(p => card(p))}</div>}
+              {rows.backs.length > 0 && <div className={cn('flex justify-center', rows.backs.length <= 3 && 'sm:gap-14', rows.backs.length > 3 ? 'gap-1.5 sm:gap-3' : 'gap-6')} style={across(rows.backs.length)}>{rows.backs.map(p => card(p))}</div>}
             </div>
           </Field>
 
@@ -170,11 +187,15 @@ function PlayerCard({ player: p, value, best, label, decimals, size, delay, onOp
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 320, damping: 24, delay }}
       whileHover={{ y: -4, scale: 1.04 }} whileTap={{ scale: 0.96 }}
-      style={{ rotateX: rx, rotateY: ry, transformPerspective: 700, ['--pc' as string]: color }}
+      style={{
+        rotateX: rx, rotateY: ry, transformPerspective: 700, ['--pc' as string]: color,
+        // Its share of its row, never more than the usual size (Formation sets the variables).
+        ...(field && { width: 'min(var(--max), calc((100cqw - var(--pad) + var(--gap)) / var(--n) - var(--gap)))' }),
+      }}
       className={cn(
         'group relative shrink-0 overflow-hidden rounded-xl text-left text-white outline-none',
         'shadow-[0_10px_24px_-10px_rgba(0,0,0,0.65)] focus-visible:ring-2 focus-visible:ring-white',
-        field ? 'w-[clamp(64px,18.5vw,108px)] lg:w-[136px]' : 'w-[clamp(72px,21vw,100px)] lg:w-[112px]',
+        !field && 'w-[clamp(72px,21vw,100px)] lg:w-[112px]',
       )}
     >
       {/* Frame: the position color, a sheen, the photo. */}

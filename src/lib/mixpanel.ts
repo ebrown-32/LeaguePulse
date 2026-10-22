@@ -39,7 +39,10 @@ export function initMixpanel(props?: SuperProps) {
     // Player photos, logos and team art are public, so replays show them; mark anything else to hide.
     record_block_selector: '[data-mp-block]',
   });
-  base = clean(props);
+  // Which deployment sent it, to filter reports to production. Vercel sets NEXT_PUBLIC_VERCEL_ENV
+  // (production, preview or development); a build elsewhere counts as production.
+  const environment = process.env.NEXT_PUBLIC_VERCEL_ENV || (process.env.NODE_ENV === 'development' ? 'development' : 'production');
+  base = clean({ ...props, environment });
   mixpanel.register(base);
   initialized = true;
 }

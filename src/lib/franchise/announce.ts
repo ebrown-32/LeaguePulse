@@ -41,7 +41,11 @@ export type OfficialVisual =
   /** A player's big day (lib/franchise/gameday). */
   | { type: 'player'; playerId: string; name: string; position: string; nflTeam: string; points: number; line: string; color: string; team: string }
   /** A final score (lib/franchise/gameday). */
-  | { type: 'final'; week: number; us: { name: string; score: number; color: string; avatar: string | null }; them: { name: string; score: number; color: string; avatar: string | null } };
+  | { type: 'final'; week: number; us: { name: string; score: number; color: string; avatar: string | null }; them: { name: string; score: number; color: string; avatar: string | null } }
+  /** A league record that just fell (lib/ai/recordWatch): the new mark, and the one it beat. */
+  | { type: 'record'; label: string; value: string; unit: string; holder: string; when: string; good: boolean; color: string;
+      was: { value: string; holder: string; when: string } | null;
+      player?: { id: string; name: string; position: string; nflTeam: string } };
 
 /** How long after one announcement of a kind before the next can go out. */
 const QUIET_MS: Record<Announcement['kind'], number> = {

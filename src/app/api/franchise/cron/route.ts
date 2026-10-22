@@ -1,7 +1,8 @@
 /**
  * Every fifteen minutes, for every league: the media desk's coverage of new trades, all year
  * (lib/ai/tradeWatch), and around the games, the franchises' game-day posts from their own
- * accounts (lib/franchise/gameday): big days and final scores.
+ * accounts (lib/franchise/gameday): big days and final scores. Once a week is final, any league
+ * record it broke (lib/ai/recordWatch).
  */
 
 import { withCron } from '@/lib/ops/monitor';
@@ -30,11 +31,14 @@ async function run(req: Request) {
   // Game-day posts only around the games; trades are covered all year (lib/ai/tradeWatch).
   const relevant = games.some(g => g.state === 'in' || (g.state === 'post' && now - Date.parse(g.kickoff) < RECENT_MS));
 
-  const [{ gamedayPosts }, { coverNewTrades }] = await Promise.all([import('@/lib/franchise/gameday'), import('@/lib/ai/tradeWatch')]);
+  const [{ gamedayPosts }, { coverNewTrades }, { coverBrokenRecords }] = await Promise.all([
+    import('@/lib/franchise/gameday'), import('@/lib/ai/tradeWatch'), import('@/lib/ai/recordWatch'),
+  ]);
   const oneLeague = async () => {
     const trades = await coverNewTrades().catch(err => ({ graded: 0, error: err instanceof Error ? err.message : String(err) }));
     const gameday = relevant ? await gamedayPosts(games) : { skipped: 'no games on or just over' };
-    return { trades, gameday };
+    const records = await coverBrokenRecords().catch(err => ({ covered: 0, error: err instanceof Error ? err.message : String(err) }));
+    return { trades, gameday, records };
   };
   if (!hosted) return NextResponse.json({ league: 'self', ...(await oneLeague()) });
 
