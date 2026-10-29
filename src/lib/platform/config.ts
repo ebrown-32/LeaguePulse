@@ -62,9 +62,12 @@ export const PLANS = {
   pro: {
     id: 'pro',
     name: 'League Pass',
-    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 15),
-    /** A season runs about five months; the season price is the better deal. */
-    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 59),
+    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_MONTHLY || 8),
+    /**
+     * A year, billed yearly. A season runs about five months, so a league paying monthly only in
+     * season pays about the same as a year: the yearly price is the better deal.
+     */
+    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_SEASON || 39),
     stripeMonthly: env('STRIPE_PRICE_MONTHLY'),
     stripeSeason: env('STRIPE_PRICE_SEASON'),
     trialDays: Number(process.env.NEXT_PUBLIC_LP_TRIAL_DAYS || 14),
@@ -73,8 +76,8 @@ export const PLANS = {
   ai: {
     id: 'ai',
     name: 'League Pass + AI',
-    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_MONTHLY || 34),
-    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_SEASON || 139),
+    monthly: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_MONTHLY || 16),
+    season: Number(process.env.NEXT_PUBLIC_LP_PRICE_AI_SEASON || 79),
     stripeMonthly: env('STRIPE_PRICE_AI_MONTHLY'),
     stripeSeason: env('STRIPE_PRICE_AI_SEASON'),
     blurb: 'Everything in League Pass, and we run the AI. No key, no second bill.',
@@ -93,6 +96,20 @@ export const tierPlan = (tier: Tier) => (tier === 'ai' ? PLANS.ai : PLANS.pro);
 export const stripePriceFor = (tier: Tier, cycle: 'monthly' | 'season') =>
   cycle === 'monthly' ? tierPlan(tier).stripeMonthly : tierPlan(tier).stripeSeason;
 
+/**
+ * Prices no longer sold that subscriptions may still be on, by tier and cycle: comma-separated
+ * Stripe price ids in STRIPE_PRICE_MONTHLY_OLD, STRIPE_PRICE_SEASON_OLD, STRIPE_PRICE_AI_MONTHLY_OLD
+ * and STRIPE_PRICE_AI_SEASON_OLD. A league on one keeps its tier until it's moved to the current
+ * price (api/platform/operator/reprice).
+ */
+const oldPrices = (name: string) => env(name).split(',').map(s => s.trim()).filter(Boolean);
+export const LEGACY_PRICES: { tier: Tier; plan: 'monthly' | 'season'; ids: string[] }[] = [
+  { tier: 'standard', plan: 'monthly', ids: oldPrices('STRIPE_PRICE_MONTHLY_OLD') },
+  { tier: 'standard', plan: 'season', ids: oldPrices('STRIPE_PRICE_SEASON_OLD') },
+  { tier: 'ai', plan: 'monthly', ids: oldPrices('STRIPE_PRICE_AI_MONTHLY_OLD') },
+  { tier: 'ai', plan: 'season', ids: oldPrices('STRIPE_PRICE_AI_SEASON_OLD') },
+];
+
 /** A Stripe price id back to its tier and cycle, or null for a price this product does not sell. */
 export function priceInfo(priceId: string | null | undefined): { tier: Tier; plan: 'monthly' | 'season' } | null {
   if (!priceId) return null;
@@ -100,7 +117,8 @@ export function priceInfo(priceId: string | null | undefined): { tier: Tier; pla
   if (priceId === PLANS.pro.stripeSeason) return { tier: 'standard', plan: 'season' };
   if (priceId === PLANS.ai.stripeMonthly) return { tier: 'ai', plan: 'monthly' };
   if (priceId === PLANS.ai.stripeSeason) return { tier: 'ai', plan: 'season' };
-  return null;
+  const old = LEGACY_PRICES.find(l => l.ids.includes(priceId));
+  return old ? { tier: old.tier, plan: old.plan } : null;
 }
 
 /** Subdomains a league may not take. */

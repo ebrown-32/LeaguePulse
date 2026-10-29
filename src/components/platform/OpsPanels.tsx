@@ -466,3 +466,76 @@ export function FeedbackInbox({ auth, onCount }: { auth: Auth; onCount?: (n: num
     </Card>
   );
 }
+
+// ── Moving subscribers to today's prices ────────────────────────────────────
+
+interface Move {
+  id: string; slug: string | null; tier: 'standard' | 'ai'; plan: 'monthly' | 'season';
+  status: string; from: number | null; to: number; renews: string | null; endsInstead: boolean;
+}
+
+/**
+ * Subscriptions still on an old price (api/platform/operator/reprice), and the button that moves
+ * them to today's. Shown only while there are some. Nothing is charged now: each one pays the new
+ * price from its next renewal.
+ */
+export function Reprice({ auth, onDone }: { auth: Auth; onDone?: (msg: string) => void }) {
+  const [moves, setMoves] = useState<Move[] | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const r = await fetch('/api/platform/operator/reprice', { headers: headers(auth), cache: 'no-store' }).catch(() => null);
+    const d = await r?.json().catch(() => null);
+    if (!r?.ok) { setError(d?.error ?? 'Could not read Stripe'); return; }
+    setMoves(d.moves ?? []); setMissing(d.missing ?? []);
+  }, [auth]);
+  useEffect(() => { load(); }, [load]);
+
+  const move = async () => {
+    if (!moves?.length) return;
+    if (!window.confirm(`Move ${moves.length} subscription${moves.length === 1 ? '' : 's'} to today's prices? Each pays the new price from its next renewal.`)) return;
+    setBusy(true); setError('');
+    const r = await fetch('/api/platform/operator/reprice', { method: 'POST', headers: headers(auth, true), body: '{}' }).catch(() => null);
+    const d = await r?.json().catch(() => null);
+    setBusy(false);
+    if (!r?.ok) { setError(d?.error ?? 'Nothing was moved'); return; }
+    const failed = (d.results ?? []).filter((x: { ok: boolean }) => !x.ok).length;
+    onDone?.(`Moved ${d.moved}${failed ? `, ${failed} failed` : ''}.`);
+    load();
+  };
+
+  if (error) return <p className="rounded-2xl border border-[hsl(var(--signal)/0.4)] bg-card px-4 py-3 text-[13.5px]">Old prices: {error}</p>;
+  if (!moves?.length && !missing.length) return null;
+  const label = (m: Move) => `${m.tier === 'ai' ? 'League Pass + AI' : 'League Pass'}, ${m.plan === 'monthly' ? 'monthly' : 'yearly'}`;
+  const per = (m: Move) => (m.plan === 'monthly' ? '/mo' : '/yr');
+  return (
+    <Card title="Subscriptions on old prices" meta={`${moves?.length ?? 0} to move`}>
+      <p className="mt-2 text-[13px] text-muted-foreground">
+        Moved to today&apos;s price for the same plan. Nothing is charged or credited now; each pays the new price from its next renewal.
+      </p>
+      {missing.length > 0 && (
+        <p className="mt-2 text-[12.5px] text-[hsl(var(--signal))]">No current Stripe price set for: {missing.join(', ')}. Those can&apos;t move until it is.</p>
+      )}
+      <ul className="mt-3 divide-y divide-border">
+        {(moves ?? []).map(m => (
+          <li key={m.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5 text-[13px]">
+            <div className="min-w-0">
+              <p className="font-semibold">{m.slug ?? m.id}</p>
+              <p className="text-[12px] text-muted-foreground">{label(m)}, {m.status}{m.renews ? `, renews ${new Date(m.renews).toLocaleDateString()}` : ''}{m.endsInstead ? ', set to cancel' : ''}</p>
+            </div>
+            <p className="shrink-0 tabular-nums">
+              <span className="text-muted-foreground line-through">{m.from != null ? `$${m.from}` : '?'}</span> <span className="font-semibold">${m.to}</span>{per(m)}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {(moves?.length ?? 0) > 0 && (
+        <button onClick={move} disabled={busy}
+          className="mt-3 rounded-full bg-foreground px-4 py-2 text-[13px] font-semibold text-background disabled:opacity-60">
+          {busy ? 'Moving' : `Move ${moves!.length} to today's prices`}
+        </button>
+      )}
+    </Card>
+  );
+}

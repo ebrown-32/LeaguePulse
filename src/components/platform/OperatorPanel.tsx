@@ -17,7 +17,7 @@ import { UserButton, useUser } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 import { productDisplay } from './fonts';
 import { Logomark, Route, Tick } from './marks';
-import { FeedbackInbox, Monitor, useNewFeedback } from './OpsPanels';
+import { FeedbackInbox, Monitor, useNewFeedback, Reprice } from './OpsPanels';
 
 /** Accounts are on when Clerk is configured (hosted only); the user chip needs its provider. */
 const accountsOn = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
@@ -185,6 +185,7 @@ export default function OperatorPanel() {
               <Signups leagues={data.leagues} />
               <Health leagues={data.leagues} />
             </div>
+            <Reprice auth={secret} onDone={(msg) => { flash(msg); load(); }} />
             <Leagues data={data} call={call} onChange={(msg) => { flash(msg); load(); }} />
             <AddLeague root={data.rootDomain} call={call} onDone={(msg) => { flash(msg); load(); }} />
             <DemoLeague root={data.rootDomain} onDone={(msg) => { flash(msg); load(); }} />
