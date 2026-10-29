@@ -57,7 +57,7 @@ export const PLANS = {
     id: 'free',
     name: 'Self-hosted',
     price: 0,
-    blurb: 'The whole app, open source. Run it on your own Vercel account.',
+    blurb: 'The whole app, free to run yourself. Run it on your own Vercel account.',
   },
   pro: {
     id: 'pro',

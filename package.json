@@ -2,7 +2,7 @@
   "name": "leaguepulse",
   "version": "0.1.0",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "FSL-1.1-ALv2",
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:hosted": "node scripts/dev-hosted.mjs",

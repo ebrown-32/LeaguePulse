@@ -54,10 +54,12 @@ export default function TermsPage() {
       </ul>
       <p>We may suspend or remove a site that breaks these rules.</p>
 
-      <h2>Open source</h2>
+      <h2>Source code</h2>
       <p>
-        The software behind {n} is open source under the GNU Affero General Public License v3. These terms govern
-        the hosted service; the licence governs the code.
+        The software behind {n} is source available under the Functional Source License, Version 1.1 (FSL-1.1-ALv2):
+        anyone may read it and run it for their own league, but not offer it as a competing product or service. Each
+        version becomes available under the Apache License 2.0 two years after its release. These terms govern the
+        hosted service; the licence governs the code.
       </p>
 
       <h2>Availability and liability</h2>

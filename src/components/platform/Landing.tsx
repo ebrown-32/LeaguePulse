@@ -373,7 +373,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
       <motion.div variants={row} className="relative mt-7 flex flex-wrap gap-2 text-[14px] font-semibold">
         <a href="#faq" onClick={go('#faq')} className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Questions</a>
         {accountsOn && <a href="/account" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Sign in to your leagues</a>}
-        <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Open source</a>
+        <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Source code</a>
       </motion.div>
 
       <motion.div variants={row} className="relative mt-auto pt-10">
@@ -805,7 +805,7 @@ function Pricing() {
   const tiers: TierCard[] = [
     {
       name: PLANS.free.name, short: 'Free', price: '$0', per: 'forever',
-      blurb: 'The whole app, open source. You bring the server, the database and the patience.',
+      blurb: 'The whole app, free to run yourself. You bring the server, the database and the patience.',
       points: ['Every feature but Franchise HQ', 'Your own Vercel and Redis', 'Your own Anthropic key', 'Help from the community'],
       cta: { label: 'Get the code', href: PLATFORM.github, external: true },
     },
@@ -1030,8 +1030,8 @@ function OpenSource() {
         <div>
           <h2 className="lp-display text-[28px] font-extrabold tracking-[-0.03em] sm:text-[34px]">Built in the open.</h2>
           <p className="mt-3 max-w-2xl text-[15.5px] leading-relaxed text-muted-foreground">
-            Every line of {PLATFORM.name} is public under the AGPL. Read how the odds are calculated, see exactly what the AI is told,
-            or run your own copy free. The hosted version is the same code, run for you.
+            Every line of {PLATFORM.name} is public. Read how the odds are calculated, see exactly what the AI is told,
+            or run your own copy free for your league. The hosted version is the same code, run for you.
           </p>
         </div>
         <a href={PLATFORM.github} target="_blank" rel="noreferrer"
@@ -1141,10 +1141,10 @@ function Footer() {
       { label: 'Questions', href: '#faq' },
       ...(accountsOn ? [{ label: 'Back office', href: '/operator', muted: true }] : []),
     ] },
-    { title: 'Open source', links: [
+    { title: 'Source code', links: [
       { label: 'GitHub', href: PLATFORM.github, external: true },
       { label: 'Run it yourself', href: `${PLATFORM.github}#readme`, external: true },
-      { label: 'License (AGPL)', href: `${PLATFORM.github}/blob/main/LICENSE`, external: true },
+      { label: 'License (FSL)', href: `${PLATFORM.github}/blob/main/LICENSE.md`, external: true },
     ] },
     { title: 'The fine print', links: [
       ...(PLATFORM.supportEmail ? [{ label: 'Support', href: `mailto:${PLATFORM.supportEmail}` }] : []),
