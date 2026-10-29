@@ -90,11 +90,13 @@ Safari may not).
 | `CRON_SECRET` | any long random string; required in hosted mode |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | a **separate** Redis database from your own league's |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_SEASON` | see Billing |
-| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 15, 59, 14) |
+| `NEXT_PUBLIC_LP_PRICE_MONTHLY` / `_SEASON` / `_TRIAL_DAYS` | displayed prices, matching Stripe (defaults 8, 39, 14) |
 | `STRIPE_PRICE_AI_MONTHLY`, `STRIPE_PRICE_AI_SEASON` | the League Pass + AI prices; see Billing. Without them, sign-up for that tier says billing is not ready |
-| `NEXT_PUBLIC_LP_PRICE_AI_MONTHLY` / `_SEASON` | displayed League Pass + AI prices (defaults 34, 139) |
+| `NEXT_PUBLIC_LP_PRICE_AI_MONTHLY` / `_SEASON` | displayed League Pass + AI prices (defaults 16, 79) |
+| `STRIPE_PRICE_MONTHLY_OLD` / `_SEASON_OLD` / `_AI_MONTHLY_OLD` / `_AI_SEASON_OLD` | optional: comma-separated Stripe prices no longer sold that subscriptions may still be on. Those leagues keep their tier, and the operator panel lists them with a button that moves them to today's price from their next renewal (api/platform/operator/reprice) |
 | `LP_MANAGED_ANTHROPIC_API_KEY` | the platform's own Anthropic key, used **only** for League Pass + AI leagues that have no key of their own. Set a spend limit on it in the Anthropic console |
 | `LP_MANAGED_DAILY_CHAT` / `LP_MANAGED_DAILY_ASK` | optional: daily chat and analytics questions for a League Pass + AI league on the platform key (defaults 40 and 20). Leagues on their own key keep `LP_AI_DAILY_CHAT` / `_ASK` (300 and 200). Each league's AI cost this month shows in the operator panel |
+| `LP_MANAGED_MONTHLY_BUDGET` | optional: dollars of AI a month (at list prices) for a League Pass + AI league on the platform key, default 4. Past it, that league's AI runs on the fast model for the rest of the month instead of stopping. `0` turns the budget off |
 | `STRIPE_PORTAL_CONFIGURATION` | optional: the customer portal setup (`bpc_…`) League Pass uses. Without it Stripe uses the account default, which must be saved once in the dashboard |
 | `LP_OPERATOR_SECRET` | `openssl rand -hex 32`. Your key to the operator endpoints below. Keep it out of GitHub |
 | `NEXT_PUBLIC_LP_SUPPORT_EMAIL` | where customers write; shown on the site, the legal pages and the admin sign-in |

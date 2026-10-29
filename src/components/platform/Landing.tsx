@@ -795,9 +795,12 @@ function Pricing() {
   const rail = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(FEATURED);
   const [receiptOpen, setReceiptOpen] = useState(false);
-  const head = (n: number) => `$${(n / teams).toFixed(2)}`;
+  /** One manager's share: what the price is for a league that splits it. Cents under a dollar. */
+  const each = (n: number) => { const v = n / teams; return v < 1 ? `${Math.round(v * 100)}\u00a2` : `$${v.toFixed(2)}`; };
   const priced = (p: { season: number; monthly: number }) => (cycle === 'season' ? p.season : p.monthly);
-  const per = cycle === 'season' ? 'per year' : 'per month';
+  const per = cycle === 'season' ? 'per manager, for the whole year' : 'per manager, per month';
+  const whole = (p: { season: number; monthly: number }) => `One person pays $${priced(p)} ${cycle === 'season' ? 'a year' : 'a month'}, split ${teams} ways`;
+  const yearly = cycle === 'season';
 
   const tiers: TierCard[] = [
     {
@@ -807,13 +810,13 @@ function Pricing() {
       cta: { label: 'Get the code', href: PLATFORM.github, external: true },
     },
     {
-      name: PLANS.pro.name, short: 'Pass', price: `$${priced(PLANS.pro)}`, per, note: `about ${head(priced(PLANS.pro))} a head`,
+      name: PLANS.pro.name, short: 'Pass', price: each(priced(PLANS.pro)), per, note: whole(PLANS.pro),
       blurb: 'Hosted on your league\u2019s own address. The AI writes on your own Anthropic key.',
       points: ['Every feature, every season kept for good', 'Franchise HQ for every manager', 'Sleeper or ESPN', 'AI on your own key, pay as you go', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=standard` },
     },
     {
-      name: PLANS.ai.name, short: '+ AI', price: `$${priced(PLANS.ai)}`, per, note: `about ${head(priced(PLANS.ai))} a head`, featured: true, badge: 'Easiest',
+      name: PLANS.ai.name, short: '+ AI', price: each(priced(PLANS.ai)), per, note: whole(PLANS.ai), featured: true, badge: 'Easiest',
       blurb: 'Everything in League Pass, and we run the AI. No key to find, no second bill.',
       points: ['Everything in League Pass', 'AI writers, chat and analytics included', 'Nothing to set up', `${PLANS.pro.trialDays} days free, no card`],
       cta: { label: 'Start free trial', href: `/start?plan=${cycle}&tier=ai` },
@@ -862,7 +865,9 @@ function Pricing() {
           <div className="max-w-2xl">
             <h2 className="lp-display text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">Costs less than last place.</h2>
             <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
-              One person pays and the whole league gets it. Run it yourself for nothing, let us host it, or let us run the AI too.
+              One person pays and the whole league gets it. Split {teams} ways, League Pass is{' '}
+              <span className="font-semibold text-foreground">{each(PLANS.pro.season)} a manager for the whole year</span>.
+              Run it yourself for nothing, let us host it, or let us run the AI too.
             </p>
           </div>
           {/* One switch for every card, and the league size the per-head prices use. */}
@@ -900,6 +905,7 @@ function Pricing() {
           className="no-scrollbar -mx-4 -mb-8 mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-10 pt-2 md:mx-0 md:mb-0 md:mt-10 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 md:pt-0 lg:grid-cols-4">
           {tiers.map(t => <TierCardView key={t.name} t={t} cycle={cycle} />)}
         </motion.div>
+        <ShareStrip share={each(priced(PLANS.pro))} yearly={yearly} />
         <p className="mt-4 text-center text-[12.5px] text-muted-foreground">
           {cycle === 'season'
             ? 'Pay once in August, forget about it until you\u2019re gloating in January. Renews yearly; cancel any time.'
@@ -950,6 +956,26 @@ function Pricing() {
   );
 }
 
+/** Your share of League Pass, next to things a fantasy manager has definitely spent more on. */
+function ShareStrip({ share, yearly }: { share: string; yearly: boolean }) {
+  const items: [string, string, boolean?][] = [
+    [yearly ? 'Your share of League Pass, all year' : 'Your share of League Pass, this month', share, true],
+    ['One stadium beer', '$14'],
+    ['Draft night wings, per person', '$18'],
+  ];
+  return (
+    <div className="mt-8 grid grid-cols-3 gap-2 sm:gap-3">
+      {items.map(([what, cost, you]) => (
+        <div key={what} className={cn('flex flex-col justify-between rounded-2xl border p-3.5 sm:p-4',
+          you ? 'border-primary/40 bg-primary/[0.07]' : 'border-dashed border-border bg-card')}>
+          <p className={cn('text-[12px] leading-snug', you ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{what}</p>
+          <p className={cn('lp-num mt-2 font-extrabold leading-none', you ? 'text-[26px] text-primary' : 'text-[20px] text-foreground/70')}>{cost}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface TierCard {
   name: string; short?: string; price: string; per?: string; note?: string; blurb: string; points: string[];
   featured?: boolean; badge?: string;
@@ -971,13 +997,12 @@ function TierCardView({ t, cycle }: { t: TierCard; cycle: string }) {
       <div className="mt-4 sm:mt-5 lg:min-h-[76px]">
         <AnimatePresence mode="wait">
           <motion.p key={t.per ? `${t.price}-${cycle}` : t.price} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}
-            className={cn('lp-num font-extrabold leading-none', t.price.startsWith('$') ? 'text-[46px] sm:text-[52px]' : 'text-[34px] tracking-[-0.02em] sm:text-[38px]')}>
+            className={cn('lp-num font-extrabold leading-none', /^[$\d]/.test(t.price) ? 'text-[46px] sm:text-[52px]' : 'text-[34px] tracking-[-0.02em] sm:text-[38px]')}>
             {t.price}
           </motion.p>
         </AnimatePresence>
-        <p className={cn('mt-2 text-[12.5px]', ink ? 'text-background/65' : 'text-muted-foreground')}>
-          {[t.per, t.note].filter(Boolean).join(', ') || '\u00a0'}
-        </p>
+        <p className={cn('mt-2 text-[12.5px] font-semibold', ink ? 'text-background/80' : 'text-foreground/80')}>{t.per || '\u00a0'}</p>
+        {t.note && <p className={cn('mt-0.5 text-[12px]', ink ? 'text-background/60' : 'text-muted-foreground')}>{t.note}</p>}
       </div>
       <p className={cn('mt-4 text-[13.5px] leading-relaxed', ink ? 'text-background/80' : 'text-muted-foreground')}>{t.blurb}</p>
       <ul className="mb-7 mt-5 space-y-2.5 text-[13.5px]">

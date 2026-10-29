@@ -84,6 +84,36 @@ export async function dailyQuestionLimit(kind: 'chat' | 'ask'): Promise<number> 
   return kind === 'chat' ? env('LP_AI_DAILY_CHAT', 300) : env('LP_AI_DAILY_ASK', 200);
 }
 
+/**
+ * The model a call actually uses. A league whose AI the platform pays for (League Pass + AI on
+ * the platform's key) has a monthly budget, LP_MANAGED_MONTHLY_BUDGET dollars at list prices
+ * ($4 unless set): past it, its calls run on the fast model for the rest of the month instead of
+ * stopping. That keeps the worst case, a league maxing its daily limits every day, inside what
+ * it pays. A league on its own key pays its own way and is never switched. The month's spend is
+ * read at most once a minute per league.
+ */
+const BUDGET_MEMO = new Map<string, { at: number; over: boolean }>();
+export async function budgetedModel(model: string): Promise<string> {
+  if (model === MODEL_FAST || !hosted()) return model;
+  try {
+    const budget = Number(process.env.LP_MANAGED_MONTHLY_BUDGET || 4);
+    if (!(budget > 0) || !(await onPlatformKey())) return model;
+    const { currentTenant } = await import('@/lib/tenant/context');
+    const slug = (await currentTenant())?.slug ?? '';
+    const hit = BUDGET_MEMO.get(slug);
+    let over = hit && Date.now() - hit.at < 60_000 ? hit.over : null;
+    if (over === null) {
+      const { monthUsage } = await import('./usage');
+      over = (await monthUsage()).cost >= budget;
+      BUDGET_MEMO.set(slug, { at: Date.now(), over });
+    }
+    return over ? MODEL_FAST : model;
+  } catch {
+    // Can't tell: the call goes ahead as asked rather than failing.
+    return model;
+  }
+}
+
 /** Whether AI can run for this request. Async: on the hosted product it is per league. */
 export async function isAIConfigured(): Promise<boolean> {
   return Boolean(await anthropicKey());
@@ -131,11 +161,13 @@ type Part = { type: string; toolName?: string };
 
 /**
  * Counts every call's tokens and web searches against the league (see
- * usage.ts). The league is captured when the call starts: a stream finishes
- * after the request code that started it has moved on.
+ * usage.ts), under the model that actually ran: a league over its budget
+ * (budgetedModel) is switched here, call by call. The league is captured when
+ * the call starts: a stream finishes after the request code that started it
+ * has moved on.
  */
-function counted(model: string): LanguageModelMiddleware {
-  const record = async (usage: Usage, parts: Part[]) => {
+function counted(asked: string): LanguageModelMiddleware {
+  const record = async (usage: Usage, parts: Part[], model: string) => {
     const n = (v?: number) => v ?? 0;
     const cacheRead = n(usage.inputTokens.cacheRead), cacheWrite = n(usage.inputTokens.cacheWrite);
     const { recordUsage } = await import('./usage');
@@ -157,16 +189,18 @@ function counted(model: string): LanguageModelMiddleware {
   };
   return {
     specificationVersion: 'v3',
-    wrapGenerate: async ({ doGenerate }) => {
-      const result = await doGenerate();
-      await (await inLeague(() => record(result.usage, result.content as Part[])))();
+    wrapGenerate: async ({ doGenerate, params }) => {
+      const used = await budgetedModel(asked);
+      const result = used === asked ? await doGenerate() : await baseModel(used).doGenerate(params);
+      await (await inLeague(() => record(result.usage, result.content as Part[], used)))();
       return result;
     },
-    wrapStream: async ({ doStream }) => {
-      const { stream, ...rest } = await doStream();
+    wrapStream: async ({ doStream, params }) => {
+      const used = await budgetedModel(asked);
+      const { stream, ...rest } = used === asked ? await doStream() : await baseModel(used).doStream(params);
       const parts: Part[] = [];
       let usage: Usage | null = null;
-      const save = await inLeague(async () => { if (usage) await record(usage, parts); });
+      const save = await inLeague(async () => { if (usage) await record(usage, parts, used); });
       return {
         stream: stream.pipeThrough(new TransformStream({
           transform(part, ctrl) {
