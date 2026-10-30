@@ -57,10 +57,14 @@ export async function generateMetadata(): Promise<Metadata> {
   // The product's own pages carry the product's name, not a league's.
   if (h.get('x-lp-surface') === 'platform') {
     const share = 'Your fantasy league, as an app. For Sleeper and ESPN.';
+    const { PLANS } = await import('@/lib/platform/config');
     return {
       metadataBase,
-      title: 'LeaguePulse: a home for your Sleeper or ESPN league',
-      description: 'AI beat writers, live win odds, a Sunday watch guide and every stat since day one, for any Sleeper or ESPN league.',
+      // What people search for: a website for their fantasy football league, on Sleeper or ESPN.
+      title: 'LeaguePulse: a website for your fantasy football league | Sleeper & ESPN',
+      description: `Turn your Sleeper or ESPN fantasy football league into its own website: full league history and record book, AI beat writers, live win odds, a trade finder and 3D stadiums. From $${(PLANS.pro.season / 12).toFixed(2)} a manager a year, ${PLANS.pro.trialDays} days free.`,
+      applicationName: 'LeaguePulse',
+      keywords: ['fantasy football league website', 'Sleeper league', 'ESPN fantasy league', 'fantasy football history', 'fantasy league record book', 'fantasy football AI', 'fantasy trade finder', 'dynasty league'],
       openGraph: {
         title: 'LeaguePulse', description: share, siteName: 'LeaguePulse', type: 'website',
         images: [{ url: '/api/og', width: 1200, height: 630, alt: 'LeaguePulse: your fantasy league, as an app' }],
@@ -102,10 +106,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const share = theme.siteDescription?.trim() || `Live scores, history and the weekly report for ${shareName}.`;
   const card = { url: '/api/og', width: 1200, height: 630, alt: shareName };
 
+  // A customer's league isn't for search engines (lib/seo/site); the demo league is.
+  const { kindOf } = await import('@/lib/seo/site');
+  const privateLeague = kindOf(host) === 'league';
   return {
     metadataBase,
     title,
     description,
+    ...(privateLeague ? { robots: { index: false, follow: false } } : {}),
     icons: { icon: [{ url: icon, href: icon }], shortcut: icon, apple },
     // Installed on an iPhone: opens full screen, labelled with the league's name.
     // iOS shortens a long label itself, with an ellipsis, as it does for any app.
