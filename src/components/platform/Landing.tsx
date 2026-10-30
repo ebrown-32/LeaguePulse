@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useReducedMotion, useScroll, useSpring } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { PLATFORM, PLANS } from '@/lib/platform/config';
+import { FAQS } from './faq';
 import { productDisplay } from './fonts';
 import {
   Logomark, Lockup, PhoneMark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
@@ -1044,19 +1045,7 @@ function OpenSource() {
 }
 
 function Faq() {
-  const qs = [
-    ['Is this made by Sleeper or ESPN?', `No. ${PLATFORM.name} is independent. It reads the public data Sleeper publishes for every league, or your league\u2019s data from ESPN. It never asks for your password and never changes anything in your league.`],
-    ['Does it work with ESPN?', 'Yes. Paste your ESPN league ID. Most ESPN leagues are private, so one member copies two cookies from their browser once (sign-up shows how). ESPN signs those out after about a year, and your admin page asks for fresh ones when it does. Scores, standings, history, drafts and trades all come across.'],
-    ['Does everyone in the league have to pay?', 'No. One subscription covers the whole league. Everyone else just opens the link.'],
-    ['Why isn\u2019t it free?', `The code is free to host yourself. The paid plan is for convenience, because running a site that a dozen people refresh every thirty seconds on Sunday costs real money, and so does the person keeping it up. The code is free if you want to run it yourself. The hosted version costs about what your league spends on wings in one draft night, split ${'$'}${(PLANS.pro.season / 12).toFixed(2)} a head. I'm happy to handle it for you.`],
-    ['Dynasty, keeper, redraft?', 'All of them. Any Sleeper or ESPN league, any scoring. Every season is linked together, so dynasty and keeper history carries through.'],
-    ['Is our league\u2019s data ours?', 'Yes. Every season LeaguePulse reads, every score, lineup, trade and draft pick, is kept in your league\u2019s own archive, even if Sleeper or ESPN later lets it go. Admins can download all of it as Excel, CSV or JSON whenever they like, so you are never locked in.'],
-    ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it\u2019s included: we run it, within generous daily limits. Everything that isn\u2019t AI works either way.'],
-    ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
-    ['What is Franchise HQ?', 'A game inside the app, included with League Pass. Each manager claims their team and runs it as a business on your league\u2019s real results: ticket prices, crowds, upgrades, and a 3D stadium in one of six styles, dressed in their own colors. Franchise values count every season you have played, championships included.'],
-    ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
-    ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],
-  ];
+  const qs = FAQS;
   const [open, setOpen] = useState<number | null>(0);
   return (
     <section id="faq" className="scroll-mt-16 lg:scroll-mt-28 py-20 sm:py-28">
@@ -1073,14 +1062,12 @@ function Faq() {
                   <span className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-foreground" />
                 </span>
               </button>
-              <AnimatePresence initial={false}>
-                {open === i && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3, ease }} className="overflow-hidden">
-                    <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-muted-foreground">{a}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Every answer stays in the page, collapsed rather than removed, so search engines and AI
+                  assistants read them all (the FAQ is also the page's structured data, see faq.ts). */}
+              <motion.div initial={false} animate={open === i ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease }} className="overflow-hidden" aria-hidden={open !== i}>
+                <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-muted-foreground">{a}</p>
+              </motion.div>
             </div>
           ))}
         </div>

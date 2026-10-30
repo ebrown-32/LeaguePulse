@@ -9,7 +9,7 @@ export default function TermsPage() {
     ? <a href={`mailto:${PLATFORM.supportEmail}`}>{PLATFORM.supportEmail}</a>
     : 'the support address on our site';
   return (
-    <LegalPage title="Terms of Service" updated="October 13, 2026">
+    <LegalPage title="Terms of Service" updated="October 29, 2026">
       <p>
         These terms cover your use of {n}&apos;s hosted service at {PLATFORM.rootDomain} and its league sites. By
         starting a trial or subscription, or by using a league site, you agree to them.
@@ -29,12 +29,12 @@ export default function TermsPage() {
 
       <h2>Subscriptions and trials</h2>
       <ul>
-        <li>A subscription (League Pass) covers one league site. Payments are processed by Stripe.</li>
+        <li>A subscription (League Pass, or League Pass + AI) covers one league site. Payments are processed by Stripe.</li>
         <li>New sites start with a {PLANS.pro.trialDays}-day free trial. No card is needed for it, and if no card is added the trial simply ends.</li>
         <li>Subscriptions renew automatically at the end of each billing period until cancelled.</li>
         <li>You can update your card, change plan or cancel at any time from your site&apos;s admin page, under Manage billing. Cancelling stops future renewals; the site stays up until the end of the period you have paid for.</li>
         <li>Payments are non-refundable except where the law requires otherwise, or where we choose to refund at our discretion.</li>
-        <li>We may change prices with at least 30 days&apos; notice before your next renewal.</li>
+        <li>We may change prices. A price increase applies only from a renewal at least 30 days after we tell you about it. A price decrease may apply from your next renewal without notice.</li>
       </ul>
 
       <h2>Your Anthropic API key and AI features</h2>
@@ -42,8 +42,10 @@ export default function TermsPage() {
         On League Pass, AI features run on an Anthropic API key that you provide. You are responsible for that
         account, its usage and its charges, and for complying with Anthropic&apos;s terms. We store your key encrypted
         and use it only to run your league&apos;s AI features. On League Pass + AI, we provide the AI instead, within
-        reasonable daily limits that keep it running for every league; you can still use your own key if you
-        prefer. Either way, AI-written content can be inaccurate; it is entertainment, not fact.
+        reasonable daily limits and a monthly allowance that keep it running for every league. If a league uses up its
+        monthly allowance, its AI features keep working for the rest of the month on a faster, lighter model. You
+        can still use your own key if you prefer. Either way, AI-written content can be inaccurate; it is
+        entertainment, not fact.
       </p>
 
       <h2>Your responsibilities</h2>
@@ -53,6 +55,12 @@ export default function TermsPage() {
         <li>Don&apos;t attempt to access another league&apos;s site or data, disrupt the service, or use it to send spam or abuse.</li>
       </ul>
       <p>We may suspend or remove a site that breaks these rules.</p>
+
+      <h2>Feedback</h2>
+      <p>
+        If you send us a bug report, idea or other feedback, we may use it to improve {n} without any obligation to
+        you. Please don&apos;t include anything private you wouldn&apos;t want us to read.
+      </p>
 
       <h2>Source code</h2>
       <p>
