@@ -10,18 +10,14 @@ export const INITIAL_LEAGUE_ID = process.env.NEXT_PUBLIC_LEAGUE_ID || 'YOUR_LEAG
 
 const UNSET = 'YOUR_LEAGUE_ID';
 
-declare global {
-  // Set by the root layout in hosted mode: the league the page was rendered for.
-  // eslint-disable-next-line no-var
-  var __LP_LEAGUE__: string | undefined;
-}
 
 /**
  * The league this request is about, as configured: the env league when
  * self-hosted, the subdomain's league when hosted.
  */
 export async function getRootLeagueId(): Promise<string> {
-  if (typeof window !== 'undefined') return window.__LP_LEAGUE__ || INITIAL_LEAGUE_ID;
+  // Hosted, the root layout marks <html data-lp-league> with the league the page was rendered for.
+  if (typeof window !== 'undefined') return document.documentElement.dataset.lpLeague || INITIAL_LEAGUE_ID;
   if (process.env.LP_HOSTED === '1') {
     const { currentTenant } = await import('@/lib/tenant/context');
     return (await currentTenant())?.leagueId ?? UNSET;

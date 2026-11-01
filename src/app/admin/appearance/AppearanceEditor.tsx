@@ -1034,7 +1034,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
               <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Live Preview</span>
               <div className="flex-1 h-px bg-border" />
             </div>
-            <div className="sticky top-20">
+            <div className="sticky top-20 xl:top-6">
               <Preview
                 h={accentMode === 'dark' ? theme.primaryH : theme.primaryHLight}
                 s={accentMode === 'dark' ? theme.primaryS : theme.primarySLight}

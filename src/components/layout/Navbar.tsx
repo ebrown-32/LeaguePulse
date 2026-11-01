@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,8 +19,8 @@ import {
   Shuffle,
   Shirt,
   ListOrdered,
-  ChevronDown,
   Menu,
+  Settings,
   X,
   FlaskConical,
   BarChart3,
@@ -38,6 +38,8 @@ import AccountChip from './AccountChip';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
 import { AddSquareIcon } from '@/components/icons/AppIcons';
 import SearchPalette from './SearchPalette';
+import SideRail from './SideRail';
+import PreferencesPanel from './Preferences';
 
 interface NavItem {
   name: string;
@@ -46,10 +48,8 @@ interface NavItem {
 }
 
 /**
- * The marquee features: a permanent slot in the top bar on desktop, and the
- * first thing in the menu on a phone.
- *
- * Home is reachable from the logo, and everything else lives in the menu.
+ * The marquee features: the first thing in the menu on a phone, as tiles.
+ * On a desktop every destination is in the side rail (SideRail), in groups.
  */
 const PRIMARY_NAV: NavItem[] = [
   { name: 'History',    href: '/history',    icon: Database  },
@@ -167,10 +167,9 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
   const isFeatured = (item: NavItem) => featured.some(f => f.href === item.href);
   const pathname  = usePathname();
   const [isOpen,    setIsOpen]    = useState(false);
-  const [moreOpen,  setMoreOpen]  = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [scrolled,  setScrolled]  = useState(false);
   const [mounted,   setMounted]   = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
   const { platform, isStandalone, openModal } = useInstallPrompt();
 
   useEffect(() => { setMounted(true); }, []);
@@ -194,26 +193,20 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
     };
   }, []);
 
-  useEffect(() => { setIsOpen(false); setMoreOpen(false); }, [pathname]);
+  useEffect(() => { setIsOpen(false); }, [pathname]);
+  // The menu always opens on the menu, not on the preferences.
+  useEffect(() => { if (!isOpen) setPrefsOpen(false); }, [isOpen]);
 
-  // Close "More" dropdown on outside click
-  useEffect(() => {
-    if (!moreOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [moreOpen]);
-
-  const isMoreActive = MORE_NAV.some(item => pathname === item.href && !isFeatured(item));
+  // On a desktop, the side rail: every group, every page this site has.
+  // The marquee pages lead as tiles, as on a phone; the groups hold the rest.
+  const railGroups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(item => shown(item) && !isFeatured(item)) })).filter(g => g.items.length);
+  const rail = <SideRail featured={featured} groups={railGroups} logoUrl={logoUrl} leagueName={leagueName} />;
 
   // Lighter and more transparent at rest so the ambient background reads
   // through it; condenses into frosted glass once you scroll.
+  // Phones and tablets only: a desktop has the side rail.
   const navbarClass = cn(
-    'sticky top-0 z-50 w-full',
+    'sticky top-0 z-50 w-full xl:hidden',
     'transition-[background-color,border-color,box-shadow] duration-300',
     scrolled
       ? 'bg-background/85 backdrop-blur-2xl border-b border-border/70 shadow-[0_1px_0_hsl(var(--border)/0.5),0_10px_36px_-10px_hsl(0_0%_0%/0.55)]'
@@ -244,6 +237,8 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
 
   if (!mounted) {
     return (
+      <>
+      {rail}
       <header className={navbarClass}>
         <nav className="mx-auto flex h-16 sm:h-20 lg:h-24 xl:h-28 max-w-7xl items-center justify-between pl-2 pr-3 sm:pl-3 sm:pr-6 lg:pl-4 lg:pr-8">
           <Link href="/" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none lg:shrink">
@@ -252,11 +247,13 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
           <div className="h-8 w-8" />
         </nav>
       </header>
+      </>
     );
   }
 
   return (
     <>
+      {rail}
       <header className={navbarClass}>
         
 
@@ -265,137 +262,6 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
           <Link href="/" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none lg:shrink">
             {brand}
           </Link>
-
-          {/* Desktop nav, kicks in at lg (1024px), not md (768px), since md
-              lands right in iPad-portrait territory (768-834px) and the full
-              5-link row plus the More dropdown doesn't fit there. */}
-          <div className="hidden xl:flex xl:items-center xl:gap-1">
-            {featured.map(item => {
-              const isActive = isIn(pathname, item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    'group relative flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2.5 text-xs font-semibold uppercase tracking-widest rounded-lg transition-colors',
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
-                  )}
-                >
-                  {/* Pill is rendered first and the label lifted above it ,
-                      previously the absolutely-positioned pill painted over
-                      the icon and text, dimming them. */}
-                  {isActive && (
-                    <>
-                      <motion.span
-                        layoutId="nav-pill"
-                        className="absolute inset-0 rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/20"
-                        transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      />
-                      <motion.span
-                        layoutId="nav-underline"
-                        className="absolute -bottom-px inset-x-2.5 h-[2px] rounded-full bg-primary"
-                        transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      />
-                    </>
-                  )}
-                  <item.icon className="relative h-3.5 w-3.5 shrink-0" />
-                  <span className="relative">{item.name}</span>
-                </Link>
-              );
-            })}
-
-            {/* More dropdown */}
-            <div ref={moreRef} className="relative">
-              <button
-                onClick={() => setMoreOpen(o => !o)}
-                className={cn(
-                  'relative flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2.5 text-xs font-semibold uppercase tracking-widest rounded-lg transition-colors',
-                  isMoreActive || moreOpen
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]',
-                )}
-              >
-                {isMoreActive && (
-                  <>
-                    <motion.span
-                      layoutId="nav-pill"
-                      className="absolute inset-0 rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/20"
-                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                    />
-                    <motion.span
-                      layoutId="nav-underline"
-                      className="absolute -bottom-px inset-x-2.5 h-[2px] rounded-full bg-primary"
-                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                    />
-                  </>
-                )}
-                <span className="relative">More</span>
-                <ChevronDown className={cn('relative h-3 w-3 transition-transform duration-200', moreOpen && 'rotate-180')} />
-              </button>
-
-              <AnimatePresence>
-                {moreOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0,  scale: 1    }}
-                    exit={{    opacity: 0, y: -4, scale: 0.97 }}
-                    transition={{ duration: 0.12 }}
-                    className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-6.5rem)] w-60 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card/95 p-2 shadow-lg backdrop-blur-xl"
-                  >
-                    {/* The same four groups, in the same order, as the mobile
-                        sheet. Anything already in the top bar is left out
-                        rather than repeated a few pixels below itself. */}
-                    {NAV_GROUPS.map(group => {
-                      const items = group.items.filter(
-                        item => shown(item) && !isFeatured(item),
-                      );
-                      if (!items.length) return null;
-                      return (
-                        <div key={group.label} className="mb-2 last:mb-0">
-                          <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
-                            {group.label}
-                          </p>
-                          {items.map(item => {
-                            const isActive = pathname === item.href;
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={() => setMoreOpen(false)}
-                                aria-current={isActive ? 'page' : undefined}
-                                className={cn(
-                                  'flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors',
-                                  isActive
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted/60',
-                                )}
-                              >
-                                <span className={cn('lp-chip h-7 w-7 rounded-lg [&>svg]:h-4 [&>svg]:w-4', !isActive && 'lp-chip-muted')}>
-                                  <item.icon />
-                                </span>
-                                {item.name}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-
-                    {/* Signed at the bottom of the menu, below a divider, so
-                        it reads as a mark on the drawer rather than another
-                        thing to navigate to. */}
-                    <div className="mt-1 space-y-1.5 border-t border-border pt-2">
-                      {/* Your LeaguePulse account: the way to your other leagues, your franchise and admin. */}
-                      <AccountChip compact className="w-full" />
-                      <PoweredBy onNavigate={() => setMoreOpen(false)} />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
@@ -457,8 +323,21 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
             >
               <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  Menu
+                  {prefsOpen ? 'Preferences' : 'Menu'}
                 </span>
+                <div className="flex items-center gap-2">
+                {/* This visitor's own settings (lib/prefs), behind the gear, as in the desktop rail. */}
+                <button
+                  onClick={() => setPrefsOpen(o => !o)}
+                  aria-label="Preferences"
+                  aria-expanded={prefsOpen}
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-lg border transition-colors',
+                    prefsOpen ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary',
+                  )}
+                >
+                  <Settings className={cn('h-4 w-4 transition-transform duration-500', prefsOpen && 'rotate-90')} />
+                </button>
                 <button
                   onClick={() => setIsOpen(false)}
                   aria-label="Close menu"
@@ -466,7 +345,23 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                 >
                   <X className="h-4 w-4" />
                 </button>
+                </div>
               </div>
+
+              <AnimatePresence initial={false}>
+                {prefsOpen && (
+                  <motion.div
+                    key="prefs"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    className="shrink-0 overflow-hidden border-b border-border"
+                  >
+                    <PreferencesPanel className="px-3 py-3" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {/* The marquee features first, as tiles, so a phone gets the

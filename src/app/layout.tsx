@@ -1,8 +1,12 @@
 import './globals.css';
 import { unstable_noStore as noStore } from 'next/cache';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { Space_Grotesk, DM_Sans } from 'next/font/google';
 import Navbar from '@/components/layout/Navbar';
+import { RAIL_COOKIE } from '@/components/layout/railCookie';
+import MotionPrefs from '@/components/layout/MotionPrefs';
+import LiveStrip from '@/components/layout/LiveStrip';
+import { PREFS_COOKIE, parsePrefs } from '@/lib/prefsCookie';
 import Footer from '@/components/layout/Footer';
 import PageTransition from '@/components/layout/PageTransition';
 import ChatWidget from '@/components/chat/ChatWidget';
@@ -182,22 +186,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     }
   }
 
+  const jar = await cookies();
+  const railFolded = jar.get(RAIL_COOKIE)?.value === 'collapsed';
+  const prefs = parsePrefs(jar.get(PREFS_COOKIE)?.value);
   const [theme, rankings] = await Promise.all([
     getTheme(),
     import('@/lib/fantasyProsRefresh').then(m => m.rankingsConnected()).catch(() => false),
   ]);
 
   return (
-    <html lang="en" data-bg={theme.background} data-motion={theme.motion} suppressHydrationWarning>
+    // data-lp-league: the league this page is for (config/league reads it in the browser).
+    // data-rail: the desktop side rail folded, from its cookie, so it's folded from the first paint.
+    // data-motion: the visitor's motion preference, else the league's (data-league-motion; lib/prefs).
+    <html lang="en" data-bg={theme.background} data-motion={prefs.motion ?? theme.motion} data-league-motion={theme.motion} data-league-sound={theme.sound === 'on' ? 'on' : 'off'} data-league-haptics={theme.haptics !== 'off' ? 'on' : 'off'} data-lp-league={tenantLeague ?? undefined}
+      data-rail={railFolded ? 'collapsed' : undefined} suppressHydrationWarning>
       <body
         className={`
           ${displayFont.variable} ${bodyFont.variable}
           min-h-screen bg-background text-foreground antialiased
         `}
       >
-        {tenantLeague && (
-          <script dangerouslySetInnerHTML={{ __html: `window.__LP_LEAGUE__=${JSON.stringify(tenantLeague)};` }} />
-        )}
         <FeedbackProvider
           sound={theme.sound === 'on'}
           haptics={theme.haptics !== 'off'}
@@ -209,12 +217,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {theme.background === 'particles' && <ParticleField />}
         {/* The demo opens dark (lib/demo): its theme is made for the night. */}
         <ThemeProvider defaultTheme={demoProduct ? 'dark' : 'light'}>
+          <MotionPrefs league={theme.motion}>
           {/* The install prompt previews the very icon the phone will get. */}
           <InstallPromptProvider logoUrl={appIconUrl(theme.logoUrl, 192)} leagueName={theme.leagueName ?? tenantName}>
             <Analytics props={analytics} />
-            <div className="flex min-h-screen flex-col">
+            <div className="lp-rail-offset flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
               <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
+              {/* Every matchup's score, while the week's games are on. */}
+              <LiveStrip />
               {demoProduct && <DemoBar productUrl={demoProduct} />}
               {/* The league's owner and admins, until the site is set up. */}
               <SetupBar />
@@ -225,6 +236,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <ChatWidget />
             </div>
           </InstallPromptProvider>
+          </MotionPrefs>
         </ThemeProvider>
       </body>
     </html>

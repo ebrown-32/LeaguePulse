@@ -185,7 +185,7 @@ export default function WatchView() {
 
           {/* ── Plays ────────────────────────────────────────────────────── */}
           {guide.me && (
-            <aside className={cn('lg:sticky lg:top-24 lg:self-start', mobileTab === 'games' && 'hidden lg:block')}>
+            <aside className={cn('lg:sticky lg:top-24 xl:top-6 lg:self-start', mobileTab === 'games' && 'hidden lg:block')}>
               <section className="lp-surface rounded-2xl p-4">
                 <SectionHeader icon={Activity} title="Your plays" meta={data?.feed.length ? `${data.feed.length}` : undefined} />
                 <div className="mt-3 flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5">

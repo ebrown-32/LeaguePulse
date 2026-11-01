@@ -16,6 +16,8 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  // The dev badge, out of the side rail's corner (bottom left) and the chat button's (bottom right).
+  devIndicators: { position: 'top-right' },
   // Whether this is the hosted product, for the client: Franchise HQ (and the
   // stadiums drawn from it) is hosted only, so a self-hosted copy leaves its
   // stadium views out rather than showing empty boxes. Fixed at build time.

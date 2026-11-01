@@ -622,7 +622,7 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
             editor put eighteen full-width rows between the top of the page and
             the thing being edited, and showed initials rather than the faces
             that make one persona tellable from another. */}
-        <div className="mb-5 lg:sticky lg:top-24 lg:mb-0">
+        <div className="mb-5 lg:sticky lg:top-24 xl:top-6 lg:mb-0">
           <div className="mb-2 flex items-baseline justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
               Cast

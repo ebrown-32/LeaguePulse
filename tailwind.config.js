@@ -94,5 +94,9 @@ module.exports = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    // `lp-rail-folded:` styles the desktop side rail when it's folded to icons (components/layout/SideRail).
+    ({ addVariant }) => addVariant('lp-rail-folded', ':root[data-rail="collapsed"] &'),
+  ],
 };

@@ -427,7 +427,7 @@ export default function ConstitutionView({ meta, markdownSections, leagueSetting
   return (
     <div className="flex gap-8 items-start">
       {/* Sidebar ToC: desktop */}
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
+      <aside className="hidden lg:block w-64 shrink-0 sticky top-24 xl:top-6 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
         <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 px-3">Contents</div>
         <TableOfContents items={tocItems} activeId={activeId} onNavigate={scrollTo} />
       </aside>

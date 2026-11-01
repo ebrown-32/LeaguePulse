@@ -15,6 +15,8 @@
  * Client only.
  */
 
+import { getPrefs, setPrefs } from '../prefs';
+
 export type Cue = 'fanfare' | 'trombone' | 'scratch' | 'boom' | 'impact' | null;
 
 const BPM = 124;
@@ -27,7 +29,6 @@ const ROOTS = [33, 29, 36, 31];
 /** Where the stabs land in a bar, in sixteenths: the syncopation. */
 const STABS = new Set([0, 3, 6, 10, 12]);
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
-const MUTE_KEY = 'lp:wrapped:sound';
 const VOLUME = 0.68;
 
 type Section = 'A' | 'B' | 'break' | 'C';
@@ -49,11 +50,8 @@ class Music {
   private running = false;
   private held = false;
   private gen = 0;
-  muted = false;
-
-  constructor() {
-    try { this.muted = typeof localStorage !== 'undefined' && localStorage.getItem(MUTE_KEY) === 'off'; } catch { /* private window */ }
-  }
+  /** Off when the visitor turned the music off (lib/prefs), here or in their preferences. */
+  get muted() { return getPrefs().music === false; }
 
   /** Call inside a tap: makes (or wakes) the audio, which browsers allow only then. */
   unlock() {
@@ -127,8 +125,7 @@ class Music {
   }
 
   setMuted(m: boolean) {
-    this.muted = m;
-    try { localStorage.setItem(MUTE_KEY, m ? 'off' : 'on'); } catch { /* private window */ }
+    setPrefs({ music: m ? false : undefined });
     if (this.running) this.level(0.08);
   }
 

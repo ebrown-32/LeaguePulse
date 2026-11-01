@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Play, Volume2, VolumeX } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
 import BoxScore from '@/components/wrapped/BoxScore';
 import { useStadiumPhoto } from '@/components/desk/StadiumPhoto';
@@ -54,6 +54,15 @@ function recordValue(r: RecordHeld): string {
   return r.value.toFixed(2);
 }
 const MEDAL = ['#FACC15', '#CBD5E1', '#D97706'];
+
+/** A round play button: a solid triangle, nudged right so it looks centered (a triangle's weight sits left). */
+function PlayDisc({ className }: { className?: string }) {
+  return (
+    <span aria-hidden className={cn('flex shrink-0 items-center justify-center rounded-full', className)}>
+      <Play className="ml-[8%] h-[42%] w-[42%]" />
+    </span>
+  );
+}
 
 /** A game's box score as its own slide: both teams, both lineups. */
 function boxSlide(key: string, g: Game | null | undefined, kicker: string, tone: string): Slide | null {
@@ -801,7 +810,10 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
         <p className="relative mt-3 max-w-xl text-[15px] text-white/85">
           {w.league.champions[0] && w.scope === 'season' ? `${w.league.champions[0].name} won it all. ` : ''}{w.league.games} games, {w.league.trades} trades, {w.league.adds} pickups.
         </p>
-        <span className="relative mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-[14px] font-bold text-black">&#9654; Play the league&apos;s story</span>
+        <span className="relative mt-5 inline-flex items-center gap-2.5 rounded-full bg-white py-1.5 pl-1.5 pr-5 text-[14px] font-bold text-black shadow-[0_8px_24px_-8px_rgb(0_0_0/0.5)]">
+          <PlayDisc className="h-9 w-9 bg-black text-white" />
+          Play the league&apos;s story
+        </span>
       </motion.button>
 
       {mine && (
@@ -809,7 +821,9 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
           className="flex w-full items-center gap-4 rounded-[24px] border-2 border-primary bg-primary/10 p-4 text-left sm:p-5">
           <Avatar avatarId={mine.avatar} size={56} className="rounded-2xl" />
           <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold uppercase tracking-widest text-primary">Your story</span><span className="block truncate text-[18px] font-extrabold">{mine.name}</span><span className="block text-[12.5px] text-muted-foreground">{rec(mine.record)}</span></span>
-          <span className="rounded-full bg-primary px-4 py-2.5 text-[13px] font-bold text-primary-foreground">&#9654; Play</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-4 text-[13px] font-bold text-primary-foreground">
+            <PlayDisc className="h-7 w-7 bg-primary-foreground/20" />Play
+          </span>
         </motion.button>
       )}
 
@@ -817,7 +831,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {w.managers.map((m, k) => (
           <motion.button key={m.ownerId} onClick={() => { music.unlock(); setOpen(m.ownerId); }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.04 }}
-            whileTap={{ scale: 0.97 }} className="relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[22px] p-3.5 text-left text-white"
+            whileTap={{ scale: 0.97 }} className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[22px] p-3.5 text-left text-white"
             style={{ background: `linear-gradient(160deg, ${prim(0.85)}, #0b0f14 75%)` }}>
             {/* The thumbnail: the player who carried their season, standing in the league's color. */}
             {m.mvp && <CoverPlayer p={m.mvp.player} />}
@@ -828,7 +842,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
             )}
             <span className="relative block truncate text-[16px] font-extrabold leading-tight">{m.name}</span>
             <span className="relative block truncate text-[12px] text-white/70">{m.team}</span>
-            <span className="relative mt-1.5 flex items-center justify-between text-[12px] font-bold"><span className="tabular-nums">{rec(m.record)}</span><span className="rounded-full bg-white/20 px-2 py-0.5">&#9654;</span></span>
+            <span className="relative mt-1.5 flex items-center justify-between text-[12px] font-bold"><span className="tabular-nums">{rec(m.record)}</span><PlayDisc className="h-8 w-8 bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-md transition-colors group-hover:bg-white group-hover:text-black" /></span>
           </motion.button>
         ))}
       </div>

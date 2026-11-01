@@ -39,7 +39,7 @@ import {
   UploadSimple, User as PUser, UserPlus as PUserPlus, Users as PUsers, Wind as PWind, X as PX,
   Lightning, Eye, WarningCircle, FootballHelmet, Football, Crown, Handshake, Fire as PFire,
   CheckCircle, Lightbulb, DownloadSimple, FileCsv, FileXls, BracketsCurly, PencilSimple, Tag as PTag,
-  BeerStein, Smiley,
+  BeerStein, Smiley, SidebarSimple, SpeakerHigh, SpeakerSlash, Play as PPlay, Vibrate as PVibrate, MusicNotes, HandPointing,
 } from '@phosphor-icons/react/dist/ssr';
 
 export type IconProps = Omit<PhosphorProps, 'ref'> & { weight?: IconWeight };
@@ -185,6 +185,14 @@ export const RefreshCw       = bold(ArrowsClockwise, 'RefreshCw');
 export const Repeat2         = bold(Repeat, 'Repeat2');
 export const RotateCcw       = bold(ArrowCounterClockwise, 'RotateCcw');
 export const Search          = bold(MagnifyingGlass, 'Search');
+export const Sidebar         = bold(SidebarSimple, 'Sidebar');
+export const Vibrate         = duo(PVibrate, 'Vibrate');
+export const Music           = duo(MusicNotes, 'Music');
+export const Pointer         = duo(HandPointing, 'Pointer');
+/** Filled: a play button reads as one only when solid. */
+export const Play            = make(PPlay, 'fill', 'Play');
+export const Volume2         = bold(SpeakerHigh, 'Volume2');
+export const VolumeX         = bold(SpeakerSlash, 'VolumeX');
 export const Settings        = bold(GearSix, 'Settings');
 export const Share2          = bold(ShareNetwork, 'Share2');
 export const SlidersHorizontal = bold(PSliders, 'SlidersHorizontal');
