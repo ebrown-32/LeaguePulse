@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Volume2, VolumeX } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import BoxScore from '@/components/wrapped/BoxScore';
 import { useStadiumPhoto } from '@/components/desk/StadiumPhoto';
@@ -21,6 +22,7 @@ import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import { cn } from '@/lib/utils';
 import type { Game, LeagueWrap, ManagerWrap, PlayerRef, Wrapped } from '@/lib/wrapped/engine';
 import type { RecordHeld } from '@/lib/wrapped/facts';
+import { cueFor, music } from '@/lib/wrapped/music';
 import { copy, headline, picker, take, type Pick } from './copy';
 
 export interface Writer { id: string; name: string; handle: string; avatar: string; type: string }
@@ -571,6 +573,8 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
   const [drag, setDrag] = useState(0);
   const paused = useRef(false);
   const gesture = useRef<{ x: number; y: number; t: number; hold: number | null } | null>(null);
+  const glow = useRef<HTMLDivElement>(null);
+  const [muted, setMuted] = useState(music.muted);
   const end = slides.length - 1;
   const go = useCallback((d: number) => {
     setDir(d);
@@ -583,16 +587,30 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
   const spec = useMemo(() => (stadium ? { shot: 'aerial' as const, host: stadium.host, guest: stadium.host, season: stadium.season, week: 1, hour: 20.5, stands: 0.95, lots: 0.9 } : null), [stadium]);
   const photo = useStadiumPhoto(spec, stadium?.team ?? '');
 
+  // The soundtrack (lib/wrapped/music): from the count-in when the story opens, out when it closes.
+  useEffect(() => { music.start(); return () => music.stop(); }, []);
+  const first = useRef(true);
   useEffect(() => {
-    let raf = 0, prev = performance.now();
+    if (first.current) { first.current = false; return; }
+    const { cue, low } = cueFor(slides[i].key, slides[i].confetti);
+    music.slide(cue, low, dir > 0);
+    // Only on a change of slide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i]);
+
+  useEffect(() => {
+    let raf = 0, prev = performance.now(), wasPaused = false;
     const tick = (t: number) => {
       const dt = t - prev; prev = t;
       if (!paused.current && i < end) setProgress(p => { const n = p + dt / SLIDE_MS; if (n >= 1) { go(1); return 0; } return n; });
+      if (paused.current !== wasPaused) { wasPaused = paused.current; music.setPaused(wasPaused); }
+      // The stage's light thumps with the kick.
+      if (glow.current && !reduce) glow.current.style.opacity = String(0.7 + 0.3 * music.pulse());
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [i, end, go]);
+  }, [i, end, go, reduce]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); if (e.key === 'Escape') onClose();
@@ -605,6 +623,7 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
 
   // Gestures: tap a side, swipe across, swipe down to close, hold to pause.
   const down = (e: React.PointerEvent) => {
+    music.unlock(); // a story opened from a link starts its music on the first tap
     if ((e.target as HTMLElement).closest('[data-interactive]')) return;
     gesture.current = { x: e.clientX, y: e.clientY, t: Date.now(), hold: window.setTimeout(() => { paused.current = true; }, 220) };
   };
@@ -636,7 +655,7 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
       style={{ borderRadius: drag ? 24 : 0 }}>
       {photo.darkroom}
       {/* The stage: night, lit in the league's own color, with the slide's tone across from it. */}
-      <div className="absolute inset-0" style={{ background: `radial-gradient(90% 70% at 15% 0%, ${prim(0.55)}, transparent 60%)` }} />
+      <div ref={glow} className="absolute inset-0" style={{ opacity: 0.7, background: `radial-gradient(90% 70% at 15% 0%, ${prim(0.55)}, transparent 60%)` }} />
       <motion.div key={`tone-${slide.key}`} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
         style={{ background: `radial-gradient(80% 60% at 100% 100%, ${slide.tone}66, transparent 65%)` }} />
       <AnimatePresence>
@@ -662,6 +681,11 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
           </div>
         ))}
       </div>
+      <button aria-label={muted ? 'Sound on' : 'Sound off'} aria-pressed={!muted} data-interactive
+        onClick={() => { music.unlock(); music.setMuted(!muted); setMuted(!muted); }}
+        className="absolute right-[62px] z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/30 backdrop-blur sm:right-[78px]" style={{ top: 'calc(env(safe-area-inset-top) + 22px)' }}>
+        {muted ? <VolumeX className="h-5 w-5 text-white/70" /> : <Volume2 className="h-5 w-5" />}
+      </button>
       <button aria-label="Close" data-interactive onClick={onClose}
         className="absolute right-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/30 text-[24px] backdrop-blur sm:right-6" style={{ top: 'calc(env(safe-area-inset-top) + 22px)' }}>&times;</button>
 
@@ -746,7 +770,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
     const m = w.managers.find(x => x.ownerId === open);
     return m ? { slides: managerSlides(m, w, cast, leagueName, card(m.ownerId)), stadium: { host: m.ownerId, team: m.team, season: latest } } : null;
   }, [w, open, leagueName, cast, card]);
-  const next = () => { const k = order.indexOf(open ?? ''); setOpen(order[(k + 1) % order.length] ?? null); };
+  const next = () => { music.unlock(); const k = order.indexOf(open ?? ''); setOpen(order[(k + 1) % order.length] ?? null); };
 
   if (!data) return <div className="h-80 animate-pulse rounded-3xl bg-card" />;
   if (data.error) return <p className="rounded-2xl border border-border bg-card p-5 text-[14px]">{data.error}</p>;
@@ -768,7 +792,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
       </div>
 
       {/* The league's story, lit in the league's own color. */}
-      <motion.button whileTap={{ scale: 0.98 }} onClick={() => setOpen('league')}
+      <motion.button whileTap={{ scale: 0.98 }} onClick={() => { music.unlock(); setOpen('league'); }}
         className="relative block w-full overflow-hidden rounded-[28px] p-6 text-left text-white shadow-[0_24px_60px_-28px_hsl(var(--primary)/0.7)] sm:p-9"
         style={{ background: `radial-gradient(120% 120% at 0% 0%, ${prim(0.95)} 0%, ${prim(0.35)} 45%, #07090c 100%)` }}>
         <motion.div aria-hidden className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-white/20 blur-3xl" animate={{ scale: [1, 1.2, 1], opacity: [0.25, 0.4, 0.25] }} transition={{ duration: 6, repeat: Infinity }} />
@@ -781,7 +805,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
       </motion.button>
 
       {mine && (
-        <motion.button whileTap={{ scale: 0.98 }} onClick={() => setOpen(mine.ownerId)}
+        <motion.button whileTap={{ scale: 0.98 }} onClick={() => { music.unlock(); setOpen(mine.ownerId); }}
           className="flex w-full items-center gap-4 rounded-[24px] border-2 border-primary bg-primary/10 p-4 text-left sm:p-5">
           <Avatar avatarId={mine.avatar} size={56} className="rounded-2xl" />
           <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold uppercase tracking-widest text-primary">Your story</span><span className="block truncate text-[18px] font-extrabold">{mine.name}</span><span className="block text-[12.5px] text-muted-foreground">{rec(mine.record)}</span></span>
@@ -792,7 +816,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
       {/* Every manager's story, as covers. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {w.managers.map((m, k) => (
-          <motion.button key={m.ownerId} onClick={() => setOpen(m.ownerId)} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.04 }}
+          <motion.button key={m.ownerId} onClick={() => { music.unlock(); setOpen(m.ownerId); }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.04 }}
             whileTap={{ scale: 0.97 }} className="relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[22px] p-3.5 text-left text-white"
             style={{ background: `linear-gradient(160deg, ${prim(0.85)}, #0b0f14 75%)` }}>
             {/* The thumbnail: the player who carried their season, standing in the league's color. */}
