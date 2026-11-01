@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import RecordBoxScore from '@/components/wrapped/RecordBoxScore';
 import Avatar from '@/components/ui/Avatar';
 import {
   Trophy,
   Flame,
+  ChevronDown,
   Zap,
   TrendingDown,
   Heart,
@@ -61,6 +63,9 @@ const RECORD_GROUPS = [
  * Every list in the record book. `unit` is what the number is, `higher` which
  * way is the record, and `note` says plainly what counts.
  */
+/** Records that are one game, which open to that game's box score. */
+const GAME_RECORDS = new Set(['highScore', 'lowScore', 'blowout', 'closeGame', 'shootout', 'highScoreLoss', 'lowScoreWin', 'playerGame', 'benchGame']);
+
 const RECORD_CATEGORIES = [
   { group: 'games',   type: 'highScore',          label: 'Highest Score',     icon: Flame,        unit: 'pts',     higher: true,  note: 'The most points in a week.' },
   { group: 'games',   type: 'lowScore',           label: 'Lowest Score',      icon: TrendingDown, unit: 'pts',     higher: false, note: 'The fewest points in a week.' },
@@ -164,6 +169,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
   }, []);
   useEffect(() => { if (activeTab === 'playoffs') setPlayoffsSeen(true); }, [activeTab]);
   const [activeRecord, setActiveRecord]             = useState('highScore');
+  const [openBoxes, setOpenBoxes]                   = useState<Record<string, boolean>>({});
   const lastUpdateRef                               = useRef(0);
 
   useEffect(() => {
@@ -689,15 +695,18 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         ? ((record.value - catMin) / catRange) * 100
                         : ((catMax - record.value) / catRange) * 100;
 
+                      const rowKey = `${record.season}-${record.type}-${record.userId}-${record.week ?? 'season'}`;
+                      const isGame = GAME_RECORDS.has(record.type) && record.week != null;
+                      // The #1 game opens with its box score; any other game on a tap.
+                      const boxOpen = isGame && (openBoxes[rowKey] ?? isFirst);
+                      const d = record.details;
                       return (
+                        <div key={rowKey} className={`overflow-hidden rounded-xl border transition-colors ${
+                          isFirst ? 'border-amber-500/20 bg-amber-500/[0.03]' : 'border-border bg-card'
+                        }`}>
                         <Link
                           href={`/team/${record.userId}`}
-                          key={`${record.season}-${record.type}-${record.userId}-${record.week ?? 'season'}`}
-                          className={`flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-colors ${
-                            isFirst
-                              ? 'border-amber-500/20 bg-amber-500/[0.03]'
-                              : 'border-border bg-card hover:bg-accent/30'
-                          }`}
+                          className={`flex items-center gap-4 px-4 py-3.5 transition-colors ${isFirst ? '' : 'hover:bg-accent/30'}`}
                         >
                           <RankBadge rank={rank} />
                           <Avatar avatarId={record.avatar} size={34} className="rounded-lg shrink-0" />
@@ -761,6 +770,26 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                             </div>
                           </div>
                         </Link>
+                        {isGame && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setOpenBoxes(o => ({ ...o, [rowKey]: !boxOpen }))}
+                              aria-expanded={boxOpen}
+                              className="flex w-full items-center justify-center gap-1.5 border-t border-border/60 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                            >
+                              {boxOpen ? 'Hide box score' : 'Box score'}
+                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${boxOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {boxOpen && (
+                              <div className="px-3 pb-3">
+                                <RecordBoxScore season={record.season} week={record.week!} owner={record.userId}
+                                  scores={d?.winnerScore != null && d?.loserScore != null ? [d.winnerScore, d.loserScore] : undefined} />
+                              </div>
+                            )}
+                          </>
+                        )}
+                        </div>
                       );
                     })
                   )}

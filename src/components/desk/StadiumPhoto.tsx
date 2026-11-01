@@ -92,6 +92,27 @@ function Darkroom() {
 
 let darkroomMounted = false;
 
+/**
+ * A stadium photograph as a bare image URL, for something that frames it itself (League Wrapped's
+ * backdrops): undefined while it develops, null when there's no stadium to photograph. The caller
+ * renders `darkroom` and stays mounted while it's needed; the darkroom is released when it goes.
+ */
+export function useStadiumPhoto(spec: PhotoSpec | null, hostTeam: string): { url: string | null | undefined; darkroom: React.ReactNode } {
+  const key = spec ? keyOf(spec) : '';
+  const [url, setUrl] = useState<string | null | undefined>(() => (spec && typeof window !== 'undefined' ? stored(key) ?? undefined : undefined));
+  const [own, setOwn] = useState(false);
+  useEffect(() => {
+    if (!spec || url !== undefined) return;
+    if (!darkroomMounted) { darkroomMounted = true; setOwn(true); }
+    let cancelled = false;
+    develop(spec, hostTeam).then(u => { if (!cancelled) setUrl(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, hostTeam, url]);
+  useEffect(() => () => { if (own) darkroomMounted = false; }, [own]);
+  return { url, darkroom: own && typeof document !== 'undefined' ? createPortal(<Darkroom />, document.body) : null };
+}
+
 export default function StadiumPhoto({ spec, hostTeam, persona, className }: {
   spec: PhotoSpec; hostTeam: string;
   /** The writer, for an interview: their face in the frame. */
