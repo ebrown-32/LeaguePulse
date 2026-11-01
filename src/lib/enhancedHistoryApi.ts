@@ -39,6 +39,8 @@ export interface EnhancedHistoricalRecord {
     winnerScore?: number;
     loserScore?: number;
     opponent?: string;
+    /** The opponent's user id, for game records. */
+    opponentId?: string;
     rank?: number;
     record?: string;
     margin?: number;
@@ -580,6 +582,7 @@ async function processHeadToHeadMatchup(
         winnerScore,
         loserScore,
         opponent: loser.display_name,
+        opponentId: loser.user_id,
         margin
       },
       isPlayoff,
@@ -602,6 +605,7 @@ async function processHeadToHeadMatchup(
         winnerScore,
         loserScore,
         opponent: loser.display_name,
+        opponentId: loser.user_id,
         margin
       },
       isPlayoff,
@@ -712,7 +716,7 @@ function generateWeeklyScoreRecords(
   records: EnhancedHistoricalRecord[],
   phaseOf: PhaseOf
 ): void {
-  type Score = { score: number; user: any; week: number; phase: GamePhase };
+  type Score = { score: number; user: any; week: number; phase: GamePhase; opp?: { user: any; score: number } };
   const weeklyHighScores: Score[] = [];
   const weeklyLowScores: Score[] = [];
   
@@ -723,13 +727,15 @@ function generateWeeklyScoreRecords(
 
     // Collect all scores for this week: games only, so a week an eliminated team had no matchup
     // (its points still counted by the provider) is no record.
-    const weekScores: { score: number; user: any; phase: GamePhase }[] = [];
+    const weekScores: Omit<Score, 'week'>[] = [];
 
     weekMatchups.forEach(matchup => {
       if (typeof matchup.points === 'number' && matchup.points > 0 && matchup.matchup_id != null) {
         const user = findUserByRoster(matchup.roster_id, users, rosters);
         if (user) {
-          weekScores.push({ score: matchup.points, user, phase: phaseOf(weekNumber, matchup.roster_id) });
+          const them = weekMatchups.find(m => m.matchup_id === matchup.matchup_id && m.roster_id !== matchup.roster_id);
+          const oppUser = them ? findUserByRoster(them.roster_id, users, rosters) : null;
+          weekScores.push({ score: matchup.points, user, phase: phaseOf(weekNumber, matchup.roster_id), opp: oppUser ? { user: oppUser, score: Number(them.points) || 0 } : undefined });
         }
       }
     });
@@ -740,9 +746,9 @@ function generateWeeklyScoreRecords(
     weekScores.sort((a, b) => b.score - a.score);
     
     // Add all scores to respective arrays for global ranking
-    weekScores.forEach(({ score, user, phase }) => {
-      weeklyHighScores.push({ score, user, week: weekNumber, phase });
-      weeklyLowScores.push({ score, user, week: weekNumber, phase });
+    weekScores.forEach(({ score, user, phase, opp }) => {
+      weeklyHighScores.push({ score, user, week: weekNumber, phase, opp });
+      weeklyLowScores.push({ score, user, week: weekNumber, phase, opp });
     });
   });
 
@@ -752,7 +758,7 @@ function generateWeeklyScoreRecords(
 
   // Generate high score records (top 50 to ensure we have enough good ones)
   const tag = (phase: GamePhase) => (phase === 'playoff' ? ' (Playoffs)' : phase === 'consolation' ? ' (Consolation)' : '');
-  weeklyHighScores.slice(0, 50).forEach(({ score, user, week, phase }) => {
+  weeklyHighScores.slice(0, 50).forEach(({ score, user, week, phase, opp }) => {
     records.push({
       type: 'highScore',
       season: league.season,
@@ -762,6 +768,7 @@ function generateWeeklyScoreRecords(
       avatar: teamAvatar(user),
       value: score,
       description: `${user.display_name} scored ${score.toFixed(2)} points in Week ${week}${tag(phase)}`,
+      details: opp ? { winnerScore: Math.max(score, opp.score), loserScore: Math.min(score, opp.score), opponent: opp.user.display_name, opponentId: opp.user.user_id } : undefined,
       isPlayoff: phase === 'playoff',
       isConsolation: phase === 'consolation'
     });

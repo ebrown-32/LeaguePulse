@@ -55,6 +55,13 @@ export function startingSlots(rosterPositions: string[] | undefined): string[] {
   return (rosterPositions ?? []).filter(s => !NON_STARTING.has(s));
 }
 
+/** Whether a player at these positions may fill a lineup slot (FLEX takes a RB, never a defense). */
+export function canFill(slot: string, positions: string[]): boolean {
+  const allowed = SLOT_ELIGIBILITY[slot];
+  if (!allowed) return positions.includes(slot);
+  return positions.some(p => allowed.includes(p));
+}
+
 function eligible(slot: string, player: LineupPlayer): boolean {
   const allowed = SLOT_ELIGIBILITY[slot];
   // An unrecognised slot accepts the position that shares its name, which is

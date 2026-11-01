@@ -20,8 +20,12 @@ const nextConfig = {
   // stadiums drawn from it) is hosted only, so a self-hosted copy leaves its
   // stadium views out rather than showing empty boxes. Fixed at build time.
   env: { NEXT_PUBLIC_LP_HOSTED: process.env.LP_HOSTED === '1' ? '1' : '' },
-  // The share card's fonts (src/app/api/og), read from disk at request time.
-  outputFileTracingIncludes: { '/api/og': ['./src/app/api/og/*.woff'] },
+  // The share cards' fonts (src/app/api/og), read from disk at request time: every route that
+  // draws a card needs them in its bundle, or it fails on Vercel while working locally.
+  outputFileTracingIncludes: {
+    '/api/og': ['./src/app/api/og/*.woff'],
+    '/api/wrapped/card': ['./src/app/api/og/*.woff'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'sleepercdn.com' },

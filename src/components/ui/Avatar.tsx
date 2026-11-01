@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import Image from 'next/image';
 
 interface AvatarProps {
@@ -7,12 +10,15 @@ interface AvatarProps {
 }
 
 export default function Avatar({ avatarId, size = 40, className = '' }: AvatarProps) {
+  // A picture that fails to load (an ESPN logo that's gone, a deleted upload) falls back to the
+  // silhouette rather than a broken image.
+  const [failed, setFailed] = useState<string | null>(null);
   // Accepts either a bare account avatar id or a full URL. A manager's team
   // picture is stored by Sleeper as an uploads URL rather than an id, so
   // prefixing everything with the avatars path turned those into 404s.
   // No picture at all (Sleeper's old default image is gone from its CDN, and
   // ESPN managers have no account picture): a plain silhouette.
-  if (!avatarId) {
+  if (!avatarId || failed === avatarId) {
     return (
       <div
         className={`relative flex items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground ring-2 ring-white/10 ${className}`}
@@ -42,6 +48,7 @@ export default function Avatar({ avatarId, size = 40, className = '' }: AvatarPr
       <Image
         src={avatarUrl}
         unoptimized={!optimizable}
+        onError={() => setFailed(avatarId)}
         alt="User avatar"
         className="object-cover"
         width={size}
