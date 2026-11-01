@@ -14,6 +14,7 @@
  *
  * seasons.settled_week (migration 2): the weeks up to it are final.
  * teams.final_rank (migration 3): 1 for the champion, from the playoff bracket.
+ * mkt_* (migration 4): the market, an anonymous sample of public Sleeper leagues (lib/market).
  *
  * Migrations only ever add: each entry runs once, in order, and is never
  * edited after it ships. `t` qualifies a table name with the schema.
@@ -142,4 +143,87 @@ export const MIGRATIONS: ((t: Q) => string)[] = [
   // Where each team finished, from the playoff bracket's placement games:
   // 1 is the champion. Null until the season is over.
   t => `ALTER TABLE ${t('teams')} ADD COLUMN final_rank int;`,
+  // The market (lib/market): a sample of public Sleeper leagues, read for what the field does,
+  // never who does it. No names, usernames or user ids are kept: a league is its public id, its
+  // format and settings; teams are counts; a trade's teams are just its sides.
+  t => `
+    CREATE TABLE ${t('mkt_frontier')} (
+      league_id text PRIMARY KEY,
+      season text NOT NULL,
+      found_at timestamptz NOT NULL DEFAULT now(),
+      r double precision NOT NULL DEFAULT random()
+    );
+    CREATE INDEX ON ${t('mkt_frontier')} (season, r);
+    CREATE TABLE ${t('mkt_leagues')} (
+      league_id text PRIMARY KEY,
+      season text NOT NULL,
+      fmt text NOT NULL,
+      size int NOT NULL,
+      faab_budget int,
+      scoring jsonb,
+      roster_positions jsonb,
+      ingested_week int NOT NULL DEFAULT 0,
+      drafted boolean NOT NULL DEFAULT false,
+      team_weeks int NOT NULL DEFAULT 0,
+      pts_sum double precision NOT NULL DEFAULT 0,
+      pts_sq double precision NOT NULL DEFAULT 0,
+      trades int NOT NULL DEFAULT 0,
+      adds int NOT NULL DEFAULT 0,
+      added_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX ON ${t('mkt_leagues')} (season, fmt);
+    CREATE INDEX ON ${t('mkt_leagues')} (season, ingested_week);
+    CREATE TABLE ${t('mkt_fmt_week')} (
+      season text NOT NULL,
+      week int NOT NULL,
+      fmt text NOT NULL,
+      leagues int NOT NULL DEFAULT 0,
+      teams int NOT NULL DEFAULT 0,
+      pts_sum double precision NOT NULL DEFAULT 0,
+      pts_sq double precision NOT NULL DEFAULT 0,
+      PRIMARY KEY (season, week, fmt)
+    );
+    CREATE TABLE ${t('mkt_player_week')} (
+      season text NOT NULL,
+      week int NOT NULL,
+      fmt text NOT NULL,
+      player_id text NOT NULL,
+      rostered int NOT NULL DEFAULT 0,
+      started int NOT NULL DEFAULT 0,
+      start_pts double precision NOT NULL DEFAULT 0,
+      adds int NOT NULL DEFAULT 0,
+      drops int NOT NULL DEFAULT 0,
+      bids int NOT NULL DEFAULT 0,
+      bid_hist int[] NOT NULL DEFAULT '{0,0,0,0,0,0,0}',
+      traded_for int NOT NULL DEFAULT 0,
+      PRIMARY KEY (season, week, fmt, player_id)
+    ) WITH (fillfactor = 80);
+    CREATE TABLE ${t('mkt_trades')} (
+      transaction_id text PRIMARY KEY,
+      season text NOT NULL,
+      week int NOT NULL,
+      fmt text NOT NULL,
+      teams int NOT NULL,
+      sides jsonb NOT NULL,
+      made_at timestamptz
+    );
+    CREATE INDEX ON ${t('mkt_trades')} (season, fmt, week);
+    CREATE TABLE ${t('mkt_adp')} (
+      season text NOT NULL,
+      fmt text NOT NULL,
+      kind text NOT NULL,
+      player_id text NOT NULL,
+      picks int NOT NULL DEFAULT 0,
+      pick_sum double precision NOT NULL DEFAULT 0,
+      pick_sq double precision NOT NULL DEFAULT 0,
+      PRIMARY KEY (season, fmt, kind, player_id)
+    );
+    CREATE TABLE ${t('mkt_runs')} (
+      id bigserial PRIMARY KEY,
+      started_at timestamptz NOT NULL DEFAULT now(),
+      finished_at timestamptz,
+      summary jsonb
+    );
+  `,
 ];

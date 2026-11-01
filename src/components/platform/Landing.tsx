@@ -25,6 +25,8 @@ import { motion, AnimatePresence, useReducedMotion, useScroll, useSpring } from 
 import { cn } from '@/lib/utils';
 import { PLATFORM, PLANS } from '@/lib/platform/config';
 import { FAQS } from './faq';
+import { SEO_SLUGS } from '@/lib/seo/paths';
+import { SEO_PAGES } from '@/lib/seo/pages';
 import { productDisplay } from './fonts';
 import {
   Logomark, Lockup, PhoneMark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
@@ -1165,6 +1167,12 @@ function Footer() {
             </nav>
           ))}
         </div>
+
+        {/* The guide pages (lib/seo/pages), linked from every visit to the front page. */}
+        <nav aria-label="Guides" className="mt-10 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-muted-foreground">
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em]">Guides</span>
+          {SEO_SLUGS.map(s => <a key={s} href={`/${s}`} className="transition-colors hover:text-primary">{SEO_PAGES[s].label}</a>)}
+        </nav>
 
         {/* The sign-off: the wordmark, set huge, half off the bottom like a stadium end-zone paint job. */}
         <p aria-hidden className="lp-wordmark pointer-events-none mt-16 select-none whitespace-nowrap text-[17.5vw] leading-[0.74] text-foreground/[0.07] md:text-[190px]">

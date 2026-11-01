@@ -96,6 +96,13 @@ interface Ops {
     leagues: { slug: string; name: string; mode: string; tier: string; month: number; calls: number; tokens: number; lastMonth: number }[];
   };
   storage?: Record<'redis' | 'postgres', Store | null>;
+  market?: MarketStats | null;
+}
+
+interface MarketStats {
+  enabled: boolean; season: string | null; leagues: number; week: number; cap: number;
+  formats: { fmt: string; leagues: number }[]; frontier: number; bytes: number;
+  lastRun: ({ at: string; added?: number; caughtUp?: number; weeks?: number; skipped?: string; ms?: number }) | null;
 }
 
 interface Store { used: number; limit: number | null; detail: string; parts: { label: string; bytes: number }[] }
@@ -243,6 +250,8 @@ export function Monitor({ auth }: { auth: Auth }) {
 
       {data.storage && <Storage storage={data.storage} />}
 
+      {data.market && <Market m={data.market} />}
+
       {data.ai && <AiSpend ai={data.ai} />}
 
       <Card title="Server errors" meta={`${errs24} in the last 24 hours`}>
@@ -313,6 +322,43 @@ function Storage({ storage }: { storage: NonNullable<Ops['storage']> }) {
           );
         })}
       </div>
+    </Card>
+  );
+}
+
+/** The Sleeper market sample (lib/market/crawl): growth, spread across formats, and its share of storage. */
+function Market({ m }: { m: MarketStats }) {
+  const share = m.cap ? m.leagues / m.cap : 0;
+  const top = m.formats.slice(0, 6);
+  return (
+    <Card title="Sleeper market" meta={m.enabled ? `${m.season ?? ''} season, through week ${m.week}` : 'Off: set LP_MARKET_CRAWL=1'}>
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {[
+          { label: 'Leagues sampled', v: m.leagues.toLocaleString(), sub: `of ${m.cap.toLocaleString()} (LP_MARKET_LEAGUES)` },
+          { label: 'Formats', v: String(m.formats.length), sub: top[0] ? `Largest: ${top[0].fmt}, ${Math.round((top[0].leagues / Math.max(1, m.leagues)) * 100)}%` : 'None yet' },
+          { label: 'Waiting to visit', v: m.frontier.toLocaleString(), sub: 'Leagues found, not yet read' },
+          { label: 'Storage', v: bytes(m.bytes), sub: 'Market tables in Postgres' },
+        ].map(k => (
+          <div key={k.label}>
+            <p className="text-[11.5px] font-semibold text-muted-foreground">{k.label}</p>
+            <p className="lp-num mt-1 text-[24px] font-extrabold tabular-nums leading-none">{k.v}</p>
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 h-2.5 rounded-full bg-muted">
+        <motion.div className="h-full rounded-full bg-primary" initial={{ width: 0 }} animate={{ width: `${Math.max(1, Math.min(100, share * 100))}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
+      </div>
+      <p className="mt-2 text-[12px] text-muted-foreground">
+        {m.lastRun
+          ? `Last run ${ago(m.lastRun.at)}: ${m.lastRun.skipped ? m.lastRun.skipped : `${m.lastRun.added ?? 0} leagues added, ${m.lastRun.caughtUp ?? 0} brought up to date (${m.lastRun.weeks ?? 0} weeks)`}.`
+          : 'No run yet.'}
+      </p>
+      {top.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-1.5 text-[11.5px]">
+          {top.map(f => <li key={f.fmt} className="rounded-full border border-border px-2.5 py-1 tabular-nums">{f.fmt} <span className="text-muted-foreground">{f.leagues}</span></li>)}
+        </ul>
+      )}
     </Card>
   );
 }

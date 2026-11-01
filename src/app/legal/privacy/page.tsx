@@ -10,12 +10,13 @@ export default function PrivacyPage() {
     ? <a href={`mailto:${PLATFORM.supportEmail}`}>{PLATFORM.supportEmail}</a>
     : 'the support address on our site';
   return (
-    <LegalPage title="Privacy Policy" updated="October 29, 2026">
+    <LegalPage title="Privacy Policy" updated="October 30, 2026">
       <p>This policy explains what {n} collects, why, and who it is shared with. We don&apos;t sell personal data and we don&apos;t run advertising.</p>
 
       <h2>What we collect</h2>
       <ul>
         <li><strong>League data from Sleeper or ESPN.</strong> League information: team and manager names, avatars and team logos, rosters, matchups and transactions. We fetch it from Sleeper&apos;s public API, or from ESPN, to build the site. For ESPN managers we show a first name and last initial.</li>
+        <li><strong>Anonymous counts from public Sleeper leagues.</strong> To show how leagues like yours play, we read a sample of public Sleeper leagues and keep only counts by league format: how often players are rostered, started, added, bid on and traded, and where they were drafted. We keep each sampled league&apos;s public id and settings, and never anyone&apos;s name, username or account.</li>
         <li><strong>A copy of each finished season</strong> of a league&apos;s data, kept so its site loads quickly and its history does not depend on Sleeper or ESPN keeping it.</li>
         <li><strong>ESPN session cookies</strong> (SWID and espn_s2), for a private ESPN league, when a member of the league gives them to us. They are stored encrypted, used only to read that league from ESPN, and never shown again. Cookies given at sign-up are deleted after two days if no site is started; otherwise they are kept until the site&apos;s admin replaces them or the site is removed.</li>
         <li><strong>Your {n} account,</strong> if you make one: the name, email and picture you sign in with, and which leagues you belong to, run or manage a franchise in. Sign-in is handled by Clerk.</li>

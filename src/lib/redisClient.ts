@@ -88,6 +88,8 @@ const SHARED_PREFIXES = [
   'lp_fc_values',
   // The back office's watch over the platform (src/lib/ops/monitor.ts) and its feedback inbox (src/lib/ops/feedback.ts).
   'lp_ops', 'lp_feedback',
+  // The Sleeper market crawl's lock and The Edge's cached answers (src/lib/market).
+  'lp_market',
 ];
 
 /**
