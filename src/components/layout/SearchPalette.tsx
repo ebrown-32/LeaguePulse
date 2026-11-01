@@ -61,6 +61,9 @@ function fuzzyScore(needle: string, haystack: string): number | null {
   return score;
 }
 
+/** Dispatch on window to open the palette. */
+export const OPEN_SEARCH = 'lp:open-search';
+
 export default function SearchPalette({ pages }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -131,6 +134,13 @@ export default function SearchPalette({ pages }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
+
+  // Opened from elsewhere too: the desktop side rail's search field.
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_SEARCH, show);
+    return () => window.removeEventListener(OPEN_SEARCH, show);
+  }, []);
 
   useEffect(() => {
     if (open) requestAnimationFrame(() => inputRef.current?.focus());

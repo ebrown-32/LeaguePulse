@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { configureFeedback, feedback } from '@/lib/feedback';
+import { usePrefs } from '@/lib/prefs';
 
 /**
  * Wires click feedback to the whole app from one listener.
@@ -22,6 +23,10 @@ export default function FeedbackProvider({
   sound: boolean;
   haptics: boolean;
 }) {
+  // The league's settings, unless this visitor chose otherwise (lib/prefs).
+  const prefs = usePrefs();
+  sound = prefs.sound ?? sound;
+  haptics = prefs.haptics ?? haptics;
   useEffect(() => {
     configureFeedback({ sound, haptics });
   }, [sound, haptics]);

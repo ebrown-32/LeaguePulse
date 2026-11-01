@@ -1203,3 +1203,22 @@ mark {
 @media (max-width: 639px) {
   body:has([data-admin]) button:has(> .lp-chat-halo) { display: none; }
 }
+
+/* ── The desktop side rail (components/layout/SideRail) ─────────────────────
+   Its width is a variable on <html>, folded by data-rail before the first paint,
+   so the rail and the page's offset from it agree from the first frame. */
+:root { --lp-rail-w: 260px; }
+:root[data-rail="collapsed"] { --lp-rail-w: 76px; }
+.lp-rail { width: var(--lp-rail-w); transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+.lp-rail-folded-only, .lp-rail-divider { display: none; }
+:root[data-rail="collapsed"] .lp-rail .lp-rail-label { display: none; }
+:root[data-rail="collapsed"] .lp-rail .lp-rail-folded-only { display: flex; }
+:root[data-rail="collapsed"] .lp-rail .lp-rail-divider { display: block; }
+/* The list fades out at its edges rather than being cut off. */
+.lp-rail-scroll { mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%); }
+@media (min-width: 1280px) {
+  .lp-rail-offset { padding-left: calc(var(--lp-rail-w) + 32px); transition: padding-left 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-rail, .lp-rail-offset { transition: none; }
+}
