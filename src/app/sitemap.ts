@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { requestSite } from '@/lib/seo/site';
+import { SEO_SLUGS } from '@/lib/seo/paths';
 
 /** The product site's public pages, or the demo league's tour; nothing for a customer's league. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -8,7 +9,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const at = (path: string, priority: number, changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] = 'weekly') =>
     ({ url: `${origin}${path}`, lastModified: now, changeFrequency, priority });
   if (kind === 'product') {
-    return [at('/', 1), at('/start', 0.8), at('/legal/privacy', 0.2, 'yearly'), at('/legal/terms', 0.2, 'yearly')];
+    return [
+      at('/', 1), at('/start', 0.8),
+      ...SEO_SLUGS.map(s => at(`/${s}`, 0.8, 'monthly')),
+      at('/legal/privacy', 0.2, 'yearly'), at('/legal/terms', 0.2, 'yearly'),
+    ];
   }
   if (kind === 'demo') {
     return [

@@ -106,6 +106,32 @@ async function postgresStorage(): Promise<Store | null> {
   };
 }
 
+/** The Sleeper market (lib/market/crawl): how big the sample is, how it's spread, and what it costs in storage. */
+async function market() {
+  const { ensureArchive, T } = await import('@/lib/archive/db');
+  const db = await ensureArchive();
+  if (!db) return null;
+  const exists = (await db.query(`SELECT to_regclass($1) AS t`, [T('mkt_leagues').replace(/"/g, '')])).rows[0]?.t;
+  if (!exists) return null;
+  const [season, fmts, frontier, run, bytes] = await Promise.all([
+    db.query(`SELECT season, count(*)::int AS leagues, max(ingested_week)::int AS week FROM ${T('mkt_leagues')} GROUP BY season ORDER BY season DESC LIMIT 1`),
+    db.query(`SELECT fmt, count(*)::int AS n FROM ${T('mkt_leagues')} WHERE season = (SELECT max(season) FROM ${T('mkt_leagues')}) GROUP BY fmt ORDER BY n DESC`),
+    db.query(`SELECT count(*)::int AS n FROM ${T('mkt_frontier')}`),
+    db.query(`SELECT finished_at, summary FROM ${T('mkt_runs')} WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`),
+    db.query(`SELECT COALESCE(sum(pg_total_relation_size(c.oid)), 0)::bigint AS b FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = $1 AND c.relname LIKE 'mkt\_%' AND c.relkind = 'r'`, [T('x').split('.')[0].replace(/"/g, '')]),
+  ]);
+  return {
+    enabled: process.env.LP_MARKET_CRAWL === '1',
+    season: season.rows[0]?.season ?? null, leagues: season.rows[0]?.leagues ?? 0, week: season.rows[0]?.week ?? 0,
+    cap: Number(process.env.LP_MARKET_LEAGUES) || 3000,
+    formats: fmts.rows.map(r => ({ fmt: r.fmt as string, leagues: Number(r.n) })),
+    frontier: Number(frontier.rows[0]?.n ?? 0),
+    lastRun: run.rows[0] ? { at: run.rows[0].finished_at, ...run.rows[0].summary } : null,
+    bytes: Number(bytes.rows[0]?.b ?? 0),
+  };
+}
+
 async function storage() {
   const [redis, postgres] = await Promise.all([redisStorage().catch(() => null), postgresStorage().catch(() => null)]);
   return { redis, postgres };
@@ -148,6 +174,6 @@ async function aiSpend() {
 export async function GET(req: Request) {
   if (!(await isOperator(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { readOps } = await import('@/lib/ops/monitor');
-  const [ops, live, ai, stores] = await Promise.all([readOps(), checks(), aiSpend().catch(() => null), storage()]);
-  return NextResponse.json({ at: new Date().toISOString(), ...ops, checks: live, ai, storage: stores }, { headers: { 'cache-control': 'no-store' } });
+  const [ops, live, ai, stores, mkt] = await Promise.all([readOps(), checks(), aiSpend().catch(() => null), storage(), market().catch(() => null)]);
+  return NextResponse.json({ at: new Date().toISOString(), ...ops, checks: live, ai, storage: stores, market: mkt }, { headers: { 'cache-control': 'no-store' } });
 }

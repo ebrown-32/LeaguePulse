@@ -168,6 +168,7 @@ export const CRONS = [
   { id: 'archive', label: 'League archive', every: 60 },
   { id: 'ai', label: 'AI desk', every: 24 * 60 },
   { id: 'fantasypros', label: 'FantasyPros rankings', every: 24 * 60 },
+  { id: 'market', label: 'Sleeper market sample', every: 60 },
 ];
 
 export interface ProviderStats {

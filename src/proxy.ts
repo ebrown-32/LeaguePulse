@@ -18,8 +18,10 @@
 
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 import { clerkMiddleware } from '@clerk/nextjs/server';
+import { SEO_SLUGS } from '@/lib/seo/paths';
 
-const PLATFORM_PREFIXES = ['/landing', '/start', '/legal', '/operator', '/account', '/sign-in', '/sign-up'];
+/** The product's own pages, the guide pages (lib/seo/pages) among them. */
+const PLATFORM_PREFIXES = ['/landing', '/start', '/legal', '/operator', '/account', '/sign-in', '/sign-up', ...SEO_SLUGS.map(s => `/${s}`)];
 const hosted = process.env.LP_HOSTED === '1';
 const rootDomain = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN ?? 'leaguepulse.io').toLowerCase();
 
