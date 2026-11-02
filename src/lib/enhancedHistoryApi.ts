@@ -1015,10 +1015,15 @@ async function determineChampionsAndPlayoffs(
       userStats.playoffAppearances++;
       userStats.seasonBySeasonStats[league.season].playoffAppearance = true;
       
-      const finalRank = roster.settings?.poff || 999;
-      userStats.seasonBySeasonStats[league.season].finish = finalRank;
-      userStats.bestFinish = Math.min(userStats.bestFinish, finalRank);
-      userStats.worstFinish = Math.max(userStats.worstFinish, finalRank);
+      // Sleeper's final place (poff) goes unset for some leagues and seasons. An unknown place is
+      // no place (0, as for a team that missed the playoffs), never "999th": it would read as a
+      // finish and win every "worst finish".
+      const finalRank = Number(roster.settings?.poff) || 0;
+      if (finalRank > 0) {
+        userStats.seasonBySeasonStats[league.season].finish = finalRank;
+        userStats.bestFinish = Math.min(userStats.bestFinish, finalRank);
+        userStats.worstFinish = Math.max(userStats.worstFinish, finalRank);
+      }
       
       // Add playoff appearance record
       records.push({
@@ -1028,10 +1033,10 @@ async function determineChampionsAndPlayoffs(
         username: userStats.username,
         avatar: userStats.avatar,
         value: finalRank,
-        description: `${userStats.username} made the playoffs, finishing ${finalRank}${getOrdinalSuffix(finalRank)}`,
-        details: {
-          rank: finalRank
-        },
+        description: finalRank
+          ? `${userStats.username} made the playoffs, finishing ${finalRank}${getOrdinalSuffix(finalRank)}`
+          : `${userStats.username} made the playoffs`,
+        details: finalRank ? { rank: finalRank } : {},
         isPlayoff: true
       });
     }

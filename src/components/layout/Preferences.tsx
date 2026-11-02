@@ -43,7 +43,8 @@ function Row({ icon: I, label, sub, on, onChange }: { icon: React.ComponentType<
   );
 }
 
-export default function PreferencesPanel({ className }: { className?: string }) {
+/** `liveStrip`: offer the live scores bar's switch, where there is one (desktop). */
+export default function PreferencesPanel({ className, liveStrip = true }: { className?: string; liveStrip?: boolean }) {
   const prefs = usePrefs();
   const { resolvedTheme, setTheme } = useTheme();
   const [canVibrate, setCanVibrate] = useState(false);
@@ -79,7 +80,7 @@ export default function PreferencesPanel({ className }: { className?: string }) 
         <Row icon={Pointer} label="Click sounds" sub="A soft tick on every tap" on={sound} onChange={on => set({ sound: on })} />
         {canVibrate && <Row icon={Vibrate} label="Haptics" sub="Feel each tap" on={haptics} onChange={on => set({ haptics: on })} />}
         <Row icon={Music} label="Wrapped music" sub="The soundtrack in League Wrapped" on={prefs.music !== false} onChange={on => set({ music: on ? undefined : false })} />
-        <Row icon={Radio} label="Live scores bar" sub="Every matchup while games are on" on={prefs.liveStrip !== false} onChange={on => set({ liveStrip: on ? undefined : false })} />
+        {liveStrip && <Row icon={Radio} label="Live scores bar" sub="Every matchup while games are on" on={prefs.liveStrip !== false} onChange={on => set({ liveStrip: on ? undefined : false })} />}
       </div>
 
       {custom && (

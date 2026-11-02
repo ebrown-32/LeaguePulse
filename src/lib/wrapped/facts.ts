@@ -127,7 +127,8 @@ async function build(season: number | null): Promise<Facts> {
       titles: of('championship').filter(r => r.userId === u.userId).map(r => r.season),
       runnerUps: of('runnerUp').filter(r => r.userId === u.userId).map(r => r.season),
       regularSeasonTitles: of('regularSeasonChamp').filter(r => r.userId === u.userId).map(r => r.season),
-      finishes: seasons.map(([k, v]) => ({ season: k, finish: v.finish })).filter(f => f.finish > 0),
+      // Real places only: an unknown one falls back to the archive's, from the bracket (engine finishOf).
+      finishes: seasons.map(([k, v]) => ({ season: k, finish: v.finish })).filter(f => f.finish > 0 && f.finish < 999),
       playoffAppearances: seasons.filter(([, v]) => v.playoffAppearance || v.championship || v.regularSeasonChamp).length,
       playoffRecord: { w: playoffRec.get(u.userId)?.wins ?? 0, l: playoffRec.get(u.userId)?.losses ?? 0 },
       records: history.records.filter(r => r.userId === u.userId && inScope(r) && !NOT_RECORDS.has(r.type))
