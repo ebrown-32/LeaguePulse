@@ -55,11 +55,20 @@ export default function LiveStrip() {
   const off = prefs.liveStrip === false;
   const [data, setData] = useState<{ week: number; games: StripGame[] } | null>(null);
   const [hidden, setHidden] = useState(true);
+  // Desktop only (xl, where the side rail is): a phone never shows it, so never asks for it.
+  const [desktop, setDesktop] = useState(false);
 
   useEffect(() => { try { setHidden(sessionStorage.getItem(HIDDEN) === '1'); } catch { setHidden(false); } }, []);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    const on = () => setDesktop(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
   useEffect(() => {
-    if (off || hidden) return;
+    if (off || hidden || !desktop) return;
     let timer = 0, live = false, stop = false;
     // `?livedemo=1` in development: a made-up live week, to see the strip on a quiet day.
     const demo = new URLSearchParams(window.location.search).get('livedemo') === '1' ? '?demo=1' : '';
@@ -78,17 +87,17 @@ export default function LiveStrip() {
     load();
     document.addEventListener('visibilitychange', onVisible);
     return () => { stop = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [off, hidden]);
+  }, [off, hidden, desktop]);
 
   const dismiss = () => { setHidden(true); try { sessionStorage.setItem(HIDDEN, '1'); } catch { /* this visit only */ } };
-  const show = !off && !hidden && data;
+  const show = desktop && !off && !hidden && data;
 
   return (
     <AnimatePresence initial={false}>
       {show && (
         <motion.div key="strip" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="z-40 overflow-hidden xl:sticky xl:top-0">
+          className="z-40 hidden overflow-hidden xl:sticky xl:top-0 xl:block">
           <div className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-8 xl:pt-4">
             <div role="region" aria-label={`Live scores, week ${data.week}`}
               // A phone: a bar under the header. Wider: the league's own surface, on its radius scale, floating on desktop.

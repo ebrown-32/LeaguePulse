@@ -20,6 +20,7 @@ import {
   Shirt,
   ListOrdered,
   Menu,
+  Search,
   Settings,
   X,
   FlaskConical,
@@ -37,7 +38,7 @@ import PoweredBy from '@/components/ui/PoweredBy';
 import AccountChip from './AccountChip';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
 import { AddSquareIcon } from '@/components/icons/AppIcons';
-import SearchPalette from './SearchPalette';
+import SearchPalette, { OPEN_SEARCH } from './SearchPalette';
 import SideRail from './SideRail';
 import PreferencesPanel from './Preferences';
 
@@ -254,6 +255,17 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
   return (
     <>
       {rail}
+      {/* The search palette, mounted once and outside the header: the header is hidden on a
+          desktop, and a dialog inside it would be hidden too. One index for it, built from the same
+          nav lists, so a page can never be navigable but unsearchable. */}
+      <SearchPalette
+        pages={ALL_NAV.filter(shown).map(n => ({
+          id: n.href,
+          label: n.name,
+          href: n.href,
+          group: 'Pages',
+        }))}
+      />
       <header className={navbarClass}>
         
 
@@ -265,16 +277,14 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
-            {/* One index for the palette, built from the same nav lists so a
-                page can never be navigable but unsearchable. */}
-            <SearchPalette
-              pages={ALL_NAV.filter(shown).map(n => ({
-                id: n.href,
-                label: n.name,
-                href: n.href,
-                group: 'Pages',
-              }))}
-            />
+            <button
+              onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+              aria-label="Search"
+              title="Search (Cmd K)"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+            >
+              <Search className="h-4 w-4" />
+            </button>
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -358,7 +368,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
                     transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                     className="shrink-0 overflow-hidden border-b border-border"
                   >
-                    <PreferencesPanel className="px-3 py-3" />
+                    <PreferencesPanel className="px-3 py-3" liveStrip={false} />
                   </motion.div>
                 )}
               </AnimatePresence>

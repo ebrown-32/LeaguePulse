@@ -164,14 +164,7 @@ export default function SearchPalette({ pages }: Props) {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="Search"
-        title="Search (Cmd K)"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
-      >
-        <Search className="h-4 w-4" />
-      </button>
+      {/* Opened from the phone's header button and the desktop rail's search field (OPEN_SEARCH). */}
 
       <AnimatePresence>
         {open && (
