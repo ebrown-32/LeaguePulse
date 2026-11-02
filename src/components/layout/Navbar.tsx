@@ -159,10 +159,17 @@ interface NavbarProps {
   franchises?: boolean;
   /** Whether expert rankings are connected (an admin added a FantasyPros key). */
   rankings?: boolean;
+  /** Whether The Edge has data: the market crawl runs on the hosted product only (lib/market/crawl). */
+  market?: boolean;
 }
 
-export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true }: NavbarProps) {
-  const shown = (item: NavItem) => (franchises || item.href !== '/franchises') && (rankings || item.href !== '/rankings');
+export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true, market = true }: NavbarProps) {
+  // Franchises and League Wrapped are built from the league archive (a database); The Edge from the
+  // hosted market crawl. A site without them doesn't offer them.
+  const shown = (item: NavItem) =>
+    (franchises || (item.href !== '/franchises' && item.href !== '/wrapped')) &&
+    (rankings || item.href !== '/rankings') &&
+    (market || item.href !== '/edge');
   // Always four: Rivalries steps in where there are no franchises.
   const featured = franchises ? PRIMARY_NAV : PRIMARY_NAV.map(item => (item.href === '/franchises' ? RIVALRIES : item));
   const isFeatured = (item: NavItem) => featured.some(f => f.href === item.href);

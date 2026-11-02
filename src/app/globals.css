@@ -1237,3 +1237,23 @@ mark {
 html[data-motion='reduced'] .lp-rail, html[data-motion='reduced'] .lp-rail-offset, html[data-motion='reduced'] .lp-rail-tile { transition: none; }
 html[data-motion='reduced'] .lp-rail-tile:hover { transform: none; }
 html[data-motion='reduced'] .lp-live-ping { animation: none; opacity: 0; }
+
+/* The assistant's heartbeat (components/chat/PulseBubble): the line drawn with pathLength 1, so a
+   dash offset of 1 hides it, 0 draws it and -1 wipes it away. Idle, it re-traces now and then;
+   thinking, it runs. Still for reduced motion. */
+@keyframes lp-beat-idle {
+  0%, 78% { stroke-dashoffset: 0; }
+  86% { stroke-dashoffset: -1; }
+  86.01% { stroke-dashoffset: 1; }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes lp-beat-run {
+  0% { stroke-dashoffset: 1; }
+  55% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -1; }
+}
+.lp-beat { stroke-dasharray: 1 1; }
+.lp-beat-idle { animation: lp-beat-idle 5.5s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+.lp-beat-run { animation: lp-beat-run 1.3s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+@media (prefers-reduced-motion: reduce) { .lp-beat { animation: none; stroke-dashoffset: 0; } }
+html[data-motion='reduced'] .lp-beat { animation: none; stroke-dashoffset: 0; }

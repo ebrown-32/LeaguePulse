@@ -90,7 +90,9 @@ The whole app, on your own account, for your own league. Franchise HQ is view on
 | **Price** (12-team league) | Free | **$3.25** a manager a year | **$6.58** a manager a year |
 | History, records, rivalries, analytics, live game day | Yes | Yes | Yes |
 | Your league's own address | Your domain | `yourleague.leaguepulse.io` | `yourleague.leaguepulse.io` |
-| Franchise HQ: stadiums, upgrades, game-day posts | View only | Yes | Yes |
+| Franchise HQ: stadiums, upgrades, the franchises' own Feed accounts | Pages only | Yes | Yes |
+| League Wrapped, every season's story | With a database | Yes | Yes |
+| The Edge: your league against thousands of others | No | Yes | Yes |
 | AI writers, chat and plain-English analytics | Your Anthropic key | Your Anthropic key | **Included** |
 | Servers, database, updates, 3am fixes | You | Us | Us |
 

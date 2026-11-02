@@ -223,7 +223,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Analytics props={analytics} />
             <div className="lp-rail-offset flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
-              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} market={process.env.LP_HOSTED === '1'} />
               {/* Every matchup's score, while the week's games are on. */}
               <LiveStrip />
               {demoProduct && <DemoBar productUrl={demoProduct} />}

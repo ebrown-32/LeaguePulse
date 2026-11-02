@@ -30,7 +30,7 @@ export default async function WrappedPage() {
   }
   return (
     <PageLayout title="League Wrapped" subtitle="Every season, told as a story. Pick a year, pick a manager, press play." className="max-w-5xl">
-      <WrappedView leagueName={name || theme?.siteTitle?.trim() || 'Your league'} />
+      <WrappedView leagueName={name || theme?.siteTitle?.trim() || 'Your league'} archived={Boolean(process.env.DATABASE_URL?.trim())} />
     </PageLayout>
   );
 }
