@@ -40,7 +40,7 @@ export default function BoxScore({ box, tone = 'page', className }: { box: Box; 
       won && !box.tie ? (stage ? 'bg-white/[0.12] ring-1 ring-[hsl(var(--primary))]' : 'bg-primary/10 ring-1 ring-primary/40') : stage ? 'bg-white/[0.05]' : 'bg-muted/50')}>
       <Avatar avatarId={s.avatar} size={34} className="shrink-0 rounded-xl" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12.5px] font-bold leading-tight">{s.name}</p>
+        <p className="text-[12.5px] font-bold leading-tight [overflow-wrap:anywhere]">{s.name}</p>
         <p className={cn('text-[22px] font-black tabular-nums leading-none tracking-tight', won && !box.tie && 'text-[hsl(var(--primary))]')}>{s.pts.toFixed(1)}</p>
       </div>
     </div>
@@ -49,17 +49,20 @@ export default function BoxScore({ box, tone = 'page', className }: { box: Box; 
   const cell = (x: Box['winner']['lineup'][number] | undefined, right: boolean, k: number) => {
     if (!x?.player) return <span className={cn('text-[11px]', muted, right && 'text-right')}>Empty</span>;
     const lit = x === top;
+    // The name on its own line, the bar and points under it: room for the whole name on a phone.
     return (
       <div className={cn('flex min-w-0 items-center gap-1.5', right && 'flex-row-reverse text-right')}>
         <Face p={x.player} />
         <div className="min-w-0 flex-1">
-          <p className={cn('truncate text-[12px] font-semibold leading-tight', lit && 'text-[hsl(var(--primary))]')}>{lastName(x.player.name)}</p>
-          <div className={cn('mt-0.5 h-[3px] overflow-hidden rounded-full', stage ? 'bg-white/10' : 'bg-muted')}>
-            <motion.div className={cn('h-full rounded-full', right && 'ml-auto')} style={{ background: lit ? 'hsl(var(--primary))' : stage ? 'rgba(255,255,255,0.6)' : 'hsl(var(--muted-foreground) / 0.6)' }}
-              initial={{ width: 0 }} animate={{ width: `${Math.max(3, (x.pts / max) * 100)}%` }} transition={{ delay: 0.25 + k * 0.05, duration: 0.6 }} />
+          <p className={cn('text-[12px] font-semibold leading-tight [overflow-wrap:anywhere]', lit && 'text-[hsl(var(--primary))]')}>{lastName(x.player.name)}</p>
+          <div className={cn('mt-1 flex items-center gap-1.5', right && 'flex-row-reverse')}>
+            <div className={cn('h-[3px] min-w-0 flex-1 overflow-hidden rounded-full', stage ? 'bg-white/10' : 'bg-muted')}>
+              <motion.div className={cn('h-full rounded-full', right && 'ml-auto')} style={{ background: lit ? 'hsl(var(--primary))' : stage ? 'rgba(255,255,255,0.6)' : 'hsl(var(--muted-foreground) / 0.6)' }}
+                initial={{ width: 0 }} animate={{ width: `${Math.max(3, (x.pts / max) * 100)}%` }} transition={{ delay: 0.25 + k * 0.05, duration: 0.6 }} />
+            </div>
+            <span className="shrink-0 text-[12.5px] font-bold leading-none tabular-nums tracking-tight">{x.pts.toFixed(1)}</span>
           </div>
         </div>
-        <span className={cn('w-10 shrink-0 text-[13px] font-bold tabular-nums tracking-tight', right ? 'text-left' : 'text-right')}>{x.pts.toFixed(1)}</span>
       </div>
     );
   };
@@ -70,7 +73,7 @@ export default function BoxScore({ box, tone = 'page', className }: { box: Box; 
         {header(box.winner, true, false)}
         <div className="flex shrink-0 flex-col items-center justify-center px-0.5">
           <span className={cn('text-[10px] font-bold uppercase tracking-widest', muted)}>{box.tie ? 'tie' : 'by'}</span>
-          <span className="text-[14px] font-black tabular-nums tracking-tight">{(box.winner.pts - box.loser.pts).toFixed(1)}</span>
+          <span className="text-[14px] font-black tabular-nums tracking-tight">{(box.winner.pts - box.loser.pts).toFixed(box.winner.pts - box.loser.pts < 1 ? 2 : 1)}</span>
         </div>
         {header(box.loser, false, true)}
       </div>

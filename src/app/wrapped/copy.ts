@@ -14,6 +14,8 @@ export function picker(seed: string): Pick {
 }
 
 const pts = (x: number) => x.toFixed(1);
+/** A sentence ending on a name: one full stop, even after an initial ("Eli B."). */
+export const end = (name: string) => (name.endsWith('.') ? name : `${name}.`);
 
 export const copy = {
   record(p: Pick, w: number, l: number): string {
@@ -73,7 +75,7 @@ export const copy = {
     return p(['Let’s just say the other side is still smiling.', 'Some trades age like wine. This one, like milk.', 'You were the "other side" in someone else’s trade of the year.']);
   },
   nemesis(p: Pick, name: string): string {
-    return p([`${name} lives in your head, rent free.`, `Every time ${name} showed up on the schedule, you knew.`, `${name}. Just ${name}.`]);
+    return p([`${name} lives in your head, rent free.`, `Every time ${name} showed up on the schedule, you knew.`, `${end(name)} Just ${end(name)}`]);
   },
   victim(p: Pick, name: string): string {
     return p([`${name} would like to stop playing you now.`, `You own ${name}. Maybe frame the receipts.`, `${name}: your favorite weekly appointment.`]);
