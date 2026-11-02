@@ -83,7 +83,9 @@ export default function SideRail({ featured, groups, logoUrl, leagueName }: { fe
   return (
     <>
       <aside ref={aside} aria-label="Site" className="lp-rail fixed bottom-4 left-4 top-4 z-[60] hidden xl:block">
-        <div className="relative flex h-full flex-col overflow-hidden rounded-[26px] border border-border/70 bg-card/80 shadow-[0_30px_70px_-30px_hsl(0_0%_0%/0.55),0_2px_8px_-2px_hsl(0_0%_0%/0.12)] backdrop-blur-2xl">
+        {/* The league's own surface (lp-surface: palette, border, the theme's shadow), its radius on the
+            appearance setting's scale, raised to the floating level. */}
+        <div className="lp-surface lp-edge lp-float relative flex h-full flex-col overflow-hidden rounded-2xl backdrop-blur-2xl">
           {/* The league's color, glowing in from the top. */}
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(120%_80%_at_0%_0%,hsl(var(--primary)/0.16),transparent_70%)]" />
 
@@ -119,7 +121,7 @@ export default function SideRail({ featured, groups, logoUrl, leagueName }: { fe
                       'lp-rail-folded:h-10 lp-rail-folded:items-center lp-rail-folded:justify-center lp-rail-folded:rounded-xl lp-rail-folded:p-0',
                       active
                         ? 'border-primary/50 bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_hsl(var(--primary)/0.9)]'
-                        : 'border-border/70 bg-background/40 text-foreground hover:-translate-y-0.5 hover:border-primary/40 hover:bg-background/70 hover:shadow-[0_10px_24px_-14px_hsl(var(--primary)/0.6)] lp-rail-folded:border-transparent lp-rail-folded:bg-transparent lp-rail-folded:hover:translate-y-0',
+                        : 'lp-rail-tile border-border/70 bg-background/40 text-foreground hover:border-primary/40 hover:bg-background/70 hover:shadow-[var(--elev-2)] lp-rail-folded:border-transparent lp-rail-folded:bg-transparent',
                     )}>
                     {active && <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/20 blur-xl lp-rail-folded:hidden" />}
                     <span className={cn('lp-chip relative h-7 w-7 rounded-lg transition-transform duration-200 group-hover:scale-110 [&>svg]:h-4 [&>svg]:w-4',
@@ -204,7 +206,7 @@ export default function SideRail({ featured, groups, logoUrl, leagueName }: { fe
           <motion.div ref={prefsBox} role="dialog" aria-label="Preferences"
             initial={{ opacity: 0, x: -10, scale: 0.97 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 520, damping: 38 }}
-            className="fixed bottom-4 z-[61] hidden w-[320px] origin-bottom-left rounded-[22px] border border-border/70 bg-card/95 p-3 shadow-[0_30px_70px_-25px_hsl(0_0%_0%/0.6)] backdrop-blur-2xl xl:block"
+            className="lp-surface lp-float fixed bottom-4 z-[61] hidden w-[320px] origin-bottom-left rounded-2xl p-3 backdrop-blur-2xl xl:block"
             style={{ left: (aside.current?.getBoundingClientRect().right ?? 276) + 12 }}>
             <div className="flex items-baseline justify-between px-2 pb-2.5 pt-1">
               <p className="font-display text-[15px] font-bold">Preferences</p>

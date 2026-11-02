@@ -91,10 +91,11 @@ export default function LiveStrip() {
           className="z-40 overflow-hidden xl:sticky xl:top-0">
           <div className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-8 xl:pt-4">
             <div role="region" aria-label={`Live scores, week ${data.week}`}
-              className="flex h-12 items-center gap-2 border-y border-border/70 bg-card/85 pl-3 pr-1.5 backdrop-blur-xl sm:rounded-2xl sm:border xl:shadow-[0_18px_40px_-26px_hsl(0_0%_0%/0.6)]">
+              // A phone: a bar under the header. Wider: the league's own surface, on its radius scale, floating on desktop.
+              className="flex h-12 items-center gap-2 border-y border-border/70 bg-card/85 pl-3 pr-1.5 backdrop-blur-xl sm:lp-surface sm:lp-edge sm:rounded-2xl xl:lp-float">
               <span className="flex shrink-0 items-center gap-2 pr-1">
                 <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+                  <span className="lp-live-ping absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
                 </span>
                 <span className="text-[11px] font-black uppercase tracking-[0.16em] text-foreground">Live</span>

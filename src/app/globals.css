@@ -1219,6 +1219,21 @@ mark {
 @media (min-width: 1280px) {
   .lp-rail-offset { padding-left: calc(var(--lp-rail-w) + 32px); transition: padding-left 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .lp-rail, .lp-rail-offset { transition: none; }
+/* Floating chrome (the rail, its popover, the live strip): the shared surface, lifted to the theme's
+   top shadow. In the components layer, so Tailwind's breakpoints (xl:lp-float) apply to it. */
+@layer components {
+  .lp-float { box-shadow: var(--elev-3); }
+  .lp-surface.lp-float { background-color: hsl(var(--card) / 0.85); }
+  .lp-rail-tile { transition: transform 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft), border-color 200ms, background-color 200ms; }
+  .lp-rail-tile:hover { transform: translateY(-2px); }
 }
+:root[data-rail="collapsed"] .lp-rail-tile:hover { transform: none; }
+/* The league's motion setting (or the visitor's) and the system's both calm the chrome. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-rail, .lp-rail-offset, .lp-rail-tile { transition: none; }
+  .lp-rail-tile:hover { transform: none; }
+  .lp-live-ping { animation: none; opacity: 0; }
+}
+html[data-motion='reduced'] .lp-rail, html[data-motion='reduced'] .lp-rail-offset, html[data-motion='reduced'] .lp-rail-tile { transition: none; }
+html[data-motion='reduced'] .lp-rail-tile:hover { transform: none; }
+html[data-motion='reduced'] .lp-live-ping { animation: none; opacity: 0; }
