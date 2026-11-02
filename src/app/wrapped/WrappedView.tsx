@@ -11,7 +11,7 @@
  * swipe down to close, hold to pause.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Play, Volume2, VolumeX } from '@/components/icons';
 import Avatar from '@/components/ui/Avatar';
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import type { Game, LeagueWrap, ManagerWrap, PlayerRef, Wrapped } from '@/lib/wrapped/engine';
 import type { RecordHeld } from '@/lib/wrapped/facts';
 import { cueFor, music } from '@/lib/wrapped/music';
-import { copy, headline, picker, take, type Pick } from './copy';
+import { copy, end, headline, picker, take, type Pick } from './copy';
 
 export interface Writer { id: string; name: string; handle: string; avatar: string; type: string }
 
@@ -45,15 +45,25 @@ const RECORD_LABEL: Record<string, string> = {
   gameWinStreak: 'Win streak', gameLossStreak: 'Losing streak', winStreak: 'Winning seasons',
   playoffHighScore: 'Playoff high', playoffLowScore: 'Playoff low',
 };
-/** A record's number, in its list's unit. */
-function recordValue(r: RecordHeld): string {
-  if (r.type === 'blowout' || r.type === 'closeGame') return `by ${r.value.toFixed(2)}`;
-  if (r.type === 'gameWinStreak' || r.type === 'gameLossStreak') return `${r.value} games`;
-  if (r.type === 'winStreak') return `${r.value} seasons`;
-  if (r.type === 'seasonRecord') return r.detail ?? `${Math.round(r.value * 1000) / 10}%`;
-  return r.value.toFixed(2);
+/** What a record's number counts, in its list's unit. */
+function recordUnit(r: RecordHeld): string {
+  switch (r.type) {
+    case 'blowout': case 'closeGame': return 'margin';
+    case 'gameWinStreak': case 'gameLossStreak': return 'games';
+    case 'winStreak': return 'seasons';
+    case 'seasonRecord': return 'record';
+    case 'pointsAgainst': return 'pts against';
+    default: return 'pts';
+  }
 }
-const MEDAL = ['#FACC15', '#CBD5E1', '#D97706'];
+const COUNTS = new Set(['gameWinStreak', 'gameLossStreak', 'winStreak']);
+/** Gold, silver and bronze, lit from the top left; past third, steel. */
+const MEDAL = [
+  'linear-gradient(145deg, #FFF4C2, #FACC15 45%, #B8860B)',
+  'linear-gradient(145deg, #FFFFFF, #CBD5E1 45%, #7C8899)',
+  'linear-gradient(145deg, #FFD9B0, #D97706 45%, #8A4B0B)',
+];
+const STEEL = 'linear-gradient(145deg, #E2E8F0, #94A3B8 45%, #475569)';
 
 /** A round play button: a solid triangle, nudged right so it looks centered (a triangle's weight sits left). */
 function PlayDisc({ className }: { className?: string }) {
@@ -73,17 +83,54 @@ function boxSlide(key: string, g: Game | null | undefined, kicker: string, tone:
   </> };
 }
 
-/** A Record Book entry: its rank, list, number and when. */
-function RecordRow({ r, k, who }: { r: RecordHeld; k: number; who?: string }) {
+/**
+ * A Record Book entry, as a card: its rank on a medal, the list's name, the number counting up in
+ * its unit, and who, what and when as chips that wrap. Nothing is cut short. A #1 glows gold.
+ */
+function RecordRow({ r, k, who, avatar }: { r: RecordHeld; k: number; who?: string; avatar?: string | null }) {
+  const first = r.rank === 1;
+  const at = 0.35 + k * 0.16;
+  const chips: { label: string; avatar?: string | null; tone?: string }[] = [
+    ...(who ? [{ label: who, avatar }] : []),
+    ...(r.detail && r.type !== 'seasonRecord' ? [{ label: r.detail }] : []),
+    { label: `${r.season}${r.week ? ` · Week ${r.week}` : ''}` },
+    ...(r.stage ? [{ label: r.stage === 'playoffs' ? 'Playoffs' : 'Consolation', tone: r.stage === 'playoffs' ? '#FACC15' : '#94A3B8' }] : []),
+  ];
   return (
-    <motion.li initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + k * 0.14, duration: 0.5, ease }}
-      className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/[0.07] p-3 backdrop-blur-md">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-[16px] font-black text-black" style={{ background: MEDAL[r.rank - 1] ?? '#94A3B8' }}>#{r.rank}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-bold">{RECORD_LABEL[r.type] ?? r.type}{who ? <span className="font-normal text-white/60"> · {who}</span> : null}</span>
-        <span className="block truncate text-[12px] text-white/60">{[r.detail && r.type !== 'seasonRecord' ? r.detail : null, `${r.season}${r.week ? ` · Week ${r.week}` : ''}`, r.stage === 'consolation' ? 'Consolation' : r.stage === 'playoffs' ? 'Playoffs' : null].filter(Boolean).join(' · ')}</span>
-      </span>
-      <span className="shrink-0 font-display text-[18px] font-black tabular-nums">{recordValue(r)}</span>
+    <motion.li initial={{ opacity: 0, y: 18, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: at, type: 'spring', stiffness: 220, damping: 20 }}
+      className={cn('relative overflow-hidden rounded-2xl border p-3 backdrop-blur-md',
+        first ? 'border-[#FACC15]/45 bg-[#FACC15]/[0.09] shadow-[0_0_34px_-12px_rgba(250,204,21,0.7)]' : 'border-white/15 bg-white/[0.07]')}>
+      {first && (
+        <motion.span aria-hidden className="pointer-events-none absolute inset-0" initial={{ x: '-110%' }} animate={{ x: '110%' }}
+          transition={{ delay: at + 0.5, duration: 1.2, ease: 'easeInOut' }}
+          style={{ background: 'linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.18) 50%, transparent 65%)' }} />
+      )}
+      <div className="relative flex items-start gap-3">
+        <motion.span initial={{ scale: 0, rotate: -120 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: at + 0.15, type: 'spring', stiffness: 380, damping: 14 }}
+          className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full text-black shadow-[inset_0_-2px_4px_rgba(0,0,0,0.25),0_4px_12px_-4px_rgba(0,0,0,0.6)]"
+          style={{ background: MEDAL[r.rank - 1] ?? STEEL }}>
+          <span className="text-[8px] font-black uppercase leading-none tracking-wider opacity-70">No.</span>
+          <span className="text-[17px] font-black leading-none tabular-nums">{r.rank}</span>
+        </motion.span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-bold leading-tight">{RECORD_LABEL[r.type] ?? r.type}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {chips.map(c => (
+              <span key={c.label} className="inline-flex items-center gap-1 rounded-full bg-white/10 py-0.5 pl-1.5 pr-2 text-[11px] font-medium leading-tight text-white/80"
+                style={c.tone ? { color: c.tone, background: `${c.tone}22` } : undefined}>
+                {c.avatar && <Avatar avatarId={c.avatar} size={14} className="rounded-full" />}
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="shrink-0 pl-1 text-right">
+          <p className={cn('text-[21px] font-black leading-none tracking-tight tabular-nums', first && 'text-[#FDE68A]')}>
+            {r.type === 'seasonRecord' ? (r.detail ?? `${Math.round(r.value * 1000) / 10}%`) : <Count to={r.value} decimals={COUNTS.has(r.type) ? 0 : 2} delay={(at + 0.2) * 1000} />}
+          </p>
+          <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/50">{recordUnit(r)}</p>
+        </div>
+      </div>
     </motion.li>
   );
 }
@@ -91,16 +138,16 @@ function RecordRow({ r, k, who }: { r: RecordHeld; k: number; who?: string }) {
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 /** A number that counts up when it arrives. */
-function Count({ to, decimals = 0 }: { to: number; decimals?: number }) {
+function Count({ to, decimals = 0, delay = 0 }: { to: number; decimals?: number; delay?: number }) {
   const reduce = useReducedMotion();
   const [v, setV] = useState(reduce ? to : 0);
   useEffect(() => {
     if (reduce) { setV(to); return; }
-    let raf = 0; const t0 = performance.now();
-    const step = (t: number) => { const k = Math.min(1, (t - t0) / 1100); setV(to * (1 - Math.pow(1 - k, 3))); if (k < 1) raf = requestAnimationFrame(step); };
+    let raf = 0; const t0 = performance.now() + delay;
+    const step = (t: number) => { const k = Math.max(0, Math.min(1, (t - t0) / 1100)); setV(to * (1 - Math.pow(1 - k, 3))); if (k < 1) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [to, reduce]);
+  }, [to, reduce, delay]);
   return <span className="tabular-nums">{v.toFixed(decimals)}</span>;
 }
 
@@ -111,7 +158,7 @@ function Rise({ i = 0, children, className }: { i?: number; children: React.Reac
 const Kicker = ({ children, i = 0 }: { children: React.ReactNode; i?: number }) =>
   <Rise i={i}><p className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: PRIMARY }}>{children}</p></Rise>;
 const Big = ({ children, i = 1, small = false }: { children: React.ReactNode; i?: number; small?: boolean }) =>
-  <Rise i={i}><div className={cn('font-display font-black leading-[0.9] tracking-[-0.04em]', small ? 'text-[clamp(36px,11vw,64px)]' : 'text-[clamp(64px,21vw,120px)]')}>{children}</div></Rise>;
+  <Rise i={i}><div className={cn('font-display font-black leading-[0.9] tracking-[-0.04em] [overflow-wrap:break-word]', small ? 'text-[clamp(30px,min(11cqw,10vh),64px)]' : 'text-[clamp(44px,min(19cqw,17vh),120px)]')}>{children}</div></Rise>;
 const Line = ({ children, i = 2, className }: { children: React.ReactNode; i?: number; className?: string }) =>
   <Rise i={i}><p className={cn('mt-3 text-[clamp(17px,4.8vw,22px)] font-semibold leading-snug text-white/90', className)}>{children}</p></Rise>;
 const Small = ({ children, i = 3 }: { children: React.ReactNode; i?: number }) =>
@@ -125,7 +172,7 @@ function TradingCard({ p, value, label, stamp, size = 'lg', i = 1, dim = false }
   return (
     <motion.div initial={{ opacity: 0, rotate: -8, y: 40, scale: 0.85 }} animate={{ opacity: dim ? 0.75 : 1, rotate: size === 'lg' ? -2 : 0, y: 0, scale: 1 }}
       transition={{ delay: 0.1 + i * 0.18, type: 'spring', stiffness: 160, damping: 15 }}
-      className={cn('relative shrink-0 overflow-hidden rounded-[18px] p-[3px] shadow-[0_24px_50px_-12px_rgba(0,0,0,0.75)]', size === 'lg' ? 'w-[min(58vw,220px)]' : 'w-[min(38vw,150px)]')}
+      className={cn('relative shrink-0 overflow-hidden rounded-[18px] p-[3px] shadow-[0_24px_50px_-12px_rgba(0,0,0,0.75)]', size === 'lg' ? 'w-[min(58vw,220px)]' : 'w-[min(35vw,150px)]')}
       style={{ background: `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 30%, #0b1116))` }}>
       <div className="relative overflow-hidden rounded-[15px] bg-gradient-to-b from-[#16202a] to-[#0b1116]">
         <div className="relative aspect-[4/3.6] overflow-hidden" style={{ background: `radial-gradient(90% 90% at 50% 100%, color-mix(in srgb, ${color} 60%, transparent), transparent 70%)` }}>
@@ -139,16 +186,17 @@ function TradingCard({ p, value, label, stamp, size = 'lg', i = 1, dim = false }
             style={{ background: 'linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%)' }} />
         </div>
         <div className="px-3 pb-3 pt-2">
-          <p className={cn('truncate font-extrabold leading-tight', size === 'lg' ? 'text-[16px]' : 'text-[12.5px]')}>{p.name}</p>
-          <div className="mt-0.5 flex items-baseline justify-between gap-2">
-            <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/55">{label}</span>
-            <span className={cn('font-display font-black tabular-nums', size === 'lg' ? 'text-[22px]' : 'text-[16px]')}>{value}</span>
+          <p className={cn('font-extrabold leading-tight', size === 'lg' ? 'text-[16px]' : 'text-[12.5px]')}>{p.name}</p>
+          {/* A small card stacks its label over its number, so neither is cut short. */}
+          <div className={cn('mt-0.5 flex gap-x-2', size === 'lg' ? 'items-baseline justify-between' : 'flex-col')}>
+            <span className="min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-wider text-white/55">{label}</span>
+            <span className={cn('shrink-0 font-black tabular-nums tracking-tight', size === 'lg' ? 'text-[24px]' : 'text-[18px]')}>{value}</span>
           </div>
         </div>
       </div>
       {stamp && (
         <motion.span initial={{ scale: 2.4, opacity: 0, rotate: -24 }} animate={{ scale: 1, opacity: 1, rotate: -14 }} transition={{ delay: 0.9 + i * 0.18, type: 'spring', stiffness: 300, damping: 14 }}
-          className="absolute right-2 top-[38%] rounded-md border-[3px] px-2 py-0.5 font-display text-[15px] font-black uppercase tracking-widest"
+          className={cn('absolute top-[38%] rounded-md font-display font-black uppercase', size === 'lg' ? 'right-2 border-[3px] px-2 py-0.5 text-[15px] tracking-widest' : 'right-1 border-2 px-1.5 py-px text-[10.5px] tracking-wider')}
           style={{ borderColor: '#EE5A2E', color: '#EE5A2E', background: 'rgba(255,255,255,0.9)' }}>{stamp}</motion.span>
       )}
     </motion.div>
@@ -175,7 +223,7 @@ function Clipping({ league, date, head, dek, i = 2, tilt = -2 }: { league: strin
       <div className="px-5 pb-6 pt-5 text-[#1b1813]" style={{ clipPath: tear, background: 'linear-gradient(180deg, #f4eedf, #ebe2cd)', fontFamily: 'Georgia, "Times New Roman", serif' }}>
         <div className="flex items-baseline justify-between gap-3 border-b-2 border-[#1b1813] pb-1">
           <span className="text-[19px] font-black italic tracking-tight">The Pulse</span>
-          <span className="truncate text-[9.5px] uppercase tracking-[0.18em] opacity-70">{league} edition</span>
+          <span className="min-w-0 text-right text-[9.5px] uppercase leading-tight tracking-[0.18em] opacity-70">{league} edition</span>
         </div>
         <p className="mt-1 border-b border-[#1b1813]/40 pb-1 text-[9.5px] uppercase tracking-[0.2em] opacity-70">{date}</p>
         <p className="mt-3 text-[clamp(23px,6.6vw,32px)] font-black uppercase leading-[0.98] tracking-[-0.01em]">{head}</p>
@@ -195,7 +243,7 @@ function Take({ writer, text, i = 3 }: { writer: Writer | null; text: string; i?
         ? <img src={writer.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full bg-white/10" />
         : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-black" style={{ background: PRIMARY }}>LP</span>}
       <div className="min-w-0">
-        <p className="truncate text-[13px] font-bold">{writer?.name ?? 'The Press Box'} <span className="font-normal text-white/50">{writer?.handle ?? '@pulse'}</span></p>
+        <p className="text-[13px] font-bold leading-tight">{writer?.name ?? 'The Press Box'} <span className="whitespace-nowrap font-normal text-white/50">{writer?.handle ?? '@pulse'}</span></p>
         <p className="mt-0.5 text-[14.5px] leading-snug text-white/90">{text}</p>
       </div>
     </motion.div>
@@ -236,7 +284,7 @@ function managerSlides(m: ManagerWrap, w: Wrapped, cast: Writer[], league: strin
     <Kicker>League Wrapped · {year}</Kicker>
     {m.avatar && <Rise i={1}><Avatar avatarId={m.avatar} size={88} className="mt-4 rounded-3xl ring-4 ring-white/25" /></Rise>}
     <Big i={2} small>{m.name}</Big>
-    <Line i={3}>{all ? `${m.seasons.length} seasons. Every win, every loss, every regret.` : `${m.team}. This was your season.`}</Line>
+    <Line i={3}>{all ? `${m.seasons.length} seasons. Every win, every loss, every regret.` : `${end(m.team)} This was your season.`}</Line>
     <Small i={4}>Tap to begin.</Small>
   </> });
 
@@ -276,7 +324,7 @@ function managerSlides(m: ManagerWrap, w: Wrapped, cast: Writer[], league: strin
       ].map((x, k) => (
         <motion.div key={x.k} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + k * 0.08 }} className="rounded-2xl border border-white/15 bg-white/[0.07] p-3">
           <p className="text-[10px] font-bold uppercase tracking-widest text-white/55">{x.k}</p>
-          <p className="mt-1 truncate font-display text-[19px] font-black">{x.v}</p>
+          <p className={cn('mt-1 font-black leading-tight tracking-tight tabular-nums', x.v.length > 12 ? 'text-[15px]' : 'text-[20px]')}>{x.v}</p>
         </motion.div>
       ))}
     </div></Rise>
@@ -287,7 +335,7 @@ function managerSlides(m: ManagerWrap, w: Wrapped, cast: Writer[], league: strin
     <Kicker>Your best week · {when(m.best, all)}</Kicker>
     <Big><Count to={m.best.pts} decimals={1} /></Big>
     <Line>{copy.best(p, m.best.oppName)}</Line>
-    <Small>{m.best.pts.toFixed(1)} to {m.best.opp.toFixed(1)} against {m.best.oppName}.</Small>
+    <Small>{m.best.pts.toFixed(1)} to {m.best.opp.toFixed(1)} against {end(m.best.oppName)}</Small>
     <Take writer={writer()} text={take.best(p, m.best.pts)} i={4} />
   </> });
   const bestBox = boxSlide('best-box', m.best, `The box score · ${m.best ? when(m.best, all) : ''}`, TONES.fire);
@@ -352,7 +400,7 @@ function managerSlides(m: ManagerWrap, w: Wrapped, cast: Writer[], league: strin
     const b = m.bench.worst;
     s.push({ key: 'benching', tone: TONES.fire, body: <>
       <Kicker>Exhibit A · Week {b.week}{all ? `, ${b.season}` : ''}</Kicker>
-      <div className="mt-5 flex items-center justify-center gap-3">
+      <div className="mt-5 flex items-center justify-center gap-2 sm:gap-3">
         <TradingCard p={b.benched} value={b.benchedPts.toFixed(1)} label="On your bench" stamp="Benched" size="sm" i={1} />
         <Rise i={2}><span className="font-display text-[26px] font-black text-white/50">vs</span></Rise>
         <TradingCard p={b.started} value={b.startedPts.toFixed(1)} label="In your lineup" size="sm" i={3} dim />
@@ -480,7 +528,7 @@ function leagueSlides(L: LeagueWrap, w: Wrapped, cast: Writer[], league: string,
     <Kicker>Every champion</Kicker>
     <Rise i={1}><ul className="mt-4 max-w-[420px] space-y-1.5 text-[16px]">{L.champions.map((c, k) => (
       <motion.li key={c.season} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + k * 0.08 }} className="flex justify-between gap-4 border-b border-white/10 pb-1.5">
-        <span className="font-display font-black" style={{ color: '#FACC15' }}>{c.season}</span><span className="truncate font-semibold">{c.name}</span><span className="tabular-nums text-white/60">{c.record}</span>
+        <span className="font-display font-black" style={{ color: '#FACC15' }}>{c.season}</span><span className="min-w-0 font-semibold leading-tight">{c.name}</span><span className="tabular-nums text-white/60">{c.record}</span>
       </motion.li>))}</ul></Rise>
   </> : <>
     <Kicker>Your champion</Kicker>
@@ -490,14 +538,14 @@ function leagueSlides(L: LeagueWrap, w: Wrapped, cast: Writer[], league: string,
   if (book.length) s.push({ key: 'records', tone: TONES.gold, body: <>
     <Kicker>{all ? 'The Record Book' : `Records that fell in ${w.season}`}</Kicker>
     <Big i={1} small>{all ? 'Every #1.' : `${book.length} new record${book.length > 1 ? 's' : ''}.`}</Big>
-    <Rise i={2}><ul className="mt-5 space-y-2">{book.slice(0, 5).map((r, k) => <RecordRow key={`${r.type}${r.season}${r.week}`} r={r} k={k} who={r.name} />)}</ul></Rise>
+    <Rise i={2}><ul className="mt-5 space-y-2">{book.slice(0, 5).map((r, k) => <RecordRow key={`${r.type}${r.season}${r.week}`} r={r} k={k} who={r.name} avatar={w.managers.find(x => x.ownerId === r.ownerId)?.avatar} />)}</ul></Rise>
     {book.length > 5 && <Small i={4}>The rest are on the History page.</Small>}
   </> });
 
   if (L.best) s.push({ key: 'best', tone: TONES.fire, body: <>
     <Kicker>Game of the {all ? 'ages' : 'year'} · {when(L.best, all)}</Kicker>
     <Big><Count to={L.best.pts} decimals={1} /></Big>
-    <Line>{L.best.name}, against {L.best.oppName}.</Line>
+    <Line>{L.best.name}, against {end(L.best.oppName)}</Line>
     <Take writer={writer()} text={take.best(p, L.best.pts)} i={3} />
   </> });
   const gotyBox = boxSlide('best-box', L.best, `The box score · ${L.best ? when(L.best, all) : ''}`, TONES.fire);
@@ -512,7 +560,7 @@ function leagueSlides(L: LeagueWrap, w: Wrapped, cast: Writer[], league: string,
   if (L.closest) s.push({ key: 'closest', tone: TONES.blood, body: <>
     <Kicker>Closest finish · {when(L.closest, all)}</Kicker>
     <Big>by <Count to={L.closest.margin} decimals={2} /></Big>
-    <Line>{L.closest.name} edged {L.closest.oppName}. Cardiologists were consulted.</Line>
+    <Line>{L.closest.name} edged {end(L.closest.oppName)} Cardiologists were consulted.</Line>
     <Small>{L.closest.name} {L.closest.pts.toFixed(2)}, {L.closest.oppName} {L.closest.opp.toFixed(2)}.</Small>
     <Take writer={writer()} text={take.heartbreak(p)} i={3} />
   </> });
@@ -571,6 +619,32 @@ function SummaryCard({ src, name }: { src: string; name: string }) {
 }
 
 // ── The player ──────────────────────────────────────────────────────────────
+
+/**
+ * A slide, always whole on screen: centered when it fits, and scaled down to fit when it's taller
+ * than the room between the controls (a box score on a small phone, a phone on its side), rather
+ * than cut off at the top and bottom.
+ */
+function Fit({ children }: { children: React.ReactNode }) {
+  const room = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const r = room.current, b = body.current;
+    if (!r || !b) return;
+    // The body's own size isn't changed by its transform, so measuring it never feeds back.
+    const measure = () => { const need = b.offsetHeight, have = r.clientHeight; setScale(need > have ? Math.max(0.42, have / need) : 1); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(r); ro.observe(b);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={room} className="flex min-h-0 w-full flex-1 items-center justify-center">
+      <div ref={body} className="w-full shrink-0" style={scale < 1 ? { transform: `scale(${scale})` } : undefined}>{children}</div>
+    </div>
+  );
+}
 
 const SLIDE_MS = 7500;
 
@@ -699,17 +773,17 @@ function Story({ slides, onClose, onDone, stadium }: { slides: Slide[]; onClose:
         className="absolute right-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/30 text-[24px] backdrop-blur sm:right-6" style={{ top: 'calc(env(safe-area-inset-top) + 22px)' }}>&times;</button>
 
       <AnimatePresence mode="wait" custom={dir}>
-        <motion.div key={slide.key} className="relative z-[5] mx-auto flex h-full max-w-xl flex-col justify-center px-6 sm:px-10"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 64px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 64px)' }}
+        <motion.div key={slide.key} className="relative z-[5] mx-auto flex h-full w-full max-w-xl flex-col px-5 [container-type:inline-size] sm:px-10"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + min(78px, 15vh))', paddingBottom: 'calc(env(safe-area-inset-bottom) + min(52px, 8vh))' }}
           initial={{ opacity: 0, x: reduce ? 0 : dir * 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reduce ? 0 : dir * -40, filter: 'blur(6px)' }} transition={{ duration: 0.35, ease }}>
-          {slide.body}
+          <Fit>{slide.body}</Fit>
         </motion.div>
       </AnimatePresence>
 
       <div className="absolute inset-x-0 z-10 flex justify-center text-[12px] font-semibold text-white/55" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 18px)' }}>
         {i === end && onDone
           ? <button data-interactive onClick={onDone} className="rounded-full bg-white/15 px-5 py-2.5 text-[13px] text-white backdrop-blur">Watch the next story</button>
-          : <span>Tap or swipe · hold to pause · swipe down to close</span>}
+          : <span className="[@media(max-height:520px)]:hidden">Tap or swipe · hold to pause · swipe down to close</span>}
       </div>
     </motion.div>
   );
@@ -820,7 +894,7 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
         <motion.button whileTap={{ scale: 0.98 }} onClick={() => { music.unlock(); setOpen(mine.ownerId); }}
           className="flex w-full items-center gap-4 rounded-[24px] border-2 border-primary bg-primary/10 p-4 text-left sm:p-5">
           <Avatar avatarId={mine.avatar} size={56} className="rounded-2xl" />
-          <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold uppercase tracking-widest text-primary">Your story</span><span className="block truncate text-[18px] font-extrabold">{mine.name}</span><span className="block text-[12.5px] text-muted-foreground">{rec(mine.record)}</span></span>
+          <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold uppercase tracking-widest text-primary">Your story</span><span className="block text-[18px] font-extrabold leading-tight [overflow-wrap:break-word]">{mine.name}</span><span className="block text-[12.5px] text-muted-foreground">{rec(mine.record)}</span></span>
           <span className="inline-flex items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-4 text-[13px] font-bold text-primary-foreground">
             <PlayDisc className="h-7 w-7 bg-primary-foreground/20" />Play
           </span>
@@ -840,8 +914,8 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
             {(m.finish === 1 || (w.scope === 'all' && m.titles > 0)) && (
               <span className="absolute left-3 top-3 rounded-full bg-[#FACC15] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black">{w.scope === 'all' ? `${m.titles}x champ` : 'Champion'}</span>
             )}
-            <span className="relative block truncate text-[16px] font-extrabold leading-tight">{m.name}</span>
-            <span className="relative block truncate text-[12px] text-white/70">{m.team}</span>
+            <span className="relative block text-[16px] font-extrabold leading-tight [overflow-wrap:break-word]">{m.name}</span>
+            <span className="relative mt-0.5 block text-[12px] leading-snug text-white/70 [overflow-wrap:break-word]">{m.team}</span>
             <span className="relative mt-1.5 flex items-center justify-between text-[12px] font-bold"><span className="tabular-nums">{rec(m.record)}</span><PlayDisc className="h-8 w-8 bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-md transition-colors group-hover:bg-white group-hover:text-black" /></span>
           </motion.button>
         ))}
