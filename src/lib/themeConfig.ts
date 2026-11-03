@@ -859,7 +859,7 @@ export const HOSTED_DEFAULT_THEME: ThemeConfig = {
   // The app-icon version: it carries its own light tile, so the ink L shows
   // on a league's dark theme as well as its light one.
   logoUrl:       '/brand/leaguepulse-icon.svg',
-  faviconUrl:    '/brand/leaguepulse-icon.svg',
+  faviconUrl:    '/brand/leaguepulse-favicon.svg',
   txColorsDark:  { trade: '#f07a52', waiver: '#3987e5', freeAgent: '#22a874' },
   txColorsLight: { trade: '#c2410c', waiver: '#2a78d6', freeAgent: '#0a7550' },
 };

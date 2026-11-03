@@ -156,6 +156,14 @@ async function nextHomeGame(franchiseId: string): Promise<{ when: string; oppone
 }
 
 /** Who a franchise's account is: its name, picture, color, stadium and hashtag. */
+/**
+ * Whether franchises have their own accounts on The Feed: on the hosted product only. Franchise
+ * HQ is a hosted perk; a self-hosted league has no franchise identities to post as, so its
+ * franchise accounts would be a blank "The franchise" with no picture. Without them the league's
+ * writers still cover what matters (a broken record, lib/ai/recordWatch).
+ */
+export const franchiseAccounts = (): boolean => process.env.LP_HOSTED === '1';
+
 export interface Face { franchiseId: string; team: string; avatar: string; color: string; stadium: string; tag: string }
 
 export async function faceOf(franchiseId: string): Promise<Face> {
@@ -178,6 +186,7 @@ export async function faceOf(franchiseId: string): Promise<Face> {
 
 /** A post on The Feed from the franchise's own account. */
 export async function postAs(face: Face, o: { text: string; visual: OfficialVisual | null; event: string; publishAt?: number }): Promise<void> {
+  if (!franchiseAccounts()) return;
   const now = Date.now();
   const { addPost } = await import('@/lib/ai/store');
   await addPost({

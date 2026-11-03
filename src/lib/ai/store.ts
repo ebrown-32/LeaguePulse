@@ -263,11 +263,18 @@ async function readPosts(): Promise<FeedPost[]> {
 /** Every stored post, queued ones included: for a writer checking what is already planned. */
 export const allPosts = (): Promise<FeedPost[]> => readPosts();
 
+/**
+ * A franchise account's post, where franchise accounts don't exist (self-hosted: lib/franchise/announce
+ * franchiseAccounts). Any posted before that rule are left out of the feed rather than shown as a
+ * blank "The franchise".
+ */
+const orphaned = (p: FeedPost) => process.env.LP_HOSTED !== '1' && (p.personaType === 'team' || p.personalityId?.startsWith('franchise:'));
+
 export async function getPosts(limit = 60): Promise<FeedPost[]> {
   const all = await readPosts();
   const now = Date.now();
   return all
-    .filter(p => new Date(p.publishAt ?? p.createdAt).getTime() <= now)
+    .filter(p => new Date(p.publishAt ?? p.createdAt).getTime() <= now && !orphaned(p))
     .sort((a, b) =>
       new Date(b.publishAt ?? b.createdAt).getTime() - new Date(a.publishAt ?? a.createdAt).getTime())
     .slice(0, limit);
@@ -288,7 +295,7 @@ export async function getImminent(withinMs: number): Promise<{
   return all
     .filter(p => {
       const t = new Date(p.publishAt ?? p.createdAt).getTime();
-      return t > now && t <= now + withinMs;
+      return t > now && t <= now + withinMs && !orphaned(p);
     })
     .map(p => ({
       replyTo: p.replyTo ?? null,

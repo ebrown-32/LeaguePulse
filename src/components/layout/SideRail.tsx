@@ -31,7 +31,10 @@ export interface RailGroup { label: string; items: RailItem[] }
 
 const isIn = (pathname: string, href: string) => pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
 
-export default function SideRail({ featured, groups, logoUrl, leagueName }: { featured: RailItem[]; groups: RailGroup[]; logoUrl?: string | null; leagueName?: string | null }) {
+/** `legal`: LeaguePulse's terms and privacy pages, on a hosted site (a self-hosted copy has none of its own). */
+export default function SideRail({ featured, groups, logoUrl, leagueName, legal }: {
+  featured: RailItem[]; groups: RailGroup[]; logoUrl?: string | null; leagueName?: string | null; legal?: { terms: string; privacy: string } | null;
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [tip, setTip] = useState<{ label: string; y: number } | null>(null);
@@ -196,6 +199,13 @@ export default function SideRail({ featured, groups, logoUrl, leagueName }: { fe
                 <Sidebar className={cn('h-[18px] w-[18px] transition-transform duration-300', collapsed && 'rotate-180')} />
               </button>
             </div>
+
+            {/* The fine print, as in the page footer: hidden when folded. */}
+            <nav aria-label="Legal" className="lp-rail-label flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-0.5 text-[11px] text-muted-foreground/75">
+              <Link href="/admin" className="transition-colors hover:text-foreground">Admin</Link>
+              {legal && <a href={legal.terms} className="transition-colors hover:text-foreground">Terms</a>}
+              {legal && <a href={legal.privacy} className="transition-colors hover:text-foreground">Privacy</a>}
+            </nav>
           </div>
         </div>
       </aside>

@@ -9,6 +9,7 @@
  */
 
 import type { SVGProps } from 'react';
+import { BRAND, markFor } from '@/lib/brandMark';
 
 type P = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -26,36 +27,33 @@ const A = (props: SVGProps<SVGPathElement>) =>
   <path fill="var(--mark-accent, hsl(var(--signal)))" stroke="none" {...props} />;
 
 /**
- * The logo, from the LeaguePulse identity guide: an ink "L" with a bevelled
- * top and a slanted foot, and an orange speech-bubble "P" carrying a white
- * heartbeat. `tile` sets it on the rounded app-icon square. The L follows the
- * page's ink, so it turns paper-white on the dark bands; the bubble stays
- * signal orange everywhere, as in the guide.
+ * The logo, "Turf Line" (lib/brandMark): a turf-green tile with a heartbeat drawn across it like
+ * a yard line, ending in a signal-orange live dot. The tile is the mark, on light pages and dark
+ * bands alike; at 24 px and under it draws the heavier small version.
  */
-export const LP_L = 'M7 20.5 L19.5 12.5 V44.5 H34 L39.5 54 H10 Q7 54 7 51 Z';
-export const LP_P = 'M21.5 7.5 H41 C49.5 7.5 55.5 13.8 55.5 22.5 C55.5 31.2 49.5 37.5 41 37.5 H30 L22 45.5 V39 Q21.5 38.2 21.5 36.5 Z';
-export const LP_PULSE = 'M25 22.5 H31 L33.6 16 L37.4 30 L40.6 19.5 L42.6 22.5 H50';
-
-export function Logomark({ size = 30, tile = false, ...rest }: P & { tile?: boolean }) {
+export function Logomark({ size = 30, ...rest }: P & { tile?: boolean }) {
+  const d = markFor(size);
+  const { tile: _tile, ...svg } = rest as P & { tile?: boolean };
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" role="img" aria-label="LeaguePulse" {...rest}>
-      {tile && <rect width="64" height="64" rx="14" fill="hsl(var(--card))" />}
-      <g transform={tile ? 'translate(8.3 8.3) scale(0.74)' : undefined}>
-        <path d={LP_L} fill="hsl(var(--foreground))" />
-        <path d={LP_P} fill="hsl(var(--signal))" />
-        <path d={LP_PULSE} stroke="#fff" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
-      </g>
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" role="img" aria-label="LeaguePulse" {...svg}>
+      <rect width="64" height="64" rx="14" fill={BRAND.turf} />
+      <path d={d.line} stroke={BRAND.paper} strokeWidth={d.stroke} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={d.dot.cx} cy={d.dot.cy} r={d.dot.r} fill={BRAND.signal} />
     </svg>
   );
 }
 
-/** The horizontal lockup: the mark, then "League" in ink and "Pulse" in orange. */
+/**
+ * The horizontal lockup: the mark, then the wordmark in wide capitals, "League" in ink and
+ * "Pulse" in turf (the page's primary: turf on paper, light turf on the dark bands). `text` is
+ * the old condensed wordmark's size; the wide one is set a little smaller to sit in the same room.
+ */
 export function Lockup({ size = 32, text = 22, className }: { size?: number; text?: number; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
+    <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`}>
       <Logomark size={size} />
-      <span className="lp-wordmark" style={{ fontSize: text }}>
-        League<span className="text-[hsl(var(--signal))]">Pulse</span>
+      <span className="lp-wordmark" style={{ fontSize: Math.round(text * 0.78) }}>
+        League <span className="text-[hsl(var(--primary))]">Pulse</span>
       </span>
     </span>
   );

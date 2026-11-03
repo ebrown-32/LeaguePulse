@@ -96,6 +96,9 @@ export interface GamedayResult { highlights: number; finals: number }
 
 export async function gamedayPosts(games: LiveGame[]): Promise<GamedayResult> {
   const out: GamedayResult = { highlights: 0, finals: 0 };
+  // Franchise accounts are hosted only (franchiseAccounts): nothing to post as, so nothing to work out.
+  const { franchiseAccounts } = await import('./announce');
+  if (!franchiseAccounts()) return out;
   const [{ getRedis }, api, { getCurrentLeagueId }, { getPlayersDirectory }, { espnTeam }] = await Promise.all([
     import('@/lib/redisClient'), import('@/lib/api'), import('@/config/league'), import('@/lib/playerStats'), import('@/lib/live/espn'),
   ]);

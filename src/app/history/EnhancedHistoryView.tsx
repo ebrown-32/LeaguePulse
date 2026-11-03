@@ -150,7 +150,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?: string[] }) {
+export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true }: { ringSeasons?: string[]; boxScores?: boolean }) {
   const RING_SEASONS = new Set(ringSeasons);
   const [loading, setLoading]                       = useState(true);
   const [error, setError]                           = useState<string | null>(null);
@@ -696,7 +696,7 @@ export default function EnhancedHistoryView({ ringSeasons = [] }: { ringSeasons?
                         : ((catMax - record.value) / catRange) * 100;
 
                       const rowKey = `${record.season}-${record.type}-${record.userId}-${record.week ?? 'season'}`;
-                      const isGame = GAME_RECORDS.has(record.type) && record.week != null;
+                      const isGame = boxScores && GAME_RECORDS.has(record.type) && record.week != null;
                       // The #1 game opens with its box score; any other game on a tap.
                       const boxOpen = isGame && (openBoxes[rowKey] ?? isFirst);
                       const d = record.details;

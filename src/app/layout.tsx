@@ -3,6 +3,7 @@ import { unstable_noStore as noStore } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { Space_Grotesk, DM_Sans } from 'next/font/google';
 import Navbar from '@/components/layout/Navbar';
+import { PLATFORM } from '@/lib/platform/config';
 import { RAIL_COOKIE } from '@/components/layout/railCookie';
 import MotionPrefs from '@/components/layout/MotionPrefs';
 import LiveStrip from '@/components/layout/LiveStrip';
@@ -75,7 +76,7 @@ export async function generateMetadata(): Promise<Metadata> {
       },
       twitter: { card: 'summary_large_image', title: 'LeaguePulse', description: share, images: ['/api/og'] },
       icons: {
-        icon: [{ url: '/brand/leaguepulse-icon.svg', type: 'image/svg+xml' }, { url: '/brand/leaguepulse-32.png', sizes: '32x32' }],
+        icon: [{ url: '/brand/leaguepulse-favicon.svg', type: 'image/svg+xml' }, { url: '/brand/leaguepulse-32.png', sizes: '32x32' }],
         apple: '/brand/leaguepulse-apple.png',
       },
     };
@@ -223,7 +224,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Analytics props={analytics} />
             <div className="lp-rail-offset flex min-h-screen flex-col">
               {/* Hosted: the league's Sleeper name until its admin sets a display name. */}
-              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} />
+              <Navbar logoUrl={theme.logoUrl} leagueName={theme.leagueName ?? tenantName} franchises={Boolean(process.env.DATABASE_URL?.trim())} rankings={rankings} market={process.env.LP_HOSTED === '1'}
+                legal={process.env.LP_HOSTED === '1' ? { terms: `https://${PLATFORM.rootDomain}/legal/terms`, privacy: `https://${PLATFORM.rootDomain}/legal/privacy` } : null} />
               {/* Every matchup's score, while the week's games are on. */}
               <LiveStrip />
               {demoProduct && <DemoBar productUrl={demoProduct} />}

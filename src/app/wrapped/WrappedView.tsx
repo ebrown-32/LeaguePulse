@@ -803,7 +803,8 @@ function CoverPlayer({ p }: { p: PlayerRef }) {
 
 interface Payload { seasons: { season: number; final: boolean }[]; wrapped: Wrapped | null; cast?: Writer[]; error?: string }
 
-export default function WrappedView({ leagueName }: { leagueName: string }) {
+/** `archived`: whether this site keeps a league archive (a database) for Wrapped to be built from. */
+export default function WrappedView({ leagueName, archived = true }: { leagueName: string; archived?: boolean }) {
   const [season, setSeason] = useState<string | null>(null);
   /** The link has been read: nothing is fetched before, so a shared link's season wins. */
   const [ready, setReady] = useState(false);
@@ -858,7 +859,9 @@ export default function WrappedView({ leagueName }: { leagueName: string }) {
   if (!data) return <div className="h-80 animate-pulse rounded-3xl bg-card" />;
   if (data.error) return <p className="rounded-2xl border border-border bg-card p-5 text-[14px]">{data.error}</p>;
   if (!data.seasons.length || !w) {
-    return <div className="rounded-3xl border border-border bg-card p-8 text-center"><p className="text-[17px] font-bold">Wrapped needs a season on the books.</p><p className="mt-1 text-[14px] text-muted-foreground">Once your league&apos;s history is archived, every season gets its story here.</p></div>;
+    return <div className="rounded-3xl border border-border bg-card p-8 text-center"><p className="text-[17px] font-bold">Wrapped needs a season on the books.</p><p className="mt-1 text-[14px] text-muted-foreground">{archived
+      ? <>Once your league&apos;s history is archived, every season gets its story here.</>
+      : <>League Wrapped is built from the league archive, which this site hasn&apos;t set up. Its admin can turn it on with a database (DATABASE_URL).</>}</p></div>;
   }
 
   const mine = w.managers.find(m => m.ownerId === me);

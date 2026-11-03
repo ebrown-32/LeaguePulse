@@ -14,16 +14,16 @@ import { headers } from 'next/headers';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
+import { markSvg } from '@/lib/brandMark';
 import { leagueLogoBytes } from '@/lib/appIcon';
 
 export const dynamic = 'force-dynamic';
 
 const PAPER = '#F7F6F2', INK = '#121417', TURF = '#0A7550', TURF_LIGHT = '#3DD598', SIGNAL = '#EE5A2E', MUTED = '#585D66';
 
-/** The LeaguePulse monogram, as in public/brand/leaguepulse-mark.svg. `ink` is the L's colour. */
-function mark(ink: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M7 20.5 L19.5 12.5 V44.5 H34 L39.5 54 H10 Q7 54 7 51 Z" fill="${ink}"/><path d="M21.5 7.5 H41 C49.5 7.5 55.5 13.8 55.5 22.5 C55.5 31.2 49.5 37.5 41 37.5 H30 L22 45.5 V39 Q21.5 38.2 21.5 36.5 Z" fill="${SIGNAL}"/><path d="M25 22.5 H31 L33.6 16 L37.4 30 L40.6 19.5 L42.6 22.5 H50" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+/** The LeaguePulse mark, Turf Line (lib/brandMark), as an image. The same tile on paper and on ink. */
+function mark() {
+  return `data:image/svg+xml;base64,${Buffer.from(markSvg()).toString('base64')}`;
 }
 
 async function fonts() {
@@ -42,9 +42,9 @@ function productCard() {
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: PAPER, padding: '72px 80px', fontFamily: 'DM Sans' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={mark(INK)} width={64} height={64} alt="" />
-        <div style={{ display: 'flex', fontFamily: 'Archivo', fontSize: 38, color: INK, letterSpacing: -1 }}>
-          League<span style={{ color: SIGNAL }}>Pulse</span>
+        <img src={mark()} width={64} height={64} alt="" />
+        <div style={{ display: 'flex', fontFamily: 'Archivo', fontSize: 32, color: INK, letterSpacing: 1 }}>
+          LEAGUE<span style={{ color: TURF, marginLeft: 10 }}>PULSE</span>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -75,7 +75,7 @@ function leagueCard(name: string, logo: string | null, host: string) {
     }}>
       <div style={{ display: 'flex', width: 168, height: 168, borderRadius: 40, background: PAPER, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logo ?? mark(INK)} width={136} height={136} style={{ objectFit: 'contain' }} alt="" />
+        <img src={logo ?? mark()} width={136} height={136} style={{ objectFit: 'contain' }} alt="" />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', fontFamily: 'Archivo', fontSize: size, lineHeight: 1.02, letterSpacing: size >= 96 ? -4 : -2.5, color: PAPER, maxWidth: 1040 }}>{name}</div>
@@ -85,7 +85,7 @@ function leagueCard(name: string, logo: string | null, host: string) {
         <div style={{ display: 'flex', color: TURF_LIGHT }}>{host}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={mark(PAPER)} width={34} height={34} alt="" />
+          <img src={mark()} width={34} height={34} alt="" />
           on LeaguePulse
         </div>
       </div>

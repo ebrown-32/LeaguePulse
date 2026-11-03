@@ -11,10 +11,12 @@
  * cropped to show no one's name; and the hero's trailer (landing/Trailer.tsx),
  * filmed in the app with every team, manager and photo replaced.
  *
- * Design: paper, ink, turf green and one signal orange; Archivo, slightly
- * condensed, for display and numbers; a small icon set drawn for the product
- * (marks.tsx). Sections read like a matchday programme: numbered chapters,
- * each built around the screen it describes.
+ * Design: paper, ink, turf green and one signal orange; Archivo for display and
+ * numbers, its big lines in wide capitals like a broadcast graphic; a small
+ * icon set drawn for the product (marks.tsx). It opens on a night game, a ball
+ * kicked through the posts under the lights (landing/KickField), and closes on
+ * one; between them, sections read like a matchday programme: numbered
+ * chapters, each built around the screen it describes.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -35,6 +37,9 @@ import {
 } from './marks';
 import Stadiums from './landing/Stadiums';
 import Trailer from './landing/Trailer';
+import KickField from './landing/KickField';
+import HeroGame from './landing/HeroGame';
+import Vault from './landing/Vault';
 import InstallApp from './landing/InstallApp';
 import InquirySheet from './landing/Inquiry';
 import FeaturedLeagues from './landing/Featured';
@@ -60,6 +65,9 @@ export default function Landing() {
       <Nav />
       <Hero />
       <Ticker />
+      <TrailerBand />
+      {/* A desktop meets the Vault on the hero's stage, in turns with the game; a phone, here. */}
+      <div className="lg:hidden"><Vault /></div>
       <Contents />
       <Chapter id="desk" n="01" mark={DeskMark} eyebrow="The Desk"
         title={<>Beat writers who actually <span className="lp-brand-text">watch your league.</span></>}
@@ -240,7 +248,8 @@ function Nav() {
             open ? 'lp-ink border-b border-transparent bg-background'
               : scrolled
                 ? 'border-b border-border bg-background/85 backdrop-blur-xl md:border-border md:bg-card/75 md:shadow-[0_10px_40px_-14px_hsl(var(--foreground)/0.28)]'
-                : 'border-b border-transparent md:border-border/70 md:bg-card/55 md:backdrop-blur-xl md:shadow-[0_6px_30px_-18px_hsl(var(--foreground)/0.25)]')}>
+                // At the top, over the night hero: the ink tokens, so the words read on it.
+                : 'lp-ink border-b border-transparent md:border-border/70 md:bg-card/55 md:backdrop-blur-xl md:shadow-[0_6px_30px_-18px_hsl(var(--foreground)/0.25)]')}>
           <Wordmark onHome={() => setOpen(false)} />
           <nav className="relative hidden items-center lg:flex" onPointerLeave={() => setHover(null)}>
             {NAV_LINKS.map(l => {
@@ -410,50 +419,82 @@ function Words({ text, delay = 0 }: { text: string; delay?: number }) {
 
 // ── Hero ─────────────────────────────────────────────────────────────────────
 
+/**
+ * The hero: a night game. The field runs back to the goalposts under the lights and a ball is
+ * kicked through them, over and over (landing/KickField); a tap on the field kicks the next one.
+ * The headline is set like a broadcast graphic, wide capitals, in the wordmark's face.
+ */
 function Hero() {
   const [q, setQ] = useState('');
   return (
-    <section className="relative pt-28 sm:pt-36">
-      <div className="lp-brand-hero-bg pointer-events-none absolute inset-x-0 top-0 h-[640px]" />
-      <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
-        <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
-          <motion.p variants={rise} className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            The custom app for your fantasy football leagues.
+    <section className="lp-ink relative overflow-hidden">
+      {/* The game, on a wide screen only: a phone gets the words on the night sky. */}
+      <div className="absolute inset-0 hidden lg:block"><HeroGame /></div>
+      <div className="pointer-events-none relative mx-auto flex min-h-[min(100svh,960px)] max-w-6xl flex-col justify-center px-4 pb-16 pt-28 sm:px-5 sm:pt-36 lg:min-h-[max(100svh,780px)] lg:pb-16 lg:pt-28">
+        {/* A phone puts the way in (find your league) right under the headline, above the stage. */}
+        <motion.div className="pointer-events-auto flex max-w-[640px] flex-col items-start lg:block" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
+          <motion.p variants={rise} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] py-1 pl-1 pr-3.5 text-[13px] font-semibold text-white/85 backdrop-blur">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/partners/sleeper.png" alt="Sleeper" width={22} height={22} className="h-[22px] w-[22px] rounded-full" />
+            Sleeper &amp; ESPN leagues
           </motion.p>
-          <h1 className="lp-display mt-4 max-w-4xl text-[46px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[76px] lg:text-[88px]">
+          <h1 className="lp-headline mt-6 self-stretch text-[42px] text-white sm:text-[64px] lg:text-[clamp(56px,8.2vh,80px)]">
             <Words text="Making fantasy football" />{' '}
-            <span className="lp-brand-text lp-underline-draw"><Words text="even better." delay={0.42} /></span>
+            <span className="lp-lights"><Words text="even better." delay={0.36} /></span>
           </h1>
-        </motion.div>
-
-        <div className="mt-10 grid grid-cols-1 items-start gap-10 pb-20 lg:grid-cols-2 lg:gap-12 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
-          <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } }}>
-            <motion.p variants={rise} className="max-w-md md:max-w-2xl lg:max-w-none text-[17px] leading-relaxed text-muted-foreground">
-              {PLATFORM.name} turns your Sleeper or ESPN league into its own app on any device. Analytics that give you the edge, AI writers who cover your actual teams,
-              live chances to win, a guide to which games to have on, and every stat back to your first draft.
-            </motion.p>
+          {/* A phone's stage: the game, the alert, the reel and the matchup, under the headline. */}
+          <motion.div variants={rise} className="order-4 -mx-4 mt-8 self-stretch sm:-mx-5 lg:hidden"><HeroGame layout="phone" /></motion.div>
+          <motion.p variants={rise} className="order-5 mt-6 max-w-[34rem] lg:order-none text-[17px] leading-relaxed text-white/75 sm:text-[18px]">
+            {PLATFORM.name} turns your league into its own app. AI beat writers who cover your actual teams, live odds every Sunday,
+            a stadium for every franchise and a record book back to your very first draft.
+          </motion.p>
+          <div className="order-3 self-stretch lg:order-none">
             {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
-            <motion.div variants={rise}><DemoInvite /></motion.div>
-            <motion.ul variants={rise} className="mt-9 grid max-w-md md:max-w-2xl lg:max-w-none grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-6 sm:grid-cols-4">
-              {([[PhoneMark, 'Installs as an app', '#app'], [DeskMark, 'AI desk', '#desk'], [GameDayMark, 'Game Day', '#gameday'], [SheetMark, 'Analytics', '#analytics']] as const).map(([M, label, href]) => (
-                <li key={label}>
-                  <a href={href} className="group flex items-center gap-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground sm:flex-col sm:items-start sm:gap-1.5">
-                    <M size={24} className="text-foreground transition-transform group-hover:-translate-y-0.5" />{label}
-                  </a>
-                </li>
-              ))}
-            </motion.ul>
-          </motion.div>
-
-          <motion.div className="min-w-0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
-            <Trailer />
-          </motion.div>
-        </div>
+          </div>
+          <motion.div variants={rise} className="order-6 self-stretch lg:order-none"><DemoInvite /></motion.div>
+          {/* A phone's way into the chapters; a desktop has them in the nav right above. */}
+          <motion.ul variants={rise} className="order-7 mt-9 grid self-stretch grid-cols-2 gap-x-5 gap-y-4 border-t border-white/10 pt-6 sm:grid-cols-4 lg:hidden">
+            {([[PhoneMark, 'Installs as an app', '#app'], [DeskMark, 'AI desk', '#desk'], [GameDayMark, 'Game Day', '#gameday'], [SheetMark, 'Analytics', '#analytics']] as const).map(([M, label, href]) => (
+              <li key={label}>
+                <a href={href} className="group flex items-center gap-2 text-[13px] font-semibold text-white/60 transition-colors hover:text-white sm:flex-col sm:items-start sm:gap-1.5">
+                  <M size={24} className="text-white transition-transform group-hover:-translate-y-0.5" />{label}
+                </a>
+              </li>
+            ))}
+          </motion.ul>
+        </motion.div>
       </div>
     </section>
   );
 }
 
+/** The app trailer, on its own big screen. */
+function TrailerBand() {
+  return (
+    <section className="relative py-20 sm:py-24">
+      <div className="mx-auto max-w-5xl px-4 sm:px-5">
+        <motion.div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end" initial="hidden" whileInView="show"
+          viewport={{ once: true, margin: '-80px' }} variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
+          <div>
+            <motion.p variants={rise} className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The app trailer</motion.p>
+            <motion.h2 variants={rise} className="lp-headline mt-3 text-[32px] sm:text-[44px]">LeaguePulse, <span className="text-primary">in action.</span></motion.h2>
+          </div>
+          <motion.p variants={rise} className="max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+            A minute inside a league site, from draft night to the final whistle.
+          </motion.p>
+        </motion.div>
+        <motion.div className="rounded-[30px] bg-foreground p-2 shadow-[0_50px_100px_-50px_rgba(0,0,0,0.7)] sm:p-3" initial={{ opacity: 0, y: 30, scale: 0.98 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, margin: '-80px' }} transition={{ duration: 0.8, ease }}>
+          <div className="flex items-center justify-between px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.2em] text-background/60">
+            <span className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--signal))]" />LeaguePulse app trailer</span>
+            <span>1:32</span>
+          </div>
+          <Trailer />
+        </motion.div>
+      </div>
+    </section>
+  );
+}
 
 function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
   const router = useRouter();
@@ -461,14 +502,14 @@ function HeroForm({ q, setQ }: { q: string; setQ: (v: string) => void }) {
     <>
             <motion.form initial="hidden" animate="show" variants={rise}
               onSubmit={e => { e.preventDefault(); router.push(`/start${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}
-              className="mt-8 flex max-w-md md:max-w-2xl lg:max-w-none flex-col gap-2 rounded-2xl border border-border bg-card p-2 shadow-[0_1px_0_hsl(var(--border))] sm:flex-row">
+              className="mt-8 flex flex-col gap-2 rounded-2xl border border-white/15 bg-white/[0.08] p-2 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.8)] backdrop-blur-md sm:flex-row">
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Sleeper username or league ID" aria-label="Sleeper username or league ID"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground" />
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] text-white outline-none placeholder:text-white/45" />
               <button className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-[14px] font-semibold text-primary-foreground transition hover:brightness-110">
                 Find my league <Route size={15} />
               </button>
             </motion.form>
-            <motion.p initial="hidden" animate="show" variants={rise} className="mt-3 text-[12.5px] text-muted-foreground">
+            <motion.p initial="hidden" animate="show" variants={rise} className="mt-3 text-[12.5px] text-white/60 [&_a]:text-white [&_a]:decoration-white/30 [&_a:hover]:decoration-white">
               {PLANS.pro.trialDays} days free, no card needed. One subscription covers the whole league.{' '}
               <Link href="/start?provider=espn" className="font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">On ESPN?</Link>{' '}
               <a href="#trailer" className="ml-1 inline-flex items-center gap-1 font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">
@@ -1097,11 +1138,12 @@ function Magnetic({ children }: { children: ReactNode }) {
 
 function FinalCta() {
   return (
-    <section className="lp-ink relative overflow-hidden pb-16 pt-24 sm:pt-32">
-      <div className="lp-yardlines pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto max-w-6xl px-4 sm:px-5">
-        <h2 className="lp-display max-w-4xl text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[72px]">
-          Your league already has the stories. <span className="text-primary">Give them some life... a pulse if you will.</span>
+    <section className="lp-ink relative overflow-hidden pb-16 pt-24 sm:pt-32 lg:flex lg:min-h-[640px] lg:items-center lg:py-24">
+      <div className="absolute inset-0 hidden opacity-90 lg:block"><KickField compact /></div>
+      <div className="pointer-events-none absolute inset-0 hidden bg-[linear-gradient(90deg,rgba(7,9,12,0.95)_0%,rgba(7,9,12,0.75)_42%,rgba(7,9,12,0)_68%)] lg:block" />
+      <div className="pointer-events-none relative mx-auto w-full max-w-6xl px-4 sm:px-5 [&_a]:pointer-events-auto">
+        <h2 className="lp-headline max-w-3xl text-[40px] text-white sm:text-[64px]">
+          Your league has the stories. <span className="lp-lights">Put them under the lights.</span>
         </h2>
         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
           <Magnetic>
@@ -1175,8 +1217,8 @@ function Footer() {
         </nav>
 
         {/* The sign-off: the wordmark, set huge, half off the bottom like a stadium end-zone paint job. */}
-        <p aria-hidden className="lp-wordmark pointer-events-none mt-16 select-none whitespace-nowrap text-[17.5vw] leading-[0.74] text-foreground/[0.07] md:text-[190px]">
-          {PLATFORM.name}
+        <p aria-hidden className="lp-wordmark pointer-events-none mt-16 select-none whitespace-nowrap text-[9.5vw] leading-[0.74] text-foreground/[0.07] md:text-[104px]">
+          League Pulse
         </p>
         <div className="relative -mt-6 flex flex-col gap-2 border-t border-border py-6 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between md:-mt-10">
           <p>&copy; {year} {PLATFORM.name}. Not affiliated with Sleeper, the NFL or ESPN.</p>

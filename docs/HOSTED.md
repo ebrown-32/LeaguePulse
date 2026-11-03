@@ -304,6 +304,16 @@ public face (logo, color, motto, bio, and the stadium's style and look) at `/tea
 but not set prices or build. Without `DATABASE_URL` there are no franchises,
 and the Franchises link is left out of the navigation.
 
+**What else a self-hosted copy leaves out.** Franchises have no accounts of
+their own on The Feed (no game-day posts, announcements or record posts from
+"the franchise"; `franchiseAccounts` in `src/lib/franchise/announce.ts`): a
+broken record is covered by the league's writers instead, and any franchise
+posts already stored are kept out of the feed. League Wrapped and the Record
+Book's box scores read the archive, so without `DATABASE_URL` the Wrapped link
+is hidden and the box scores are not offered. The Edge compares a league with
+the hosted product's sample of other leagues (`src/lib/market/crawl.ts`), so a
+self-hosted copy hides its link and its page says it isn't available.
+
 **Stadium styles** (`src/lib/franchise/stadiumStyles.ts`,
 `stadiumBlueprint.ts`) are cosmetic: a manager picks one of six (Classic Bowl,
 Horseshoe, Grandstand, Dome, Cantilever, Coliseum) and dresses it (accent

@@ -46,7 +46,7 @@ function Frame({ kicker, title, subtitle, stats, foot }: { kicker: string; title
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 26, color: 'rgba(255,255,255,0.7)' }}>
         <div style={{ display: 'flex' }}>{foot}</div>
-        <div style={{ display: 'flex', fontFamily: 'Archivo', fontSize: 34, color: '#fff' }}>League<span style={{ color: SIGNAL }}>Pulse</span></div>
+        <div style={{ display: 'flex', fontFamily: 'Archivo', fontSize: 28, color: '#fff', letterSpacing: 1 }}>LEAGUE<span style={{ color: '#3DD598', marginLeft: 8 }}>PULSE</span></div>
       </div>
     </div>
   );

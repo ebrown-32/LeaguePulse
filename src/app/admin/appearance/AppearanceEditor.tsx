@@ -1010,7 +1010,7 @@ export default function AppearanceEditor({ adminPassword }: { adminPassword: str
                     <div className="mt-2 flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={theme.faviconUrl || theme.logoUrl || '/logo.png'}
+                        src={theme.faviconUrl || theme.logoUrl || '/brand/leaguepulse-favicon.svg'}
                         alt="Favicon preview"
                         className="h-4 w-4 rounded-sm object-contain"
                       />

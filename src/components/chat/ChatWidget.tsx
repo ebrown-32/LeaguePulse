@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { lockScroll } from '@/lib/scrollLock';
 import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
-import { X, ArrowUp, Sparkles, Maximize2, Minimize2, GripHorizontal, Eraser } from '@/components/icons';
+import { X, ArrowUp, Maximize2, Minimize2, GripHorizontal, Eraser } from '@/components/icons';
+import PulseBubble from './PulseBubble';
 import { Streamdown } from 'streamdown';
 import { cn } from '@/lib/utils';
 
@@ -47,14 +48,7 @@ function ThinkingBubble() {
 
   return (
     <div className="flex items-center gap-2.5">
-      <motion.span
-        aria-hidden="true"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 3.2, repeat: Infinity, ease: 'linear' }}
-        className="text-primary"
-      >
-        <Sparkles className="h-4 w-4" />
-      </motion.span>
+      <PulseBubble motion="thinking" className="h-[18px] w-[18px] text-primary" />
       <span className="text-[11px] text-muted-foreground">{note}</span>
       <span className="inline-flex gap-1">
         {[0, 1, 2].map(d => (
@@ -344,7 +338,7 @@ export default function ChatWidget() {
           >
             {open
               ? <X className="h-5 w-5" />
-              : <Sparkles className="h-6 w-6 transition-transform duration-300 group-hover:rotate-12 sm:h-5 sm:w-5" />}
+              : <PulseBubble motion="idle" className="h-7 w-7 transition-transform duration-300 group-hover:scale-110 sm:h-6 sm:w-6" />}
           </motion.span>
         </AnimatePresence>
       </motion.button>
@@ -416,7 +410,7 @@ export default function ChatWidget() {
                   className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-muted-foreground/30"
                 />
               )}
-              <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+              <PulseBubble className="h-5 w-5 text-primary" />
               <span className="truncate text-xs font-bold uppercase tracking-widest text-foreground">
                 {name}
               </span>
