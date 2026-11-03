@@ -161,9 +161,11 @@ interface NavbarProps {
   rankings?: boolean;
   /** Whether The Edge has data: the market crawl runs on the hosted product only (lib/market/crawl). */
   market?: boolean;
+  /** LeaguePulse's terms and privacy, for the side rail's fine print: hosted sites only, as in the footer. */
+  legal?: { terms: string; privacy: string } | null;
 }
 
-export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true, market = true }: NavbarProps) {
+export default function Navbar({ logoUrl, leagueName, franchises = true, rankings = true, market = true, legal = null }: NavbarProps) {
   // Franchises and League Wrapped are built from the league archive (a database); The Edge from the
   // hosted market crawl. A site without them doesn't offer them.
   const shown = (item: NavItem) =>
@@ -208,7 +210,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
   // On a desktop, the side rail: every group, every page this site has.
   // The marquee pages lead as tiles, as on a phone; the groups hold the rest.
   const railGroups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(item => shown(item) && !isFeatured(item)) })).filter(g => g.items.length);
-  const rail = <SideRail featured={featured} groups={railGroups} logoUrl={logoUrl} leagueName={leagueName} />;
+  const rail = <SideRail featured={featured} groups={railGroups} logoUrl={logoUrl} leagueName={leagueName} legal={legal} />;
 
   // Lighter and more transparent at rest so the ambient background reads
   // through it; condenses into frosted glass once you scroll.

@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { LP_L, LP_P, LP_PULSE } from '../marks';
+import { Logomark } from '../marks';
 
 const STAGES = [
   { key: 'browse', label: 'Open your league', ms: 2400 },
@@ -29,14 +29,7 @@ const ADDRESS = 'theleague.leaguepulse.io';
 /** The LeaguePulse app icon, as it sits on a home screen. */
 function AppIcon({ size = 52 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="drop-shadow-sm">
-      <rect width="64" height="64" rx="14" fill="#F7F6F2" />
-      <g transform="translate(8.3 8.3) scale(0.74)">
-        <path d={LP_L} fill="#121417" />
-        <path d={LP_P} fill="#EE5A2E" />
-        <path d={LP_PULSE} fill="none" stroke="#fff" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-    </svg>
+    <Logomark size={size} aria-hidden className="drop-shadow-sm" />
   );
 }
 

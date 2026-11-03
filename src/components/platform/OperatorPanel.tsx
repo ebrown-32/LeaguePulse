@@ -114,7 +114,7 @@ export default function OperatorPanel() {
           <a href="/" className="flex items-center gap-2.5" aria-label={`${'LeaguePulse'} home`}>
             <Logomark size={32} />
             <span className="hidden flex-col leading-none sm:flex">
-              <span className="lp-wordmark text-[18px]">League<span className="text-[hsl(var(--signal))]">Pulse</span></span>
+              <span className="lp-wordmark text-[14px]">League <span className="text-[hsl(var(--primary))]">Pulse</span></span>
               <span className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Back office</span>
             </span>
           </a>
