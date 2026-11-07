@@ -24,7 +24,7 @@ import { checkRecordClaims } from './recordCheck';
 import type { Personality } from './personalities';
 import type { GameOfWeek } from '@/lib/gameOfWeek';
 
-function systemFor(p: Personality): string {
+export function systemFor(p: Personality): string {
   // Fans are league members, not analysts. Handing them the same expertise
   // brief as the writers made every one of them sound like a columnist with a
   // funny name, which is the opposite of why they exist.
@@ -340,7 +340,7 @@ export type TradeGrade = z.infer<typeof TradeGradeSchema>;
 
 // ── Generators ─────────────────────────────────────────────────────────────
 
-async function briefBlock(): Promise<string> {
+export async function briefBlock(): Promise<string> {
   const brief = await buildLeagueBrief();
   // Same phase framing the chat assistant gets, so a persona does not write
   // start/sit copy in March or dynasty musings during a playoff week.
@@ -467,7 +467,7 @@ async function factProblems(
   return { trade, status, record };
 }
 
-async function publishable<T>(
+export async function publishable<T>(
   content: T,
   regenerate: (correction: string) => Promise<T>,
 ): Promise<T> {

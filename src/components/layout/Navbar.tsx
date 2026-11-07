@@ -11,6 +11,7 @@ import {
   Activity,
   Newspaper,
   Megaphone,
+  Headphones,
   Receipt,
   ClipboardCheck,
   ClipboardList,
@@ -90,6 +91,7 @@ const MORE_NAV: NavItem[] = [
   // Re-add this line to put it back in the menu.
   // { name: 'Weather',      href: '/weather',      icon: CloudSun     },
   { name: 'Media',        href: '/media',        icon: Newspaper    },
+  { name: 'The Desk Weekly', href: '/podcast',   icon: Headphones   },
   { name: 'Constitution', href: '/constitution', icon: Scroll       },
 ];
 
@@ -135,6 +137,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'Catch up',
     items: [
       { name: 'The Feed',     href: '/desk',         icon: Megaphone     },
+      { name: 'The Desk Weekly', href: '/podcast',   icon: Headphones    },
       { name: 'Media',        href: '/media',        icon: Newspaper     },
       { name: 'Rosters',      href: '/rosters',      icon: Shirt         },
       { name: 'Transactions', href: '/transactions', icon: Receipt       },

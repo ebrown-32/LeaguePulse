@@ -39,7 +39,7 @@ import {
   UploadSimple, User as PUser, UserPlus as PUserPlus, Users as PUsers, Wind as PWind, X as PX,
   Lightning, Eye, WarningCircle, FootballHelmet, Football, Crown, Handshake, Fire as PFire,
   CheckCircle, Lightbulb, DownloadSimple, FileCsv, FileXls, BracketsCurly, PencilSimple, Tag as PTag,
-  BeerStein, Smiley, SidebarSimple, SpeakerHigh, SpeakerSlash, Play as PPlay, Vibrate as PVibrate, MusicNotes, HandPointing,
+  BeerStein, Smiley, SidebarSimple, Headphones as PHeadphones, SpeakerHigh, SpeakerSlash, Play as PPlay, Pause as PPause, Vibrate as PVibrate, MusicNotes, HandPointing,
 } from '@phosphor-icons/react/dist/ssr';
 
 export type IconProps = Omit<PhosphorProps, 'ref'> & { weight?: IconWeight };
@@ -188,9 +188,11 @@ export const Search          = bold(MagnifyingGlass, 'Search');
 export const Sidebar         = bold(SidebarSimple, 'Sidebar');
 export const Vibrate         = duo(PVibrate, 'Vibrate');
 export const Music           = duo(MusicNotes, 'Music');
+export const Headphones      = duo(PHeadphones, 'Headphones');
 export const Pointer         = duo(HandPointing, 'Pointer');
 /** Filled: a play button reads as one only when solid. */
 export const Play            = make(PPlay, 'fill', 'Play');
+export const Pause           = make(PPause, 'fill', 'Pause');
 export const Volume2         = bold(SpeakerHigh, 'Volume2');
 export const VolumeX         = bold(SpeakerSlash, 'VolumeX');
 export const Settings        = bold(GearSix, 'Settings');

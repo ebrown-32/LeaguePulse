@@ -12,11 +12,11 @@
  * filmed in the app with every team, manager and photo replaced.
  *
  * Design: paper, ink, turf green and one signal orange; Archivo for display and
- * numbers, its big lines in wide capitals like a broadcast graphic; a small
- * icon set drawn for the product (marks.tsx). It opens on a night game, a ball
- * kicked through the posts under the lights (landing/KickField), and closes on
- * one; between them, sections read like a matchday programme: numbered
- * chapters, each built around the screen it describes.
+ * numbers; a small icon set drawn for the product (marks.tsx). It opens on the
+ * app itself, on a phone (landing/HeroPhone), and closes on a night game, a ball
+ * kicked through the posts under the lights (landing/KickField); between them,
+ * sections read like a matchday programme: numbered chapters, each built around
+ * the screen it describes.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -38,7 +38,9 @@ import {
 import Stadiums from './landing/Stadiums';
 import Trailer from './landing/Trailer';
 import KickField from './landing/KickField';
-import HeroGame from './landing/HeroGame';
+import HeroPhone from './landing/HeroPhone';
+import { WavyBackground } from '@/components/ui/wavy-background';
+import { useDemoUrl } from './landing/demoUrl';
 import Vault from './landing/Vault';
 import InstallApp from './landing/InstallApp';
 import InquirySheet from './landing/Inquiry';
@@ -66,8 +68,7 @@ export default function Landing() {
       <Hero />
       <Ticker />
       <TrailerBand />
-      {/* A desktop meets the Vault on the hero's stage, in turns with the game; a phone, here. */}
-      <div className="lg:hidden"><Vault /></div>
+      <Vault />
       <Contents />
       <Chapter id="desk" n="01" mark={DeskMark} eyebrow="The Desk"
         title={<>Beat writers who actually <span className="lp-brand-text">watch your league.</span></>}
@@ -137,21 +138,13 @@ function GetStarted() {
  * The live demo league (lib/demo): demo.<root domain>, or NEXT_PUBLIC_LP_DEMO_URL when set; on
  * a local server, the demo on the same port.
  */
-function useDemoUrl(): string {
-  const [url, setUrl] = useState(PLATFORM.demoUrl || `https://demo.${PLATFORM.rootDomain}`);
-  useEffect(() => {
-    const { hostname, port } = window.location;
-    if (hostname === 'localhost' || hostname.endsWith('.localhost')) setUrl(`http://demo.localhost${port ? `:${port}` : ''}`);
-  }, []);
-  return url;
-}
-
 /** The nav's way into the demo, beside "Get started": a plain link, in a new tab. */
 function DemoLink() {
   const url = useDemoUrl();
   return (
     <a href={url} target="_blank" rel="noopener"
-      className="hidden items-center gap-1.5 whitespace-nowrap px-2 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground md:inline-flex">
+      // Left out between lg and xl, where the nav's links leave no room (the hero's phone is the demo too).
+      className="hidden items-center gap-1.5 whitespace-nowrap px-2 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground md:inline-flex lg:hidden xl:inline-flex">
       <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
       Live demo
     </a>
@@ -198,6 +191,77 @@ const NAV_LINKS = [
   { label: 'The Desk', href: '#desk' }, { label: 'Game Day', href: '#gameday' },
   { label: 'Analytics', href: '#analytics' }, { label: 'Stadiums', href: '#franchise' }, { label: 'Pricing', href: '#pricing' },
 ];
+/** The rest of the page, under "More" on a desktop (a phone's menu lists them all). */
+const MORE_LINKS = [
+  { label: 'Install as an app', href: '#app', m: PhoneMark },
+  { label: 'Game of the Week', href: '#gotw', m: GameBallMark },
+  { label: 'Simulator', href: '#simulator', m: BranchMark },
+  { label: 'The Vault', href: '#vault', m: RingMark },
+  { label: 'Featured leagues', href: '#leagues', m: PennantMark },
+  { label: 'FAQs', href: '#faq', m: ChatMark },
+] as const;
+
+/**
+ * "More": the rest of the page's sections, in a dropdown that opens on hover or click and closes
+ * on Escape, a click elsewhere or a choice. Lit while one of its sections is on screen.
+ */
+function MoreMenu({ active }: { active: string | null }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const leave = useRef<number | null>(null);
+  const viaMouse = useRef(false);
+  const lit = MORE_LINKS.some(l => l.href === active);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', away); window.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
+  }, [open]);
+  const hold = () => { if (leave.current) clearTimeout(leave.current); };
+  return (
+    <div ref={box} className="relative" onPointerEnter={e => { if (e.pointerType === 'mouse') { hold(); setOpen(true); } }}
+      onPointerLeave={e => { if (e.pointerType === 'mouse') { hold(); leave.current = window.setTimeout(() => setOpen(false), 180); } }}>
+      {/* A mouse has already opened it by hovering, so its click keeps it open; touch and keys toggle. */}
+      <button type="button" onPointerDown={e => { viaMouse.current = e.pointerType === 'mouse'; }}
+        onClick={() => { const mouse = viaMouse.current; viaMouse.current = false; setOpen(o => (mouse ? true : !o)); }} aria-expanded={open} aria-haspopup="true"
+        className={cn('relative flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-2 text-[13px] font-semibold transition-colors duration-200 xl:px-3.5 xl:text-[13.5px]',
+          open || lit ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+        {(open || lit) && <span className="absolute inset-0 rounded-full bg-foreground/[0.07]" />}
+        <span className="relative">More</span>
+        <motion.svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden
+          animate={{ rotate: open ? 180 : 0 }} transition={{ type: 'spring', stiffness: 400, damping: 26 }}>
+          <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </motion.svg>
+        {lit && !open && <span className="absolute right-1 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+            className="absolute right-0 top-full z-50 mt-2.5 w-[248px] origin-top-right rounded-[22px] border border-border bg-card/95 p-2 shadow-[0_30px_70px_-25px_hsl(var(--foreground)/0.45)] backdrop-blur-xl">
+            <ul className="grid gap-0.5">
+              {MORE_LINKS.map((l, i) => {
+                const on = active === l.href;
+                return (
+                  <motion.li key={l.href} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 + i * 0.03, duration: 0.25 }}>
+                    <a href={l.href} onClick={() => setOpen(false)} aria-current={on ? 'true' : undefined}
+                      className={cn('group flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors duration-150', on ? 'bg-primary/10' : 'hover:bg-foreground/[0.05]')}>
+                      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background transition-transform duration-200 group-hover:scale-105', on && 'border-primary/40')}>
+                        <l.m size={18} />
+                      </span>
+                      <span className={cn('text-[14px] font-semibold', on ? 'text-primary' : 'text-foreground')}>{l.label}</span>
+                    </a>
+                  </motion.li>
+                );
+              })}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 /** Which of the nav's sections is on screen. */
 function useActiveSection(hrefs: string[]) {
@@ -220,7 +284,7 @@ function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
-  const active = useActiveSection(NAV_LINKS.map(l => l.href));
+  const active = useActiveSection([...NAV_LINKS, ...MORE_LINKS].map(l => l.href));
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 8);
     on(); window.addEventListener('scroll', on, { passive: true });
@@ -241,9 +305,10 @@ function Nav() {
       <header className="pointer-events-none fixed inset-x-0 top-0 z-50 md:top-4 md:px-5">
         <motion.div
           initial={false}
-          animate={{ maxWidth: scrolled ? 1040 : 1152 }}
+          animate={{ maxWidth: scrolled ? 1100 : 1152 }}
           transition={{ type: 'spring', stiffness: 220, damping: 30 }}
-          className={cn('pointer-events-auto mx-auto flex h-16 items-center justify-between gap-3 px-4 transition-[background-color,border-color,box-shadow,color] duration-500',
+          // The bar's own colors fade; its text doesn't (lp-nav: each piece of text fades its own, once).
+          className={cn('lp-nav pointer-events-auto mx-auto flex h-16 items-center justify-between gap-3 px-4 transition-[background-color,border-color,box-shadow] duration-500',
             'md:h-[60px] md:rounded-full md:border md:pl-5 md:pr-2',
             open ? 'lp-ink border-b border-transparent bg-background'
               : scrolled
@@ -270,6 +335,7 @@ function Nav() {
                 </a>
               );
             })}
+            <MoreMenu active={active} />
           </nav>
           <div className="flex items-center gap-2.5 sm:gap-3">
             {/* Signed in, the account area replaces "Get started": a returning
@@ -383,7 +449,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
       </ul>
 
       <motion.div variants={row} className="relative mt-7 flex flex-wrap gap-2 text-[14px] font-semibold">
-        <a href="#faq" onClick={go('#faq')} className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Questions</a>
+        <a href="#faq" onClick={go('#faq')} className="rounded-full border border-border px-4 py-2.5 active:bg-muted">FAQs</a>
         {accountsOn && <a href="/account" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Sign in to your leagues</a>}
         <a href={PLATFORM.github} target="_blank" rel="noreferrer" className="rounded-full border border-border px-4 py-2.5 active:bg-muted">Source code</a>
       </motion.div>
@@ -420,49 +486,40 @@ function Words({ text, delay = 0 }: { text: string; delay?: number }) {
 // ── Hero ─────────────────────────────────────────────────────────────────────
 
 /**
- * The hero: a night game. The field runs back to the goalposts under the lights and a ball is
- * kicked through them, over and over (landing/KickField); a tap on the field kicks the next one.
- * The headline is set like a broadcast graphic, wide capitals, in the wordmark's face.
+ * The hero: the promise, the way in, and the app itself on a phone (landing/HeroPhone), a live
+ * matchup scoring as you watch with the notifications a manager gets floating around it. On a
+ * phone it stacks: the headline and "Find my league" first, then the phone.
  */
 function Hero() {
   const [q, setQ] = useState('');
   return (
     <section className="lp-ink relative overflow-hidden">
-      {/* The game, on a wide screen only: a phone gets the words on the night sky. */}
-      <div className="absolute inset-0 hidden lg:block"><HeroGame /></div>
-      <div className="pointer-events-none relative mx-auto flex min-h-[min(100svh,960px)] max-w-6xl flex-col justify-center px-4 pb-16 pt-28 sm:px-5 sm:pt-36 lg:min-h-[max(100svh,780px)] lg:pb-16 lg:pt-28">
-        {/* A phone puts the way in (find your league) right under the headline, above the stage. */}
-        <motion.div className="pointer-events-auto flex max-w-[640px] flex-col items-start lg:block" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.09 } } }}>
-          <motion.p variants={rise} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] py-1 pl-1 pr-3.5 text-[13px] font-semibold text-white/85 backdrop-blur">
+      {/* Ribbons of turf light drifting behind it all (one thread of signal orange), and a
+          shade from the left and the bottom so the words always read. */}
+      <WavyBackground data-mp-block containerClassName="pointer-events-none absolute inset-0" backgroundFill="#101214" blur={18} speed="slow" waveOpacity={0.35}
+        waveWidth={42} amplitude={190} center={0.5}
+        colors={['rgba(61,213,152,0.55)', 'rgba(10,117,80,0.7)', 'rgba(31,181,122,0.45)', 'rgba(238,90,46,0.28)', 'rgba(14,143,98,0.55)', 'rgba(61,213,152,0.3)']} waves={6} />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(16,18,20,0.55)_0%,rgba(16,18,20,0)_30%,rgba(16,18,20,0)_70%,#101214_100%)] lg:bg-[linear-gradient(90deg,rgba(16,18,20,0.85)_0%,rgba(16,18,20,0.35)_45%,rgba(16,18,20,0)_70%),linear-gradient(180deg,rgba(16,18,20,0)_75%,#101214_100%)]" />
+      <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-28 sm:pt-32 lg:min-h-[min(100svh,920px)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-10 lg:pb-24 lg:pt-28">
+        <motion.div className="min-w-0" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
+          <motion.p variants={rise} className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] py-1 pl-1 pr-3.5 text-[13px] font-medium text-white/80 backdrop-blur">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/partners/sleeper.png" alt="Sleeper" width={22} height={22} className="h-[22px] w-[22px] rounded-full" />
             Sleeper &amp; ESPN leagues
           </motion.p>
-          <h1 className="lp-headline mt-6 self-stretch text-[42px] text-white sm:text-[64px] lg:text-[clamp(56px,8.2vh,80px)]">
+          <h1 className="lp-display mt-6 text-[44px] font-extrabold leading-[0.98] tracking-[-0.045em] text-white sm:text-[64px] lg:text-[76px]">
             <Words text="Making fantasy football" />{' '}
-            <span className="lp-lights"><Words text="even better." delay={0.36} /></span>
+            <span className="text-[hsl(var(--signal))]"><Words text="even better." delay={0.32} /></span>
           </h1>
-          {/* A phone's stage: the game, the alert, the reel and the matchup, under the headline. */}
-          <motion.div variants={rise} className="order-4 -mx-4 mt-8 self-stretch sm:-mx-5 lg:hidden"><HeroGame layout="phone" /></motion.div>
-          <motion.p variants={rise} className="order-5 mt-6 max-w-[34rem] lg:order-none text-[17px] leading-relaxed text-white/75 sm:text-[18px]">
-            {PLATFORM.name} turns your league into its own app. AI beat writers who cover your actual teams, live odds every Sunday,
-            a stadium for every franchise and a record book back to your very first draft.
+          <motion.p variants={rise} className="mt-5 max-w-[30rem] text-[16.5px] leading-relaxed text-white/65 sm:text-[18px]">
+            Your league, as its own app. AI writers who cover your actual teams, live odds every Sunday and every record back to your first draft.
           </motion.p>
-          <div className="order-3 self-stretch lg:order-none">
+          <div className="max-w-[34rem]">
             {accountsOn ? <motion.div variants={rise}><WelcomeBack fallback={<HeroForm q={q} setQ={setQ} />} /></motion.div> : <HeroForm q={q} setQ={setQ} />}
+            <motion.div variants={rise}><DemoInvite /></motion.div>
           </div>
-          <motion.div variants={rise} className="order-6 self-stretch lg:order-none"><DemoInvite /></motion.div>
-          {/* A phone's way into the chapters; a desktop has them in the nav right above. */}
-          <motion.ul variants={rise} className="order-7 mt-9 grid self-stretch grid-cols-2 gap-x-5 gap-y-4 border-t border-white/10 pt-6 sm:grid-cols-4 lg:hidden">
-            {([[PhoneMark, 'Installs as an app', '#app'], [DeskMark, 'AI desk', '#desk'], [GameDayMark, 'Game Day', '#gameday'], [SheetMark, 'Analytics', '#analytics']] as const).map(([M, label, href]) => (
-              <li key={label}>
-                <a href={href} className="group flex items-center gap-2 text-[13px] font-semibold text-white/60 transition-colors hover:text-white sm:flex-col sm:items-start sm:gap-1.5">
-                  <M size={24} className="text-white transition-transform group-hover:-translate-y-0.5" />{label}
-                </a>
-              </li>
-            ))}
-          </motion.ul>
         </motion.div>
+        <div className="min-w-0 pb-4 lg:pb-0"><HeroPhone /></div>
       </div>
     </section>
   );
@@ -1169,7 +1226,7 @@ function Footer() {
     { title: 'Your league', links: [
       { label: 'Start a league', href: '/start' },
       ...(accountsOn ? [{ label: 'Sign in', href: '/account' }, { label: 'My leagues', href: '/account' }] : []),
-      { label: 'Questions', href: '#faq' },
+      { label: 'FAQs', href: '#faq' },
       ...(accountsOn ? [{ label: 'Back office', href: '/operator', muted: true }] : []),
     ] },
     { title: 'Source code', links: [

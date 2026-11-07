@@ -1,7 +1,7 @@
 import './globals.css';
 import { unstable_noStore as noStore } from 'next/cache';
 import { cookies, headers } from 'next/headers';
-import { Space_Grotesk, DM_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import Navbar from '@/components/layout/Navbar';
 import { PLATFORM } from '@/lib/platform/config';
 import { RAIL_COOKIE } from '@/components/layout/railCookie';
@@ -29,18 +29,22 @@ import SetupBar from '@/components/layout/SetupBar';
 import DemoBar from '@/components/platform/DemoBar';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
 
-const displayFont = Space_Grotesk({
-  subsets:  ['latin'],
+// Bundled with the app (src/fonts, OFL), not fetched from Google Fonts at build time: a Google
+// Fonts hiccup on the build machine used to fail the whole deploy.
+const displayFont = localFont({
+  src:      '../fonts/space-grotesk-latin-wght-normal.woff2',
   variable: '--font-display-fallback',
-  weight:   ['400', '500', '600', '700'],
+  weight:   '300 700',
   display:  'swap',
+  fallback: ['system-ui', 'sans-serif'],
 });
 
-const bodyFont = DM_Sans({
-  subsets:  ['latin'],
+const bodyFont = localFont({
+  src:      '../fonts/dm-sans-latin-wght-normal.woff2',
   variable: '--font-body-fallback',
-  weight:   ['300', '400', '500', '600', '700'],
+  weight:   '100 1000',
   display:  'swap',
+  fallback: ['system-ui', 'sans-serif'],
 });
 
 /**

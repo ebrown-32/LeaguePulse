@@ -271,6 +271,7 @@ from, and `CRON_SECRET`, the same value as in Vercel. The workflows in
 | `ESPN_SWID` + `ESPN_S2` | A private ESPN league. |
 | `ADMIN_PASSWORD` | The admin panel. Set this before going public. |
 | `ANTHROPIC_API_KEY` | AI desk, chat and plain-English analytics. |
+| `ELEVENLABS_API_KEY` | Recorded voices for The Desk Weekly podcast; pick each personality's voice in the AI Desk admin. Optional: without it, browsers read episodes aloud. |
 | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Saving anything in production. Or `REDIS_URL` for a `rediss://` connection string. |
 | `CRON_SECRET` | Keeping the scheduled jobs private. |
 | `FANTASY_PROS` | Expert player rankings ([free key](https://secure.fantasypros.com/api-keys/request/), personal use). |

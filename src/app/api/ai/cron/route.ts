@@ -388,6 +388,12 @@ async function runForLeague(request: Request): Promise<Response> {
   })().catch(() => 'mid');
   const cad = seasonalCadence(volume === 'off' ? 'light' : volume, phase);
 
+  // The Desk Weekly: on Tuesdays, once the week is final, this week's episode (lib/ai/podcast).
+  if (params.get('mode') !== 'live') {
+    await import('@/lib/ai/podcast').then(m => m.maybePublishWeekly())
+      .catch(err => console.error('[ai/cron] podcast', err instanceof Error ? err.message : err));
+  }
+
   // Game-day coverage runs on its own cadence and its own guards.
   if (params.get('mode') === 'live') return runLiveCoverage(force, cad);
 

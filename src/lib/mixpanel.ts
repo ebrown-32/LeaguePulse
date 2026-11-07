@@ -14,7 +14,10 @@
 import mixpanel from 'mixpanel-browser';
 
 const TOKEN = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN?.trim() ?? '';
-const REPLAY = Math.min(100, Math.max(0, Number(process.env.NEXT_PUBLIC_MIXPANEL_REPLAY_PERCENT ?? 100) || 0));
+// Never while developing: a replay recorder on a page that hot-reloads and animates constantly
+// fights itself for its storage lock, and those sessions aren't worth watching anyway.
+const REPLAY = process.env.NODE_ENV === 'development' ? 0
+  : Math.min(100, Math.max(0, Number(process.env.NEXT_PUBLIC_MIXPANEL_REPLAY_PERCENT ?? 100) || 0));
 
 let initialized = false;
 let base: Record<string, unknown> = {};
@@ -28,6 +31,9 @@ const clean = (props: Record<string, unknown> = {}) =>
 export function initMixpanel(props?: SuperProps) {
   if (typeof window === 'undefined' || initialized || !TOKEN) return;
   if (window.location.pathname.startsWith('/operator')) return;
+  // Framed: the demo league inside the front page's phone (landing/HeroPhone). That visit is the
+  // front page's; counting it again as a demo visit would inflate every report.
+  try { if (window.self !== window.top) return; } catch { return; }
   mixpanel.init(TOKEN, {
     debug: process.env.NODE_ENV !== 'production',
     persistence: 'localStorage',

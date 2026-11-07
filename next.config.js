@@ -15,6 +15,19 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
 ];
 
+/**
+ * The one exception: the demo league (demo.<root>), shown live inside the phone on the product
+ * site's front page. Only the product site may frame it (and localhost in development); every
+ * other site, customers' leagues and every admin page included, is never framed.
+ */
+const root = (process.env.NEXT_PUBLIC_LP_ROOT_DOMAIN || 'leaguepulse.io').trim();
+const demoFramers = [`https://${root}`, `https://www.${root}`, ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:*'])];
+const demoHeaders = [
+  { key: 'Content-Security-Policy', value: `frame-ancestors 'self' ${demoFramers.join(' ')}` },
+  ...securityHeaders.filter(h => h.key !== 'X-Frame-Options' && h.key !== 'Content-Security-Policy'),
+];
+const DEMO_HOST = [{ type: 'host', value: 'demo\\..*' }];
+
 const nextConfig = {
   // The dev badge, out of the side rail's corner (bottom left) and the chat button's (bottom right).
   devIndicators: { position: 'top-right' },
@@ -38,7 +51,10 @@ const nextConfig = {
     ],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', missing: DEMO_HOST, headers: securityHeaders },
+      { source: '/:path*', has: DEMO_HOST, headers: demoHeaders },
+    ];
   },
 };
 

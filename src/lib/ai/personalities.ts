@@ -61,6 +61,8 @@ export interface Personality {
    * reappears on the next page load.
    */
   hidden?: boolean;
+  /** Their speaking voice on The Desk Weekly: an ElevenLabs voice id the admin picked. Unset, one is cast for them. */
+  voiceId?: string;
 }
 
 const MEDIA_PERSONALITIES: Personality[] = [
