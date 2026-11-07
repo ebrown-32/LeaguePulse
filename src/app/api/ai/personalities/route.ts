@@ -3,6 +3,7 @@ import { getPersonalities, getPersonalitiesForAdmin, savePersonalities } from '@
 import { avatarProblem } from '@/lib/ai/avatarUpload';
 import type { Personality } from '@/lib/ai/personalities';
 import { isAdminRequest } from '@/lib/tenant/admin';
+import { VOICE_ID } from '@/lib/ai/elevenlabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,9 @@ export async function PUT(req: NextRequest) {
     // Rejecting the whole save is deliberate: a partial write would leave the
     // cast in a state the admin did not ask for.
     for (const p of personalities) {
+      if (p.voiceId !== undefined && (typeof p.voiceId !== 'string' || !VOICE_ID.test(p.voiceId))) {
+        return NextResponse.json({ error: `${p.name || p.id}: that podcast voice isn't one we recognise` }, { status: 400 });
+      }
       if (p.avatarImage === undefined) continue;
       const problem = avatarProblem(p.avatarImage);
       if (problem) {

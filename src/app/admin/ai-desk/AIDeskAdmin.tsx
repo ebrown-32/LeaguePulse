@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw, Sparkles } from '@/components/icons';
 import PersonaStudio, { type StudioDraft, type StudioTarget } from './PersonaStudio';
+import VoicePicker from './VoicePicker';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
@@ -862,6 +863,10 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
                 <textarea id="persona-voice" value={active.voice} onChange={e => update({ voice: e.target.value })} rows={5}
                   className={cn(FIELD, 'leading-relaxed')} />
               </div>
+
+              <VoicePicker password={password} field={FIELD} value={active.voiceId}
+                onChange={voiceId => update({ voiceId })}
+                takenBy={Object.fromEntries(people.filter(p => p.id !== active.id && p.voiceId && !p.hidden).map(p => [p.voiceId!, p.name]))} />
 
               <div>
                 <span className="mb-1.5 block text-xs text-muted-foreground">Writes</span>
