@@ -213,6 +213,8 @@ const CASTING_KEY = 'lp_podcast_casting';
  * personality keeps the voice they were cast with before; otherwise Claude casts them from the
  * ElevenLabs voices on offer, by their description against each voice's (a bellowing 1970s anchor
  * gets a big, warm, older voice, not a soft narrator), and that casting is kept for next time.
+ * The kept casting belongs to the voices on offer when it was made: when voices are added to or
+ * removed from the account, everyone is cast again from the new pool, so new voices get used.
  * Everyone on a panel sounds different. Returns host id to voice id; anyone it can't cast is left
  * to the recorder's own fallback.
  */
@@ -222,8 +224,12 @@ async function castPanel(hosts: Personality[]): Promise<Record<string, string>> 
   if (!voices.length) return {};
   const offered = new Set(voices.map(v => v.id));
   const { client } = getRedis();
+  const pool = [...offered].sort().join(',');
   let kept: Record<string, string> = {};
-  try { kept = JSON.parse((await client?.get(CASTING_KEY)) ?? '{}'); } catch { /* none yet */ }
+  try {
+    const saved = JSON.parse((await client?.get(CASTING_KEY)) ?? '{}') as { pool?: string; cast?: Record<string, string> };
+    if (saved.pool === pool && saved.cast) kept = saved.cast;
+  } catch { /* none yet */ }
 
   const out: Record<string, string> = {};
   const taken = new Set<string>();
@@ -256,7 +262,7 @@ Answer with one voice id per host id, from the list.`,
           out[host] = voice; taken.add(voice); kept[host] = voice;
         }
       }
-      await client?.set(CASTING_KEY, JSON.stringify(kept)).catch(() => {});
+      await client?.set(CASTING_KEY, JSON.stringify({ pool, cast: kept })).catch(() => {});
     } catch (err) {
       console.error('[podcast] casting failed; voices fall back to the default casting', err instanceof Error ? err.message : err);
     }
