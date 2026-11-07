@@ -20,7 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { castVoices, elevenLabsKey, listVoices, speak, spendCharacters } from '@/lib/ai/elevenlabs';
+import { castVoices, elevenLabsKey, speak, spendCharacters, voicePool } from '@/lib/ai/elevenlabs';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
 
 export const dynamic = 'force-dynamic';
@@ -44,11 +44,12 @@ export async function GET(req: NextRequest) {
   const line = ep?.chapters[c]?.lines[l];
   if (!ep || !line) return refuse('No such line.', 404);
 
-  // Only cache misses get here (the CDN answers the rest): about an episode and a half per visitor
-  // every ten minutes, which a listener skipping around never reaches.
-  if (!(await rateLimit('lp_rl_podcast_audio:', clientIp(req), 40, 10 * 60_000)).ok) return refuse('Slow down.', 429);
+  // Only cache misses get here (the CDN answers the rest). The player fetches a line ahead, so the
+  // first listener asks for a whole episode (up to 70 lines) in a few minutes: two episodes' worth
+  // per visitor every ten minutes, which a real listener never reaches.
+  if (!(await rateLimit('lp_rl_podcast_audio:', clientIp(req), 140, 10 * 60_000)).ok) return refuse('Slow down.', 429);
 
-  const pool = (await listVoices().catch(() => [])).map(v => v.id);
+  const pool = await voicePool();
   const voices = castVoices(ep.hosts, pool);
   const voice = voices[line.host] || voices[0];
   if (!voice) return refuse('No ElevenLabs voices to read with.', 502);
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     // The status and a short message only: never the request, which carries the key in its headers.
     const e = err as { statusCode?: number; message?: string };
-    console.error('[api/podcast/audio]', e.statusCode ?? '', String(e.message ?? err).slice(0, 200));
+    console.error('[api/podcast/audio]', e.statusCode ?? '', String(e.message ?? err).slice(0, 300));
     return refuse('The line could not be recorded.', 502);
   }
 }

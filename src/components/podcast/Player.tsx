@@ -18,6 +18,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Episode, Visual } from '@/lib/ai/podcast';
 import { PodcastEngine, type EngineState } from './engine';
+import { plainLine } from '@/lib/podcastText';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const KIND_LABEL: Record<string, string> = { open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
@@ -264,7 +265,7 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
             <AnimatePresence mode="wait">
               <motion.div key={`${s.chapter}-${s.line}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3, ease }}>
                 <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.16em]" style={{ color: tint(speaker) }}>{episode.hosts[speaker]?.name}</p>
-                {line && <Spoken text={line.text} char={s.playing || s.progress > 0 ? s.char : -1} />}
+                {line && <Spoken text={plainLine(line.text)} char={s.playing || s.progress > 0 ? s.char : -1} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -301,7 +302,7 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
                     data-now={now || undefined}
                     className={cn('flex w-full gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] leading-snug transition-colors', now ? 'bg-white/10 text-white' : 'text-white/55 hover:bg-white/[0.05] hover:text-white/85')}>
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: tint(l.host) }} />
-                    <span>{l.text}</span>
+                    <span>{plainLine(l.text)}</span>
                   </button>
                 </li>
               );

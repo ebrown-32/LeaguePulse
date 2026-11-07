@@ -90,6 +90,8 @@ const SHARED_PREFIXES = [
   'lp_ops', 'lp_feedback',
   // The Sleeper market crawl's lock and The Edge's cached answers (src/lib/market).
   'lp_market',
+  // The platform's one ElevenLabs account: characters spent this month, all leagues (src/lib/ai/elevenlabs.ts).
+  'lp_tts_platform',
 ];
 
 /**

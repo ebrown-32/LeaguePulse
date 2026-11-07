@@ -2,7 +2,8 @@
  * The Desk Weekly (lib/ai/podcast).
  *
  *   GET            the league's episodes, newest first, and whether recorded voices are on
- *   POST (admin)   write this week's episode now
+ *   POST (admin)   write an episode now: { week? } (default the latest finished week; an earlier
+ *                  week of this season is a look back, and replaces that week's episode)
  */
 
 import { NextResponse } from 'next/server';
@@ -21,10 +22,13 @@ export async function GET() {
 
 export async function POST(req: Request) {
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const body = await req.json().catch(() => ({})) as { week?: unknown };
+  const week = body.week === undefined ? undefined : Number(body.week);
+  if (week !== undefined && (!Number.isInteger(week) || week < 1 || week > 25)) return NextResponse.json({ error: 'Pick a week of this season.' }, { status: 400 });
   try {
     const [{ isAIConfigured }, { publishEpisode }] = await Promise.all([import('@/lib/ai/claude'), import('@/lib/ai/podcast')]);
     if (!(await isAIConfigured())) return NextResponse.json({ error: 'The AI desk is not set up for this league.' }, { status: 400 });
-    const episode = await publishEpisode();
+    const episode = await publishEpisode(week);
     return NextResponse.json({ episode });
   } catch (err) {
     console.error('[api/podcast]', err);

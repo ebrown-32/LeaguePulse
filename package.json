@@ -27,6 +27,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@upstash/redis": "^1.38.2",
+    "@vercel/blob": "^2.8.2",
     "@vercel/functions": "^3.3.0",
     "@vercel/kv": "^3.0.0",
     "ai": "^6.0.175",

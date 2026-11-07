@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw, Sparkles } from '@/components/icons';
 import PersonaStudio, { type StudioDraft, type StudioTarget } from './PersonaStudio';
 import VoicePicker from './VoicePicker';
+import PodcastAdmin from './PodcastAdmin';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import type { Personality, ContentKind } from '@/lib/ai/personalities';
@@ -551,6 +552,10 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
             Every post and reply is written by the AI, so fewer posts cost less. Franchise accounts&apos; scores and big days are free and always post.
           </p>
           {volumeError && <p className="mt-2 text-[11px] text-red-500">{volumeError}</p>}
+        </Section>
+
+        <Section title="The Desk Weekly" summary="Record an episode for any week of the season">
+          <PodcastAdmin password={password} />
         </Section>
 
         <Section title="Chat assistant" summary={assistantName || 'Unnamed'}>
