@@ -170,6 +170,24 @@ export async function refundCharacters(chars: number): Promise<void> {
 
 const modelId = () => process.env.ELEVENLABS_MODEL?.trim() || 'eleven_v4';
 
+/** Dialogue takes at most 100 characters of context either side: the end of what came before,
+ *  the start of what comes next, cut at a word. */
+const CONTEXT = 100;
+export function contextBefore(t?: string): string | undefined {
+  if (!t) return undefined;
+  const plain = plainLine(t);
+  if (plain.length <= CONTEXT) return plain;
+  const tail = plain.slice(-CONTEXT);
+  return tail.slice(tail.indexOf(' ') + 1);
+}
+export function contextAfter(t?: string): string | undefined {
+  if (!t) return undefined;
+  const plain = plainLine(t);
+  if (plain.length <= CONTEXT) return plain;
+  const head = plain.slice(0, CONTEXT);
+  return head.slice(0, head.lastIndexOf(' ') > 0 ? head.lastIndexOf(' ') : CONTEXT);
+}
+
 /**
  * A whole chapter, performed as one conversation (Text to Dialogue): the voices react to each
  * other, so it plays like a real panel rather than lines read one after another. One request
@@ -194,8 +212,8 @@ export async function performChapter(
     outputFormat: 'mp3_44100_96',
     // Lively, a little loose: the panel arguing, not reading.
     settings: { stability: 0.5 },
-    previousText: around.previous,
-    futureText: around.next,
+    previousText: contextBefore(around.previous),
+    futureText: contextAfter(around.next),
   });
   const spans = new Map<number, { start: number; end: number }>();
   for (const s of res.voiceSegments ?? []) {

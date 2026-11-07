@@ -28,6 +28,8 @@ export interface EngineState extends Position {
   char: number;
   rate: number;
   done: boolean;
+  /** Waiting on a recording: the first listener of a chapter waits while the panel records it. */
+  buffering: boolean;
 }
 
 type Listener = (s: EngineState) => void;
@@ -77,7 +79,7 @@ export class PodcastEngine {
   /** Whether lines are played from recordings. Turns false for the session if recordings keep failing. */
   recorded: boolean;
   private misses = 0;
-  private state: EngineState = { chapter: 0, line: 0, playing: false, progress: 0, char: 0, rate: 1, done: false };
+  private state: EngineState = { chapter: 0, line: 0, playing: false, progress: 0, char: 0, rate: 1, done: false, buffering: false };
   private listeners = new Set<Listener>();
   private audio: HTMLAudioElement | null = null;
   private ctx: AudioContext | null = null;
@@ -141,7 +143,7 @@ export class PodcastEngine {
 
   pause() {
     this.token++;
-    this.set({ playing: false });
+    this.set({ playing: false, buffering: false });
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     this.audio?.pause();
     cancelAnimationFrame(this.clock);
@@ -284,8 +286,11 @@ export class PodcastEngine {
   private speakChapter(my: number) {
     const c = this.state.chapter;
     const a = this.element();
+    const wait = window.setTimeout(() => { if (my === this.token) this.set({ buffering: true }); }, 350);
     this.fetchChapter(c).then(take => {
+      window.clearTimeout(wait);
       if (my !== this.token) return;
+      this.set({ buffering: false });
       if (!take) { this.lineMode.add(c); this.speakRecorded(my); return; }
       if (this.ep.chapters[c + 1]) this.fetchChapter(c + 1);
       const segs = take.segments;
@@ -382,8 +387,11 @@ export class PodcastEngine {
       this.clock = requestAnimationFrame(tick);
     };
 
+    const wait = window.setTimeout(() => { if (my === this.token) this.set({ buffering: true }); }, 350);
     this.fetchLine(chapter, line).then(url => {
+      window.clearTimeout(wait);
       if (my !== this.token) return;
+      this.set({ buffering: false });
       if (!url) { fallBack(); return; }
       this.prefetchNext();
       a.src = url;

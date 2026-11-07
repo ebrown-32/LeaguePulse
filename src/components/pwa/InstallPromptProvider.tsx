@@ -43,6 +43,15 @@ function detectStandalone(): boolean {
   return window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 }
 
+/**
+ * Shown inside another page: the live demo in the landing page's phone. There's nothing to install
+ * there, and on touch screens that phone takes no taps, so a prompt in it could never be closed.
+ */
+function inFrame(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return window.self !== window.top; } catch { return true; }
+}
+
 interface InstallPromptProviderProps {
   children: ReactNode;
   logoUrl?: string | null;
@@ -70,8 +79,8 @@ export function InstallPromptProvider({ children, logoUrl, leagueName }: Install
   }, []);
 
   useEffect(() => {
-    if (isStandalone || platform === 'other') return;
-    if (localStorage.getItem(DISMISSED_KEY)) return;
+    if (isStandalone || platform === 'other' || inFrame()) return;
+    try { if (localStorage.getItem(DISMISSED_KEY)) return; } catch { /* storage blocked: ask anyway */ }
 
     const timer = setTimeout(() => setShowModal(true), AUTO_SHOW_DELAY_MS);
     return () => clearTimeout(timer);
@@ -89,12 +98,12 @@ export function InstallPromptProvider({ children, logoUrl, leagueName }: Install
 
   const closeModal = (dismissPermanently: boolean) => {
     setShowModal(false);
-    if (dismissPermanently) localStorage.setItem(DISMISSED_KEY, '1');
+    if (dismissPermanently) { try { localStorage.setItem(DISMISSED_KEY, '1'); } catch { /* storage blocked */ } }
   };
 
   return (
     <InstallPromptContext.Provider
-      value={{ platform, isStandalone, canInstallNatively, promptInstall, openModal: () => setShowModal(true) }}
+      value={{ platform, isStandalone, canInstallNatively, promptInstall, openModal: () => { if (!inFrame()) setShowModal(true); } }}
     >
       {children}
       <InstallPromptModal
