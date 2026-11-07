@@ -452,17 +452,26 @@ without naming the players.
  * abandoned rather than published with a claim we have proven false.
  */
 /** Every factual check a draft must pass, run together. */
+/**
+ * Which checks run. `tradesOnly` is for writing about an earlier week (The Desk Weekly's look
+ * backs): the game status and standings checks compare against today, and a record that was
+ * right in week 3 is wrong against today's table. Trades are a fixed record, so they still apply.
+ */
+export interface FactCheckOptions { tradesOnly?: boolean }
+
 async function factProblems(
   content: unknown,
+  opts: FactCheckOptions = {},
 ): Promise<{ trade: string[]; status: string[]; record: string[] }> {
   const text = collectText(content).join(' ');
+  const none = Promise.resolve([] as string[]);
   const [trade, status, record] = await Promise.all([
     checkTradeClaims(text).catch(() => [] as string[]),
     // Game status: no calling an unfinished matchup final, no saying a player
     // who has finished has not played.
-    checkGameStatusClaims(text).catch(() => [] as string[]),
+    opts.tradesOnly ? none : checkGameStatusClaims(text).catch(() => [] as string[]),
     // Standings: no miscounting who is undefeated or winless.
-    checkRecordClaims(text).catch(() => [] as string[]),
+    opts.tradesOnly ? none : checkRecordClaims(text).catch(() => [] as string[]),
   ]);
   return { trade, status, record };
 }
@@ -470,8 +479,9 @@ async function factProblems(
 export async function publishable<T>(
   content: T,
   regenerate: (correction: string) => Promise<T>,
+  opts: FactCheckOptions = {},
 ): Promise<T> {
-  const first = await factProblems(content);
+  const first = await factProblems(content, opts);
   if (!first.trade.length && !first.status.length && !first.record.length) return content;
 
   console.error('[generate] factual errors, regenerating:', first);
@@ -502,7 +512,7 @@ export async function publishable<T>(
     'Write it again without those errors.',
   );
 
-  const still = await factProblems(corrected);
+  const still = await factProblems(corrected, opts);
   if (still.trade.length || still.status.length || still.record.length) {
     throw new Error(
       `Factual errors remain after correction: ${

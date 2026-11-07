@@ -14,8 +14,10 @@
  *                (api/podcast/audio); without it, read in the listener's browser (Web Speech),
  *                each host a different voice.
  *
- * One episode a week, after the week is final (the AI cron, Tuesdays), or when the admin asks.
- * The last eight are kept, per league.
+ * One episode a week, after the week is final (the AI cron, Tuesdays). Admins can also record any
+ * earlier week of the season from the AI Desk admin: a look back, written from that week as it
+ * stood (podcastWeek.ts), not from today's table. One episode per week; recording a week again
+ * replaces it. A season's worth are kept, per league, latest week first.
  */
 
 import { generateObject } from 'ai';
@@ -23,9 +25,11 @@ import { z } from 'zod';
 import { getRedis } from '@/lib/redisClient';
 import { claude, GROUNDING_RULES, MODEL_SMART, stripDashes } from './claude';
 import { briefBlock, publishable } from './generate';
-import { buildLeagueBrief, type LeagueBrief } from './leagueBrief';
+import { buildLeagueBrief, type BriefMatchup, type BriefMove } from './leagueBrief';
+import { weekSnapshot, type SnapshotTeam } from './podcastWeek';
 import { personaAvatarUrl } from './avatar';
 import type { Personality } from './personalities';
+import { DELIVERY_TAGS, keepDeliveryTags } from '@/lib/podcastText';
 
 export type Visual =
   | { type: 'matchup'; week: number; home: { team: string; points: number }; away: { team: string; points: number }; margin: number }
@@ -52,7 +56,7 @@ export interface Episode {
 }
 
 const KEY = 'lp_podcast_episodes';
-const KEEP = 8;
+const KEEP = 20;
 
 export async function listEpisodes(): Promise<Episode[]> {
   const { client } = getRedis();
@@ -64,11 +68,21 @@ export async function getEpisode(id: string): Promise<Episode | null> {
   return (await listEpisodes()).find(e => e.id === id) ?? null;
 }
 
+/** Keeps `ep`, in place of any earlier recording of the same week, latest week first. */
 async function saveEpisode(ep: Episode): Promise<void> {
   const { client } = getRedis();
   if (!client) throw new Error('The podcast needs storage (REDIS_URL) to keep its episodes.');
-  const all = (await listEpisodes()).filter(e => e.id !== ep.id);
-  await client.set(KEY, JSON.stringify([ep, ...all].slice(0, KEEP)));
+  const before = await listEpisodes();
+  const all = before.filter(e => e.id !== ep.id && !(e.season === ep.season && e.week === ep.week));
+  const sorted = [ep, ...all].sort((a, b) => b.season.localeCompare(a.season) || b.week - a.week || b.createdAt.localeCompare(a.createdAt));
+  const kept = sorted.slice(0, KEEP);
+  await client.set(KEY, JSON.stringify(kept));
+  // Recordings of episodes that were replaced or aged out go with them, so storage doesn't grow.
+  const gone = before.filter(e => !kept.some(k => k.id === e.id));
+  if (gone.length) {
+    const { forgetEpisode } = await import('./podcastAudio');
+    await Promise.all(gone.map(e => forgetEpisode(e.id, e.chapters.length)));
+  }
 }
 
 // ── The script ─────────────────────────────────────────────────────────────
@@ -92,12 +106,10 @@ function scriptSchema(n: number) {
 }
 type Script = z.infer<ReturnType<typeof scriptSchema>>;
 
-/** The things a chapter may show, numbered for the model, filled in from the brief here. */
-function references(b: LeagueBrief): { text: string; resolve: (ref: string) => Visual | null } {
-  const lastWeek = Math.max(0, ...b.recentMatchups.map(m => m.week));
-  const games = b.recentMatchups.filter(m => m.week === lastWeek);
-  const teams = [...b.teams].sort((x, y) => x.rank - y.rank);
-  const moves = b.recentMoves.slice(0, 6);
+/** The things a chapter may show, numbered for the model, filled in here from the record. */
+function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: BriefMove[]): { text: string; resolve: (ref: string) => Visual | null } {
+  const teams = [...teamsIn].sort((x, y) => x.rank - y.rank);
+  const moves = movesIn.slice(0, 6);
   const text = [
     'REFERENCES (what a chapter can put on screen; use the id):',
     ...games.map((m, i) => `matchup:${i} = week ${m.week}, ${m.home.teamName} ${m.home.points} vs ${m.away.teamName} ${m.away.points}`),
@@ -134,7 +146,9 @@ function pickHosts(people: Personality[]): Personality[] | null {
   return pool.slice(0, Math.min(pool.length, Math.random() < 0.5 ? 3 : 4));
 }
 
-async function writeScript(hosts: Personality[], refs: string, correction = ''): Promise<Script> {
+interface Brief { context: string; refs: string; focus: string }
+
+async function writeScript(hosts: Personality[], { context, refs, focus }: Brief, correction = ''): Promise<Script> {
   const panel = hosts.map((h, i) => `${i}. ${h.name} (${h.handle}), ${(h.type ?? 'media') === 'fan' ? 'a fan from the group chat' : 'a Desk writer'}. Voice: ${h.voice}`).join('\n');
   const { object } = await generateObject({
     model: claude(MODEL_SMART),
@@ -150,11 +164,11 @@ ${panel}
 
 Every host sounds like themselves, from their first word. Someone who knows this cast names the
 speaker without being told.`,
-    prompt: `${await briefBlock()}
+    prompt: `${context}
 
 ${refs}
 
-Write this week's episode: a recap of the week just played, for the managers in this league.
+${focus}
 
 IT HAS TO BE FUNNY. This is a comedy show with real numbers, not a news bulletin with jokes.
 - Bits, not one-liners: a running gag that comes back in the sign-off, a callback to the cold open.
@@ -173,7 +187,15 @@ The shape:
 
 WRITTEN FOR THE EAR. Short sentences. Contractions. Say numbers the way people say them
 ("one twenty-four" for 124.3 is fine, or "a hundred and twenty-four"). No lists, no
-parentheses, no emoji, no hashtags, no stage directions, no sound effects in brackets.
+parentheses, no emoji, no hashtags, no stage directions.
+
+PERFORMED, NOT READ. The voices are recorded by actors who act out a few bracketed cues. Use
+them where a real person would actually do it, at most one per line and in under half the lines:
+${DELIVERY_TAGS.map(t => `[${t}]`).join(' ')}
+e.g. "[scoffs] Eighty-eight points. That's not a team, that's a cry for help." Nothing else goes
+in brackets. Let people react to each other: "Wait, what?", "No. No no no.", trailing off with
+"...", a laugh at someone else's joke.
+
 Call managers by name. Every claim comes from the league context above: the
 scores, records and moves are the real ones. Each chapter's ref must point at the thing it's
 about.
@@ -182,36 +204,142 @@ ${correction}`,
   return stripDashes(object);
 }
 
-/** Writes, checks and keeps this week's episode. */
-export async function publishEpisode(): Promise<Episode> {
+// ── Casting ────────────────────────────────────────────────────────────────
+
+const CASTING_KEY = 'lp_podcast_casting';
+
+/**
+ * A speaking voice for every host, matched to who they are. The admin's pick wins; otherwise the
+ * personality keeps the voice they were cast with before; otherwise Claude casts them from the
+ * ElevenLabs voices on offer, by their description against each voice's (a bellowing 1970s anchor
+ * gets a big, warm, older voice, not a soft narrator), and that casting is kept for next time.
+ * Everyone on a panel sounds different. Returns host id to voice id; anyone it can't cast is left
+ * to the recorder's own fallback.
+ */
+async function castPanel(hosts: Personality[]): Promise<Record<string, string>> {
+  const { listVoices } = await import('./elevenlabs');
+  const voices = await listVoices().catch(() => []);
+  if (!voices.length) return {};
+  const offered = new Set(voices.map(v => v.id));
+  const { client } = getRedis();
+  let kept: Record<string, string> = {};
+  try { kept = JSON.parse((await client?.get(CASTING_KEY)) ?? '{}'); } catch { /* none yet */ }
+
+  const out: Record<string, string> = {};
+  const taken = new Set<string>();
+  for (const h of hosts) if (h.voiceId && offered.has(h.voiceId) && !taken.has(h.voiceId)) { out[h.id] = h.voiceId; taken.add(h.voiceId); }
+  for (const h of hosts) {
+    const v = kept[h.id];
+    if (!out[h.id] && v && offered.has(v) && !taken.has(v)) { out[h.id] = v; taken.add(v); }
+  }
+
+  const uncast = hosts.filter(h => !out[h.id]);
+  const free = voices.filter(v => !taken.has(v.id));
+  if (uncast.length && free.length >= uncast.length) {
+    try {
+      const { object } = await generateObject({
+        model: claude(MODEL_SMART),
+        schema: z.object({ casting: z.array(z.object({ host: z.string(), voice: z.string() })) }),
+        schemaName: 'Casting',
+        prompt: `You are casting voice actors for a funny fantasy football podcast. Give each host the voice that best fits who they are: age, energy, attitude, accent where it matters. Each host gets a different voice.
+
+HOSTS:
+${uncast.map(h => `- id ${h.id}: ${h.name}, ${h.tagline}. ${h.voice.slice(0, 400)}`).join('\n')}
+
+VOICES (id: name, what it sounds like):
+${free.map(v => `- ${v.id}: ${v.name}${v.description ? `, ${v.description}` : ''}`).join('\n')}
+
+Answer with one voice id per host id, from the list.`,
+      });
+      for (const { host, voice } of object.casting) {
+        if (uncast.some(h => h.id === host) && !out[host] && offered.has(voice) && !taken.has(voice)) {
+          out[host] = voice; taken.add(voice); kept[host] = voice;
+        }
+      }
+      await client?.set(CASTING_KEY, JSON.stringify(kept)).catch(() => {});
+    } catch (err) {
+      console.error('[podcast] casting failed; voices fall back to the default casting', err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
+}
+
+/**
+ * Writes, checks and keeps an episode: the latest finished week by default, or `week`, an earlier
+ * week of this season, as a look back.
+ */
+export async function publishEpisode(week?: number): Promise<Episode> {
   const [brief, { getPersonalities }] = await Promise.all([buildLeagueBrief(), import('./store')]);
   const hosts = pickHosts(await getPersonalities());
   if (!hosts) throw new Error('The podcast needs at least two personalities on the Desk.');
-  const { text: refs, resolve } = references(brief);
 
-  const first = await writeScript(hosts, refs);
-  const script = await publishable(first, async correction => writeScript(hosts, refs, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`));
+  const latest = Math.max(0, ...brief.recentMatchups.map(m => m.week));
+  const target = week ?? latest;
+  if (!target || !Number.isInteger(target) || target < 1 || target > latest) {
+    throw new Error(latest ? `Pick a week from 1 to ${latest}.` : 'No week of this season has finished yet.');
+  }
 
-  const week = Math.max(0, ...brief.recentMatchups.map(m => m.week)) || brief.week;
+  let ctx: Brief, refsOf: ReturnType<typeof references>, lookBack = false;
+  if (target === latest) {
+    refsOf = references(brief.recentMatchups.filter(m => m.week === latest), brief.teams, brief.recentMoves);
+    ctx = { context: await briefBlock(), refs: refsOf.text, focus: "Write this week's episode: a recap of the week just played, for the managers in this league." };
+  } else {
+    const snap = await weekSnapshot(brief, target);
+    if (!snap.games.length) throw new Error(`Week ${target} has no finished games on record.`);
+    refsOf = references(snap.games, snap.table, snap.moves);
+    lookBack = true;
+    ctx = {
+      context: `LEAGUE CONTEXT FOR THIS EPISODE (the complete, authoritative record of week ${target}):\n\n${snap.text}`,
+      refs: refsOf.text,
+      focus: `Write the episode for week ${target}: a recap of that week, for the managers in this league, as if it had just been played.`,
+    };
+  }
+
+  // Cast while the script is written: the two don't depend on each other.
+  const casting = castPanel(hosts).catch(() => ({} as Record<string, string>));
+  const first = await writeScript(hosts, ctx);
+  // A look back is checked against the trade record only: the standings and game-status checks
+  // compare against today, which a week-3 record would fail while being right.
+  const script = await publishable(first, async correction => writeScript(hosts, ctx, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: lookBack });
+
   const past = await listEpisodes();
-  const host = (p: Personality): Host => ({ id: p.id, name: p.name, handle: p.handle, avatar: personaAvatarUrl(p), accent: p.accent, ...(p.voiceId ? { voiceId: p.voiceId } : {}) });
+  const same = past.find(e => e.season === brief.season && e.week === target);
+  const cast = await casting;
+  const host = (p: Personality): Host => {
+    const voiceId = cast[p.id] ?? p.voiceId;
+    return { id: p.id, name: p.name, handle: p.handle, avatar: personaAvatarUrl(p), accent: p.accent, ...(voiceId ? { voiceId } : {}) };
+  };
   const ep: Episode = {
-    id: `${brief.season}-w${week}-${Date.now().toString(36)}`,
+    id: `${brief.season}-w${target}-${Date.now().toString(36)}`,
     leagueName: brief.leagueName,
     season: brief.season,
-    week,
-    number: (past[0]?.number ?? 0) + 1,
+    week: target,
+    number: same?.number ?? Math.max(0, ...past.map(e => e.number)) + 1,
     title: script.title,
     teaser: script.teaser,
     createdAt: new Date().toISOString(),
     hosts: hosts.map(host),
     chapters: script.chapters.map(c => ({
-      title: c.title, kind: c.kind, visual: c.ref === 'none' ? null : resolve(c.ref),
-      lines: c.lines.map(l => ({ host: Math.max(0, Math.min(hosts.length - 1, l.host)), text: l.text.trim() })).filter(l => l.text),
+      title: c.title, kind: c.kind, visual: c.ref === 'none' ? null : refsOf.resolve(c.ref),
+      lines: c.lines.map(l => ({ host: Math.max(0, Math.min(hosts.length - 1, l.host)), text: keepDeliveryTags(l.text) })).filter(l => l.text),
     })).filter(c => c.lines.length),
   };
   await saveEpisode(ep);
   return ep;
+}
+
+/** For the admin: the season's finished weeks, each with its episode if it has one. */
+export async function episodeWeeks(): Promise<{ season: string; weeks: { week: number; episode: { id: string; title: string; createdAt: string } | null }[] }> {
+  const brief = await buildLeagueBrief();
+  const latest = Math.max(0, ...brief.recentMatchups.map(m => m.week));
+  const eps = (await listEpisodes()).filter(e => e.season === brief.season);
+  return {
+    season: brief.season,
+    weeks: Array.from({ length: latest }, (_, i) => latest - i).map(week => {
+      const e = eps.find(x => x.week === week);
+      return { week, episode: e ? { id: e.id, title: e.title, createdAt: e.createdAt } : null };
+    }),
+  };
 }
 
 /** For the cron: once a week, on Tuesday (Eastern) after the week is final, if there isn't one yet. */

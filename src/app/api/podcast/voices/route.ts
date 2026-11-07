@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/tenant/admin';
-import { elevenLabsKey, listVoices } from '@/lib/ai/elevenlabs';
+import { elevenLabsKey, listVoices, voicesProblem } from '@/lib/ai/elevenlabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ recorded: true, voices: await listVoices() });
   } catch (err) {
-    console.error('[api/podcast/voices]', err);
-    return NextResponse.json({ recorded: true, voices: [], error: 'Could not load the voices from ElevenLabs.' }, { status: 502 });
+    const problem = voicesProblem(err);
+    console.error('[api/podcast/voices]', problem);
+    return NextResponse.json({ recorded: true, voices: [], error: problem }, { status: 502 });
   }
 }

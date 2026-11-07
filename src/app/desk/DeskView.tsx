@@ -1,6 +1,5 @@
 'use client';
 
-import PodcastTeaser from '@/components/podcast/Teaser';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -126,8 +125,6 @@ export default function DeskView({ leagueName }: { leagueName?: string | null } 
       subtitle="Beat writers and fans with live takes, previews and commentary."
       className="max-w-3xl"
     >
-      {/* This week's episode of The Desk Weekly, when there is one. */}
-      <PodcastTeaser />
       {/* Full bleed. The feed escapes PageLayout's gutters so the dividers run
           edge to edge and the timeline reads as the page rather than as a
           widget sitting on it. Each post puts the gutters back for itself. */}

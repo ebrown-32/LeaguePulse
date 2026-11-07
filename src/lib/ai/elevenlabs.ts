@@ -6,9 +6,13 @@
  *                                        in the browser
  *   ELEVENLABS_VOICES                    optional: a comma list of voice ids to offer and cast
  *                                        from; unset, every voice on the ElevenLabs account
- *   ELEVENLABS_MODEL                     optional, default eleven_multilingual_v2
- *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 60000 (about $5 a league a month on
- *                                        the default model); past it, browsers read the episode
+ *   ELEVENLABS_MODEL                     optional, default eleven_v4 (the most human: it performs
+ *                                        the script's delivery tags, like [laughs])
+ *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 12000 (about two episodes); past it,
+ *                                        browsers read that league's episodes
+ *   ELEVENLABS_MONTHLY_CHARS_TOTAL       optional, default 36000 (90% of the Starter plan's 40,000):
+ *                                        the whole platform's month, every league together, so one
+ *                                        league can't spend everyone's. Raise both with the plan.
  *
  * Admins pick a voice per personality in the AI Desk (Personality.voiceId). A pick only counts
  * when it is one of the voices on offer, so a saved id can't reach voices (or prices) outside the
@@ -19,6 +23,7 @@
 import 'server-only';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { getRedis } from '@/lib/redisClient';
+import { plainLine } from '@/lib/podcastText';
 
 export interface SpeakingVoice { id: string; name: string; description: string; preview: string | null }
 
@@ -52,7 +57,8 @@ export function listVoices(): Promise<SpeakingVoice[]> {
       .map(v => ({
         id: v.voiceId,
         name: (v.name ?? 'Voice').split(' - ')[0].trim(),
-        description: [v.labels?.gender, v.labels?.age?.replace('_', ' '), v.labels?.accent, v.labels?.descriptive ?? v.labels?.description, v.labels?.use_case?.replace('_', ' ')]
+        // "Roger - Laid-Back, Casual, Resonant": the part after the dash is the voice's own blurb.
+        description: [v.labels?.gender, v.labels?.age?.replace('_', ' '), v.labels?.accent, (v.name ?? '').split(' - ').slice(1).join(' - ').trim() || v.labels?.descriptive || v.labels?.description, v.labels?.use_case?.replace('_', ' ')]
           .filter(Boolean).join(', ') || (v.description ?? '').slice(0, 80),
         preview: v.previewUrl ?? null,
       }))
@@ -61,6 +67,36 @@ export function listVoices(): Promise<SpeakingVoice[]> {
   memo = { at: Date.now(), voices };
   voices.catch(() => { memo = null; });
   return voices;
+}
+
+/**
+ * Stand-ins when the account's voices can't be listed (a key without the voices_read permission,
+ * or ElevenLabs briefly down): ElevenLabs' own premade voices, which any key can speak with, so
+ * an episode is still recorded rather than silent.
+ */
+const STAND_INS = ['JBFqnCBsd6RMkjVDRZzb', 'EXAVITQu4vr4xnSDxMaL', 'onwK4e9ZLuTAKqWW03F9', 'XB0fDUnXU5powFXDhCwa'];
+
+let warned = 0;
+/** The voice ids to cast from: the ones on offer, or the stand-ins when they can't be listed. */
+export async function voicePool(): Promise<string[]> {
+  try {
+    const ids = (await listVoices()).map(v => v.id);
+    if (ids.length) return ids;
+  } catch (err) {
+    if (Date.now() - warned > 10 * 60_000) {
+      warned = Date.now();
+      console.warn('[elevenlabs] could not list voices, using stand-ins:', voicesProblem(err));
+    }
+  }
+  return STAND_INS;
+}
+
+/** What went wrong listing voices, in words an admin can act on. */
+export function voicesProblem(err: unknown): string {
+  const e = err as { statusCode?: number; body?: { detail?: { status?: string; message?: string } } };
+  if (e?.body?.detail?.status === 'missing_permissions') return 'The ElevenLabs API key needs the "Voices: Read" permission. Turn it on for the key in ElevenLabs (Settings, API Keys), or make a new key with it.';
+  if (e?.statusCode === 401) return 'ElevenLabs rejected the API key. Check ELEVENLABS_API_KEY.';
+  return 'Could not load the voices from ElevenLabs.';
 }
 
 function hash(s: string): number {
@@ -97,21 +133,87 @@ export function castVoices(hosts: { id: string; voiceId?: string }[], pool: stri
 
 // ── Spending ────────────────────────────────────────────────────────────────
 
-const monthKey = () => `lp_podcast_tts_chars:${new Date().toISOString().slice(0, 7)}`;
-const monthlyCap = () => Number(process.env.ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE || 60_000);
+const month = () => new Date().toISOString().slice(0, 7);
+const leagueCap = () => Number(process.env.ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE || 12_000);
+const platformCap = () => Number(process.env.ELEVENLABS_MONTHLY_CHARS_TOTAL || 36_000);
+
+async function charge(redis: NonNullable<ReturnType<typeof getRedis>['client']>, key: string, chars: number, cap: number): Promise<boolean> {
+  const total = await redis.incrby(key, chars);
+  if (total === chars) await redis.expire(key, 40 * 24 * 3600);
+  if (total > cap) { await redis.incrby(key, -chars); return false; }
+  return true;
+}
 
 /**
- * Charges `chars` to this league's month (the Redis keys are per league). False when that would
- * go over the cap, and nothing is charged. Without Redis (local dev) there is no cap.
+ * Charges `chars` to this league's month and the platform's. False when either would go over its
+ * cap, and nothing is charged. Without Redis (local dev) there is no cap.
  */
 export async function spendCharacters(chars: number): Promise<boolean> {
   const { client: redis } = getRedis();
   if (!redis) return true;
-  const key = monthKey();
-  const total = await redis.incrby(key, chars);
-  if (total === chars) await redis.expire(key, 40 * 24 * 3600);
-  if (total > monthlyCap()) { await redis.incrby(key, -chars); return false; }
+  const m = month();
+  if (!(await charge(redis, `lp_tts_platform:${m}`, chars, platformCap()))) return false;
+  if (!(await charge(redis, `lp_podcast_tts_chars:${m}`, chars, leagueCap()))) {
+    await redis.incrby(`lp_tts_platform:${m}`, -chars);
+    return false;
+  }
   return true;
+}
+
+/** Gives back characters charged for a recording that then failed. */
+export async function refundCharacters(chars: number): Promise<void> {
+  const { client: redis } = getRedis();
+  if (!redis) return;
+  const m = month();
+  await Promise.all([redis.incrby(`lp_tts_platform:${m}`, -chars), redis.incrby(`lp_podcast_tts_chars:${m}`, -chars)]).catch(() => {});
+}
+
+const modelId = () => process.env.ELEVENLABS_MODEL?.trim() || 'eleven_v4';
+
+/**
+ * A whole chapter, performed as one conversation (Text to Dialogue): the voices react to each
+ * other, so it plays like a real panel rather than lines read one after another. One request
+ * instead of one a line. Returns the MP3 and where each line starts and ends in it.
+ *
+ * Dialogue takes only the v3 and v4 models; with an older model set this throws, and the caller
+ * falls back to recording line by line.
+ */
+export async function performChapter(
+  lines: { voiceId: string; text: string }[],
+  around: { previous?: string; next?: string } = {},
+): Promise<{ audio: Buffer; segments: { line: number; start: number; end: number }[] }> {
+  const el = elevenLabs();
+  if (!el) throw new Error('ElevenLabs is not set up');
+  const model = modelId();
+  if (!/^eleven_v[34]/.test(model)) throw new Error(`${model} can't perform dialogue`);
+  if (lines.some(l => !VOICE_ID.test(l.voiceId))) throw new Error('Not a voice id');
+  const res = await el.textToDialogue.convertWithTimestamps({
+    inputs: lines.map(l => ({ text: l.text, voiceId: l.voiceId })),
+    modelId: model,
+    // Speech needs far less than music: 96kbps sounds the same and halves what's stored and served.
+    outputFormat: 'mp3_44100_96',
+    // Lively, a little loose: the panel arguing, not reading.
+    settings: { stability: 0.5 },
+    previousText: around.previous,
+    futureText: around.next,
+  });
+  const spans = new Map<number, { start: number; end: number }>();
+  for (const s of res.voiceSegments ?? []) {
+    const had = spans.get(s.dialogueInputIndex);
+    spans.set(s.dialogueInputIndex, had
+      ? { start: Math.min(had.start, s.startTimeSeconds), end: Math.max(had.end, s.endTimeSeconds) }
+      : { start: s.startTimeSeconds, end: s.endTimeSeconds });
+  }
+  const segments = lines.map((_, i) => ({ line: i, ...(spans.get(i) ?? { start: -1, end: -1 }) }));
+  // Lines the timings missed get the gap they sit in, so every line can still be found and seeked.
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i].start >= 0) continue;
+    const prev = segments.slice(0, i).reverse().find(x => x.start >= 0);
+    const next = segments.slice(i + 1).find(x => x.start >= 0);
+    segments[i].start = prev ? prev.end : 0;
+    segments[i].end = next ? next.start : segments[i].start;
+  }
+  return { audio: Buffer.from(res.audioBase64, 'base64'), segments };
 }
 
 /** One line, as MP3. Voice settings follow what the model supports (v4 has no style). */
@@ -119,17 +221,32 @@ export async function speak(voiceId: string, text: string, around: { previous?: 
   const el = elevenLabs();
   if (!el) throw new Error('ElevenLabs is not set up');
   if (!VOICE_ID.test(voiceId)) throw new Error('Not a voice id');
-  const modelId = process.env.ELEVENLABS_MODEL?.trim() || 'eleven_multilingual_v2';
-  const v4 = modelId.startsWith('eleven_v4');
-  return el.textToSpeech.convert(voiceId, {
-    text,
-    modelId,
-    outputFormat: 'mp3_44100_128',
-    previousText: around.previous,
-    nextText: around.next,
-    // A sports-radio read: lively, a little loose, the voice's own character up front.
-    voiceSettings: v4
-      ? { stability: 0.4, similarityBoost: 0.8 }
-      : { stability: 0.4, similarityBoost: 0.8, style: 0.35, useSpeakerBoost: true },
-  });
+  const model0 = modelId();
+  const read = (model: string) => {
+    const v4 = model.startsWith('eleven_v4');
+    // Only v4 performs delivery tags; an older model would read "[laughs]" out loud.
+    const say = (t?: string) => (t === undefined ? undefined : v4 ? t : plainLine(t));
+    return el.textToSpeech.convert(voiceId, {
+      text: say(text)!,
+      modelId: model,
+      outputFormat: 'mp3_44100_128',
+      previousText: say(around.previous),
+      nextText: say(around.next),
+      // A sports-radio read: lively, a little loose, the voice's own character up front. v4 takes
+      // only these two; older models also take style and speaker boost.
+      voiceSettings: v4
+        ? { stability: 0.5, similarityBoost: 0.8 }
+        : { stability: 0.4, similarityBoost: 0.8, style: 0.35, useSpeakerBoost: true },
+    });
+  };
+  try {
+    return await read(model0);
+  } catch (err) {
+    // A model the account or voice can't use (400/403/422): the line is still recorded, on the
+    // previous generation, rather than falling back to the browser's voice.
+    const status = (err as { statusCode?: number }).statusCode;
+    if (model0 === 'eleven_multilingual_v2' || !status || ![400, 403, 422].includes(status)) throw err;
+    console.warn('[elevenlabs]', model0, 'refused with', status, '; using eleven_multilingual_v2');
+    return read('eleven_multilingual_v2');
+  }
 }
