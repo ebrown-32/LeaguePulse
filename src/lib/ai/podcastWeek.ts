@@ -7,7 +7,11 @@
  *   - that week's results
  *   - the table after it (wins, losses, ties and points from weeks 1 to N, median games
  *     included where the league plays them; regular season only)
- *   - that week's moves, where the brief's transaction window still has them
+ *   - that week's moves and the three weeks' before (labelled by week), where the brief's
+ *     transaction window still has them; nothing after the week
+ *
+ * Every episode is written from this, the latest finished week included: the live brief carries
+ * the week in progress (its scores, who's trailing), and an episode about last week must not.
  *
  * Server only.
  */
@@ -97,7 +101,9 @@ export async function weekSnapshot(brief: LeagueBrief, week: number): Promise<We
       topPlayers: [],
     }));
 
-  const moves = brief.recentMoves.filter(m => m.season === brief.season && m.week === week);
+  const moves = brief.recentMoves
+    .filter(m => m.season === brief.season && m.week <= week && m.week >= week - 3)
+    .sort((a, b) => b.week - a.week);
   const playoffs = week >= brief.playoffWeekStart;
   const tableWeek = Math.min(week, brief.playoffWeekStart - 1);
 
@@ -112,8 +118,8 @@ export async function weekSnapshot(brief: LeagueBrief, week: number): Promise<We
     `STANDINGS AFTER WEEK ${tableWeek} (regular season, wins then points):`,
     ...table.map(t => `${t.rank}. ${t.teamName}${t.manager ? ` (${t.manager})` : ''}: ${t.record}, ${t.pointsFor} points`),
     '',
-    `MOVES DURING WEEK ${week}:`,
-    ...(moves.length ? moves.map(m => `- ${m.type}: ${m.summary}`) : ['- none on record (do not invent any)']),
+    `MOVES, WEEK ${week} AND THE THREE WEEKS BEFORE (say which week when you bring one up):`,
+    ...(moves.length ? moves.map(m => `- week ${m.week}, ${m.type}: ${m.summary}`) : ['- none on record (do not invent any)']),
   ].join('\n');
 
   return { week, games, table, moves, playoffs, text };

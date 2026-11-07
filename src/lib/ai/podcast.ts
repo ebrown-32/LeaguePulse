@@ -24,7 +24,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { getRedis } from '@/lib/redisClient';
 import { claude, GROUNDING_RULES, MODEL_SMART, stripDashes } from './claude';
-import { briefBlock, publishable } from './generate';
+import { publishable } from './generate';
 import { buildLeagueBrief, type BriefMatchup, type BriefMove } from './leagueBrief';
 import { weekSnapshot, type SnapshotTeam } from './podcastWeek';
 import { personaAvatarUrl } from './avatar';
@@ -208,6 +208,9 @@ ${correction}`,
 
 const CASTING_KEY = 'lp_podcast_casting';
 
+/** Said up front, because the week after is often under way when an episode is written. */
+const GAME_STATUS_NOTE = 'TIMING: this episode is set at the moment its week ended. Games, scores, records and news from later weeks are off limits, even ones you might have heard of.';
+
 /**
  * A speaking voice for every host, matched to who they are. The admin's pick wins; otherwise the
  * personality keeps the voice they were cast with before; otherwise Claude casts them from the
@@ -285,28 +288,26 @@ export async function publishEpisode(week?: number): Promise<Episode> {
     throw new Error(latest ? `Pick a week from 1 to ${latest}.` : 'No week of this season has finished yet.');
   }
 
-  let ctx: Brief, refsOf: ReturnType<typeof references>, lookBack = false;
-  if (target === latest) {
-    refsOf = references(brief.recentMatchups.filter(m => m.week === latest), brief.teams, brief.recentMoves);
-    ctx = { context: await briefBlock(), refs: refsOf.text, focus: "Write this week's episode: a recap of the week just played, for the managers in this league." };
-  } else {
-    const snap = await weekSnapshot(brief, target);
-    if (!snap.games.length) throw new Error(`Week ${target} has no finished games on record.`);
-    refsOf = references(snap.games, snap.table, snap.moves);
-    lookBack = true;
-    ctx = {
-      context: `LEAGUE CONTEXT FOR THIS EPISODE (the complete, authoritative record of week ${target}):\n\n${snap.text}`,
-      refs: refsOf.text,
-      focus: `Write the episode for week ${target}: a recap of that week, for the managers in this league, as if it had just been played.`,
-    };
-  }
+  // Every episode, the latest week's included, is written from the week as it stood when it
+  // finished (podcastWeek.ts), never from the live brief: that carries the week in progress, and
+  // its scores and storylines leaked into last week's episode.
+  const snap = await weekSnapshot(brief, target);
+  if (!snap.games.length) throw new Error(`Week ${target} has no finished games on record.`);
+  const refsOf = references(snap.games, snap.table, snap.moves);
+  const ctx: Brief = {
+    context: `${GAME_STATUS_NOTE}\n\nLEAGUE CONTEXT FOR THIS EPISODE (the complete, authoritative record of week ${target}):\n\n${snap.text}`,
+    refs: refsOf.text,
+    focus: `Write the episode for week ${target}: a recap of that week, for the managers in this league, as if it had just been played. Week ${target + 1} and anything after it doesn't exist yet.`,
+  };
 
   // Cast while the script is written: the two don't depend on each other.
   const casting = castPanel(hosts).catch(() => ({} as Record<string, string>));
   const first = await writeScript(hosts, ctx);
   // A look back is checked against the trade record only: the standings and game-status checks
   // compare against today, which a week-3 record would fail while being right.
-  const script = await publishable(first, async correction => writeScript(hosts, ctx, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: lookBack });
+  // Checked against the trade record only: the standings and game-status checks compare against
+  // today, which a record that was right after week 7 would fail.
+  const script = await publishable(first, async correction => writeScript(hosts, ctx, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: true });
 
   const past = await listEpisodes();
   const same = past.find(e => e.season === brief.season && e.week === target);
