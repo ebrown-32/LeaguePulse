@@ -71,6 +71,29 @@ function silence(): string {
   return silent;
 }
 
+/**
+ * iPhone and iPad (every browser there is Safari underneath) and Safari on a Mac. There, audio
+ * played through the Web Audio API is muted by the ring/silent switch and can stall when the page
+ * is backgrounded, so the voices play straight from the audio element, and the level meter is
+ * felt, not measured.
+ */
+function appleAudio(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  const safari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(ua);
+  return ios || safari;
+}
+
+/** Why a play() was refused: only some of these mean the recording is bad. */
+type PlayRefusal = 'blocked' | 'interrupted' | 'failed';
+function refusal(err: unknown): PlayRefusal {
+  const name = (err as { name?: string })?.name;
+  // Blocked: the browser wants a tap. Interrupted: a pause, a skip or the next load got there
+  // first. Neither says anything about the recording.
+  return name === 'NotAllowedError' ? 'blocked' : name === 'AbortError' ? 'interrupted' : 'failed';
+}
+
 /** The show's sound files, fetched once a page whatever players come and go. */
 const RAW_SOUNDS = new Map<string, Promise<ArrayBuffer | null>>();
 
@@ -120,8 +143,10 @@ export class PodcastEngine {
       let sum = 0; for (const v of d) sum += ((v - 128) / 128) ** 2;
       return Math.min(1, Math.sqrt(sum / d.length) * 4);
     }
-    // Speech can't be measured: a syllable-ish pulse, brighter right after each word.
     const t = performance.now();
+    // A recording playing without a meter (Safari): a speech-like pulse while it plays.
+    if (this.recorded && this.audio && !this.audio.paused) return 0.4 + 0.3 * Math.abs(Math.sin(t / 110)) * Math.abs(Math.sin(t / 47 + 1));
+    // Speech can't be measured: a syllable-ish pulse, brighter right after each word.
     const fresh = Math.max(0, 1 - (t - this.boundaryAt) / 260);
     return 0.35 + 0.25 * Math.abs(Math.sin(t / 95)) + 0.35 * fresh;
   }
@@ -253,7 +278,15 @@ export class PodcastEngine {
   private fetchChapter(c: number) {
     let got = this.takes.get(c);
     if (!got) {
-      got = fetch(`/api/podcast/chapter?ep=${encodeURIComponent(this.ep.id)}&c=${c}`)
+      const url = `/api/podcast/chapter?ep=${encodeURIComponent(this.ep.id)}&c=${c}`;
+      // 503: someone else's play is recording this chapter right now. It's worth waiting for
+      // rather than recording the chapter again line by line.
+      const ask = async (tries: number): Promise<Response> => {
+        const r = await fetch(url);
+        if (r.status === 503 && tries > 0) { await new Promise(res => setTimeout(res, 3000)); return ask(tries - 1); }
+        return r;
+      };
+      got = ask(2)
         .then(async r => {
           if (!r.ok) return null;
           const segments = JSON.parse(r.headers.get('x-lp-segments') || '[]') as { line: number; start: number; end: number }[];
@@ -269,11 +302,12 @@ export class PodcastEngine {
     return got;
   }
 
-  /** The one audio element everything recorded plays through, wired to the level meter. */
+  /** The one audio element everything recorded plays through, wired to the level meter (except
+   *  on Apple devices: see appleAudio). Everything it plays is from this site, as blobs. */
   private element(): HTMLAudioElement {
     const a = this.audio ?? (this.audio = new Audio());
-    a.crossOrigin = 'anonymous';
-    if (this.ctx && !this.source) {
+    a.preload = 'auto';
+    if (this.ctx && !this.source && !appleAudio()) {
       try {
         this.source = this.ctx.createMediaElementSource(a);
         this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 1024;
@@ -320,8 +354,9 @@ export class PodcastEngine {
         this.clock = requestAnimationFrame(tick);
       };
       a.play().then(() => { this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
-        if ((err as { name?: string })?.name === 'NotAllowedError') this.set({ playing: false });
-        else if (my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); }
+        const why = refusal(err);
+        if (why === 'blocked') this.set({ playing: false });
+        else if (why === 'failed' && my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); }
       });
     });
   }
@@ -371,13 +406,14 @@ export class PodcastEngine {
     this.loadedChapter = -1;
     const text = this.text;
     // Not recorded (over the month's allowance, or ElevenLabs down): the line is read in the browser
-    // instead, and after two misses in a row the rest of the episode is too, without asking again.
+    // instead. Only after three lines in a row come back unrecorded from the server does the rest
+    // of the episode follow without asking again; a hiccup playing one line never does that.
     let fellBack = false;
-    const fallBack = () => {
+    const fallBack = (refused: boolean) => {
       if (my !== this.token || fellBack) return;
       fellBack = true;
       cancelAnimationFrame(this.clock);
-      if (++this.misses >= 2) this.recorded = false;
+      if (refused && ++this.misses >= 3) this.recorded = false;
       this.speakSynth(my);
     };
     const tick = () => {
@@ -392,17 +428,16 @@ export class PodcastEngine {
       window.clearTimeout(wait);
       if (my !== this.token) return;
       this.set({ buffering: false });
-      if (!url) { fallBack(); return; }
+      if (!url) { fallBack(true); return; }
       this.prefetchNext();
       a.src = url;
       a.playbackRate = this.state.rate;
       a.onended = () => { this.misses = 0; this.advance(my); };
-      a.onerror = fallBack;
+      a.onerror = () => fallBack(false);
       a.play().then(() => { this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
-        // Only a blocked autoplay means the listener has to press play; anything else is a
-        // recording that didn't play, and the browser reads the line instead.
-        if ((err as { name?: string })?.name === 'NotAllowedError') this.set({ playing: false });
-        else fallBack();
+        const why = refusal(err);
+        if (why === 'blocked') this.set({ playing: false });
+        else if (why === 'failed') fallBack(false);
       });
     });
   }
@@ -419,7 +454,7 @@ export class PodcastEngine {
     if (typeof window === 'undefined') return;
     if (this.recorded && !this.audio) {
       const a = this.audio = new Audio();
-      a.crossOrigin = 'anonymous';
+      a.preload = 'auto';
       a.src = silence();
       a.play().catch(() => { /* still unlocked, or nothing more to do */ });
     }
