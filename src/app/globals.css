@@ -540,6 +540,15 @@
   transition-duration: 150ms;
 }
 
+/* The landing nav changing between its dark look (over the hero) and its light one: the bar swaps
+   its color tokens at once and every piece of text fades to its new color over the same half
+   second, once. (The bar itself fading its text color made each child's own transition restart
+   every frame, and the wordmark flickered.) :where() keeps it below utilities, so hovers stay quick. */
+:where(.lp-nav) *, :where(.lp-nav) *::before, :where(.lp-nav) *::after {
+  transition-duration: 500ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Safe area insets (mobile) */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
@@ -1289,3 +1298,10 @@ html[data-motion='reduced'] .lp-beat { animation: none; stroke-dashoffset: 0; }
 .gf-twinkle { animation: gf-twinkle 4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .gf-twinkle { animation: none; opacity: 0.6; } }
 html[data-motion='reduced'] .gf-twinkle { animation: none; opacity: 0.6; }
+
+/* The landing hero's notifications: a slow drift around the phone. Still for reduced motion. */
+@keyframes lp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.lp-bob { animation: lp-bob 5s ease-in-out infinite; }
+.lp-bob-slow { animation: lp-bob 7s ease-in-out infinite 1s; }
+@media (prefers-reduced-motion: reduce) { .lp-bob, .lp-bob-slow { animation: none; } }
+html[data-motion='reduced'] .lp-bob, html[data-motion='reduced'] .lp-bob-slow { animation: none; }

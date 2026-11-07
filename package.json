@@ -51,6 +51,7 @@
     "recharts": "^2.15.0",
     "redis": "^5.8.1",
     "sharp": "^0.35.5",
+    "simplex-noise": "^4.0.3",
     "streamdown": "^2.5.0",
     "stripe": "^23.0.0",
     "tailwind-merge": "^2.6.0",
