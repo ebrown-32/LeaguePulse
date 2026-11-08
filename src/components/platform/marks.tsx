@@ -71,6 +71,18 @@ export function DeskMark(p: P) {
   );
 }
 
+/** The Desk Weekly: headphones, the on-air light between them. */
+export function PodcastMark(p: P) {
+  return (
+    <Frame {...p}>
+      <path d="M5 21v-4a11 11 0 0 1 22 0v4" />
+      <rect x="4.5" y="19" width="5" height="8.5" rx="1.5" />
+      <rect x="22.5" y="19" width="5" height="8.5" rx="1.5" />
+      <A d="M16 9.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" transform="translate(.8 .4)" />
+    </Frame>
+  );
+}
+
 /** Game Day: a screen showing a field, the ball on it. */
 export function GameDayMark(p: P) {
   return (

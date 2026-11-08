@@ -3,7 +3,9 @@
  *
  *   GET            the league's episodes, newest first, and whether recorded voices are on
  *   POST (admin)   write an episode now: { week? } (default the latest finished week; an earlier
- *                  week of this season is a look back, and replaces that week's episode)
+ *                  week of this season is a look back, and replaces that week's episode).
+ *                  Replacing an episode is limited to once a week per league: a 429 with
+ *                  { error, nextAt } until then.
  */
 
 import { NextResponse } from 'next/server';
@@ -28,9 +30,11 @@ export async function POST(req: Request) {
   try {
     const [{ isAIConfigured }, { publishEpisode }] = await Promise.all([import('@/lib/ai/claude'), import('@/lib/ai/podcast')]);
     if (!(await isAIConfigured())) return NextResponse.json({ error: 'The AI desk is not set up for this league.' }, { status: 400 });
-    const episode = await publishEpisode(week);
+    const episode = await publishEpisode(week, { admin: true });
     return NextResponse.json({ episode });
   } catch (err) {
+    const { RerecordTooSoon } = await import('@/lib/ai/podcast');
+    if (err instanceof RerecordTooSoon) return NextResponse.json({ error: err.message, nextAt: err.nextAt }, { status: 429 });
     console.error('[api/podcast]', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'The episode could not be written.' }, { status: 500 });
   }

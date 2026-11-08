@@ -7,7 +7,9 @@
  *              word being spoken comes from the voice's boundary events, or from the clock
  *              where a voice doesn't send them
  *   recorded   ElevenLabs: each chapter performed by the panel as one conversation
- *              (api/podcast/chapter), the line being spoken found from its timings; a chapter
+ *              (api/podcast/chapter), the line and the word being spoken found from its timings
+ *              (each word's start, measured when it was recorded; estimated for older recordings
+ *              and for lines recorded one at a time); a chapter
  *              that can't be had falls back to line-by-line recordings (api/podcast/audio), and
  *              those to the browser's voice. With a real level meter.
  *
@@ -17,13 +19,21 @@
  * preference (lib/prefs music) only for those: the voices are what they pressed play for.
  */
 
-import { plainLine } from '@/lib/podcastText';
+import { estimateWordStarts, plainLine, spokenWords } from '@/lib/podcastText';
 import type { Episode } from '@/lib/ai/podcast';
 
 export interface Position { chapter: number; line: number }
+
+/** A line's place in its chapter's recording (api/podcast/chapter), in seconds. */
+interface Timing { line: number; start: number; end: number; words?: number[] }
+
+/** How far ahead of the clock a word lights up, in seconds: a frame to paint, and the colour's
+ *  short fade (Player's Spoken), land as the word starts rather than after. */
+const LEAD_S = 0.09;
 export interface EngineState extends Position {
   playing: boolean;
-  /** How far through the current line, 0 to 1, and the character the voice has reached. */
+  /** How far through the current line, 0 to 1, and where the word being said starts (-1 before
+   *  the first). */
   progress: number;
   char: number;
   rate: number;
@@ -101,6 +111,41 @@ export class PodcastEngine {
   private analyser: AnalyserNode | null = null;
   private source: MediaElementAudioSourceNode | null = null;
   private clock = 0;
+
+  // ── Following the voice, word by word ──
+  //
+  // An audio element's currentTime moves in steps (every 250ms or so in Safari and Firefox), so a
+  // highlight read straight from it stutters and trails. Between steps the clock runs on from the
+  // last one at the playback rate; it never runs backwards except for a real seek.
+  private heard = { media: -1, wall: 0, shown: -1 };
+
+  private audioTime(a: HTMLAudioElement): number {
+    const media = a.currentTime, wall = performance.now();
+    if (media !== this.heard.media) this.heard = { media, wall, shown: this.heard.shown };
+    const est = a.paused ? media : media + Math.min(0.35, ((wall - this.heard.wall) / 1000) * a.playbackRate);
+    // A seek (or a new source) jumps back: follow it. A step that lands a hair behind the estimate: hold.
+    const t = est < this.heard.shown - 0.3 ? est : Math.max(est, this.heard.shown);
+    this.heard.shown = t;
+    return t;
+  }
+
+  private resetClock() { this.heard = { media: -1, wall: 0, shown: -1 }; }
+
+  /** Where the word being said at `t` starts in the line (-1 before the first), given each word's start. */
+  private wordAt(text: string, starts: number[], t: number): number {
+    const words = spokenWords(text);
+    let i = -1;
+    // A touch early: by the time the frame is painted and the colour has turned, the word is out.
+    for (let k = 0; k < starts.length && k < words.length; k++) if (starts[k] <= t + LEAD_S) i = k;
+    return i < 0 ? -1 : words[i].at;
+  }
+  private estimates = new Map<string, number[]>();
+  private startsFor(key: string, text: string, start: number, end: number, measured?: number[], raw?: string): number[] {
+    if (measured?.length) return measured;
+    let e = this.estimates.get(key);
+    if (!e) { e = estimateWordStarts(text, start, end, raw); this.estimates.set(key, e); }
+    return e;
+  }
   private started = 0;
   private token = 0;
   private voices: (SpeechSynthesisVoice | null)[] = [];
@@ -179,7 +224,7 @@ export class PodcastEngine {
     this.pause();
     const ch = Math.max(0, Math.min(this.ep.chapters.length - 1, pos.chapter));
     const ln = Math.max(0, Math.min(this.ep.chapters[ch].lines.length - 1, pos.line));
-    this.set({ chapter: ch, line: ln, progress: 0, char: 0, done: false });
+    this.set({ chapter: ch, line: ln, progress: 0, char: -1, done: false });
     if (was) { this.set({ playing: true }); this.speak(); }
   }
 
@@ -203,7 +248,7 @@ export class PodcastEngine {
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     this.audio?.pause();
     cancelAnimationFrame(this.clock);
-    this.set({ progress: 0, char: 0 });
+    this.set({ progress: 0, char: -1 });
     if (!this.recorded) this.speakSynth(my);
     else if (this.lineMode.has(this.state.chapter)) this.speakRecorded(my);
     else this.speakChapter(my);
@@ -251,8 +296,11 @@ export class PodcastEngine {
     const tick = () => {
       if (my !== this.token) return;
       if (!boundaries) {
-        const p = Math.min(0.98, ((performance.now() - this.started) / 1000) * 15 * this.state.rate / Math.max(1, text.length));
-        this.set({ progress: p, char: Math.floor(p * text.length) });
+        const length = text.length / 15 / this.state.rate;
+        const t = (performance.now() - this.started) / 1000;
+        const p = Math.min(0.98, t / Math.max(0.1, length));
+        const char = this.wordAt(text, this.startsFor(`s${this.state.chapter}:${this.state.line}:${this.state.rate}`, text, 0, length), t);
+        if (p !== this.state.progress || char !== this.state.char) this.set({ progress: p, char });
       }
       this.clock = requestAnimationFrame(tick);
     };
@@ -262,7 +310,7 @@ export class PodcastEngine {
 
   // ── Recordings: a chapter at a time, the next one fetched while this one plays ──
 
-  private takes = new Map<number, Promise<{ url: string; segments: { line: number; start: number; end: number }[] } | null>>();
+  private takes = new Map<number, Promise<{ url: string; segments: Timing[] } | null>>();
   /** Chapters that couldn't be had whole, played line by line instead. */
   private lineMode = new Set<number>();
   private loadedChapter = -1;
@@ -284,7 +332,7 @@ export class PodcastEngine {
           // for too many). The episode is all-or-nothing, so the browser reads all of it.
           if (r.status === 429) { this.recorded = false; return null; }
           if (!r.ok) return null;
-          const segments = JSON.parse(r.headers.get('x-lp-segments') || '[]') as { line: number; start: number; end: number }[];
+          const segments = JSON.parse(r.headers.get('x-lp-segments') || '[]') as Timing[];
           const b = await r.blob();
           return b.size && segments.length ? { url: URL.createObjectURL(b), segments } : null;
         })
@@ -330,6 +378,7 @@ export class PodcastEngine {
       const place = () => {
         // Resuming inside the line it stopped on carries on from there; anything else starts the line.
         if (a.currentTime < from.start || a.currentTime >= from.end) a.currentTime = Math.max(0, from.start);
+        this.resetClock();
       };
       if (this.loadedChapter !== c) {
         this.loadedChapter = c;
@@ -341,14 +390,16 @@ export class PodcastEngine {
       a.onerror = () => { if (my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); } };
       const tick = () => {
         if (my !== this.token) return;
-        const t = a.currentTime;
+        const t = this.audioTime(a);
         let i = 0;
-        for (let k = 0; k < segs.length; k++) if (segs[k].start <= t + 0.05) i = k;
+        for (let k = 0; k < segs.length; k++) if (segs[k].start <= t + LEAD_S) i = k;
         const s = segs[i];
         const p = s.end > s.start ? Math.min(1, Math.max(0, (t - s.start) / (s.end - s.start))) : 1;
-        const text = plainLine(this.ep.chapters[c]?.lines[s.line]?.text ?? '');
+        const raw = this.ep.chapters[c]?.lines[s.line]?.text ?? '';
+        const text = plainLine(raw);
+        const char = this.wordAt(text, this.startsFor(`c${c}:${s.line}`, text, s.start, s.end, s.words, raw), t);
         if (s.line !== this.state.line) this.set({ line: s.line });
-        this.set({ progress: p, char: Math.floor(p * text.length) });
+        if (p !== this.state.progress || char !== this.state.char) this.set({ progress: p, char });
         this.clock = requestAnimationFrame(tick);
       };
       a.play().then(() => { this.unlocked = true; this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
@@ -416,8 +467,11 @@ export class PodcastEngine {
     };
     const tick = () => {
       if (my !== this.token) return;
-      const p = a.duration ? a.currentTime / a.duration : 0;
-      this.set({ progress: p, char: Math.floor(p * text.length) });
+      const t = this.audioTime(a);
+      const p = a.duration ? Math.min(1, t / a.duration) : 0;
+      // A line on its own has no timings: estimated across it, less the recording's quiet ends.
+      const char = a.duration ? this.wordAt(text, this.startsFor(`l${chapter}:${line}:${a.duration}`, text, Math.min(0.12, a.duration / 10), Math.max(0, a.duration - 0.25), undefined, this.ep.chapters[chapter]?.lines[line]?.text), t) : -1;
+      if (p !== this.state.progress || char !== this.state.char) this.set({ progress: p, char });
       this.clock = requestAnimationFrame(tick);
     };
 
@@ -429,6 +483,7 @@ export class PodcastEngine {
       if (!url) { fallBack(true); return; }
       this.prefetchNext();
       a.src = url;
+      this.resetClock();
       a.playbackRate = this.state.rate;
       a.onended = () => { this.misses = 0; this.advance(my); };
       a.onerror = () => fallBack(false);

@@ -2,7 +2,8 @@
  * For the AI Desk admin's Desk Weekly section: this season's finished weeks, each with its
  * episode if it has one, and whether the Desk can write one.
  *
- *   GET   admin only   { season, weeks: [{ week, episode: { id, title, createdAt } | null }], aiReady }
+ *   GET   admin only   { season, nextRerecordAt, weeks: [{ week, episode: { id, title, createdAt } | null }], aiReady }
+ *                      nextRerecordAt: when the league may next replace an episode (once a week), or null
  */
 
 import { NextResponse } from 'next/server';

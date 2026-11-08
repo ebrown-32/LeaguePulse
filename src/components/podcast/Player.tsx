@@ -22,7 +22,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Episode, Visual } from '@/lib/ai/podcast';
 import { PodcastEngine, type EngineState } from './engine';
-import { plainLine } from '@/lib/podcastText';
+import { plainLine, spokenWords } from '@/lib/podcastText';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const KIND_LABEL: Record<string, string> = { open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
@@ -170,18 +170,19 @@ function VisualCard({ v }: { v: Visual }) {
   );
 }
 
-/** The line being spoken, word by word. */
+/**
+ * The line being spoken, word by word: each word lights as it's said (the engine times it from the
+ * recording, a little early to cover the paint), the one being said a shade brighter than those
+ * already said, so the eye follows the voice without the line jumping.
+ */
 function Spoken({ text, char }: { text: string; char: number }) {
-  const words = useMemo(() => {
-    const out: { w: string; at: number }[] = [];
-    const re = /\S+\s*/g; let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) out.push({ w: m[0], at: m.index });
-    return out;
-  }, [text]);
+  const words = useMemo(() => spokenWords(text), [text]);
+  const current = char < 0 ? -1 : words.reduce((n, x, i) => (x.at <= char ? i : n), -1);
   return (
     <p className="text-[clamp(18px,2.4vw,26px)] font-semibold leading-snug tracking-[-0.01em]">
       {words.map((x, i) => (
-        <span key={i} className={cn('transition-colors duration-150', x.at <= char ? 'text-foreground' : 'text-foreground/30')}>{x.w}</span>
+        <span key={i} className={cn('transition-colors duration-[80ms] ease-out',
+          i === current ? 'text-foreground' : i < current ? 'text-foreground/85' : 'text-foreground/25')}>{x.w}</span>
       ))}
     </p>
   );
