@@ -127,6 +127,87 @@ export function DeskFeed() {
   );
 }
 
+// ── The Desk Weekly ──────────────────────────────────────────────────────────
+
+const PANEL = [
+  { who: 'Dana Cole', initials: 'DC', tone: 'ink' as const },
+  { who: 'Big Mike', initials: 'BM', tone: 'signal' as const },
+  { who: 'The Analyst', initials: 'TA', tone: 'turf' as const },
+];
+const EPISODE = [
+  { host: 1, chapter: 'Cold open', text: 'Fourth & Long Shots started a fullback. On purpose. In week nine.' },
+  { host: 0, chapter: 'Cold open', text: 'Sixty-one points. I have seen better totals at a bowling alley.' },
+  { host: 2, chapter: 'Cold open', text: 'In fairness, the fullback did outscore their kicker.' },
+  { host: 1, chapter: 'Cold open', text: 'That is not the defense you think it is.' },
+  { host: 0, chapter: 'The table', text: 'Meanwhile the Ghosts are eight and one and nobody is talking about it.' },
+  { host: 2, chapter: 'The table', text: 'Best points-for in the league, third-easiest schedule left. I am talking about it.' },
+  { host: 1, chapter: 'Sign-off', text: 'Next week on the show: does anyone want a fullback?' },
+];
+
+/**
+ * The Desk Weekly, as its player looks: the panel, who's talking, the line on screen and the
+ * episode's progress. A picture of the player (no sound), with an invented episode.
+ */
+export function DeskWeekly() {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { margin: '-80px' });
+  const i = useTicker(inView, 2600, EPISODE.length);
+  const line = EPISODE[i];
+  return (
+    <div ref={ref} className="rounded-[22px] border border-border bg-card p-4 sm:p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] font-semibold text-muted-foreground">The Desk Weekly</p>
+        <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--signal))]" /> Week 9, episode 9
+        </p>
+      </div>
+      <p className="lp-display mt-3 text-[24px] font-extrabold leading-tight tracking-[-0.02em]">The Fullback Experiment</p>
+
+      <div className="mt-6 flex items-end justify-center gap-6 sm:gap-10">
+        {PANEL.map((h, n) => {
+          const on = line.host === n;
+          return (
+            <div key={h.who} className="flex flex-col items-center gap-2">
+              <motion.div animate={{ scale: on ? 1.12 : 1, opacity: on ? 1 : 0.55 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className={cn('rounded-[12px] p-[3px]', on ? 'ring-2 ring-primary' : 'ring-1 ring-border')}>
+                <Face initials={h.initials} tone={h.tone} />
+              </motion.div>
+              <span className="flex h-3 items-end gap-[2px]" aria-hidden>
+                {[0, 1, 2, 3].map(b => (
+                  <motion.span key={b} className="w-[3px] rounded-full bg-primary"
+                    animate={on ? { height: [3, 12, 5, 10, 3] } : { height: 3 }}
+                    transition={on ? { duration: 0.9, repeat: Infinity, delay: b * 0.12 } : { duration: 0.2 }} />
+                ))}
+              </span>
+              <span className={cn('text-[11.5px] font-semibold', on ? 'text-foreground' : 'text-muted-foreground')}>{h.who}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 min-h-[92px] rounded-2xl border border-border/70 bg-background/60 p-4">
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-primary">{line.chapter}</p>
+        <AnimatePresence mode="wait">
+          <motion.p key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.3 }}
+            className="mt-1.5 text-[15px] leading-snug text-foreground/90">
+            <span className="font-semibold">{PANEL[line.host].who}:</span> {line.text}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-hidden>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="2.5" y="2" width="3" height="10" rx="1" /><rect x="8.5" y="2" width="3" height="10" rx="1" /></svg>
+        </span>
+        <div className="h-1.5 flex-1 rounded-full bg-muted">
+          <motion.div className="h-full rounded-full bg-primary" animate={{ width: `${((i + 1) / EPISODE.length) * 100}%` }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} />
+        </div>
+        <span className="lp-num shrink-0 text-[12px] tabular-nums text-muted-foreground">1:30</span>
+      </div>
+    </div>
+  );
+}
+
 /** A heart that pops, throws a few sparks, and counts. Try it. */
 function Like({ base }: { base: number }) {
   const reduce = useReducedMotion();

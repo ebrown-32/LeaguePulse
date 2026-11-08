@@ -15,7 +15,8 @@
 import 'server-only';
 import { getRedis } from '@/lib/redisClient';
 
-export interface ChapterTimings { line: number; start: number; end: number }
+/** Where a line is in its chapter's recording, in seconds, and when each of its words starts. */
+export interface ChapterTimings { line: number; start: number; end: number; words?: number[] }
 export interface StoredChapter { url: string; segments: ChapterTimings[] }
 
 const recKey = (ep: string, c: number) => `lp_podcast_rec:${ep}:${c}`;

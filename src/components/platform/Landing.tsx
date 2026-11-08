@@ -33,7 +33,7 @@ import { productDisplay } from './fonts';
 import {
   Logomark, Lockup, PhoneMark, DeskMark, GameDayMark, OddsMark, GameBallMark, SheetMark, BranchMark, RingMark, PlayMark,
   PennantMark, StadiumMark, FindMark, AddressMark, ChatMark, Tick, Route,
-  BracketMark, VersusMark, RadarMark, CharterMark, QuillMark,
+  BracketMark, VersusMark, RadarMark, CharterMark, QuillMark, PodcastMark,
 } from './marks';
 import Stadiums from './landing/Stadiums';
 import Trailer from './landing/Trailer';
@@ -46,7 +46,7 @@ import InstallApp from './landing/InstallApp';
 import InquirySheet from './landing/Inquiry';
 import FeaturedLeagues from './landing/Featured';
 import { NavAccount, WelcomeBack } from './landing/SignedIn';
-import { DeskFeed, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
+import { DeskFeed, DeskWeekly, GameDayBoard, GotwSignals, AskAnalytics, PlayoffSim } from './landing/Showcase';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 /** Commissioner accounts are on when Clerk is configured (hosted only). */
@@ -75,19 +75,24 @@ export default function Landing() {
         body="A cast of AI writers and loud fans post all week: power rankings, matchup previews, trade grades, live reactions on Sunday. They argue in the replies. Every claim is checked against your real standings, trades and game status before it posts."
         points={['Posts through the day, quiet overnight', 'You choose the cast and their voices', 'Your own AI key, or ours with League Pass + AI']}
         visual={<DeskFeed />} />
+      <Chapter id="podcast" n="02" mark={PodcastMark} eyebrow="The Desk Weekly" flip
+        title={<>Your league&rsquo;s week, as a <span className="lp-brand-text">comedy podcast.</span></>}
+        body="Every Tuesday, three or four of your Desk personalities sit down and roast the week: the blowout, the benching, the trade nobody understood. About ninety seconds, each host in their own voice, every score the real one."
+        points={['A new episode every Tuesday, on its own', 'Your cast, a different panel every week', 'Admins can record any earlier week as a look back']}
+        visual={<DeskWeekly />} />
       <GameDayBand />
       <InstallBand />
-      <Chapter id="gotw" n="03" mark={GameBallMark} eyebrow="Game of the Week" flip
+      <Chapter id="gotw" n="04" mark={GameBallMark} eyebrow="Game of the Week" flip
         title="The game everyone should be watching, picked on purpose."
         body="Each week the desk crowns the most entertaining matchup on the slate, scored on five things: whether both teams are winning, playoff stakes, points, rivalry history and how close the forecast is. Then they announce it, and the card shows the live score once it starts."
         points={['Scored the same way every week', 'Rivalry history from every season you have played', 'Announced midweek by the desk']}
         visual={<GotwSignals />} />
-      <Chapter id="analytics" n="04" mark={SheetMark} eyebrow="Analytics"
+      <Chapter id="analytics" n="05" mark={SheetMark} eyebrow="Analytics"
         title="Ask your league a question. Get a chart back."
         body="Type a question in plain English, or drag fields into a chart, or scroll the rows like a spreadsheet. Matchups, seasons, player weeks, trades and drafts, back to your first season. Save reports and share them by link."
         points={['Plain-English questions, answered as charts', 'Drag-and-drop builder and a full data grid', 'Every season, already loaded']}
         visual={<AskAnalytics />} />
-      <Chapter id="simulator" n="05" mark={BranchMark} eyebrow="Simulator" flip
+      <Chapter id="simulator" n="06" mark={BranchMark} eyebrow="Simulator" flip
         title="Ten thousand seasons before Sunday."
         body="Playoff odds from simulating the rest of the season ten thousand times, fitted to how your league actually scores. Then the what-ifs: alternate schedules, and the trades that really changed who won."
         points={['Odds fitted to your league, not a generic one', 'Schedule luck and trade trees', 'Live win chances on every matchup']}
@@ -194,6 +199,7 @@ const NAV_LINKS = [
 /** The rest of the page, under "More" on a desktop (a phone's menu lists them all). */
 const MORE_LINKS = [
   { label: 'Install as an app', href: '#app', m: PhoneMark },
+  { label: 'The Desk Weekly', href: '#podcast', m: PodcastMark },
   { label: 'Game of the Week', href: '#gotw', m: GameBallMark },
   { label: 'Simulator', href: '#simulator', m: BranchMark },
   { label: 'The Vault', href: '#vault', m: RingMark },
@@ -618,12 +624,13 @@ function Ticker() {
 function Contents() {
   const items = [
     { n: '01', t: 'The Desk', m: DeskMark, href: '#desk' },
-    { n: '02', t: 'Game Day', m: GameDayMark, href: '#gameday' },
-    { n: '03', t: 'Game of the Week', m: GameBallMark, href: '#gotw' },
-    { n: '04', t: 'Analytics', m: SheetMark, href: '#analytics' },
-    { n: '05', t: 'Simulator', m: BranchMark, href: '#simulator' },
-    { n: '06', t: 'Franchise HQ', m: StadiumMark, href: '#franchise' },
-    { n: '07', t: 'History & more', m: RingMark, href: '#more' },
+    { n: '02', t: 'The Desk Weekly', m: PodcastMark, href: '#podcast' },
+    { n: '03', t: 'Game Day', m: GameDayMark, href: '#gameday' },
+    { n: '04', t: 'Game of the Week', m: GameBallMark, href: '#gotw' },
+    { n: '05', t: 'Analytics', m: SheetMark, href: '#analytics' },
+    { n: '06', t: 'Simulator', m: BranchMark, href: '#simulator' },
+    { n: '07', t: 'Franchise HQ', m: StadiumMark, href: '#franchise' },
+    { n: '08', t: 'History & more', m: RingMark, href: '#more' },
   ];
   // Which chapter is being read: the one crossing a line a third of the way down the screen.
   const [active, setActive] = useState<string | null>(null);
@@ -640,7 +647,7 @@ function Contents() {
   }, []);
   return (
     <section className="border-y border-border bg-card">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:grid-cols-4 sm:px-5 lg:grid-cols-7">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:grid-cols-4 sm:px-5 lg:grid-cols-8">
         {items.map((it, i) => {
           const on = active === it.href;
           return (
@@ -720,7 +727,7 @@ function GameDayBand() {
         <motion.div className="min-w-0" initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }}
           variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
           <motion.div variants={rise} style={{ ['--mark-accent' as string]: 'hsl(var(--primary))' }}>
-            <ChapterHead n="02" mark={GameDayMark} eyebrow="Game Day" />
+            <ChapterHead n="03" mark={GameDayMark} eyebrow="Game Day" />
           </motion.div>
           <motion.h2 variants={rise} className="lp-display mt-6 text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">
             Which game to have on, and where your guys are.
@@ -795,7 +802,7 @@ function FranchiseBand() {
           initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} variants={{ show: { transition: { staggerChildren: 0.08 } } }}>
           <div className="min-w-0">
             <motion.div variants={rise} style={{ ['--mark-accent' as string]: 'hsl(var(--primary))' }}>
-              <ChapterHead n="06" mark={StadiumMark} eyebrow="Franchise HQ" />
+              <ChapterHead n="07" mark={StadiumMark} eyebrow="Franchise HQ" />
             </motion.div>
             <motion.h2 variants={rise} className="lp-display mt-6 text-[36px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[48px]">
               Every manager gets a stadium. <span className="lp-brand-text">Built on real results.</span>
@@ -833,7 +840,7 @@ function AlsoInside() {
   return (
     <section id="more" className="scroll-mt-16 lg:scroll-mt-28 border-t border-border py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-5">
-        <ChapterHead n="07" mark={RingMark} eyebrow="Also inside" />
+        <ChapterHead n="08" mark={RingMark} eyebrow="Also inside" />
         <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((it, i) => (
             <motion.div key={it.t} initial="hidden" whileInView="show" viewport={{ once: true }} variants={rise}

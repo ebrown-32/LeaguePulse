@@ -20,6 +20,7 @@ export const FAQS: [question: string, answer: string][] = [
   ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it’s included: we run it, within generous limits. Everything that isn’t AI works either way.'],
   ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
   ['What is Franchise HQ?', `A game inside the app, included with League Pass. Each manager claims their team and runs it as a business on your league’s real results: ticket prices, crowds, upgrades, and a 3D stadium in one of ${STYLE_ORDER.length} styles, dressed in their own colors. Franchise values count every season you have played, championships included.`],
+  ['What is The Desk Weekly?', 'A ninety-second comedy podcast about your league\u2019s week, recorded every Tuesday once the week is final. Three or four of your Desk personalities host, each in their own voice, a different panel every week. It comes with the AI desk, and the scores in it are the real ones.'],
   ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
   ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],
 ];

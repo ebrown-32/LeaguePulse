@@ -23,7 +23,7 @@
 import 'server-only';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { getRedis } from '@/lib/redisClient';
-import { EPISODE_CHARS, plainLine } from '@/lib/podcastText';
+import { alignWordStarts, EPISODE_CHARS, plainLine } from '@/lib/podcastText';
 
 export interface SpeakingVoice { id: string; name: string; description: string; preview: string | null }
 
@@ -161,6 +161,33 @@ export async function spendCharacters(chars: number): Promise<boolean> {
 }
 
 /**
+ * Charges `credits` to the platform's month only, for what isn't a league's podcast (League
+ * Wrapped's soundtracks, which are limited by count instead). False, and nothing charged, past the cap.
+ */
+export async function spendPlatform(credits: number): Promise<boolean> {
+  const { client: redis } = getRedis();
+  if (!redis) return false;
+  return charge(redis, `lp_tts_platform:${month()}`, credits, platformCap());
+}
+
+/** Gives back platform credits charged for something that then failed. */
+export async function refundPlatform(credits: number): Promise<void> {
+  const { client: redis } = getRedis();
+  await redis?.incrby(`lp_tts_platform:${month()}`, -credits).catch(() => {});
+}
+
+/** An original instrumental from ElevenLabs Music, as MP3. */
+export async function composeMusic(prompt: string, lengthMs: number): Promise<Buffer> {
+  const el = elevenLabs();
+  if (!el) throw new Error('ElevenLabs is not set up');
+  const stream = await el.music.compose({ prompt, musicLengthMs: lengthMs, forceInstrumental: true, outputFormat: 'mp3_44100_128' });
+  const chunks: Uint8Array[] = [];
+  const reader = stream.getReader();
+  for (;;) { const { done, value } = await reader.read(); if (done) break; if (value) chunks.push(value); }
+  return Buffer.concat(chunks);
+}
+
+/**
  * Pays for a whole episode up front, the first time any of it is recorded: true if it's paid
  * for (now or before). An episode is either recorded from start to finish or not at all, so a
  * league reaching its cap never hears the panel turn into the browser's voice halfway through;
@@ -274,7 +301,7 @@ export function contextAfter(t?: string): string | undefined {
 export async function performChapter(
   lines: { voiceId: string; text: string }[],
   around: { previous?: string; next?: string } = {},
-): Promise<{ audio: Buffer; segments: { line: number; start: number; end: number }[] }> {
+): Promise<{ audio: Buffer; segments: { line: number; start: number; end: number; words?: number[] }[] }> {
   const el = elevenLabs();
   if (!el) throw new Error('ElevenLabs is not set up');
   const model = modelId();
@@ -290,14 +317,28 @@ export async function performChapter(
     previousText: contextBefore(around.previous),
     futureText: contextAfter(around.next),
   });
-  const spans = new Map<number, { start: number; end: number }>();
+  const spans = new Map<number, { start: number; end: number; from: number; to: number }>();
   for (const s of res.voiceSegments ?? []) {
     const had = spans.get(s.dialogueInputIndex);
     spans.set(s.dialogueInputIndex, had
-      ? { start: Math.min(had.start, s.startTimeSeconds), end: Math.max(had.end, s.endTimeSeconds) }
-      : { start: s.startTimeSeconds, end: s.endTimeSeconds });
+      ? { start: Math.min(had.start, s.startTimeSeconds), end: Math.max(had.end, s.endTimeSeconds), from: Math.min(had.from, s.characterStartIndex), to: Math.max(had.to, s.characterEndIndex) }
+      : { start: s.startTimeSeconds, end: s.endTimeSeconds, from: s.characterStartIndex, to: s.characterEndIndex });
   }
-  const segments = lines.map((_, i) => ({ line: i, ...(spans.get(i) ?? { start: -1, end: -1 }) }));
+  const segments: { line: number; start: number; end: number; words?: number[] }[] = lines.map((_, i) => {
+    const sp = spans.get(i);
+    return { line: i, start: sp?.start ?? -1, end: sp?.end ?? -1 };
+  });
+  // When each word starts, from the characters' own timings, so the transcript lights each word
+  // as it's said (Player). Where they can't be matched up, the player estimates instead.
+  const al = res.alignment;
+  if (al?.characters?.length) {
+    segments.forEach((seg, i) => {
+      const sp = spans.get(i);
+      if (!sp || seg.start < 0) return;
+      const words = alignWordStarts(plainLine(lines[i].text), al.characters.slice(sp.from, sp.to + 1), al.characterStartTimesSeconds.slice(sp.from, sp.to + 1), seg);
+      if (words) seg.words = words;
+    });
+  }
   // Lines the timings missed get the gap they sit in, so every line can still be found and seeked.
   for (let i = 0; i < segments.length; i++) {
     if (segments[i].start >= 0) continue;

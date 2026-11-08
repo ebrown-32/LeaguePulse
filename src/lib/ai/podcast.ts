@@ -100,8 +100,8 @@ function scriptSchema(n: number) {
     ref: z.string().describe('What this chapter shows on screen: one of the REFERENCE ids given (e.g. "matchup:2", "team:3", "move:0", "standings"), or "none"'),
     lines: z.array(z.object({
       host: z.number().int().min(0).max(n - 1).describe(`Which host speaks: 0 to ${n - 1}, as numbered in THE PANEL`),
-      text: z.string().describe('One spoken turn: one short sentence (two only if both are tiny), under about 120 characters, written to be heard, not read'),
-    })).min(2).max(5),
+      text: z.string().describe('One spoken turn: a short sentence, or a quick reaction of a few words ("Oh no.", "Wait, what?"). Under about 110 characters. A turn that gets cut off ends with "..." and the next turn starts with [interrupting] or [cuts in]'),
+    })).min(2).max(9),
   });
   return z.object({
     title: z.string().describe('The episode title: a headline for the week, under eight words, ideally funny'),
@@ -175,6 +175,20 @@ ${refs}
 
 ${focus}
 
+IT HAS TO SOUND LIKE A REAL SHOW. Sports talk radio with three or four friends who've had a
+coffee too many: nobody waits their turn politely, nobody reads a paragraph.
+- Most turns are short. Mix one-sentence points with quick reactions of two to five words: "Oh
+  no.", "Stop it.", "He did not.", "Okay, okay, okay.", "Wait, say that again."
+- People cut each other off. A turn trails into "..." mid-thought and the next one starts with
+  [interrupting] or [cuts in]. Someone talks over a punchline with [overlapping]. Do this two or
+  three times an episode, not every line.
+- Laughter is real and uneven: a host [starts laughing] at their own joke, another loses it
+  ([laughs harder], [wheezing]) at someone else's, somebody refuses to laugh ([deadpan]).
+- Real speech, not writing: "I mean", "look", "here's the thing", "no, because", starting a
+  sentence over, repeating a word for emphasis. One or two per host, not in every line.
+- Hosts react to each other by name, agree loudly, disagree louder, and somebody always circles
+  back to a point that was supposedly settled.
+
 IT HAS TO BE FUNNY. This is a comedy show with real numbers, not a news bulletin with jokes.
 - Bits, not one-liners: a running gag that comes back in the sign-off, a callback to the cold open.
 - The hosts roast the managers, the lineups and each other. Somebody always takes it personally.
@@ -201,12 +215,12 @@ WRITTEN FOR THE EAR. Short sentences. Contractions. Say numbers the way people s
 ("one twenty-four" for 124.3 is fine, or "a hundred and twenty-four"). No lists, no
 parentheses, no emoji, no hashtags, no stage directions.
 
-PERFORMED, NOT READ. The voices are recorded by actors who act out a few bracketed cues. Use
-them where a real person would actually do it, at most one per line and in under half the lines:
+PERFORMED, NOT READ. The voices are recorded by actors who act out bracketed cues. Use them
+where a real person would actually do it, at most two in a line and in about half the lines:
 ${DELIVERY_TAGS.map(t => `[${t}]`).join(' ')}
-e.g. "[scoffs] Eighty-eight points. That's not a team, that's a cry for help." Nothing else goes
-in brackets. Let people react to each other: "Wait, what?", "No. No no no.", trailing off with
-"...", a laugh at someone else's joke.
+e.g. "[scoffs] Eighty-eight points. That's not a team, that's a cry for help."
+e.g. "So the trade itself was actually..." then "[interrupting] Don't. Do not defend that trade."
+Nothing else goes in brackets. The cues count toward the length, so don't pile them up.
 
 Call managers by name. Every claim comes from the league context above: the
 scores, records and moves are the real ones. Each chapter's ref must point at the thing it's
@@ -285,11 +299,53 @@ Answer with one voice id per host id, from the list.`,
   return out;
 }
 
+// ── Re-recording ───────────────────────────────────────────────────────────
+
+/**
+ * An admin may replace one of the league's episodes once a week. A re-record is a new episode:
+ * a new script, and a new recording paid for again when it's played. Recording a week that has
+ * no episode yet isn't limited, and neither is the Tuesday episode. Without Redis (local
+ * development) there is no limit.
+ */
+const RERECORD_GAP_S = 7 * 24 * 3600;
+const RERECORD_CLAIM = 'lp_podcast_rerecord_claim';
+const RERECORD_AT = 'lp_podcast_rerecorded_at';
+
+export class RerecordTooSoon extends Error {
+  constructor(public nextAt: string) {
+    super(`This league re-recorded an episode in the last week. The next re-record opens ${new Date(nextAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.`);
+  }
+}
+
+/** When this league may next re-record an episode, or null if it may now. */
+export async function nextRerecordAt(): Promise<string | null> {
+  const { client: redis } = getRedis();
+  const at = Number(await redis?.get(RERECORD_AT).catch(() => null));
+  if (!at) return null;
+  const next = at + RERECORD_GAP_S * 1000;
+  return next > Date.now() ? new Date(next).toISOString() : null;
+}
+
+/** Takes this week's re-record, or throws RerecordTooSoon. Returns a refund for a failed recording. */
+async function claimRerecord(): Promise<() => Promise<void>> {
+  const { client: redis } = getRedis();
+  if (!redis) return async () => {};
+  const next = await nextRerecordAt();
+  if (next) throw new RerecordTooSoon(next);
+  // Two clicks at once: only the first gets it.
+  const n = await redis.incrby(RERECORD_CLAIM, 1);
+  if (n === 1) await redis.expire(RERECORD_CLAIM, RERECORD_GAP_S);
+  else throw new RerecordTooSoon(new Date(Date.now() + RERECORD_GAP_S * 1000).toISOString());
+  await redis.set(RERECORD_AT, String(Date.now()), RERECORD_GAP_S);
+  return async () => { await Promise.all([redis.del(RERECORD_CLAIM), redis.del(RERECORD_AT)]).catch(() => {}); };
+}
+
 /**
  * Writes, checks and keeps an episode: the latest finished week by default, or `week`, an earlier
- * week of this season, as a look back.
+ * week of this season, as a look back. `admin`: asked for from the AI Desk admin, where replacing
+ * an episode is limited to once a week (claimRerecord).
  */
-export async function publishEpisode(week?: number): Promise<Episode> {
+export async function publishEpisode(week?: number, { admin = false }: { admin?: boolean } = {}): Promise<Episode> {
   const [brief, { getPersonalities }] = await Promise.all([buildLeagueBrief(), import('./store')]);
   const hosts = pickHosts(await getPersonalities());
   if (!hosts) throw new Error('The podcast needs at least two personalities on the Desk.');
@@ -299,6 +355,18 @@ export async function publishEpisode(week?: number): Promise<Episode> {
   if (!target || !Number.isInteger(target) || target < 1 || target > latest) {
     throw new Error(latest ? `Pick a week from 1 to ${latest}.` : 'No week of this season has finished yet.');
   }
+
+  const replacing = (await listEpisodes()).some(e => e.season === brief.season && e.week === target);
+  const refund = admin && replacing ? await claimRerecord() : null;
+  try {
+    return await writeEpisode(brief, hosts, target);
+  } catch (err) {
+    await refund?.();
+    throw err;
+  }
+}
+
+async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>, hosts: Personality[], target: number): Promise<Episode> {
 
   // Every episode, the latest week's included, is written from the week as it stood when it
   // finished (podcastWeek.ts), never from the live brief: that carries the week in progress, and
@@ -355,12 +423,13 @@ export async function publishEpisode(week?: number): Promise<Episode> {
 }
 
 /** For the admin: the season's finished weeks, each with its episode if it has one. */
-export async function episodeWeeks(): Promise<{ season: string; weeks: { week: number; episode: { id: string; title: string; createdAt: string } | null }[] }> {
-  const brief = await buildLeagueBrief();
+export async function episodeWeeks(): Promise<{ season: string; nextRerecordAt: string | null; weeks: { week: number; episode: { id: string; title: string; createdAt: string } | null }[] }> {
+  const [brief, nextAt] = await Promise.all([buildLeagueBrief(), nextRerecordAt()]);
   const latest = Math.max(0, ...brief.recentMatchups.map(m => m.week));
   const eps = (await listEpisodes()).filter(e => e.season === brief.season);
   return {
     season: brief.season,
+    nextRerecordAt: nextAt,
     weeks: Array.from({ length: latest }, (_, i) => latest - i).map(week => {
       const e = eps.find(x => x.week === week);
       return { week, episode: e ? { id: e.id, title: e.title, createdAt: e.createdAt } : null };
