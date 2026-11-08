@@ -1,7 +1,10 @@
 /**
  * A fantasy matchup, live, for the stadium (lib/live/liveMatchup).
  *
- *   GET ?host=<userId>&guest=<userId>[&week=n][&demo=1]
+ *   GET ?host=<userId>&guest=<userId>[&week=n][&demo=1][&plays=1]
+ *
+ * `plays=1`: for a finished week, its real plays too (ESPN's play by play for that week's games),
+ * for The Desk Weekly's highlights.
  *
  * Polled by the stadium every fifteen seconds while the week is on, by everyone
  * watching, so it is built once per matchup every ten seconds however many
@@ -36,13 +39,14 @@ export async function GET(req: NextRequest) {
   try {
     const [leagueId, nfl] = await Promise.all([getCurrentLeagueId(), getNFLState().catch(() => null as any)]);
     const week = Number(q.get('week') ?? 0) || Number(nfl?.week ?? 1);
-    const key = `${leagueId}|${host}|${guest}|${week}`;
+    const playsOfPast = q.get('plays') === '1';
+    const key = `${leagueId}|${host}|${guest}|${week}|${playsOfPast ? 'p' : ''}`;
     const hit = built.get(key);
     let pending = hit && Date.now() - hit.at < TTL_MS ? hit.value : null;
     if (!pending) {
       pending = (async () => {
         const info = await getLeagueInfo(leagueId).catch(() => null as any);
-        return liveMatchup({ leagueId, week, host, guest, scoring: info?.scoring_settings ?? {} });
+        return liveMatchup({ leagueId, week, host, guest, scoring: info?.scoring_settings ?? {}, playsOfPast });
       })();
       built.set(key, { at: Date.now(), value: pending });
       // Old entries go once there are many: one per matchup being watched, at most a few hundred.

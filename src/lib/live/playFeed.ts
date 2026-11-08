@@ -14,7 +14,7 @@
  * Sleeper's total on the scoreboard stays the official figure.
  */
 
-import { espnPlays, espnScoreboard, espnTeam } from './espn';
+import { espnPlays, espnScoreboard, espnTeam, type LiveGame } from './espn';
 import { getPlayersDirectory } from '@/lib/playerStats';
 import { crosswalkFor } from './crosswalk';
 
@@ -80,10 +80,12 @@ export async function playFeed(opts: {
   theirs: string[];
   scoring: Scoring;
   limit?: number;
+  /** A week's games other than this one's (a past week's scoreboard, for its highlights). */
+  games?: LiveGame[];
 }): Promise<FeedPlay[]> {
   const all = [...opts.mine, ...opts.theirs];
   if (!all.length) return [];
-  const [games, xw] = await Promise.all([espnScoreboard(), crosswalkFor(all)]);
+  const [games, xw] = await Promise.all([opts.games ? Promise.resolve(opts.games) : espnScoreboard(), crosswalkFor(all)]);
   const side = new Map<string, 'mine' | 'theirs'>();
   for (const id of opts.mine) side.set(id, 'mine');
   for (const id of opts.theirs) if (!side.has(id)) side.set(id, 'theirs');

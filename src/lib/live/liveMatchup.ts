@@ -56,6 +56,8 @@ async function anchorsFor(leagueId: string, week: number, players: LivePlayer[])
 
 export async function liveMatchup(o: {
   leagueId: string; week: number; host: string; guest: string; scoring: Record<string, number>;
+  /** A finished week's real plays too, for its highlights (The Desk Weekly). */
+  playsOfPast?: boolean;
 }): Promise<LiveMatchup | null> {
   const [nfl, rosters, users, matchups, directory] = await Promise.all([
     getNFLState().catch(() => null as any), getLeagueRosters(o.leagueId), getLeagueUsers(o.leagueId).catch(() => [] as any[]),
@@ -113,6 +115,20 @@ export async function liveMatchup(o: {
       scoring: f.scoring, big: f.scoring || (f.points ?? 0) >= 4, at: f.at, period: f.period, clock: f.clock,
       kind: playKind(f.type, f.role), yards: f.yards,
     }));
+  }
+  // A finished week: its plays, from that week's games (kept for a day: they don't change).
+  if (past && o.playsOfPast) {
+    const { espnScoreboardWeek } = await import('./espn');
+    const season = String(nfl?.season ?? new Date().getFullYear());
+    const weekGames = await espnScoreboardWeek(season, o.week).catch(() => [] as LiveGame[]);
+    if (weekGames.length) {
+      const feed = await playFeed({ mine: starters(hostM), theirs: starters(guestM), scoring: o.scoring, limit: 400, games: weekGames }).catch(() => []);
+      plays = feed.map(f => ({
+        id: f.id, playerId: f.playerId, side: f.side === 'mine' ? 'host' : 'guest', text: f.text, points: f.points,
+        scoring: f.scoring, big: f.scoring || (f.points ?? 0) >= 4, at: f.at, period: f.period, clock: f.clock,
+        kind: playKind(f.type, f.role), yards: f.yards,
+      }));
+    }
   }
 
   // Sleeper's points, caught up with the plays it hasn't counted yet; the team scores move with them.
