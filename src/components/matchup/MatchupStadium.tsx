@@ -96,12 +96,14 @@ export default function MatchupStadium(props: {
    * stadium's name and the score over it, so the stadium shows. Fullscreen is the same either way.
    */
   compact?: boolean;
+  /** A finished week's highlights, recreated from the box score and played on a loop (useLiveMatchup). */
+  highlights?: boolean;
 }) {
   if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
   return <HostedStadium {...props} />;
 }
 
-function HostedStadium({ a, b, week, className, prompt = false, compact = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean }) {
+function HostedStadium({ a, b, week, className, prompt = false, compact = false, highlights = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean; highlights?: boolean }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -158,10 +160,11 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false 
   // A card tapped on the field, shown up close.
   const [picked, setPicked] = useState<LivePlayer | null>(null);
   useEffect(() => { if (!full) setPicked(null); }, [full]);
-  const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full });
+  const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full, highlights });
   const playing = match && match.phase !== 'upcoming' ? match : null;
   // The director (see director.ts) moves on to its next shot every beat while it has the camera.
-  const directing = full && angle === 'director';
+  // Highlights are always directed: the camera follows each play, as on a broadcast.
+  const directing = (full && angle === 'director') || (highlights && !full);
   const [beat, setBeat] = useState(0);
   useEffect(() => {
     if (!directing) return;
@@ -186,11 +189,11 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false 
       fps={full ? 60 : 30}
       // In a live matchup the starters are the players on the field.
       field={playing ? 'empty' : day.stage === 'live' ? 'game' : day.stage === 'gates' ? 'warmup' : 'empty'}
-      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full, pinSize: 14, cardScale: narrow || portrait ? 0.85 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
+      live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full && !highlights, pinSize: 14, cardScale: narrow || portrait ? 0.85 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
       onReady={full ? () => setFullReady(true) : undefined}
-      view={full && playing ? { ...(shot ?? ANGLE_VIEW[angle && angle !== 'director' ? angle : 'sideline'][portrait ? 'narrow' : 'wide']), still: true, broadcast: true }
+      view={(full || highlights) && playing ? { ...(shot ?? ANGLE_VIEW[angle && angle !== 'director' ? angle : 'sideline'][portrait ? 'narrow' : 'wide']), still: true, broadcast: true }
         : full ? { position: [14 * fit, 7.5 * fit, 14 * fit], target: [0, 0.4, 0], fov: 40 } : { position: [10.5 * fit, 6.2 * fit, 10.5 * fit], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
   const matchupLine = host && guest ? (
@@ -378,7 +381,7 @@ function Banner({ celebrate, compact = false }: { celebrate: { play: LivePlay; n
           transition={{ type: 'spring', stiffness: 380, damping: 22 }}
           className={cn('text-center text-white', compact ? 'w-[88%]' : 'w-[min(92%,520px)]')}>
           <div className="rounded-2xl bg-black/70 px-4 py-2.5 shadow-2xl backdrop-blur-md">
-            <p className={cn('font-display font-black tracking-wide text-[#ffd44d]', compact ? 'text-[15px]' : 'text-[22px]')}>{celebrate.play.scoring ? 'TOUCHDOWN' : 'BIG PLAY'}</p>
+            <p className={cn('font-display font-black tracking-wide text-[#ffd44d]', compact ? 'text-[15px]' : 'text-[22px]')}>{celebrate.play.recreated ? 'HIGHLIGHT' : celebrate.play.scoring ? 'TOUCHDOWN' : 'BIG PLAY'}</p>
             <p className={cn('font-semibold', compact ? 'text-[11.5px]' : 'text-[14px]')}>
               {celebrate.name}{celebrate.play.points != null ? ` · +${celebrate.play.points.toFixed(1)}` : ''}
             </p>

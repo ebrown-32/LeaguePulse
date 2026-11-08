@@ -208,12 +208,22 @@ export class PodcastEngine {
     this.set({ playing: false, buffering: false });
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     this.audio?.pause();
+    this.stopVoice(true);
     cancelAnimationFrame(this.clock);
   }
 
   toggle() { if (this.state.playing) this.pause(); else this.play(); }
 
+  /** The show's audio, once a tap has woken it: for music played under the voices (Studio's highlights). */
+  audioContext(): AudioContext | null { return this.ctx && this.ctx.state === 'running' ? this.ctx : null; }
+
   setRate(rate: number) {
+    // A chapter playing through Web Audio keeps its place at the new speed.
+    if (this.voice && this.ctx) {
+      const t = this.voiceTime();
+      this.voice.playbackRate.value = rate;
+      this.voiceAt = this.ctx.currentTime - t / rate;
+    }
     this.set({ rate });
     if (this.audio) this.audio.playbackRate = rate;
     if (this.state.playing && !this.recorded) this.speak();
@@ -222,6 +232,7 @@ export class PodcastEngine {
   seek(pos: Position) {
     const was = this.state.playing;
     this.pause();
+    this.resumeAt = null;
     const ch = Math.max(0, Math.min(this.ep.chapters.length - 1, pos.chapter));
     const ln = Math.max(0, Math.min(this.ep.chapters[ch].lines.length - 1, pos.line));
     this.set({ chapter: ch, line: ln, progress: 0, char: -1, done: false });
@@ -234,6 +245,7 @@ export class PodcastEngine {
   /** Stops and lets go of the audio. Usable again after (React may mount it twice in development). */
   destroy() {
     this.pause();
+    this.buffers.clear();
     try { this.ctx?.close(); } catch { /* closed */ }
     this.ctx = null; this.analyser = null; this.source = null; this.audio = null;
     for (const got of this.lines.values()) got.then(u => { if (u) URL.revokeObjectURL(u); });
@@ -251,7 +263,119 @@ export class PodcastEngine {
     this.set({ progress: 0, char: -1 });
     if (!this.recorded) this.speakSynth(my);
     else if (this.lineMode.has(this.state.chapter)) this.speakRecorded(my);
+    else if (appleAudio() && this.ctx) this.speakChapterWeb(my);
     else this.speakChapter(my);
+  }
+
+  // ── Chapters through Web Audio (Apple devices) ──
+  //
+  // Safari on an iPhone lets an audio element start only from a tap, and in practice that
+  // doesn't reliably carry over to a new chapter started later: the theme plays first and each
+  // chapter begins on its own, so the voices could be refused and the show stopped until it was
+  // tapped again. Web Audio, once the tap has woken it, plays whatever it's given for the rest of
+  // the visit. So on Apple devices each chapter is decoded once and played as a buffer, through
+  // the same meter as everything else (a real one: the studio's lights follow the voices). The
+  // audio session is "playback" (unlockAudio), so the silent switch doesn't mute it.
+
+  private buffers = new Map<number, Promise<AudioBuffer | null>>();
+  private voice: AudioBufferSourceNode | null = null;
+  private voiceOutNode: GainNode | null = null;
+  /** The context's time at which the chapter's start would have played, at the current speed. */
+  private voiceAt = 0;
+  private voiceChapter = -1;
+  /** Where a pause left off, so play carries on from inside the line. */
+  private resumeAt: { chapter: number; t: number } | null = null;
+
+  private voiceTime(): number { return this.ctx ? (this.ctx.currentTime - this.voiceAt) * this.state.rate : 0; }
+
+  private stopVoice(keepPlace: boolean) {
+    const v = this.voice;
+    if (!v) return;
+    if (keepPlace) this.resumeAt = { chapter: this.voiceChapter, t: this.voiceTime() };
+    v.onended = null;
+    try { v.stop(); } catch { /* not started */ }
+    v.disconnect();
+    this.voice = null;
+  }
+
+  private voiceOut(): AudioNode {
+    const c = this.ctx!;
+    if (!this.voiceOutNode) {
+      this.voiceOutNode = c.createGain();
+      if (!this.analyser) { this.analyser = c.createAnalyser(); this.analyser.fftSize = 1024; }
+      this.voiceOutNode.connect(this.analyser).connect(c.destination);
+    }
+    return this.voiceOutNode;
+  }
+
+  private bufferFor(c: number, url: string): Promise<AudioBuffer | null> {
+    let b = this.buffers.get(c);
+    if (!b) {
+      b = fetch(url).then(r => r.arrayBuffer()).then(d => this.ctx!.decodeAudioData(d)).catch(() => null);
+      this.buffers.set(c, b);
+      b.then(x => { if (!x) this.buffers.delete(c); });
+    }
+    return b;
+  }
+
+  private speakChapterWeb(my: number) {
+    const c = this.state.chapter, ctx = this.ctx!;
+    const wait = window.setTimeout(() => { if (my === this.token) this.set({ buffering: true }); }, 350);
+    this.fetchChapter(c).then(async take => {
+      if (my !== this.token) { window.clearTimeout(wait); return; }
+      if (!take) {
+        window.clearTimeout(wait); this.set({ buffering: false });
+        if (!this.recorded) { this.speakSynth(my); return; }
+        this.lineMode.add(c); this.speakRecorded(my); return;
+      }
+      const buf = await this.bufferFor(c, take.url);
+      window.clearTimeout(wait);
+      if (my !== this.token) return;
+      this.set({ buffering: false });
+      // Couldn't be decoded here: the audio element instead.
+      if (!buf) { this.speakChapter(my); return; }
+      const next = this.ep.chapters[c + 1] ? this.fetchChapter(c + 1) : null;
+      next?.then(t => { if (t) this.bufferFor(c + 1, t.url); });
+
+      const segs = take.segments;
+      const from = segs[this.state.line] ?? segs[0];
+      const r = this.resumeAt;
+      const offset = r && r.chapter === c && r.t >= from.start && r.t < from.end ? r.t : Math.max(0, from.start);
+      this.resumeAt = null;
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = this.state.rate;
+      src.connect(this.voiceOut());
+      src.start(0, Math.min(offset, Math.max(0, buf.duration - 0.05)));
+      this.voice = src; this.voiceChapter = c;
+      this.voiceAt = ctx.currentTime - offset / this.state.rate;
+      this.unlocked = true;
+      src.onended = () => { if (my === this.token && this.voice === src) { this.voice = null; this.misses = 0; this.nextChapter(my); } };
+
+      const tick = () => {
+        if (my !== this.token) return;
+        const t = this.voiceTime();
+        let i = 0;
+        for (let k = 0; k < segs.length; k++) if (segs[k].start <= t + LEAD_S) i = k;
+        const s = segs[i];
+        const p = s.end > s.start ? Math.min(1, Math.max(0, (t - s.start) / (s.end - s.start))) : 1;
+        const raw = this.ep.chapters[c]?.lines[s.line]?.text ?? '';
+        const text = plainLine(raw);
+        const char = this.wordAt(text, this.startsFor(`c${c}:${s.line}`, text, s.start, s.end, s.words, raw), t);
+        if (s.line !== this.state.line) { this.set({ line: s.line }); this.react(c, s.line); }
+        if (p !== this.state.progress || char !== this.state.char) this.set({ progress: p, char });
+        this.clock = requestAnimationFrame(tick);
+      };
+      cancelAnimationFrame(this.clock);
+      this.clock = requestAnimationFrame(tick);
+      // If the system has the audio held (a call, another app), the show waits for a tap rather
+      // than pretending to play.
+      window.setTimeout(() => {
+        if (my === this.token && this.state.playing && ctx.state !== 'running') { this.stopVoice(true); this.set({ playing: false }); }
+      }, 1500);
+    });
   }
 
   /** On to the next chapter (with its stinger, and the crowd if the game calls for it), or the end. */

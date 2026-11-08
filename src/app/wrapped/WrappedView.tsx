@@ -23,6 +23,13 @@ import { cn } from '@/lib/utils';
 import type { Game, LeagueWrap, ManagerWrap, PlayerRef, Wrapped } from '@/lib/wrapped/engine';
 import type { RecordHeld } from '@/lib/wrapped/facts';
 import { cueFor, music } from '@/lib/wrapped/music';
+import dynamic from 'next/dynamic';
+
+// The rings and the trophy (components/trophies), turning in their slides.
+const RingPiece = dynamic(() => import('@/components/trophies/Forge').then(m => m.RingPiece), { ssr: false });
+const TrophyPiece = dynamic(() => import('@/components/trophies/Forge').then(m => m.TrophyPiece), { ssr: false });
+/** Seasons with a hand-made ring model (lib/ringModels), set by the page. */
+let RING_MODELS = new Set<string>();
 import { copy, end, headline, picker, take, type Pick } from './copy';
 
 export interface Writer { id: string; name: string; handle: string; avatar: string; type: string }
@@ -299,6 +306,14 @@ function managerSlides(m: ManagerWrap, w: Wrapped, cast: Writer[], league: strin
   </> });
 
   const f = m.facts;
+  // The ring: this season's, or (all time) the latest one they've won.
+  const ringSeason = champ ? String(w.season) : all ? [...m.history].reverse().find(h => h.finish === 1)?.season?.toString() : undefined;
+  if (ringSeason) s.push({ key: 'ring', tone: TONES.gold, confetti: champ, body: <>
+    <Kicker>{champ ? `The ${ringSeason} ring` : m.titles > 1 ? `${m.titles} rings. The latest:` : `The ${ringSeason} ring`}</Kicker>
+    <Rise i={1}><RingPiece season={ringSeason} league={league} champion={m.name} model={RING_MODELS.has(ringSeason)} /></Rise>
+    <Line i={2}>{champ ? 'Yours. Forever. Wear it to the draft.' : `${ringSeason}, ${m.name}. Still shining.`}</Line>
+  </> });
+
   if (f?.records.length) s.push({ key: 'records', tone: TONES.gold, body: <>
     <Kicker>The Record Book</Kicker>
     <Big i={1} small>{f.records.some(r => r.rank === 1) ? 'You\u2019re in the book.' : 'Knocking on the door.'}</Big>
@@ -534,6 +549,18 @@ function leagueSlides(L: LeagueWrap, w: Wrapped, cast: Writer[], league: string,
     <Kicker>Your champion</Kicker>
     <Rise i={1} className="mt-4"><Clipping league={league} date={season} i={1} head={headline.champion(p, L.champions[0].name)} dek={`${L.champions[0].team} finishes ${L.champions[0].record} and lifts the trophy. The rest of the league will hear about this until the draft.`} /></Rise>
   </> });
+  // The hardware: the trophy, every champion on it (all time), or the season's ring.
+  if (all && L.champions.length) s.push({ key: 'trophy', tone: TONES.night, body: <>
+    <Kicker>The trophy</Kicker>
+    <Rise i={1}><TrophyPiece league={league} champions={L.champions.map(c => ({ season: String(c.season), name: c.name }))} /></Rise>
+    <Line i={2}>{L.champions.length} champion{L.champions.length === 1 ? '' : 's'}. Every name, engraved.</Line>
+  </> });
+  if (!all && L.champions[0] && !w.inProgress) s.push({ key: 'ring', tone: TONES.gold, body: <>
+    <Kicker>The {w.season} ring</Kicker>
+    <Rise i={1}><RingPiece season={String(w.season)} league={league} champion={L.champions[0].name} model={RING_MODELS.has(String(w.season))} /></Rise>
+    <Line i={2}>{L.champions[0].name}&apos;s, forever.</Line>
+  </> });
+
   const book = L.facts?.records ?? [];
   if (book.length) s.push({ key: 'records', tone: TONES.gold, body: <>
     <Kicker>{all ? 'The Record Book' : `Records that fell in ${w.season}`}</Kicker>
@@ -804,7 +831,8 @@ function CoverPlayer({ p }: { p: PlayerRef }) {
 interface Payload { seasons: { season: number; final: boolean }[]; wrapped: Wrapped | null; cast?: Writer[]; error?: string }
 
 /** `archived`: whether this site keeps a league archive (a database) for Wrapped to be built from. */
-export default function WrappedView({ leagueName, archived = true }: { leagueName: string; archived?: boolean }) {
+export default function WrappedView({ leagueName, archived = true, ringModels = [] }: { leagueName: string; archived?: boolean; ringModels?: string[] }) {
+  RING_MODELS = new Set(ringModels);
   const [season, setSeason] = useState<string | null>(null);
   /** The link has been read: nothing is fetched before, so a shared link's season wins. */
   const [ready, setReady] = useState(false);

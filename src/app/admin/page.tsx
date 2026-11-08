@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import AdminShell from './AdminShell';
+import { leagueDisplayName } from '@/lib/leagueName';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,6 @@ export const metadata: Metadata = {
   description: 'Configure appearance and the AI desk.',
 };
 
-export default function AdminPage() {
-  return <AdminShell />;
+export default async function AdminPage() {
+  return <AdminShell leagueName={await leagueDisplayName()} />;
 }

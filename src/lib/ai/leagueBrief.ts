@@ -49,8 +49,9 @@ export interface BriefTeam {
 
 export interface BriefMatchup {
   week: number;
-  home: { teamName: string; points: number };
-  away: { teamName: string; points: number };
+  /** `userId` and `avatar`: the manager, where known (the Desk Weekly's highlights find the stadium by them). */
+  home: { teamName: string; points: number; userId?: string; avatar?: string };
+  away: { teamName: string; points: number; userId?: string; avatar?: string };
   margin: number;
 }
 
