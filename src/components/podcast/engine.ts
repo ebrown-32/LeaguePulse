@@ -203,6 +203,18 @@ export class PodcastEngine {
     } else { this.loadSounds(); this.speak(); }
   }
 
+  /**
+   * A sound off the studio's soundboard (Studio), over whatever is playing. Call inside a tap: it
+   * wakes the audio the same way play does. The theme plays for a few seconds, then fades.
+   */
+  fx(name: 'roar' | 'groan' | 'turn' | 'theme' | 'close') {
+    this.unlockAudio();
+    this.loadSounds().then(() => {
+      if (this.playSound(name, name === 'theme' ? 0.42 : 0.45, name === 'theme' ? 6 : undefined)) return;
+      if (name === 'turn' || name === 'close') this.synthSting(name);
+    });
+  }
+
   pause() {
     this.token++;
     this.set({ playing: false, buffering: false });

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import type { Episode } from '@/lib/ai/podcast';
 import Player from '@/components/podcast/Player';
 
-export default function PodcastView({ leagueName }: { leagueName: string }) {
+export default function PodcastView({ leagueName, logoUrl }: { leagueName: string; logoUrl?: string | null }) {
   const [data, setData] = useState<{ episodes: Episode[]; recorded: boolean } | null>(null);
   const [pick, setPick] = useState<string | null>(null);
 
@@ -49,7 +49,7 @@ export default function PodcastView({ leagueName }: { leagueName: string }) {
 
   return (
     <div className="space-y-8">
-      <Player key={episode.id} episode={episode} recorded={data.recorded} autoFocus />
+      <Player key={episode.id} episode={episode} recorded={data.recorded} autoFocus logoUrl={logoUrl} />
       {data.episodes.length > 1 && (
         <section aria-labelledby="episodes">
           <div className="flex items-baseline justify-between">

@@ -3,8 +3,8 @@
 /**
  * The Desk Weekly's player: an episode as a show you can watch while you listen.
  *
- *   The stage       the panel (three or four hosts), the one speaking lit and ringed by a live
- *                   meter of their voice
+ *   The studio      the panel at their desk, in a tower over the city, lights on whoever's talking
+ *                   (Studio): the show's logo, ON AIR, a chyron and a soundboard
  *
  * Dressed in the league's own theme (its colours, surfaces and corner radius, light or dark), like
  * every other card on the site. On a phone the controls stay at the bottom of the screen.
@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import Studio, { DeskWeeklyLogo } from './Studio';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Episode, Visual } from '@/lib/ai/podcast';
@@ -33,50 +34,11 @@ const KIND_LABEL: Record<string, string> = { open: 'Cold open', games: 'The game
 const HOST_TINT = ['hsl(var(--primary))', '#E07A4F', '#5B8DEF', '#C064C6'];
 const tint = (i: number) => HOST_TINT[i % HOST_TINT.length];
 
-/** Phone width, for sizing a panel of three or four hosts to fit a row. */
-function useNarrow(): boolean {
-  return useSyncExternalStore(
-    l => { const m = matchMedia('(max-width: 639px)'); m.addEventListener('change', l); return () => m.removeEventListener('change', l); },
-    () => matchMedia('(max-width: 639px)').matches,
-    () => false,
-  );
-}
 
 function useEngine(engine: PodcastEngine): EngineState {
   return useSyncExternalStore(l => engine.subscribe(l), () => engine.snapshot, () => engine.snapshot);
 }
 
-/** A ring of bars around a host, pulsing with their voice. Drawn by hand each frame. */
-function VoiceRing({ engine, active, color, size }: { engine: PodcastEngine; active: boolean; color: string; size: number }) {
-  const ref = useRef<SVGGElement>(null);
-  const reduce = useReducedMotion();
-  const BARS = 44;
-  useEffect(() => {
-    if (!active || reduce) { ref.current?.querySelectorAll('line').forEach(l => l.setAttribute('y2', String(-size / 2 - 3))); return; }
-    let raf = 0;
-    const seeds = Array.from({ length: BARS }, (_, i) => Math.sin(i * 12.9898) * 43758.5453 % 1);
-    const frame = (t: number) => {
-      const lv = engine.level();
-      ref.current?.querySelectorAll('line').forEach((l, i) => {
-        const wob = 0.55 + 0.45 * Math.sin(t / 120 + i * 0.7 + seeds[i] * 6);
-        l.setAttribute('y2', String(-size / 2 - 3 - lv * wob * 18));
-      });
-      raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [active, engine, reduce, size]);
-  const r = size / 2 + 3;
-  return (
-    <svg aria-hidden width={size + 60} height={size + 60} viewBox={`${-(size + 60) / 2} ${-(size + 60) / 2} ${size + 60} ${size + 60}`} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-      <g ref={ref} style={{ opacity: active ? 1 : 0, transition: 'opacity .4s' }}>
-        {Array.from({ length: BARS }, (_, i) => (
-          <line key={i} x1="0" y1={-r} x2="0" y2={-r} stroke={color} strokeWidth="3" strokeLinecap="round" transform={`rotate(${(360 / BARS) * i})`} />
-        ))}
-      </g>
-    </svg>
-  );
-}
 
 function Count({ to, decimals = 2 }: { to: number; decimals?: number }) {
   const reduce = useReducedMotion();
@@ -188,7 +150,7 @@ function Spoken({ text, char }: { text: string; char: number }) {
   );
 }
 
-export default function Player({ episode, recorded, autoFocus = false }: { episode: Episode; recorded: boolean; autoFocus?: boolean }) {
+export default function Player({ episode, recorded, autoFocus = false, logoUrl }: { episode: Episode; recorded: boolean; autoFocus?: boolean; logoUrl?: string | null }) {
   const engine = useMemo(() => new PodcastEngine(episode, recorded), [episode, recorded]);
   useEffect(() => () => engine.destroy(), [engine]);
   const s = useEngine(engine);
@@ -203,9 +165,6 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
   const ch = episode.chapters[s.chapter];
   const line = ch?.lines[s.line];
   const speaker = line?.host ?? 0;
-  const narrow = useNarrow();
-  const panel = episode.hosts.length;
-  const face = panel > 2 ? (narrow ? (panel > 3 ? 56 : 64) : 76) : 84;
   const totalLines = episode.chapters.reduce((n, c) => n + c.lines.length, 0);
   const done = episode.chapters.slice(0, s.chapter).reduce((n, c) => n + c.lines.length, 0) + s.line + s.progress;
   const pct = s.done ? 1 : done / Math.max(1, totalLines);
@@ -243,13 +202,9 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
         <div className="absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
-      <div className="relative grid gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-8">
-        {/* Left: the show. */}
-        <div className="min-w-0">
+      <div className="relative p-4 pb-0 sm:p-7 sm:pb-0">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm sm:h-11 sm:w-11">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M4 13a8 8 0 0 1 16 0v4a2 2 0 0 1-2 2h-1v-6h3M4 13v4a2 2 0 0 0 2 2h1v-6H4" /></svg>
-            </span>
+            <DeskWeeklyLogo size={44} words={false} />
             <div className="min-w-0 flex-1 leading-tight">
               <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-primary">The Desk Weekly · Ep. {episode.number}</p>
               <p className="truncate text-[13px] text-muted-foreground">Week {episode.week}, {episode.season}</p>
@@ -260,26 +215,14 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
               {copied ? <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> : <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg>}
             </button>
           </div>
-          <h2 className="mt-4 font-display text-[clamp(24px,3.4vw,38px)] font-extrabold leading-[1.06] tracking-[-0.025em] text-foreground">{episode.title}</h2>
-          <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-muted-foreground sm:text-[15px]">{episode.teaser}</p>
+          <div className="mt-4"><Studio episode={episode} s={s} engine={engine} tint={tint} logoUrl={logoUrl} leagueName={episode.leagueName} /></div>
+      </div>
 
-          {/* The hosts. */}
-          <div className={`mt-7 flex items-start justify-center sm:mt-8 ${panel > 2 ? 'gap-2 sm:gap-8' : 'gap-10 sm:gap-14'}`}>
-            {episode.hosts.map((h, i) => {
-              const on = i === speaker && s.playing;
-              return (
-                <div key={h.id} className="flex min-w-0 flex-col items-center" style={{ width: face + 24 }}>
-                  <motion.div className="relative" animate={{ scale: on ? 1.08 : 0.94, opacity: on || !s.playing ? 1 : 0.5 }} transition={{ type: 'spring', stiffness: 260, damping: 20 }}>
-                    <VoiceRing engine={engine} active={on} color={tint(i)} size={face} />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={h.avatar} alt="" width={face} height={face} style={{ width: face, height: face, ['--tw-ring-color' as string]: on ? tint(i) : 'hsl(var(--border))' }} className="relative rounded-full bg-muted object-cover ring-2" />
-                  </motion.div>
-                  <p className={`mt-3.5 w-full truncate text-center font-bold text-foreground ${panel > 2 ? 'text-[12.5px] sm:text-[14px]' : 'text-[14px]'}`}>{h.name}</p>
-                  <p className={`w-full truncate text-center text-muted-foreground ${panel > 2 ? 'text-[11px] sm:text-[12px]' : 'text-[12px]'}`}>{h.handle}</p>
-                </div>
-              );
-            })}
-          </div>
+      <div className="relative grid gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-8">
+        {/* Left: the episode, and the words on air. */}
+        <div className="min-w-0">
+          <h2 className="font-display text-[clamp(24px,3.4vw,38px)] font-extrabold leading-[1.06] tracking-[-0.025em] text-foreground">{episode.title}</h2>
+          <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-muted-foreground sm:text-[15px]">{episode.teaser}</p>
 
           {/* The words. */}
           <div className="mt-6 min-h-[132px] sm:mt-8 sm:min-h-[150px]" aria-live="polite">

@@ -143,8 +143,9 @@ publishes, so nobody gets traded the wrong way round.
 **The Desk Weekly** is your league's week as a ninety-second comedy show. Three or four of your
 Desk personalities sit down after the week is final and roast it: the blowout, the benching, the
 trade nobody understood. Each host has their own voice, the panel changes every week, and every
-score and record is the real one, checked the same way as the Feed. The player shows the game or
-the table being argued about, and works on phones with the screen locked.
+score and record is the real one, checked the same way as the Feed. It plays in a studio high
+over a city skyline: lights that swing to whoever's talking, the league's logo on the desk, a
+chyron, a soundboard anyone can hit, and the game or table being argued about on screen.
 
 Admins pick each personality's voice and can record any earlier week of the season as a look
 back, from that week as it stood. Re-recording an episode is limited to once a week per league.
@@ -313,6 +314,12 @@ Two caps keep a month from running away (past either, browsers read the episode 
 | `ELEVENLABS_MONTHLY_CHARS_TOTAL` | 36000 | Everything together: keep it under your plan's limit. |
 | `ELEVENLABS_MODEL` | `eleven_v4` | The most natural model; it acts out cues like [laughs]. |
 | `ELEVENLABS_VOICES` | every voice | A comma list of voice ids, to limit what admins can pick. |
+
+With ElevenLabs and Blob, League Wrapped also gets its own music: an original instrumental for each
+finished season, in the mood that season earned (a runaway champion, an underdog, a season of
+trades), and a new one for the all-time story every few months. About a minute each, roughly 900
+credits, counted toward `ELEVENLABS_MONTHLY_CHARS_TOTAL`. Without them, Wrapped plays its built-in
+soundtrack.
 
 The caps need Redis, which the AI desk already uses.
 

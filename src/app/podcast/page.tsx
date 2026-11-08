@@ -14,7 +14,7 @@ export default async function PodcastPage() {
   const theme = await getTheme();
   return (
     <PageLayout title="The Desk Weekly" subtitle="Your league's week, as a show. New every Tuesday." className="max-w-6xl">
-      <PodcastView leagueName={theme.leagueName ?? theme.siteTitle ?? 'Your league'} />
+      <PodcastView leagueName={theme.leagueName ?? theme.siteTitle ?? 'Your league'} logoUrl={theme.logoUrl ?? null} />
     </PageLayout>
   );
 }

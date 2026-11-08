@@ -12,6 +12,13 @@
  * And the story's moments: a fanfare for a title, a sad trombone for the worst week, a record
  * scratch for the bad trade, a low boom for heartbreak, a hit on the beat for the big numbers.
  * Sad slides muffle the music. Browsers only let sound start from a tap: call `unlock` inside one.
+ *
+ * Or the league's own track (setTrack): an original instrumental ElevenLabs Music wrote for that
+ * season, in the mood it earned (lib/wrapped/soundtrack). It plays through the same chain, so the
+ * moments, the muffling and the stage's thump all still work: looped with a crossfade, the thump
+ * read from its bass, the pitched moments with the track ducked under them. Until it has loaded,
+ * or where there isn't one, the loop above; a track that arrives mid-story takes over on a bar line.
+ *
  * Client only.
  */
 
@@ -30,6 +37,10 @@ const ROOTS = [33, 29, 36, 31];
 const STABS = new Set([0, 3, 6, 10, 12]);
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 const VOLUME = 0.68;
+/** A finished, mastered track is far louder than the loop's parts: it sits under the moments. */
+const TRACK_VOLUME = 0.42;
+/** How long one pass of a track fades into the next, in seconds. */
+const XFADE = 1.6;
 
 type Section = 'A' | 'B' | 'break' | 'C';
 const sectionOf = (bar: number): Section => { const b = bar % 32; return b < 8 ? 'A' : b < 16 ? 'B' : b < 24 ? 'break' : 'C'; };
@@ -50,6 +61,20 @@ class Music {
   private running = false;
   private held = false;
   private gen = 0;
+
+  // The league's own track, when it has one.
+  private trackUrl: string | null = null;
+  private trackBytes: Promise<ArrayBuffer | null> | null = null;
+  private trackBuf: AudioBuffer | null = null;
+  private trackOn = false;
+  private trackGain!: GainNode;
+  private trackMeter!: AnalyserNode;
+  private trackBins: Uint8Array<ArrayBuffer> | null = null;
+  private trackNextAt = 0;
+  private trackFirst = true;
+  /** When the track comes in: the loop plays up to there. */
+  private trackStartAt = 0;
+  private sources: AudioBufferSourceNode[] = [];
   /** Off when the visitor turned the music off (lib/prefs), here or in their preferences. */
   get muted() { return getPrefs().music === false; }
 
@@ -81,9 +106,78 @@ class Music {
     this.send = c.createGain();
     this.send.connect(delay).connect(fb).connect(delay); delay.connect(wet).connect(this.duck);
     this.sfxBus = c.createGain(); this.sfxBus.gain.value = 0.9; this.sfxBus.connect(comp);
+    // The league's track: through the tone filter (sad slides muffle it too), metered for the thump.
+    this.trackGain = c.createGain(); this.trackGain.gain.value = 0; this.trackGain.connect(this.tone);
+    this.trackMeter = c.createAnalyser(); this.trackMeter.fftSize = 256; this.trackMeter.smoothingTimeConstant = 0.55;
+    this.trackGain.connect(this.trackMeter);
+    this.decodeTrack();
     this.noise = c.createBuffer(1, c.sampleRate, c.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+  }
+
+  /**
+   * The story's own track (a URL from api/wrapped/soundtrack), or null for the synthesized loop.
+   * Fetched now, decoded once there's audio to decode with, and played from the next start, or
+   * from the next bar if the story is already playing.
+   */
+  setTrack(url: string | null) {
+    if (url === this.trackUrl) return;
+    this.trackUrl = url; this.trackBuf = null;
+    this.trackBytes = url ? fetch(url).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
+    if (!url && this.trackOn) this.endTrack();
+    this.decodeTrack();
+  }
+
+  private async decodeTrack() {
+    const c = this.ctx, url = this.trackUrl, bytes = this.trackBytes;
+    if (!c || !url || !bytes) return;
+    const data = await bytes;
+    if (!data || url !== this.trackUrl || this.trackBuf) return;
+    const buf = await c.decodeAudioData(data.slice(0)).catch(() => null);
+    if (!buf || url !== this.trackUrl) return;
+    this.trackBuf = buf;
+    // Already playing the loop: take over on the next bar.
+    if (this.running && !this.trackOn) {
+      const bar = STEP * BAR;
+      this.beginTrack(this.zero + Math.ceil((c.currentTime + 0.1 - this.zero) / bar) * bar);
+    }
+  }
+
+  private beginTrack(at: number) {
+    const c = this.ctx!;
+    this.trackOn = true; this.trackFirst = true;
+    this.trackNextAt = Math.max(at, c.currentTime + 0.05);
+    this.trackStartAt = this.trackNextAt;
+    this.trackGain.gain.cancelScheduledValues(c.currentTime);
+    this.trackGain.gain.setValueAtTime(0.0001, this.trackNextAt);
+    this.trackGain.gain.exponentialRampToValueAtTime(TRACK_VOLUME, this.trackNextAt + 0.5);
+    this.queueTrack();
+  }
+
+  /** Keeps the next pass of the track queued: each one fades into the next over XFADE seconds. */
+  private queueTrack() {
+    const c = this.ctx, buf = this.trackBuf;
+    if (!c || !buf || !this.trackOn) return;
+    while (this.trackNextAt < c.currentTime + 1.5) {
+      const at = this.trackNextAt, len = buf.duration, xf = Math.min(XFADE, len / 4);
+      const src = c.createBufferSource(); src.buffer = buf;
+      const g = c.createGain(); src.connect(g).connect(this.trackGain);
+      if (this.trackFirst) g.gain.setValueAtTime(1, at);
+      else { g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(1, at + xf); }
+      g.gain.setValueAtTime(1, at + len - xf); g.gain.linearRampToValueAtTime(0.0001, at + len);
+      src.start(at); src.stop(at + len + 0.05);
+      src.onended = () => { this.sources = this.sources.filter(x => x !== src); };
+      this.sources.push(src);
+      this.trackFirst = false;
+      this.trackNextAt = at + len - xf;
+    }
+  }
+
+  private endTrack() {
+    this.trackOn = false;
+    for (const s of this.sources) { try { s.stop(); } catch { /* already stopped */ } }
+    this.sources = [];
   }
 
   /** From the count-in: the story opened. */
@@ -95,6 +189,8 @@ class Music {
     this.step = COUNT_IN;
     this.next = c.currentTime + 0.08;
     this.zero = this.next - COUNT_IN * STEP;
+    // The league's track, when it's ready, straight in: it was written to start on the beat.
+    if (this.trackBuf) { this.zero = this.next; this.step = 0; this.beginTrack(this.next); }
     this.tone.frequency.cancelScheduledValues(c.currentTime); this.tone.frequency.setValueAtTime(18000, c.currentTime);
     this.level(0.05);
     if (this.timer) clearInterval(this.timer);
@@ -112,6 +208,7 @@ class Music {
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.setTimeout(() => {
       if (g !== this.gen) return;
+      this.endTrack();
       if (this.timer) clearInterval(this.timer); this.timer = null;
       c.suspend().catch(() => {});
     }, 600);
@@ -135,6 +232,18 @@ class Music {
     this.tone.frequency.setTargetAtTime(low ? 650 : 18000, c.currentTime, low ? 0.25 : 0.4);
     this.whoosh(c.currentTime, forward);
     if (!cue) return;
+    if (this.trackOn) {
+      // The track has its own tempo and key: the moment lands now, and the pitched ones play
+      // over the track ducked low, so they don't clash with it.
+      const now = c.currentTime + 0.02;
+      if (cue !== 'impact') {
+        this.trackGain.gain.cancelScheduledValues(now);
+        this.trackGain.gain.setTargetAtTime(TRACK_VOLUME * 0.3, now, 0.05);
+        this.trackGain.gain.setTargetAtTime(TRACK_VOLUME, now + (cue === 'fanfare' ? 1.8 : 1.3), 0.3);
+      }
+      ({ fanfare: this.fanfare, trombone: this.trombone, scratch: this.scratch, boom: this.boom, impact: this.impact })[cue].call(this, now);
+      return;
+    }
     const beat = STEP * 4;
     const at = this.zero + Math.ceil((c.currentTime + 0.02 - this.zero) / (cue === 'impact' ? STEP * 2 : beat)) * (cue === 'impact' ? STEP * 2 : beat);
     ({ fanfare: this.fanfare, trombone: this.trombone, scratch: this.scratch, boom: this.boom, impact: this.impact })[cue].call(this, Math.max(at, c.currentTime));
@@ -143,6 +252,13 @@ class Music {
   /** How hard the kick is hitting right now, 0 to 1: for the stage to thump along. */
   pulse(): number {
     const c = this.ctx; if (!c || !this.running || this.held || this.muted) return 0;
+    if (this.trackOn) {
+      // The track's own low end: how hard its kick and bass are hitting.
+      const bins = this.trackBins ?? (this.trackBins = new Uint8Array(new ArrayBuffer(this.trackMeter.frequencyBinCount)));
+      this.trackMeter.getByteFrequencyData(bins);
+      let sum = 0; for (let k = 1; k < 5; k++) sum += bins[k];
+      return Math.min(1, Math.max(0, (sum / 4 / 255 - 0.5) / 0.4));
+    }
     const since = c.currentTime - this.zero; if (since < 0) return 0;
     if (sectionOf(Math.floor(since / (STEP * BAR))) === 'break') return 0;
     return Math.exp(-((since % (STEP * 4)) / (STEP * 4)) * 6);
@@ -162,6 +278,12 @@ class Music {
 
   private schedule = () => {
     const c = this.ctx; if (!c || !this.running) return;
+    if (this.trackOn) {
+      this.queueTrack();
+      // The loop carries on up to the bar the track comes in on, so the hand-over has no gap.
+      while (this.next < Math.min(this.trackStartAt, c.currentTime + 0.12)) { this.play(this.step, this.next); this.next += STEP; this.step++; }
+      return;
+    }
     while (this.next < c.currentTime + 0.12) { this.play(this.step, this.next); this.next += STEP; this.step++; }
   };
 
