@@ -56,20 +56,12 @@ function pickVoices(n: number): (SpeechSynthesisVoice | null)[] {
 /** Where two hosts share a browser voice, pitch and pace tell them apart. */
 const SHADES = [{ pitch: 1, rate: 1 }, { pitch: 1.3, rate: 1.04 }, { pitch: 0.8, rate: 0.96 }, { pitch: 1.15, rate: 1.1 }];
 
-/** A tenth of a second of silence as a WAV, for unlocking the audio element inside a tap. */
-let silent: string | null = null;
-function silence(): string {
-  if (silent) return silent;
-  const rate = 8000, n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
-  const str = (o: number, t: string) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
-  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE'); str(12, 'fmt ');
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
-  str(36, 'data'); v.setUint32(40, n, true);
-  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
-  silent = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-  return silent;
-}
+/**
+ * A quarter second of silence, for unlocking the audio element inside a tap: a real MP3 file
+ * (public/podcast/silence.mp3), the format every phone plays. A clip the phone won't play leaves
+ * the element locked, and the first line blocked until a second tap.
+ */
+const silence = () => '/podcast/silence.mp3';
 
 /**
  * iPhone and iPad (every browser there is Safari underneath) and Safari on a Mac. There, audio
@@ -288,6 +280,9 @@ export class PodcastEngine {
       };
       got = ask(2)
         .then(async r => {
+          // 429: the league's recorded voices are used up for the month (or this visitor asked
+          // for too many). The episode is all-or-nothing, so the browser reads all of it.
+          if (r.status === 429) { this.recorded = false; return null; }
           if (!r.ok) return null;
           const segments = JSON.parse(r.headers.get('x-lp-segments') || '[]') as { line: number; start: number; end: number }[];
           const b = await r.blob();
@@ -325,7 +320,10 @@ export class PodcastEngine {
       window.clearTimeout(wait);
       if (my !== this.token) return;
       this.set({ buffering: false });
-      if (!take) { this.lineMode.add(c); this.speakRecorded(my); return; }
+      if (!take) {
+        if (!this.recorded) { this.speakSynth(my); return; }
+        this.lineMode.add(c); this.speakRecorded(my); return;
+      }
       if (this.ep.chapters[c + 1]) this.fetchChapter(c + 1);
       const segs = take.segments;
       const from = segs[this.state.line] ?? segs[0];
@@ -353,9 +351,9 @@ export class PodcastEngine {
         this.set({ progress: p, char: Math.floor(p * text.length) });
         this.clock = requestAnimationFrame(tick);
       };
-      a.play().then(() => { this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
+      a.play().then(() => { this.unlocked = true; this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
         const why = refusal(err);
-        if (why === 'blocked') this.set({ playing: false });
+        if (why === 'blocked') { this.unlocked = false; this.set({ playing: false }); }
         else if (why === 'failed' && my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); }
       });
     });
@@ -434,9 +432,9 @@ export class PodcastEngine {
       a.playbackRate = this.state.rate;
       a.onended = () => { this.misses = 0; this.advance(my); };
       a.onerror = () => fallBack(false);
-      a.play().then(() => { this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
+      a.play().then(() => { this.unlocked = true; this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
         const why = refusal(err);
-        if (why === 'blocked') this.set({ playing: false });
+        if (why === 'blocked') { this.unlocked = false; this.set({ playing: false }); }
         else if (why === 'failed') fallBack(false);
       });
     });
@@ -452,11 +450,13 @@ export class PodcastEngine {
    */
   private unlockPlayback() {
     if (typeof window === 'undefined') return;
-    if (this.recorded && !this.audio) {
-      const a = this.audio = new Audio();
+    // Until a play on the element has gone through, every tap tries the unlock again.
+    if (this.recorded && !this.unlocked && (!this.audio || this.audio.paused)) {
+      const a = this.audio ?? (this.audio = new Audio());
       a.preload = 'auto';
+      this.loadedChapter = -1;
       a.src = silence();
-      a.play().catch(() => { /* still unlocked, or nothing more to do */ });
+      a.play().then(() => { this.unlocked = true; }).catch(() => { /* the next tap tries again */ });
     }
     if (typeof speechSynthesis !== 'undefined' && !this.speechUnlocked) {
       this.speechUnlocked = true;
@@ -466,6 +466,8 @@ export class PodcastEngine {
     }
   }
   private speechUnlocked = false;
+  /** Whether the audio element has been allowed to play (by a play inside a tap). */
+  private unlocked = false;
 
   private unlockAudio() {
     if (this.ctx || typeof window === 'undefined') { this.ctx?.resume().catch(() => {}); return; }

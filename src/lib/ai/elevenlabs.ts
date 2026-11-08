@@ -8,7 +8,7 @@
  *                                        from; unset, every voice on the ElevenLabs account
  *   ELEVENLABS_MODEL                     optional, default eleven_v4 (the most human: it performs
  *                                        the script's delivery tags, like [laughs])
- *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 12000 (about two episodes); past it,
+ *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 12000 (about four episodes); past it,
  *                                        browsers read that league's episodes
  *   ELEVENLABS_MONTHLY_CHARS_TOTAL       optional, default 36000 (90% of the Starter plan's 40,000):
  *                                        the whole platform's month, every league together, so one
@@ -158,6 +158,82 @@ export async function spendCharacters(chars: number): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+/**
+ * Pays for a whole episode up front, the first time any of it is recorded: true if it's paid
+ * for (now or before). An episode is either recorded from start to finish or not at all, so a
+ * league reaching its cap never hears the panel turn into the browser's voice halfway through;
+ * an episode it can't afford is read by the browser from the start. Every recording after the
+ * first, of that episode, is already paid for. (What ElevenLabs actually bills is only what gets
+ * played, so this is the cautious side of the count.)
+ */
+export async function payForEpisode(epId: string, chars: number): Promise<boolean> {
+  const { client: redis } = getRedis();
+  if (!redis) return true;
+  const paid = `lp_podcast_paid:${epId}`;
+  if (await redis.get(paid)) return true;
+  // One payment even when several chapters are asked for at once.
+  const lock = `lp_podcast_paying:${epId}`;
+  const n = await redis.incrby(lock, 1);
+  if (n === 1) await redis.expire(lock, 30);
+  else {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      if (await redis.get(paid)) return true;
+    }
+    return false;
+  }
+  try {
+    const ok = await spendCharacters(chars);
+    if (ok) await redis.set(paid, '1', 400 * 24 * 3600);
+    return ok;
+  } finally {
+    await redis.del(lock).catch(() => {});
+  }
+}
+
+/** The characters a whole episode takes to record. */
+export function episodeCharacters(ep: { chapters: { lines: { text: string }[] }[] }): number {
+  return ep.chapters.reduce((n, c) => n + c.lines.reduce((m, l) => m + l.text.length, 0), 0);
+}
+
+/** About what one episode takes (podcast.ts writes to about 3,000 characters). */
+export const EPISODE_CHARS = 3_000;
+
+/**
+ * For the back office's monitor: the ElevenLabs plan as ElevenLabs counts it, and the platform's
+ * own count against its caps. `planError` says why the plan couldn't be read (a key without the
+ * User: read permission can't see its subscription); the platform's count works regardless.
+ * Run outside any league: the platform counter is shared, the per-league ones are read by the caller.
+ */
+export async function voiceAccount() {
+  const client = elevenLabs();
+  const m = month();
+  const { client: redis } = getRedis();
+  const platformUsed = Number((await redis?.get(`lp_tts_platform:${m}`).catch(() => null)) ?? 0) || 0;
+  let plan: null | { tier: string; used: number; limit: number; resetsAt: string | null; voiceSlots: number; voiceLimit: number } = null;
+  let planError: string | null = client ? null : 'No ELEVENLABS_API_KEY';
+  if (client) {
+    try {
+      const s = await client.user.subscription.get();
+      plan = {
+        tier: s.tier, used: s.characterCount, limit: s.characterLimit,
+        resetsAt: s.nextCharacterCountResetUnix ? new Date(s.nextCharacterCountResetUnix * 1000).toISOString() : null,
+        voiceSlots: s.voiceSlotsUsed, voiceLimit: s.voiceLimit,
+      };
+    } catch (err) {
+      const e = err as { statusCode?: number };
+      planError = e.statusCode === 401 ? 'The key can\'t read its plan (give it User: read)' : `ElevenLabs answered ${e.statusCode ?? 'with an error'}`;
+    }
+  }
+  return { month: m, plan, planError, platformUsed, platformCap: platformCap(), leagueCap: leagueCap(), episodeChars: EPISODE_CHARS };
+}
+
+/** This league's characters for a month (yyyy-mm). Run inside the league. */
+export async function leagueCharacters(m: string): Promise<number> {
+  const { client: redis } = getRedis();
+  return Number((await redis?.get(`lp_podcast_tts_chars:${m}`).catch(() => null)) ?? 0) || 0;
 }
 
 /** Gives back characters charged for a recording that then failed. */

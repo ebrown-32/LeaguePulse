@@ -2,8 +2,8 @@
  * Operator only: how the platform is doing, for the back office's monitor (/operator).
  *
  *   GET   calls to every other service (lib/ops/monitor), the server's errors, the scheduled
- *         jobs, live checks of what the platform depends on, storage used, and the AI spend of
- *         every league
+ *         jobs, live checks of what the platform depends on, storage used, the AI spend of
+ *         every league, and the podcast's ElevenLabs characters (plan, caps, every league)
  *
  * Storage is read from the stores themselves: Upstash's INFO (its own data size and plan limit, for
  * the whole database, every namespace) and Postgres's sizes, against LP_POSTGRES_LIMIT_MB (512 when
@@ -171,9 +171,38 @@ async function aiSpend() {
   };
 }
 
+/**
+ * The Desk Weekly's recorded voices: ElevenLabs' own count of the plan, the platform's count
+ * against its caps, and every league's month. How many leagues the plan carries assumes one
+ * episode a week (about 4.35 a month) at the episode's usual length.
+ */
+async function voices() {
+  const [{ voiceAccount, leagueCharacters }, { listTenants }, { runAsTenant }] = await Promise.all([
+    import('@/lib/ai/elevenlabs'), import('@/lib/platform/tenants'), import('@/lib/tenant/context'),
+  ]);
+  const acct = await voiceAccount();
+  const now = new Date();
+  const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  const tenants = await listTenants().catch(() => []);
+  const leagues = (await Promise.all(tenants.map(t => runAsTenant(t, async () => ({
+    slug: t.slug, name: t.leagueName,
+    month: await leagueCharacters(acct.month), lastMonth: await leagueCharacters(lastMonth),
+  }))))).filter(l => l.month || l.lastMonth).sort((a, b) => b.month - a.month);
+  const perLeague = Math.round(acct.episodeChars * 4.35);
+  const budget = Math.min(acct.plan?.limit ?? Infinity, acct.platformCap);
+  return {
+    ...acct, leagues, perLeague,
+    carries: { plan: acct.plan ? Math.floor(acct.plan.limit / perLeague) : null, cap: Math.floor(budget / perLeague) },
+  };
+}
+
 export async function GET(req: Request) {
   if (!(await isOperator(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { readOps } = await import('@/lib/ops/monitor');
-  const [ops, live, ai, stores, mkt] = await Promise.all([readOps(), checks(), aiSpend().catch(() => null), storage(), market().catch(() => null)]);
-  return NextResponse.json({ at: new Date().toISOString(), ...ops, checks: live, ai, storage: stores, market: mkt }, { headers: { 'cache-control': 'no-store' } });
+  const { elevenLabsKey } = await import('@/lib/ai/elevenlabs');
+  const [ops, live, ai, stores, mkt, tts] = await Promise.all([
+    readOps(), checks(), aiSpend().catch(() => null), storage(), market().catch(() => null),
+    elevenLabsKey() ? voices().catch(() => null) : Promise.resolve(null),
+  ]);
+  return NextResponse.json({ at: new Date().toISOString(), ...ops, checks: live, ai, storage: stores, market: mkt, voices: tts }, { headers: { 'cache-control': 'no-store' } });
 }

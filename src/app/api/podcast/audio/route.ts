@@ -20,7 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { castVoices, elevenLabsKey, speak, spendCharacters, voicePool } from '@/lib/ai/elevenlabs';
+import { castVoices, elevenLabsKey, episodeCharacters, payForEpisode, speak, voicePool } from '@/lib/ai/elevenlabs';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
 
 export const dynamic = 'force-dynamic';
@@ -54,7 +54,8 @@ export async function GET(req: NextRequest) {
   const voice = voices[line.host] || voices[0];
   if (!voice) return refuse('No ElevenLabs voices to read with.', 502);
 
-  if (!(await spendCharacters(line.text.length).catch(() => true))) return refuse('This month\'s recorded voices are used up.', 429);
+  // Paid for as a whole episode, like a chapter: all of it recorded or none of it.
+  if (!(await payForEpisode(ep.id, episodeCharacters(ep)).catch(() => true))) return refuse('This month\'s recorded voices are used up.', 429);
 
   // The conversation around this line, for delivery: the turn before and the turn after.
   const flat = ep.chapters.flatMap(ch => ch.lines);

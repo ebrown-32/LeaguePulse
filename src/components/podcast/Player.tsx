@@ -235,8 +235,10 @@ export default function Player({ episode, recorded, autoFocus = false }: { episo
     <div ref={box} tabIndex={-1} onKeyDown={onKey} className="lp-surface lp-surface-2 relative rounded-2xl text-card-foreground outline-none">
       {/* The room: a slow glow in the speaker's colour, and the brand's own in the corner. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-        <motion.div className="absolute -top-48 left-1/2 h-[460px] w-[460px] -translate-x-1/2 rounded-full blur-3xl"
-          animate={{ backgroundColor: tint(speaker), opacity: s.playing ? 0.16 : 0.07 }} transition={{ duration: 1.2 }} />
+        {/* A CSS transition, not an animation: the first host's colour is the theme's own
+            (a CSS variable), which only the browser can blend. */}
+        <div className="absolute -top-48 left-1/2 h-[460px] w-[460px] -translate-x-1/2 rounded-full blur-3xl"
+          style={{ backgroundColor: tint(speaker), opacity: s.playing ? 0.16 : 0.07, transition: 'background-color 1.2s ease, opacity 1.2s ease' }} />
         <div className="absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       </div>
 

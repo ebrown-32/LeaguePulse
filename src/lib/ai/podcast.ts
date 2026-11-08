@@ -95,13 +95,13 @@ function scriptSchema(n: number) {
     ref: z.string().describe('What this chapter shows on screen: one of the REFERENCE ids given (e.g. "matchup:2", "team:3", "move:0", "standings"), or "none"'),
     lines: z.array(z.object({
       host: z.number().int().min(0).max(n - 1).describe(`Which host speaks: 0 to ${n - 1}, as numbered in THE PANEL`),
-      text: z.string().describe('One spoken turn: one to three sentences, written to be heard, not read'),
-    })).min(3).max(10),
+      text: z.string().describe('One spoken turn: one or two short sentences, written to be heard, not read'),
+    })).min(3).max(6),
   });
   return z.object({
     title: z.string().describe('The episode title: a headline for the week, under eight words, ideally funny'),
     teaser: z.string().describe('One sentence that makes a manager press play'),
-    chapters: z.array(chapter).min(4).max(7),
+    chapters: z.array(chapter).min(4).max(5),
   });
 }
 type Script = z.infer<ReturnType<typeof scriptSchema>>;
@@ -175,15 +175,20 @@ IT HAS TO BE FUNNY. This is a comedy show with real numbers, not a news bulletin
 - The hosts roast the managers, the lineups and each other. Somebody always takes it personally.
 - Interruptions and pile-ons: short turns, people cutting in, a host who keeps getting talked over.
 - Specific beats generic. The joke is in the real score, the real benching, the real trade.
-- Everyone gets laughs, and everyone speaks in every chapter or close to it.
+- Everyone gets laughs, and everyone gets in at least twice.
 
-The shape:
+KEEP IT TIGHT: about three minutes, roughly 3,000 characters across the whole episode. Four or
+five chapters, three to six turns each, one or two sentences a turn. Pick the week's best
+storylines and leave the rest out: a short show that kills beats a long one that sags.
+
+The shape (four or five chapters):
 - open: a cold open, straight into the week's best storyline. No "welcome to the show" filler.
-- games: the week's results, the blowout and the nail-biter. One chapter per game worth it (one or two).
-- standings: where the table stands and what it means.
-- move: a trade or a pickup worth arguing about, if there was one.
-- take: a hot take that splits the panel and turns into an argument.
-- close: sign off and look ahead to next week, in a line or two each.
+- games: the week's best game (the blowout or the nail-biter). One chapter.
+- then one or two of these, whichever has the best material this week:
+  - standings: where the table stands and what it means.
+  - move: a trade or a pickup worth arguing about.
+  - take: a hot take that splits the panel and turns into an argument.
+- close: a quick sign-off, a line each at most, ideally landing the running gag.
 
 WRITTEN FOR THE EAR. Short sentences. Contractions. Say numbers the way people say them
 ("one twenty-four" for 124.3 is fine, or "a hundred and twenty-four"). No lists, no
