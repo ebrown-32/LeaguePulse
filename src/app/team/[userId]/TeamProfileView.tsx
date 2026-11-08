@@ -13,6 +13,7 @@ import { useFranchise, FranchiseStorySection, ManageLink, BackLink, fieldLogo } 
 import { Section } from './Section';
 
 const ChampionRing = dynamic(() => import('@/components/ui/ChampionRing'), { ssr: false });
+const RingView = dynamic(() => import('@/components/trophies/Forge').then(m => m.RingView), { ssr: false });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ function Skeleton() {
 
 // ── Main view ────────────────────────────────────────────────────────────────
 
-export default function TeamProfileView({ userId }: { userId: string }) {
+export default function TeamProfileView({ userId, leagueName = 'The League' }: { userId: string; leagueName?: string }) {
   const [data, setData] = useState<TeamProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -262,9 +263,7 @@ export default function TeamProfileView({ userId }: { userId: string }) {
                 {ring.modelPath ? (
                   <ChampionRing modelPath={ring.modelPath} height={140} />
                 ) : (
-                  <div className="flex h-[140px] items-center justify-center">
-                    <Trophy className="h-10 w-10 text-primary" />
-                  </div>
+                  <RingView season={ring.season} league={leagueName} champion={data.teamName} height={140} />
                 )}
                 <p className="mt-1 text-center text-xs font-semibold text-foreground">{ring.season} Champion</p>
               </div>

@@ -14,9 +14,30 @@ import { isAdminRequest } from '@/lib/tenant/admin';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+/**
+ * Episodes recorded before games named their managers: each side's manager found by team name, so
+ * their highlights (the stadium, components/podcast/Studio) play too.
+ */
+async function withManagers<T extends { chapters: { visual: any }[] }>(episodes: T[]): Promise<T[]> {
+  const missing = episodes.some(e => e.chapters.some(c => c.visual?.type === 'matchup' && (!c.visual.home.userId || !c.visual.away.userId)));
+  if (!missing) return episodes;
+  try {
+    const [{ getCurrentLeagueId }, { getLeagueUsers }] = await Promise.all([import('@/config/league'), import('@/lib/api')]);
+    const users: any[] = await getLeagueUsers(await getCurrentLeagueId());
+    const byName = new Map<string, any>();
+    for (const u of users) for (const n of [u.metadata?.team_name, u.display_name]) if (n) byName.set(String(n).toLowerCase(), u);
+    const fill = (side: any) => {
+      if (side.userId) return side;
+      const u = byName.get(String(side.team).toLowerCase());
+      return u ? { ...side, userId: String(u.user_id), avatar: u.avatar ?? '' } : side;
+    };
+    return episodes.map(e => ({ ...e, chapters: e.chapters.map(c => c.visual?.type === 'matchup' ? { ...c, visual: { ...c.visual, home: fill(c.visual.home), away: fill(c.visual.away) } } : c) }));
+  } catch { return episodes; }
+}
+
 export async function GET() {
   const { listEpisodes } = await import('@/lib/ai/podcast');
-  const episodes = await listEpisodes().catch(() => []);
+  const episodes = await withManagers(await listEpisodes().catch(() => []));
   return NextResponse.json({ episodes, recorded: Boolean(process.env.ELEVENLABS_API_KEY?.trim()) }, {
     headers: { 'cache-control': 'public, max-age=30, s-maxage=120, stale-while-revalidate=600' },
   });

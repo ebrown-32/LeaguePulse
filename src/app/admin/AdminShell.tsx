@@ -12,6 +12,7 @@ import YourData from './export/YourData';
 import ManagersAdmin from './managers/ManagersAdmin';
 import ConstitutionAdmin from './constitution/ConstitutionAdmin';
 import RankingsAdmin from './rankings/RankingsAdmin';
+import TrophyAdmin from './trophy/TrophyAdmin';
 import BillingCard from '@/components/admin/BillingCard';
 import EspnConnectionCard from '@/components/admin/EspnConnectionCard';
 import SetupGuide from './SetupGuide';
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'appearance', label: 'Appearance', blurb: 'Palette, fonts, background and motion.' },
   { id: 'ai',         label: 'AI Desk',    blurb: 'Personalities, publishing and diagnostics.' },
   { id: 'data',       label: 'League data', blurb: 'Fill in what the platform didn’t keep, and add older seasons.' },
+  { id: 'trophy',     label: 'Trophy',      blurb: 'Design what your champions lift: its name, metal, glow and crown.' },
   { id: 'managers',   label: 'Managers',    blurb: 'Who runs each franchise, and claims waiting for your answer.' },
   { id: 'constitution', label: 'Constitution', blurb: 'The league’s rules: write them, change them, and keep every version.' },
   { id: 'rankings',   label: 'Rankings',    blurb: 'Expert player rankings from FantasyPros, on your league’s own key.' },
@@ -71,7 +73,7 @@ function operatorOf(pass: string | null): string | null {
   try { return JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))).op ?? null; } catch { return null; }
 }
 
-export default function AdminShell() {
+export default function AdminShell({ leagueName = 'The League' }: { leagueName?: string }) {
   const [password, setPassword] = useState('');
   const [authed, setAuthed] = useState(false);
   const [error, setError] = useState('');
@@ -264,6 +266,7 @@ export default function AdminShell() {
       {tab === 'export' && <YourData adminPassword={password} />}
       {tab === 'constitution' && <ConstitutionAdmin adminPassword={password} />}
       {tab === 'rankings' && <RankingsAdmin adminPassword={password} />}
+      {tab === 'trophy' && <TrophyAdmin adminPassword={password} leagueName={leagueName} />}
       </div>
       <BillingCard password={password} />
       </div>

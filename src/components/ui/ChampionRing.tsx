@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { useGLTF, Environment, ContactShadows, OrbitControls } from '@react-three/drei';
 import { Box3, Vector3 } from 'three';
-import { Maximize2, X } from '@/components/icons';
+import { Maximize2, Volume2, VolumeX, X } from '@/components/icons';
+import { trophyBeat } from '@/lib/trophyBeat';
 
 function RingModel({ path }: { path: string }) {
   const { scene } = useGLTF(path);
@@ -120,6 +121,11 @@ interface ChampionRingProps {
 
 export default function ChampionRing({ modelPath, height = 220 }: ChampionRingProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [muted, setMuted] = useState(false);
+  // Full screen, the ring gets its beat (lib/trophyBeat), from the tap that opened it.
+  const open = () => { setIsFullscreen(true); setMuted(trophyBeat.muted); trophyBeat.start(); };
+  const close = () => { setIsFullscreen(false); trophyBeat.stop(); };
+  useEffect(() => () => trophyBeat.stop(), []);
 
   return (
     <>
@@ -129,7 +135,7 @@ export default function ChampionRing({ modelPath, height = 220 }: ChampionRingPr
       >
         <RingCanvas modelPath={modelPath} />
         <button
-          onClick={() => setIsFullscreen(true)}
+          onClick={open}
           className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/60 hover:bg-background/90 text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm"
           aria-label="View fullscreen"
         >
@@ -140,7 +146,7 @@ export default function ChampionRing({ modelPath, height = 220 }: ChampionRingPr
       {isFullscreen && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md"
-          onClick={() => setIsFullscreen(false)}
+          onClick={close}
         >
           <div
             className="relative w-full max-w-2xl mx-4 rounded-2xl overflow-hidden bg-card border border-border shadow-2xl"
@@ -149,7 +155,14 @@ export default function ChampionRing({ modelPath, height = 220 }: ChampionRingPr
           >
             <RingCanvas modelPath={modelPath} />
             <button
-              onClick={() => setIsFullscreen(false)}
+              onClick={() => { trophyBeat.setMuted(!muted); setMuted(!muted); }}
+              className="absolute top-3 left-3 p-2 rounded-xl bg-background/60 hover:bg-background/90 text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm"
+              aria-label={muted ? 'Sound on' : 'Sound off'} aria-pressed={!muted}
+            >
+              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={close}
               className="absolute top-3 right-3 p-2 rounded-xl bg-background/60 hover:bg-background/90 text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm"
               aria-label="Close"
             >

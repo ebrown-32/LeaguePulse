@@ -60,6 +60,8 @@ export interface LivePlay {
   at: string | null;
   period: number;
   clock: string;
+  /** A highlight recreated from the box score (a player's real points, the play drawn for their position), not a play from the feed. */
+  recreated?: boolean;
 }
 
 export interface LiveMatchup {

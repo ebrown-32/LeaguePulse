@@ -37,6 +37,9 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { formatPoints } from '@/lib/utils';
 
 const ChampionRing = dynamic(() => import('@/components/ui/ChampionRing'), { ssr: false });
+// Rings for seasons without a hand-made model, and the league's trophy, built in code (components/trophies).
+const RingView = dynamic(() => import('@/components/trophies/Forge').then(m => m.RingView), { ssr: false });
+const TrophyView = dynamic(() => import('@/components/trophies/Forge').then(m => m.TrophyView), { ssr: false });
 import {
   generateEnhancedLeagueHistory,
   type EnhancedLeagueHistory,
@@ -150,7 +153,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true }: { ringSeasons?: string[]; boxScores?: boolean }) {
+export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true, leagueName = 'The League' }: { ringSeasons?: string[]; boxScores?: boolean; leagueName?: string }) {
   const RING_SEASONS = new Set(ringSeasons);
   const [loading, setLoading]                       = useState(true);
   const [error, setError]                           = useState<string | null>(null);
@@ -257,7 +260,8 @@ export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true
   // yet, or that season is missing), so it is not "to be determined".
   const claimedSeasons = new Set(championRecords.map(r => r.season));
   const currentSeason = parseInt(leagueMetadata.currentSeason ?? '', 10);
-  const futureRingSeasons = [...RING_SEASONS]
+  // This season and next always have a ring waiting, made for them when there's no model.
+  const futureRingSeasons = [...new Set([...RING_SEASONS, ...(Number.isFinite(currentSeason) ? [String(currentSeason), String(currentSeason + 1)] : [])])]
     .filter(s => !claimedSeasons.has(s) && Number.isFinite(currentSeason) && parseInt(s, 10) >= currentSeason)
     .sort((a, b) => parseInt(a) - parseInt(b));
 
@@ -506,6 +510,19 @@ export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true
                 </div>
               ) : (
                 <div className="space-y-2.5">
+                  {/* The league's trophy: every champion on a plate round its base. */}
+                  <div className="grid overflow-hidden rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/[0.07] to-transparent md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                    <div className="flex flex-col justify-center gap-2 px-5 py-5 md:px-7">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">The trophy</div>
+                      <div className="font-display text-2xl font-bold leading-tight text-foreground">{leagueName}</div>
+                      <p className="text-sm text-muted-foreground">
+                        {championRecords.length} champion{championRecords.length === 1 ? '' : 's'}, every one engraved round the base. Drag to turn it.
+                      </p>
+                    </div>
+                    <div className="border-t border-amber-500/15 md:border-l md:border-t-0">
+                      <TrophyView league={leagueName} champions={championRecords.map(c => ({ season: c.season, name: c.username }))} height={300} />
+                    </div>
+                  </div>
                   {championRecords.map((champion, i) => {
                     const runnerUp    = runnerUpBySeason[champion.season];
                     const isMostRecent = i === 0;
@@ -590,12 +607,12 @@ export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true
                           )}
                         </div>
 
-                        {/* 3D ring: full-height right column */}
-                        {RING_SEASONS.has(champion.season) && (
-                          <div className="w-36 md:w-44 shrink-0 border-l border-border/40">
-                            <ChampionRing modelPath={ringPath} height={160} />
-                          </div>
-                        )}
+                        {/* 3D ring: full-height right column. The hand-made one where there is one, else one made for the season. */}
+                        <div className="w-28 sm:w-36 md:w-44 shrink-0 border-l border-border/40">
+                          {RING_SEASONS.has(champion.season)
+                            ? <ChampionRing modelPath={ringPath} height={160} />
+                            : <RingView season={champion.season} league={leagueName} champion={champion.username} height={160} />}
+                        </div>
                       </div>
                     );
                   })}
@@ -627,8 +644,10 @@ export default function EnhancedHistoryView({ ringSeasons = [], boxScores = true
                         </div>
                       </div>
                       {/* Ring preview */}
-                      <div className="w-36 md:w-44 shrink-0 border-l border-border/25">
-                        <ChampionRing modelPath={`/models/rings/ring-${season}.glb`} height={160} />
+                      <div className="w-28 sm:w-36 md:w-44 shrink-0 border-l border-border/25">
+                        {RING_SEASONS.has(season)
+                          ? <ChampionRing modelPath={`/models/rings/ring-${season}.glb`} height={160} />
+                          : <RingView season={season} league={leagueName} height={160} />}
                       </div>
                     </div>
                   ))}

@@ -45,9 +45,9 @@ export async function weekSnapshot(brief: LeagueBrief, week: number): Promise<We
   const leagueId = await getCurrentLeagueId();
   const [rosters, users] = await Promise.all([getLeagueRosters(leagueId), getLeagueUsers(leagueId)]);
   const userById = new Map<string, any>(users.map((u: any) => [u.user_id, u]));
-  const nameOf = new Map<number, { team: string; manager: string }>(rosters.map((r: any) => {
+  const nameOf = new Map<number, { team: string; manager: string; userId: string; avatar: string }>(rosters.map((r: any) => {
     const u = userById.get(r.owner_id);
-    return [r.roster_id, { team: u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`, manager: u?.display_name ?? '' }];
+    return [r.roster_id, { team: u?.metadata?.team_name || u?.display_name || `Roster ${r.roster_id}`, manager: u?.display_name ?? '', userId: String(r.owner_id ?? ''), avatar: u?.avatar ?? '' }];
   }));
 
   const weeks = await Promise.all(Array.from({ length: week }, (_, i) => getLeagueMatchups(leagueId, i + 1).catch(() => [] as any[])));
@@ -82,8 +82,8 @@ export async function weekSnapshot(brief: LeagueBrief, week: number): Promise<We
     if (wk === week) {
       games = played.map(([a, b]) => ({
         week: wk,
-        home: { teamName: nameOf.get(a.roster_id)?.team ?? '?', points: round1(a.points ?? 0) },
-        away: { teamName: nameOf.get(b.roster_id)?.team ?? '?', points: round1(b.points ?? 0) },
+        home: { teamName: nameOf.get(a.roster_id)?.team ?? '?', points: round1(a.points ?? 0), userId: nameOf.get(a.roster_id)?.userId, avatar: nameOf.get(a.roster_id)?.avatar },
+        away: { teamName: nameOf.get(b.roster_id)?.team ?? '?', points: round1(b.points ?? 0), userId: nameOf.get(b.roster_id)?.userId, avatar: nameOf.get(b.roster_id)?.avatar },
         margin: round1(Math.abs((a.points ?? 0) - (b.points ?? 0))),
       }));
     }

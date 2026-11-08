@@ -20,16 +20,28 @@
  * Watched like a video: tap the stage to play or pause, with the controls (`children`) in the
  * frame under it.
  *
+ * Highlights: while a segment is about a game, the show cuts to the home team's stadium (the live
+ * Game Day stadium, components/matchup/MatchupStadium) replaying the game's best performers,
+ * recreated from the box score, the panel in boxes along the bottom still talking over it, and a
+ * hype beat under them (lib/trophyBeat, on the player's own audio).
+ *
  * Everything that moves with the voice is written straight to CSS variables each frame (no React
  * render a frame). The room is a night-time TV studio in any theme; its accents are the league's.
  * Still for reduced motion: no sweeps, no parallax, no shake.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import dynamic from 'next/dynamic';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { trophyBeat } from '@/lib/trophyBeat';
 import { cn } from '@/lib/utils';
 import type { Episode } from '@/lib/ai/podcast';
 import type { EngineState, PodcastEngine } from './engine';
+
+// The live stadium (Game Day), for a game segment's highlights. Hosted only: it draws a franchise's
+// stadium, which a self-hosted copy doesn't have, so there the panel stays at the desk.
+const MatchupStadium = dynamic(() => import('@/components/matchup/MatchupStadium'), { ssr: false });
+const HOSTED = process.env.NEXT_PUBLIC_LP_HOSTED === '1';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const STADIUMS = ['bowl', 'cantilever', 'coliseum', 'dome', 'grandstand', 'horseshoe'];
@@ -211,6 +223,15 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
   const raw = ch?.lines[s.line]?.text ?? '';
   const speaker = ch?.lines[s.line]?.host ?? 0;
   const live = s.playing;
+  // A game segment, with both managers known, on a site with stadiums: highlights.
+  const v = ch?.visual;
+  const game = HOSTED && v?.type === 'matchup' && v.home.userId && v.away.userId ? v : null;
+  const highlights = Boolean(live && game);
+  useEffect(() => {
+    if (highlights) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
+    else trophyBeat.stop();
+  }, [highlights, engine]);
+  useEffect(() => () => trophyBeat.stop(), []);
   // The room's lights follow the show: a party for the open and the sign-off, warm for a hot take.
   const lights: Lights = !live ? 'show' : ch?.kind === 'open' || ch?.kind === 'close' ? 'party' : ch?.kind === 'take' ? 'warm' : 'show';
   const mood = !live ? null : LAUGH.test(raw) ? 'laugh' : CUT.test(raw) ? 'cut' : HYPE.test(raw) ? 'hype' : 'talk';
@@ -393,6 +414,35 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
             {narrow && h.name.length > 9 ? h.name.split(' ')[0] : h.name}
           </span>
         ))}
+
+        {/* Highlights: the cut to the stadium, the panel in boxes, still talking. */}
+        <AnimatePresence>
+          {game && highlights && (
+            <motion.div key={`hl-${s.chapter}`} initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.5, ease }} className="absolute inset-0 z-[25] bg-black"
+              // The stadium's own buttons stay its own; anywhere else, a tap pauses the show as usual.
+              onClick={e => { if ((e.target as HTMLElement).closest('button')) e.stopPropagation(); }}>
+              <MatchupStadium highlights compact week={game.week} className="h-full w-full"
+                a={{ userId: game.home.userId!, teamName: game.home.team, avatar: game.home.avatar ?? '' }}
+                b={{ userId: game.away.userId!, teamName: game.away.team, avatar: game.away.avatar ?? '' }} />
+              <span className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md bg-[#e0352b] px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg sm:text-[11px]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Highlights
+              </span>
+              <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex gap-1.5">
+                {episode.hosts.map((h, i) => {
+                  const on = i === speaker;
+                  return (
+                    <div key={h.id} className="overflow-hidden rounded-lg bg-black/70 backdrop-blur-sm transition-all duration-300"
+                      style={{ boxShadow: on ? `0 0 0 2px ${tint(i)}, 0 0 18px 2px ${tint(i)}` : '0 0 0 1px rgba(255,255,255,0.15)', transform: on ? 'translateY(-4px)' : undefined }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={h.avatar} alt={h.name} width={narrow ? 34 : 46} height={narrow ? 34 : 46} className="block bg-[#22242f] object-cover" style={{ width: narrow ? 34 : 46, height: narrow ? 34 : 46 }} />
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Before it plays (and paused): the episode, like a video's poster, with a big play button. */}
         {!live && (

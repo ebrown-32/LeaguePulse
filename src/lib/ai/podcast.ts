@@ -32,10 +32,13 @@ import type { Personality } from './personalities';
 import { DELIVERY_TAGS, EPISODE_CHARS, keepDeliveryTags } from '@/lib/podcastText';
 
 export type Visual =
-  | { type: 'matchup'; week: number; home: { team: string; points: number }; away: { team: string; points: number }; margin: number }
+  | { type: 'matchup'; week: number; home: VisualTeam; away: VisualTeam; margin: number }
   | { type: 'team'; team: string; manager: string; record: string; rank: number; pointsFor: number; top: { name: string; position: string; points: number | null }[] }
   | { type: 'standings'; rows: { rank: number; team: string; record: string; pointsFor: number }[] }
   | { type: 'move'; kind: 'trade' | 'waiver' | 'free_agent'; week: number; summary: string };
+
+/** A side of a game: `userId` and `avatar` (the manager) find its stadium for the highlights. */
+export interface VisualTeam { team: string; points: number; userId?: string; avatar?: string }
 
 export interface Host { id: string; name: string; handle: string; avatar: string; accent: string; voiceId?: string }
 /** `host`: which of the episode's hosts says it (an index into Episode.hosts). */
@@ -127,7 +130,7 @@ function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: Bri
     const i = Number(n);
     if (kind === 'matchup' && games[i]) {
       const m = games[i];
-      return { type: 'matchup', week: m.week, home: { team: m.home.teamName, points: m.home.points }, away: { team: m.away.teamName, points: m.away.points }, margin: m.margin };
+      return { type: 'matchup', week: m.week, home: { team: m.home.teamName, points: m.home.points, userId: m.home.userId, avatar: m.home.avatar }, away: { team: m.away.teamName, points: m.away.points, userId: m.away.userId, avatar: m.away.avatar }, margin: m.margin };
     }
     if (kind === 'team' && teams[i]) {
       const t = teams[i];
