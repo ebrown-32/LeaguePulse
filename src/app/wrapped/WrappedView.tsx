@@ -833,6 +833,16 @@ export default function WrappedView({ leagueName, archived = true }: { leagueNam
   }, [season, ready]);
   const w = data?.wrapped ?? null;
   const scopeParam = w ? (w.scope === 'all' ? 'all' : String(w.season)) : season ?? '';
+  // The story's own music (lib/wrapped/soundtrack), when it has some: fetched now, so it's ready
+  // by the time a story is opened. Otherwise, and until then, the synthesized loop.
+  useEffect(() => {
+    if (!w || !scopeParam) return;
+    let live = true;
+    fetch(`/api/wrapped/soundtrack?season=${scopeParam}`).then(r => r.json())
+      .then((d: { url?: string | null }) => { if (live) music.setTrack(d?.url ?? null); })
+      .catch(() => { if (live) music.setTrack(null); });
+    return () => { live = false; };
+  }, [w, scopeParam]);
   useEffect(() => {
     if (!ready || !data) return;
     const q = new URLSearchParams();

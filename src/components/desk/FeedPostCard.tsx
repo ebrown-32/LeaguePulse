@@ -3,11 +3,12 @@
 import StadiumPhoto from './StadiumPhoto';
 import OfficialVisualView from './OfficialVisual';
 import { useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Trophy, Newspaper, Scale, ChevronDown, Users, Swords, Radio, CrownIcon,
   ArrowRight, Ticket, Zap, Sword, type Icon,
-  Camera, Check,
+  Camera, Check, Headphones,
 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/Avatar';
@@ -30,7 +31,9 @@ type Kind =
   | 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
   | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo'
   /** A franchise's official account (lib/franchise/announce). */
-  | 'official';
+  | 'official'
+  /** A new episode of The Desk Weekly. */
+  | 'episode';
 
 /** Written while the games are on, and rendered inline so it reads as news
  *  breaking rather than as a document to open. */
@@ -38,6 +41,8 @@ const LIVE_KINDS = new Set<Kind>(['kickoff', 'liveTake']);
 
 export interface FeedPost {
   id: string;
+  /** Who posted: a Desk personality's id, or `franchise:<id>` for a franchise's own account. */
+  personalityId?: string;
   personaName: string;
   personaHandle: string;
   personaAccent: string;
@@ -71,7 +76,54 @@ const KIND_META: Record<Kind, { label: string; icon: Icon } | null> = {
   photo: { label: 'Photo', icon: Camera },
   // The verified badge by the name says it.
   official: null,
+  episode: { label: 'The Desk Weekly', icon: Headphones },
 };
+
+/** Where a byline goes: the personality's profile, or a franchise's own page. */
+export function profileHref(post: { personalityId?: string }): string | null {
+  const id = post.personalityId;
+  if (!id) return null;
+  if (id.startsWith('franchise:')) return `/team/${encodeURIComponent(id.slice('franchise:'.length))}`;
+  return `/desk/people/${encodeURIComponent(id)}`;
+}
+
+/**
+ * A new episode of The Desk Weekly: its cover (the studio, drawn for that episode by
+ * api/podcast/thumb), the panel, and a way in. The whole card is the link.
+ */
+function EpisodePost({ post }: { post: FeedPost }) {
+  const c = post.content ?? {};
+  if (!c.episodeId) return null;
+  const href = `/podcast?ep=${encodeURIComponent(c.episodeId)}&w=${c.week ?? ''}`;
+  return (
+    <Link href={href} className="group mt-2.5 block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-primary/40">
+      <span className="relative block aspect-video overflow-hidden bg-[#07080f]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/podcast/thumb?ep=${encodeURIComponent(c.episodeId)}`} alt={`The Desk Weekly, week ${c.week}: ${c.title}`} loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.9)] ring-4 ring-white/20 transition group-hover:scale-110">
+            <svg viewBox="0 0 24 24" className="ml-1 h-6 w-6" fill="currentColor" aria-hidden><path d="M7 4.5v15l12.5-7.5Z" /></svg>
+          </span>
+        </span>
+      </span>
+      <span className="flex items-center gap-3 px-3.5 py-3">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[10.5px] font-bold uppercase tracking-[0.16em] text-primary">Episode {c.week} · Week {c.week}, {c.season}</span>
+          <span className="mt-0.5 line-clamp-2 block font-display text-[15.5px] font-bold leading-snug text-foreground">{c.title}</span>
+        </span>
+        {Array.isArray(c.hosts) && (
+          <span className="flex shrink-0 -space-x-2">
+            {c.hosts.slice(0, 4).map((h: { name: string; avatar: string }) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={h.name} src={h.avatar} alt={h.name} title={h.name} className="h-7 w-7 rounded-full bg-muted object-cover ring-2 ring-card" />
+            ))}
+          </span>
+        )}
+      </span>
+    </Link>
+  );
+}
 
 const SIGNAL_ICON: Record<string, Icon> = {
   records: Trophy, playoffs: Ticket, points: Zap, rivalry: Sword, closeness: Scale,
@@ -191,7 +243,8 @@ export function AiBadge() {
 
 function Avatar({ post }: { post: FeedPost }) {
   const initials = post.personaName.split(' ').map(w => w[0]).slice(0, 2).join('');
-  return (
+  const href = profileHref(post);
+  const face = (
     <span className={cn(
       'relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full',
       'bg-card text-[11px] font-bold ring-1 ring-border ring-offset-2 ring-offset-background',
@@ -205,6 +258,9 @@ function Avatar({ post }: { post: FeedPost }) {
       )}
     </span>
   );
+  return href
+    ? <Link href={href} aria-label={`${post.personaName}'s profile`} className="shrink-0 self-start rounded-full transition hover:opacity-85">{face}</Link>
+    : face;
 }
 
 /** Long-form bodies collapse so the timeline stays scannable. */
@@ -462,7 +518,9 @@ export function FeedPostCard({
   const isGotw = post.kind === 'gameOfWeek';
   const isPhoto = post.kind === 'photo';
   const isOfficial = post.kind === 'official';
-  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto && !isOfficial;
+  const isEpisode = post.kind === 'episode';
+  const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto && !isOfficial && !isEpisode;
+  const profile = profileHref(post);
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}
@@ -484,9 +542,9 @@ export function FeedPostCard({
                 and kind onto one row put all four in the same 300px on a
                 phone, which wrapped mid-byline and read as clutter. */}
             <div className="flex items-baseline gap-2">
-              <span className={cn('truncate text-[15px] font-bold', post.personaAccent)}>
-                {post.personaName}
-              </span>
+              {profile
+                ? <Link href={profile} className={cn('truncate text-[15px] font-bold hover:underline', post.personaAccent)}>{post.personaName}</Link>
+                : <span className={cn('truncate text-[15px] font-bold', post.personaAccent)}>{post.personaName}</span>}
               {/* A franchise's own account: verified, as a team's would be. */}
               {post.personaType === 'team' && (
                 <span title="Official franchise account" className="inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center self-center rounded-full bg-primary text-primary-foreground">
@@ -499,7 +557,9 @@ export function FeedPostCard({
             </div>
 
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[13px] text-muted-foreground">{post.personaHandle}</span>
+              {profile
+                ? <Link href={profile} className="text-[13px] text-muted-foreground hover:text-foreground">{post.personaHandle}</Link>
+                : <span className="text-[13px] text-muted-foreground">{post.personaHandle}</span>}
               {post.personaType === 'fan' && (
                 <span className="rounded bg-muted px-1 py-px text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                   Fan
@@ -533,6 +593,8 @@ export function FeedPostCard({
             )}
 
             {isLive && <GameBeat post={post} />}
+
+            {isEpisode && <EpisodePost post={post} />}
 
             {isGotw && <GameOfWeekPost post={post} />}
 

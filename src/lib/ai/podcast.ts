@@ -359,7 +359,9 @@ export async function publishEpisode(week?: number, { admin = false }: { admin?:
   const replacing = (await listEpisodes()).some(e => e.season === brief.season && e.week === target);
   const refund = admin && replacing ? await claimRerecord() : null;
   try {
-    return await writeEpisode(brief, hosts, target);
+    const ep = await writeEpisode(brief, hosts, target);
+    await announceEpisode(ep, hosts[0], latest);
+    return ep;
   } catch (err) {
     await refund?.();
     throw err;
@@ -396,8 +398,6 @@ async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>,
     if (shorter && scriptCharacters(shorter) < scriptCharacters(script)) script = shorter;
   }
 
-  const past = await listEpisodes();
-  const same = past.find(e => e.season === brief.season && e.week === target);
   const cast = await casting;
   const host = (p: Personality): Host => {
     const voiceId = cast[p.id] ?? p.voiceId;
@@ -408,7 +408,8 @@ async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>,
     leagueName: brief.leagueName,
     season: brief.season,
     week: target,
-    number: same?.number ?? Math.max(0, ...past.map(e => e.number)) + 1,
+    // One episode a week, numbered by it: week 8's episode is episode 8, whenever it was recorded.
+    number: target,
     title: script.title,
     teaser: script.teaser,
     createdAt: new Date().toISOString(),
@@ -420,6 +421,42 @@ async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>,
   };
   await saveEpisode(ep);
   return ep;
+}
+
+/**
+ * The drop: a new week's episode, posted to The Feed by its first host, with the episode's cover
+ * (api/podcast/thumb) and a link to it. Once a week: a re-record, or a look back at an earlier
+ * week, doesn't post again. Never fails the episode: a Feed that can't be written to just
+ * misses the post.
+ */
+async function announceEpisode(ep: Episode, host: Personality, latestWeek: number): Promise<void> {
+  if (ep.week !== latestWeek) return;
+  try {
+    const { addPost, getPosts } = await import('./store');
+    const posted = (await getPosts(100)).some(p => p.kind === 'episode' && p.content?.season === ep.season && p.content?.week === ep.week);
+    if (posted) return;
+    const now = new Date().toISOString();
+    await addPost({
+      id: `ep-${ep.id}`,
+      personalityId: host.id,
+      personaName: host.name,
+      personaHandle: host.handle,
+      personaAccent: host.accent,
+      personaType: host.type ?? 'media',
+      personaAvatar: personaAvatarUrl(host),
+      kind: 'episode',
+      content: {
+        text: `New Desk Weekly is up. ${ep.teaser}`,
+        episodeId: ep.id, title: ep.title, teaser: ep.teaser, week: ep.week, season: ep.season,
+        hosts: ep.hosts.map(h => ({ name: h.name, avatar: h.avatar })),
+      },
+      createdAt: now,
+      publishAt: now,
+      source: 'cron',
+    });
+  } catch (err) {
+    console.error('[podcast] could not post the episode to the Feed', err instanceof Error ? err.message : err);
+  }
 }
 
 /** For the admin: the season's finished weeks, each with its episode if it has one. */

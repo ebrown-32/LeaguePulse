@@ -398,15 +398,11 @@ export class PodcastEngine {
         const raw = this.ep.chapters[c]?.lines[s.line]?.text ?? '';
         const text = plainLine(raw);
         const char = this.wordAt(text, this.startsFor(`c${c}:${s.line}`, text, s.start, s.end, s.words, raw), t);
-        if (s.line !== this.state.line) this.set({ line: s.line });
+        if (s.line !== this.state.line) { this.set({ line: s.line }); this.react(c, s.line); }
         if (p !== this.state.progress || char !== this.state.char) this.set({ progress: p, char });
         this.clock = requestAnimationFrame(tick);
       };
-      a.play().then(() => { this.unlocked = true; this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
-        const why = refusal(err);
-        if (why === 'blocked') { this.unlocked = false; this.set({ playing: false }); }
-        else if (why === 'failed' && my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); }
-      });
+      this.start(a, my, tick, () => { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); });
     });
   }
 
@@ -487,11 +483,7 @@ export class PodcastEngine {
       a.playbackRate = this.state.rate;
       a.onended = () => { this.misses = 0; this.advance(my); };
       a.onerror = () => fallBack(false);
-      a.play().then(() => { this.unlocked = true; this.clock = requestAnimationFrame(tick); }).catch((err: unknown) => {
-        const why = refusal(err);
-        if (why === 'blocked') { this.unlocked = false; this.set({ playing: false }); }
-        else if (why === 'failed') fallBack(false);
-      });
+      this.start(a, my, tick, () => fallBack(false));
     });
   }
 
@@ -525,9 +517,43 @@ export class PodcastEngine {
   private unlocked = false;
 
   private unlockAudio() {
-    if (this.ctx || typeof window === 'undefined') { this.ctx?.resume().catch(() => {}); return; }
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (Ctx) this.ctx = new Ctx();
+    if (typeof window === 'undefined') return;
+    // Safari (16.4 and later): the show is media, like a video. Without this, once the theme has
+    // played through Web Audio, an iPhone on silent mutes the voices that follow it too.
+    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+    if (session && session.type !== 'playback') { try { session.type = 'playback'; } catch { /* older Safari */ } }
+    if (!this.ctx) {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) this.ctx = new Ctx();
+    }
+    // Inside the tap: some browsers make a new context suspended until it's asked to run.
+    this.ctx?.resume().catch(() => {});
+  }
+
+  /**
+   * Starts the voice on the element and keeps it honest. A start the browser cut short (a new
+   * load got in its way) is tried again rather than left silent with the button saying it's
+   * playing; and two seconds in, if the element still isn't moving, it's started again, or, if the
+   * browser won't allow that outside a tap, the player shows Play so one tap carries on.
+   */
+  private start(a: HTMLAudioElement, my: number, tick: () => void, failed: () => void) {
+    const go = (retry: boolean) => a.play().then(() => {
+      if (my !== this.token) return;
+      this.unlocked = true;
+      cancelAnimationFrame(this.clock);
+      this.clock = requestAnimationFrame(tick);
+    }).catch((err: unknown) => {
+      if (my !== this.token) return;
+      const why = refusal(err);
+      if (why === 'blocked') { this.unlocked = false; this.set({ playing: false }); }
+      else if (why === 'failed') failed();
+      else if (retry) window.setTimeout(() => { if (my === this.token && this.state.playing && a.paused && !a.ended) go(false); }, 200);
+    });
+    go(true);
+    window.setTimeout(() => {
+      if (my !== this.token || !this.state.playing || !a.paused || a.ended || this.state.buffering) return;
+      go(false);
+    }, 2000);
   }
 
   // The show's sound, made once with ElevenLabs Music and Sound Effects and served as plain files:
@@ -585,6 +611,22 @@ export class PodcastEngine {
     if (v?.type !== 'matchup') return;
     if (v.margin >= 40) this.playSound('roar', 0.22);
     else if (v.margin <= 5) this.playSound('groan', 0.22);
+  }
+
+  /**
+   * The soundboard, run by the show itself: when a host gets loud in a game segment the crowd
+   * goes up, and a groan from the panel gets one from the crowd. Low under the voices, and at most
+   * one every fifteen seconds, so it lands as a moment rather than a laugh track.
+   */
+  private reacted = 0;
+  private react(chapter: number, line: number) {
+    if (!this.stingsOn()) return;
+    const ch = this.ep.chapters[chapter], raw = ch?.lines[line]?.text ?? '';
+    const now = performance.now();
+    if (now - this.reacted < 15_000) return;
+    const sound = /\[(shouting|excited)\]/i.test(raw) && (ch.kind === 'games' || ch.kind === 'open') ? 'roar'
+      : /\[(groans|exasperated)\]/i.test(raw) ? 'groan' : null;
+    if (sound && this.playSound(sound, 0.12)) this.reacted = now;
   }
 
   /** Plays a sting; returns how long before the first voice should start, in ms. */

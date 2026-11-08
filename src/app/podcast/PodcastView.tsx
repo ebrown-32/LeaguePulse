@@ -11,18 +11,23 @@ import { cn } from '@/lib/utils';
 import type { Episode } from '@/lib/ai/podcast';
 import Player from '@/components/podcast/Player';
 
-export default function PodcastView({ leagueName }: { leagueName: string }) {
+export default function PodcastView({ leagueName, logoUrl }: { leagueName: string; logoUrl?: string | null }) {
   const [data, setData] = useState<{ episodes: Episode[]; recorded: boolean } | null>(null);
   const [pick, setPick] = useState<string | null>(null);
+  const [pickWeek, setPickWeek] = useState<number | null>(null);
 
   const load = useCallback(() => fetch('/api/podcast', { cache: 'no-store' }).then(r => r.json()).then(setData).catch(() => setData({ episodes: [], recorded: false })), []);
   useEffect(() => {
     load();
-    setPick(new URLSearchParams(window.location.search).get('ep'));
+    const q = new URLSearchParams(window.location.search);
+    setPick(q.get('ep'));
+    // A link from The Feed names its week too: if that episode was re-recorded since, the week's
+    // new one plays instead.
+    setPickWeek(Number(q.get('w')) || null);
   }, [load]);
 
   if (!data) return <div className="h-[560px] animate-pulse rounded-2xl bg-muted/60" />;
-  const episode = data.episodes.find(e => e.id === pick) ?? data.episodes[0];
+  const episode = data.episodes.find(e => e.id === pick) ?? data.episodes.find(e => e.week === pickWeek) ?? data.episodes[0];
 
   if (!episode) {
     return (
@@ -49,7 +54,7 @@ export default function PodcastView({ leagueName }: { leagueName: string }) {
 
   return (
     <div className="space-y-8">
-      <Player key={episode.id} episode={episode} recorded={data.recorded} autoFocus />
+      <Player key={episode.id} episode={episode} recorded={data.recorded} autoFocus logoUrl={logoUrl} />
       {data.episodes.length > 1 && (
         <section aria-labelledby="episodes">
           <div className="flex items-baseline justify-between">
@@ -89,7 +94,7 @@ function EpisodeCard({ e, current, onPick }: { e: Episode; current: boolean; onP
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[10.5px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-            {current ? <span className="text-primary">Now playing</span> : `Episode ${e.number}`} · {minutes(e)} min
+            {current ? <span className="text-primary">Now playing</span> : `Episode ${e.week}`} · {minutes(e)} min
           </span>
           <span className="mt-0.5 line-clamp-2 block text-[14.5px] font-bold leading-snug text-foreground">{e.title}</span>
           <span className="mt-1.5 flex items-center gap-2">
