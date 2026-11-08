@@ -227,6 +227,10 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
   const v = ch?.visual;
   const game = HOSTED && v?.type === 'matchup' && v.home.userId && v.away.userId ? v : null;
   const highlights = Boolean(live && game);
+  // The cut waits for the stadium: it loads out of sight behind the desk, and the show cuts to it once
+  // it's drawn with the game in. A new game segment loads its own.
+  const [hlReady, setHlReady] = useState(false);
+  useEffect(() => { setHlReady(false); }, [s.chapter]);
   useEffect(() => {
     if (highlights) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
     else trophyBeat.stop();
@@ -418,11 +422,11 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
         {/* Highlights: the cut to the stadium, the panel in boxes, still talking. */}
         <AnimatePresence>
           {game && highlights && (
-            <motion.div key={`hl-${s.chapter}`} initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.5, ease }} className="absolute inset-0 z-[25] bg-black"
+            <motion.div key={`hl-${s.chapter}`} initial={{ opacity: 0, scale: 1.06 }} animate={hlReady ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.06 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.5, ease }} className={cn('absolute inset-0 z-[25] bg-black', !hlReady && 'pointer-events-none')}
               // The stadium's own buttons stay its own; anywhere else, a tap pauses the show as usual.
               onClick={e => { if ((e.target as HTMLElement).closest('button')) e.stopPropagation(); }}>
-              <MatchupStadium highlights compact week={game.week} className="h-full w-full"
+              <MatchupStadium highlights compact week={game.week} className="h-full w-full" onReady={() => setHlReady(true)}
                 a={{ userId: game.home.userId!, teamName: game.home.team, avatar: game.home.avatar ?? '' }}
                 b={{ userId: game.away.userId!, teamName: game.away.team, avatar: game.away.avatar ?? '' }} />
               <span className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md bg-[#e0352b] px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg sm:text-[11px]">

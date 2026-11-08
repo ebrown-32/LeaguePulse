@@ -96,14 +96,16 @@ export default function MatchupStadium(props: {
    * stadium's name and the score over it, so the stadium shows. Fullscreen is the same either way.
    */
   compact?: boolean;
-  /** A finished week's highlights, recreated from the box score and played on a loop (useLiveMatchup). */
+  /** A finished week's highlights, its top scorers' real plays, on a loop (useLiveMatchup). */
   highlights?: boolean;
+  /** Called once the stadium has drawn and the matchup is in: the show cuts to it only then. */
+  onReady?: () => void;
 }) {
   if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
   return <HostedStadium {...props} />;
 }
 
-function HostedStadium({ a, b, week, className, prompt = false, compact = false, highlights = false }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean; highlights?: boolean }) {
+function HostedStadium({ a, b, week, className, prompt = false, compact = false, highlights = false, onReady }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean; highlights?: boolean; onReady?: () => void }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -162,6 +164,10 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false,
   useEffect(() => { if (!full) setPicked(null); }, [full]);
   const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full, highlights });
   const playing = match && match.phase !== 'upcoming' ? match : null;
+  // Ready for the show: the stadium drawn and the matchup in, said once.
+  const [drawn, setDrawn] = useState(false);
+  const told = useRef(false);
+  useEffect(() => { if (drawn && playing && onReady && !told.current) { told.current = true; onReady(); } }, [drawn, playing, onReady]);
   // The director (see director.ts) moves on to its next shot every beat while it has the camera.
   // Highlights are always directed: the camera follows each play, as on a broadcast.
   const directing = (full && angle === 'director') || (highlights && !full);
@@ -192,7 +198,7 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false,
       live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full && !highlights, pinSize: 14, cardScale: narrow || portrait ? 0.85 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}
       color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={host.teamName} logo={ground.logo} look={ground.look}
       // Watching a live matchup: the broadcast view, from the angle picked (ANGLE_VIEW), the field never blocked.
-      onReady={full ? () => setFullReady(true) : undefined}
+      onReady={full ? () => setFullReady(true) : onReady ? () => setDrawn(true) : undefined}
       view={(full || highlights) && playing ? { ...(shot ?? ANGLE_VIEW[angle && angle !== 'director' ? angle : 'sideline'][portrait ? 'narrow' : 'wide']), still: true, broadcast: true }
         : full ? { position: [14 * fit, 7.5 * fit, 14 * fit], target: [0, 0.4, 0], fov: 40 } : { position: [10.5 * fit, 6.2 * fit, 10.5 * fit], target: [0, 0.4, 0], fov: 42 }} />
   ) : null;
@@ -255,7 +261,7 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false,
           <Maximize2 className="h-4 w-4" />
         </button>
       ))}
-      {!full && <Banner celebrate={celebrate} compact />}
+      {!full && <Banner celebrate={celebrate} compact detail={highlights} />}
       {full && <Fullscreen onClose={() => setFull(false)} label={host && guest ? `${guest.teamName} @ ${host.teamName}` : 'Stadium'}>
         {scene(true)}
         {words(true) && <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-5 pb-6 pt-16 text-white sm:px-8', playing && playing.plays.length > 0 && 'max-md:hidden')}>{words(true)}</div>}
@@ -371,7 +377,7 @@ function PlayerSpotlight({ p, color, team, onClose }: { p: LivePlayer; color: st
 }
 
 /** A big play, announced: who, what, and the points. */
-function Banner({ celebrate, compact = false }: { celebrate: { play: LivePlay; name: string } | null; compact?: boolean }) {
+function Banner({ celebrate, compact = false, detail = false }: { celebrate: { play: LivePlay; name: string } | null; compact?: boolean; detail?: boolean }) {
   return (
     <AnimatePresence>
       {celebrate && (
@@ -385,7 +391,7 @@ function Banner({ celebrate, compact = false }: { celebrate: { play: LivePlay; n
             <p className={cn('font-semibold', compact ? 'text-[11.5px]' : 'text-[14px]')}>
               {celebrate.name}{celebrate.play.points != null ? ` · +${celebrate.play.points.toFixed(1)}` : ''}
             </p>
-            {!compact && <p className="mt-0.5 line-clamp-2 text-[12px] text-white/70">{celebrate.play.text}</p>}
+            {(!compact || detail) && !celebrate.play.recreated && <p className="mt-0.5 line-clamp-2 text-[12px] text-white/70">{celebrate.play.text}</p>}
           </div>
         </motion.div>
         </div>

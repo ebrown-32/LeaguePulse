@@ -11,10 +11,10 @@
  *
  * `demo` (a development server only: ?livedemo=1 on the page) simulates a game.
  *
- * `highlights`: a finished week, replayed. There's no play by play for a past week, so the reel is
- * recreated from the box score: the matchup's best performers, smallest to biggest, each as the
- * play their position makes (a catch, a run, a throw) with their real points, marked `recreated`
- * so nothing claims to be the actual play. It loops for as long as it's on.
+ * `highlights`: a finished week, replayed: the matchup's top scorers and their real plays (ESPN's
+ * play by play for that week, asked for with `plays=1`), each one's best, building to the
+ * biggest. Where a week's plays can't be had, the top scorers' totals, drawn as the play their
+ * position makes and marked `recreated`. It loops for as long as it's on.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -32,8 +32,40 @@ export function liveDemoRequested(): boolean {
   return new URLSearchParams(window.location.search).get('livedemo') === '1';
 }
 
-/** The week's best performers as a highlight reel, biggest last. */
+/**
+ * A play as a highlight's caption: ESPN's own words, without the formation ("(Shotgun)") or the
+ * extra point, the snapper and the holder after it.
+ */
+export function playCaption(text: string): string {
+  return text
+    .replace(/^\s*\([^)]*\)\s*/, '')
+    .replace(/\bTOUCHDOWN\b[\s\S]*$/, 'TOUCHDOWN')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * The week's highlights, biggest last: the matchup's top scorers (three) and each one's best plays
+ * (two: touchdowns first, then the most points), as they happened. Only plays the stadium can draw.
+ */
 export function highlightReel(d: LiveMatchup, count = 5): { play: LivePlay; name: string }[] {
+  const nameOf = (id: string) => d.players.find(x => x.playerId === id)?.name ?? '';
+  const drawn = d.plays.filter(p => p.kind !== 'other' && !p.recreated);
+  if (drawn.length) {
+    const stars = [...d.players].filter(p => (p.points ?? 0) > 0).sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
+      .filter(p => drawn.some(x => x.playerId === p.playerId)).slice(0, 3);
+    const best = (a: LivePlay, b: LivePlay) => Number(b.scoring) - Number(a.scoring) || (b.points ?? 0) - (a.points ?? 0) || (b.yards ?? 0) - (a.yards ?? 0);
+    const picks = stars.flatMap(p => drawn.filter(x => x.playerId === p.playerId).sort(best).slice(0, 2));
+    if (picks.length) {
+      return picks.sort((a, b) => (a.points ?? 0) - (b.points ?? 0) || Number(a.scoring) - Number(b.scoring))
+        .map(play => ({ play: { ...play, big: true, text: playCaption(play.text) }, name: nameOf(play.playerId) }));
+    }
+  }
+  return recreatedReel(d, count);
+}
+
+/** Where the plays can't be had: the top scorers' totals, as their position's play. */
+function recreatedReel(d: LiveMatchup, count: number): { play: LivePlay; name: string }[] {
   const kindOf = (pos: string): LivePlay['kind'] => (pos === 'QB' ? 'throw' : pos === 'RB' ? 'run' : pos === 'WR' || pos === 'TE' ? 'catch' : 'other');
   return d.players
     .filter(p => typeof p.points === 'number' && p.points > 0 && kindOf(p.position) !== 'other')
@@ -68,6 +100,7 @@ export function useLiveMatchup(o: { host: string | null; guest: string | null; w
       const q = new URLSearchParams({ host: o.host!, guest: o.guest! });
       if (o.week) q.set('week', String(o.week));
       if (demo.current) q.set('demo', '1');
+      if (o.highlights) q.set('plays', '1');
       const d: LiveMatchup | null = await fetch(`/api/live/matchup?${q}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
       if (cancelled) return;
       if (d) {

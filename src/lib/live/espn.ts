@@ -199,8 +199,18 @@ export async function espnScoreboard(): Promise<LiveGame[]> {
   return (await shared<LiveGame[]>('lp_live_scoreboard', fresh, 3600, () => readScoreboard())) ?? [];
 }
 
-async function readScoreboard(): Promise<LiveGame[] | null> {
-  const d = await getJson<any>(`${SITE}/scoreboard`, 0);
+/**
+ * A past week's scoreboard (regular season), for its plays: The Desk Weekly's highlights. A
+ * finished week doesn't change, so it's kept for a day.
+ */
+export async function espnScoreboardWeek(season: string, week: number): Promise<LiveGame[]> {
+  if (!/^\d{4}$/.test(season) || !Number.isInteger(week) || week < 1 || week > 22) return [];
+  return (await shared<LiveGame[]>(`lp_live_scoreboard_wk:${season}:${week}`, 24 * 3_600_000, 7 * 86_400,
+    () => readScoreboard(`${SITE}/scoreboard?seasontype=2&week=${week}&dates=${season}`))) ?? [];
+}
+
+async function readScoreboard(url = `${SITE}/scoreboard`): Promise<LiveGame[] | null> {
+  const d = await getJson<any>(url, 0);
   if (!d) return null;
   return (d?.events ?? []).map((e: any): LiveGame => {
     const c = e.competitions?.[0] ?? {};
