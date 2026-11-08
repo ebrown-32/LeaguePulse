@@ -29,7 +29,7 @@ import { buildLeagueBrief, type BriefMatchup, type BriefMove } from './leagueBri
 import { weekSnapshot, type SnapshotTeam } from './podcastWeek';
 import { personaAvatarUrl } from './avatar';
 import type { Personality } from './personalities';
-import { DELIVERY_TAGS, keepDeliveryTags } from '@/lib/podcastText';
+import { DELIVERY_TAGS, EPISODE_CHARS, keepDeliveryTags } from '@/lib/podcastText';
 
 export type Visual =
   | { type: 'matchup'; week: number; home: { team: string; points: number }; away: { team: string; points: number }; margin: number }
@@ -87,6 +87,11 @@ async function saveEpisode(ep: Episode): Promise<void> {
 
 // ── The script ─────────────────────────────────────────────────────────────
 
+/** How long an episode is written to be, in characters (about ninety seconds), and the most it may be. */
+const EPISODE_TARGET = EPISODE_CHARS;
+const EPISODE_MAX = 1_900;
+const scriptCharacters = (s: Script) => s.chapters.reduce((n, c) => n + c.lines.reduce((m, l) => m + keepDeliveryTags(l.text).length, 0), 0);
+
 /** The script's shape, for a panel of `n` hosts. */
 function scriptSchema(n: number) {
   const chapter = z.object({
@@ -95,13 +100,13 @@ function scriptSchema(n: number) {
     ref: z.string().describe('What this chapter shows on screen: one of the REFERENCE ids given (e.g. "matchup:2", "team:3", "move:0", "standings"), or "none"'),
     lines: z.array(z.object({
       host: z.number().int().min(0).max(n - 1).describe(`Which host speaks: 0 to ${n - 1}, as numbered in THE PANEL`),
-      text: z.string().describe('One spoken turn: one to three sentences, written to be heard, not read'),
-    })).min(3).max(10),
+      text: z.string().describe('One spoken turn: one short sentence (two only if both are tiny), under about 120 characters, written to be heard, not read'),
+    })).min(2).max(5),
   });
   return z.object({
     title: z.string().describe('The episode title: a headline for the week, under eight words, ideally funny'),
     teaser: z.string().describe('One sentence that makes a manager press play'),
-    chapters: z.array(chapter).min(4).max(7),
+    chapters: z.array(chapter).min(3).max(4),
   });
 }
 type Script = z.infer<ReturnType<typeof scriptSchema>>;
@@ -175,15 +180,22 @@ IT HAS TO BE FUNNY. This is a comedy show with real numbers, not a news bulletin
 - The hosts roast the managers, the lineups and each other. Somebody always takes it personally.
 - Interruptions and pile-ons: short turns, people cutting in, a host who keeps getting talked over.
 - Specific beats generic. The joke is in the real score, the real benching, the real trade.
-- Everyone gets laughs, and everyone speaks in every chapter or close to it.
+- Everyone gets at least one laugh.
 
-The shape:
-- open: a cold open, straight into the week's best storyline. No "welcome to the show" filler.
-- games: the week's results, the blowout and the nail-biter. One chapter per game worth it (one or two).
-- standings: where the table stands and what it means.
-- move: a trade or a pickup worth arguing about, if there was one.
-- take: a hot take that splits the panel and turns into an argument.
-- close: sign off and look ahead to next week, in a line or two each.
+KEEP IT SHORT: about ninety seconds, ${EPISODE_TARGET.toLocaleString('en-US')} characters across the whole episode, and
+never more than ${EPISODE_MAX.toLocaleString('en-US')}. Count them. Three or four chapters, two to five turns each, one short
+sentence a turn. Pick the week's one or two best storylines and leave everything else out: a
+ninety-second show that kills beats a long one that sags.
+
+The shape (three or four chapters):
+- open: a cold open, straight into the week's best game (the blowout or the nail-biter). No
+  "welcome to the show" filler.
+- then one or two of these, whichever has the best material this week:
+  - games: a second game, only if it's genuinely funny.
+  - standings: where the table stands and what it means.
+  - move: a trade or a pickup worth arguing about.
+  - take: a hot take that splits the panel.
+- close: a sign-off in two or three quick turns, ideally landing the running gag.
 
 WRITTEN FOR THE EAR. Short sentences. Contractions. Say numbers the way people say them
 ("one twenty-four" for 124.3 is fine, or "a hundred and twenty-four"). No lists, no
@@ -307,7 +319,14 @@ export async function publishEpisode(week?: number): Promise<Episode> {
   // compare against today, which a week-3 record would fail while being right.
   // Checked against the trade record only: the standings and game-status checks compare against
   // today, which a record that was right after week 7 would fail.
-  const script = await publishable(first, async correction => writeScript(hosts, ctx, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: true });
+  let script = await publishable(first, async correction => writeScript(hosts, ctx, `\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: true });
+  // Every character is paid for when it's recorded: a script over the limit is cut once, by the
+  // writer, and the shorter of the two is kept.
+  if (scriptCharacters(script) > EPISODE_MAX) {
+    const cut = `\nTOO LONG: the last draft was ${scriptCharacters(script).toLocaleString('en-US')} characters. Write it again at ${EPISODE_TARGET.toLocaleString('en-US')} or fewer: fewer turns, shorter turns, one storyline fewer. Keep the best jokes.`;
+    const shorter = await publishable(await writeScript(hosts, ctx, cut), async correction => writeScript(hosts, ctx, `${cut}\nFIX THESE BEFORE ANYTHING ELSE:\n${correction}`), { tradesOnly: true }).catch(() => null);
+    if (shorter && scriptCharacters(shorter) < scriptCharacters(script)) script = shorter;
+  }
 
   const past = await listEpisodes();
   const same = past.find(e => e.season === brief.season && e.week === target);

@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { castVoices, elevenLabsKey, performChapter, refundCharacters, spendCharacters, voicePool } from '@/lib/ai/elevenlabs';
+import { castVoices, elevenLabsKey, episodeCharacters, payForEpisode, performChapter, voicePool } from '@/lib/ai/elevenlabs';
 import { claimChapter, releaseChapter, storeChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
 
@@ -64,7 +64,6 @@ export async function GET(req: NextRequest) {
     return res || refuse('Still recording.', 503);
   }
 
-  let charged = 0;
   try {
     if (!(await rateLimit('lp_rl_podcast_chapter:', clientIp(req), 24, 10 * 60_000)).ok) return refuse('Slow down.', 429);
 
@@ -72,14 +71,12 @@ export async function GET(req: NextRequest) {
     const lines = chapter.lines.map(l => ({ voiceId: voices[l.host] || voices[0], text: l.text }));
     if (lines.some(l => !l.voiceId)) return refuse('No ElevenLabs voices to read with.', 502);
 
-    const chars = lines.reduce((n, l) => n + l.text.length, 0);
-    if (!(await spendCharacters(chars).catch(() => true))) return refuse('This month\'s recorded voices are used up.', 429);
-    charged = chars;
+    // The whole episode is paid for with its first recording, or none of it is recorded.
+    if (!(await payForEpisode(epId, episodeCharacters(ep)).catch(() => true))) return refuse('This month\'s recorded voices are used up.', 429);
 
     const before = ep.chapters[c - 1]?.lines.at(-1)?.text;
     const after = ep.chapters[c + 1]?.lines[0]?.text;
     const { audio, segments } = await performChapter(lines, { previous: before, next: after });
-    charged = 0;
 
     await storeChapter(epId, c, audio, segments).catch(err => {
       console.error('[api/podcast/chapter] could not store', err instanceof Error ? err.message : err);
@@ -90,7 +87,6 @@ export async function GET(req: NextRequest) {
     console.error('[api/podcast/chapter]', e.statusCode ?? '', String(e.message ?? err).slice(0, 300));
     return refuse('The chapter could not be recorded.', 502);
   } finally {
-    if (charged) await refundCharacters(charged);
     await releaseChapter(epId, c);
   }
 }

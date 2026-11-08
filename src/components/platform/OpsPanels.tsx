@@ -5,7 +5,8 @@
  *
  *   Monitor   live checks of what the platform depends on, the scheduled jobs, every other
  *             service's calls (with errors, rate limits and Sleeper's busiest minute against its
- *             limit), the AI spend of every league, and the server's own errors
+ *             limit), the AI spend of every league, the podcast's ElevenLabs characters, and
+ *             the server's own errors
  *   Feedback  bugs and ideas sent from the leagues' sites, to triage
  *
  * Both read the operator API with the same sign-in as the rest of the panel.
@@ -97,6 +98,16 @@ interface Ops {
   };
   storage?: Record<'redis' | 'postgres', Store | null>;
   market?: MarketStats | null;
+  voices?: VoiceStats | null;
+}
+
+interface VoiceStats {
+  month: string;
+  plan: { tier: string; used: number; limit: number; resetsAt: string | null; voiceSlots: number; voiceLimit: number } | null;
+  planError: string | null;
+  platformUsed: number; platformCap: number; leagueCap: number; episodeChars: number; perLeague: number;
+  carries: { plan: number | null; cap: number };
+  leagues: { slug: string; name: string; month: number; lastMonth: number }[];
 }
 
 interface MarketStats {
@@ -254,6 +265,8 @@ export function Monitor({ auth }: { auth: Auth }) {
 
       {data.ai && <AiSpend ai={data.ai} />}
 
+      {data.voices && <Voices v={data.voices} />}
+
       <Card title="Server errors" meta={`${errs24} in the last 24 hours`}>
         <div className="mt-4"><Sparkline hours={data.appErrors.map(h => ({ hour: h.hour, calls: h.err, err: 0 }))} label="Server errors" /></div>
         <ul className="mt-4 divide-y divide-border">
@@ -410,6 +423,77 @@ function AiSpend({ ai }: { ai: NonNullable<Ops['ai']> }) {
           </table>
         </div>
       )}
+    </Card>
+  );
+}
+
+/**
+ * The Desk Weekly's ElevenLabs characters: the plan as ElevenLabs counts it (everything the key
+ * made, theme and sound effects included), the platform's own count against its cap, and each
+ * league against its cap. An episode is paid for when it's first played, so a league whose
+ * episodes nobody plays costs nothing.
+ */
+function Voices({ v }: { v: VoiceStats }) {
+  const plan = v.plan;
+  const share = plan?.limit ? plan.used / plan.limit : v.platformUsed / Math.max(1, v.platformCap);
+  const level = share > 0.9 ? 'bad' : share > 0.7 ? 'warn' : 'ok';
+  const resets = plan?.resetsAt ? new Date(plan.resetsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null;
+  const kpis = [
+    plan
+      ? { label: `ElevenLabs ${plan.tier}`, v: `${Math.round(share * 100)}%`, sub: `${plan.used.toLocaleString()} of ${plan.limit.toLocaleString()} characters${resets ? `, resets ${resets}` : ''}` }
+      : { label: 'ElevenLabs plan', v: '-', sub: v.planError ?? 'Not readable' },
+    { label: 'Our count', v: big(v.platformUsed), sub: `of ${v.platformCap.toLocaleString()} (ELEVENLABS_MONTHLY_CHARS_TOTAL)` },
+    { label: 'Leagues it carries', v: String(v.carries.cap), sub: `At one episode a week, about ${v.perLeague.toLocaleString()} characters a league${v.carries.plan != null && v.carries.plan !== v.carries.cap ? `; the plan alone, ${v.carries.plan}` : ''}` },
+    plan ? { label: 'Voice slots', v: `${plan.voiceSlots} / ${plan.voiceLimit}`, sub: 'Voices added to the account' } : { label: 'Per league', v: big(v.leagueCap), sub: 'ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE' },
+  ];
+  return (
+    <Card title="Recorded voices" meta={`${new Date(`${v.month}-01T12:00:00Z`).toLocaleDateString(undefined, { month: 'long' })}, The Desk Weekly on ElevenLabs`}>
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {kpis.map(k => (
+          <div key={k.label}>
+            <p className="text-[11.5px] font-semibold text-muted-foreground">{k.label}</p>
+            <p className={cn('lp-num mt-1 text-[26px] font-extrabold tabular-nums leading-none', k === kpis[0] && level === 'bad' && 'text-[hsl(var(--signal))]')}>{k.v}</p>
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <div className="h-2.5 flex-1 rounded-full bg-muted">
+          <motion.div className={cn('h-full rounded-full', level === 'bad' ? 'bg-[hsl(var(--signal))]' : level === 'warn' ? 'bg-amber-500' : 'bg-primary')}
+            initial={{ width: 0 }} animate={{ width: `${Math.max(1, Math.min(100, share * 100))}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
+        </div>
+        <State level={level} label={level === 'ok' ? 'Plenty left' : level === 'warn' ? 'Running low' : 'Nearly out'} />
+      </div>
+      {v.leagues.length > 0 ? (
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-[13px]">
+            <thead>
+              <tr className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="py-2 pr-3 font-semibold">League</th>
+                <th className="py-2 pr-3 text-right font-semibold">Episodes</th>
+                <th className="py-2 pr-3 text-right font-semibold">This month</th>
+                <th className="py-2 pr-3 text-right font-semibold">Of its cap</th>
+                <th className="py-2 text-right font-semibold">Last month</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {v.leagues.map(l => {
+                const of = l.month / Math.max(1, v.leagueCap);
+                return (
+                  <tr key={l.slug}>
+                    <td className="py-2 pr-3"><span className="font-semibold">{l.name}</span><span className="ml-1.5 text-[11.5px] text-muted-foreground">{l.slug}</span></td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">about {Math.round(l.month / v.episodeChars)}</td>
+                    <td className="py-2 pr-3 text-right font-semibold tabular-nums">{l.month.toLocaleString()}</td>
+                    <td className={cn('py-2 pr-3 text-right tabular-nums', of >= 0.9 && 'font-semibold text-[hsl(var(--signal))]')}>{Math.round(of * 100)}%</td>
+                    <td className="py-2 text-right tabular-nums text-muted-foreground">{l.lastMonth.toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[11.5px] text-muted-foreground">Each league is capped at {v.leagueCap.toLocaleString()} characters a month (ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE). Past it, browsers read its episodes.</p>
+        </div>
+      ) : <p className="mt-4 text-[12.5px] text-muted-foreground">No episode recorded this month or last.</p>}
     </Card>
   );
 }

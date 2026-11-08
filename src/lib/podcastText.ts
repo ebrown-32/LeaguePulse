@@ -25,3 +25,6 @@ export function keepDeliveryTags(text: string): string {
 export function plainLine(text: string): string {
   return text.replace(TAG, ' ').replace(/\s{2,}/g, ' ').trim();
 }
+
+/** About what one episode of The Desk Weekly is written to (about ninety seconds), in characters. */
+export const EPISODE_CHARS = 1_500;
