@@ -8,7 +8,7 @@
  *                                        from; unset, every voice on the ElevenLabs account
  *   ELEVENLABS_MODEL                     optional, default eleven_v4 (the most human: it performs
  *                                        the script's delivery tags, like [laughs])
- *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 12000 (about four episodes); past it,
+ *   ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE  optional, default 12000 (about eight episodes); past it,
  *                                        browsers read that league's episodes
  *   ELEVENLABS_MONTHLY_CHARS_TOTAL       optional, default 36000 (90% of the Starter plan's 40,000):
  *                                        the whole platform's month, every league together, so one
@@ -23,7 +23,7 @@
 import 'server-only';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { getRedis } from '@/lib/redisClient';
-import { plainLine } from '@/lib/podcastText';
+import { EPISODE_CHARS, plainLine } from '@/lib/podcastText';
 
 export interface SpeakingVoice { id: string; name: string; description: string; preview: string | null }
 
@@ -198,8 +198,7 @@ export function episodeCharacters(ep: { chapters: { lines: { text: string }[] }[
   return ep.chapters.reduce((n, c) => n + c.lines.reduce((m, l) => m + l.text.length, 0), 0);
 }
 
-/** About what one episode takes (podcast.ts writes to about 3,000 characters). */
-export const EPISODE_CHARS = 3_000;
+export { EPISODE_CHARS };
 
 /**
  * For the back office's monitor: the ElevenLabs plan as ElevenLabs counts it, and the platform's
