@@ -206,7 +206,7 @@ export default function Player({ episode, recorded, autoFocus = false, logoUrl }
           <div className="flex items-center gap-3">
             <DeskWeeklyLogo size={44} words={false} />
             <div className="min-w-0 flex-1 leading-tight">
-              <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-primary">The Desk Weekly · Ep. {episode.number}</p>
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-primary">The Desk Weekly · Episode {episode.week}</p>
               <p className="truncate text-[13px] text-muted-foreground">Week {episode.week}, {episode.season}</p>
             </div>
             {/* On a phone, sharing lives up here: the bottom corner belongs to the chat button. */}
@@ -215,7 +215,45 @@ export default function Player({ episode, recorded, autoFocus = false, logoUrl }
               {copied ? <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> : <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg>}
             </button>
           </div>
-          <div className="mt-4"><Studio episode={episode} s={s} engine={engine} tint={tint} logoUrl={logoUrl} leagueName={episode.leagueName} /></div>
+          <div className="mt-4">
+            <Studio episode={episode} s={s} engine={engine} tint={tint} logoUrl={logoUrl} leagueName={episode.leagueName}>
+              {/* In the frame, like a video's controls (from a tablet up; a phone keeps its bar at the bottom). */}
+              <div className="hidden items-center gap-3 border-t border-white/5 bg-[#0a0b11] px-3 py-2 sm:flex">
+                <button type="button" onClick={() => engine.prev()} aria-label="Previous chapter" className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 hover:text-white">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden><path d="M6 5h2v14H6zM20 5v14L9 12z" /></svg>
+                </button>
+                <motion.button type="button" onClick={() => engine.toggle()} aria-label={s.playing ? 'Pause' : 'Play'} whileTap={{ scale: 0.9 }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  {s.playing
+                    ? <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
+                    : <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5" fill="currentColor" aria-hidden><path d="M7 4.5v15l12.5-7.5Z" /></svg>}
+                </motion.button>
+                <button type="button" onClick={() => engine.next()} aria-label="Next chapter" className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 hover:text-white">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden><path d="M16 5h2v14h-2zM4 5v14l11-7z" /></svg>
+                </button>
+                <div className="flex min-w-0 flex-1 gap-1" role="list" aria-label="Chapters">
+                  {episode.chapters.map((c, i) => {
+                    const before = episode.chapters.slice(0, i).reduce((n, x) => n + x.lines.length, 0);
+                    const fill = Math.max(0, Math.min(1, (done - before) / c.lines.length));
+                    return (
+                      <button key={i} type="button" role="listitem" onClick={() => engine.seek({ chapter: i, line: 0 })} title={c.title} aria-label={`Chapter ${i + 1}: ${c.title}`}
+                        className="group flex-1 py-2" style={{ flexGrow: c.lines.length }}>
+                        <span className="block h-1.5 overflow-hidden rounded-full bg-white/15 transition-[height] group-hover:h-2">
+                          <span className="block h-full rounded-full bg-primary" style={{ width: `${(s.done ? 1 : fill) * 100}%` }} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={() => engine.setRate(s.rate === 1 ? 1.25 : s.rate === 1.25 ? 1.5 : 1)} aria-label={`Speed ${s.rate}x`}
+                  className="h-8 rounded-full px-2.5 text-[12px] font-bold tabular-nums text-white/70 hover:bg-white/10 hover:text-white">{s.rate}x</button>
+                <button type="button" onClick={share} aria-label="Share this episode" className="flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold text-white/70 hover:bg-white/10 hover:text-white">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg>
+                  {copied ? 'Copied' : 'Share'}
+                </button>
+              </div>
+            </Studio>
+          </div>
       </div>
 
       <div className="relative grid gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-8">
@@ -288,7 +326,7 @@ export default function Player({ episode, recorded, autoFocus = false, logoUrl }
 
       {/* The controls and the timeline. On a phone they stay in reach at the bottom of the screen
           while the rest of the show scrolls by. */}
-      <div className="sticky bottom-0 z-10 rounded-b-[inherit] border-t border-border/70 bg-card/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:static sm:bg-transparent sm:px-7 sm:pb-5 sm:pt-4 sm:backdrop-blur-none">
+      <div className="sticky bottom-0 z-10 rounded-b-[inherit] border-t border-border/70 bg-card/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:hidden">
         <div className="flex gap-1" role="list" aria-label="Chapters">
           {episode.chapters.map((c, i) => {
             const before = episode.chapters.slice(0, i).reduce((n, x) => n + x.lines.length, 0);

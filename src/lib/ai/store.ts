@@ -25,7 +25,9 @@ export interface FeedPost {
   kind: 'article' | 'tweet' | 'comment' | 'tradeGrade' | 'powerRankings' | 'predictions'
       | 'matchupPreview' | 'kickoff' | 'liveTake' | 'gameOfWeek' | 'photo'
       /** A franchise's official post (lib/franchise/announce). */
-      | 'official';
+      | 'official'
+      /** A new episode of The Desk Weekly, posted by one of its hosts (lib/ai/podcast). */
+      | 'episode';
   content: any;
   /** When it was generated. */
   createdAt: string;

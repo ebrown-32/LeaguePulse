@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle, ChevronDown } from '@/components/icons';
 import { cn } from '@/lib/utils';
-import type { FeedPost } from './FeedPostCard';
+import Link from 'next/link';
+import { profileHref, type FeedPost } from './FeedPostCard';
 
 /**
  * The argument under a post.
@@ -44,9 +45,9 @@ function Reply({ reply }: { reply: FeedPost }) {
 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <span className={cn('text-[12px] font-bold', reply.personaAccent)}>
-            {reply.personaName}
-          </span>
+          {profileHref(reply)
+            ? <Link href={profileHref(reply)!} className={cn('text-[12px] font-bold hover:underline', reply.personaAccent)}>{reply.personaName}</Link>
+            : <span className={cn('text-[12px] font-bold', reply.personaAccent)}>{reply.personaName}</span>}
           <span className="text-[11px] text-muted-foreground">{reply.personaHandle}</span>
         </span>
         <span className="mt-0.5 block whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">

@@ -7,14 +7,18 @@
  *                 city every visit), with a lit stadium among the towers. The sky follows the
  *                 listener's own clock: dawn, day, dusk or night, windows lighting up after dark.
  *   The room      a lighting rig whose spotlights swing to whoever is talking and pulse with their
- *                 voice, an ON AIR sign, and a video wall: one of LeaguePulse's stadiums, the show's
+ *                 voice, the episode's badge, and a video wall: one of LeaguePulse's stadiums, the show's
  *                 logo between segments and the segment on air while it plays.
  *   The desk      the panel (the league's own Desk personalities, their faces and colours) seated
  *                 at a curved anchor desk with the show's logo and the league's, a mic each, name
  *                 plates. The speaker leans in; a laugh in the script shakes the desk.
  *   The chyron    the segment on air, a ticker of the episode's rundown, and the clock.
- *   Soundboard    the show's own crowd, groan, sting and theme (public/podcast), for anyone to hit,
- *                 and the lights, to change the room's mood.
+ *   The sound     the show runs its own soundboard (the engine: the theme, a sting between
+ *                 segments, the crowd for a blowout or a nail-biter or a host losing it), and its
+ *                 own lights: a party for the open and the sign-off, warm for a hot take.
+ *
+ * Watched like a video: tap the stage to play or pause, with the controls (`children`) in the
+ * frame under it.
  *
  * Everything that moves with the voice is written straight to CSS variables each frame (no React
  * render a frame). The room is a night-time TV studio in any theme; its accents are the league's.
@@ -51,7 +55,6 @@ function skyNow(): Sky {
 }
 
 type Lights = 'show' | 'party' | 'warm';
-const LIGHT_LABEL: Record<Lights, string> = { show: 'Show', party: 'Party', warm: 'Warm' };
 
 // ── The show's logo ─────────────────────────────────────────────────────────
 
@@ -161,14 +164,13 @@ const LAUGH = /\[(laughs|laughing|laughs harder|starts laughing|wheezing|chuckle
 const CUT = /\[(interrupting|cuts in|overlapping)\]/i;
 const HYPE = /\[(shouting|excited)\]|!/;
 
-export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }: {
-  episode: Episode; s: EngineState; engine: PodcastEngine; tint: (i: number) => string; logoUrl?: string | null; leagueName: string;
+export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, children }: {
+  episode: Episode; s: EngineState; engine: PodcastEngine; tint: (i: number) => string; logoUrl?: string | null; leagueName: string; children?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
   const motionOn = !reduce;
   const root = useRef<HTMLDivElement>(null);
   const [sky, setSky] = useState<Sky>('night');
-  const [lights, setLights] = useState<Lights>('show');
   const [poked, setPoked] = useState<number | null>(null);
   const [clock, setClock] = useState('');
   const [size, setSize] = useState({ w: 800, h: 400 });
@@ -209,6 +211,8 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
   const raw = ch?.lines[s.line]?.text ?? '';
   const speaker = ch?.lines[s.line]?.host ?? 0;
   const live = s.playing;
+  // The room's lights follow the show: a party for the open and the sign-off, warm for a hot take.
+  const lights: Lights = !live ? 'show' : ch?.kind === 'open' || ch?.kind === 'close' ? 'party' : ch?.kind === 'take' ? 'warm' : 'show';
   const mood = !live ? null : LAUGH.test(raw) ? 'laugh' : CUT.test(raw) ? 'cut' : HYPE.test(raw) ? 'hype' : 'talk';
   const n = episode.hosts.length;
   const narrow = size.w < 560;
@@ -242,7 +246,8 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
 
       {/* The stage. */}
       <div ref={root} onPointerMove={onPointer} onPointerLeave={() => root.current?.style.setProperty('--px', '0')}
-        className="relative h-[300px] select-none sm:h-[420px]" style={{ ['--lv' as string]: 0, ['--px' as string]: 0 }}>
+        onClick={() => engine.toggle()} role="button" tabIndex={-1} aria-label={live ? 'Pause' : 'Play'}
+        className="relative h-[280px] cursor-pointer select-none min-[400px]:h-[310px] sm:h-[clamp(320px,calc(100vh-380px),430px)]" style={{ ['--lv' as string]: 0, ['--px' as string]: 0 }}>
         {/* The window wall. */}
         <div className="absolute inset-x-0 top-0 h-[69%] overflow-hidden">
           <Skyline seed={leagueName} sky={sky} motionOn={motionOn} />
@@ -281,13 +286,10 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
           );
         })}
 
-        {/* ON AIR. */}
-        <div className="absolute left-[3%] top-[11%] rounded-md border border-white/10 bg-black/60 px-2 py-1 backdrop-blur-sm sm:left-[4%]">
-          <span className={cn('flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.22em] sm:text-[11px]', live ? 'text-[#ff4d3d]' : 'text-white/35')}
-            style={live ? { textShadow: '0 0 12px rgba(255,77,61,0.9)' } : undefined}>
-            <span className={cn('h-2 w-2 rounded-full', live ? 'bg-[#ff4d3d] shadow-[0_0_10px_2px_rgba(255,77,61,0.8)]' : 'bg-white/25')} />
-            On air
-          </span>
+        {/* The episode's badge: one episode a week, numbered by its week. */}
+        <div className="absolute left-[3%] top-[11%] rounded-md border border-white/10 bg-black/60 px-2 py-1 leading-none backdrop-blur-sm sm:left-[4%] sm:px-2.5 sm:py-1.5">
+          <span className="block text-[8px] font-bold uppercase tracking-[0.22em] text-white/55 sm:text-[9.5px]">{episode.season}</span>
+          <span className="mt-0.5 block font-display text-[12px] font-black uppercase tracking-[0.04em] text-white sm:text-[15px]">Week {episode.week}</span>
         </div>
 
         {/* The video wall: a stadium, and the show's logo or the segment on air. */}
@@ -321,7 +323,7 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
           const react = on ? mood : others ? 'giggle' : null;
           return (
             <button key={h.id} type="button" aria-label={`${h.name}, ${h.handle}`}
-              onClick={() => { setPoked(i); window.setTimeout(() => setPoked(p => (p === i ? null : p)), 1600); }}
+              onClick={e => { e.stopPropagation(); setPoked(i); window.setTimeout(() => setPoked(p => (p === i ? null : p)), 1600); }}
               className="absolute -translate-x-1/2 focus:outline-none" style={{ left: `${hostX(i)}%`, bottom: `${(1 - deskTop) * 100 - 1}%` }}>
               <motion.div className="relative flex flex-col items-center"
                 animate={
@@ -387,15 +389,29 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
         {episode.hosts.map((h, i) => (
           <span key={h.id} className="pointer-events-none absolute z-20 -translate-x-1/2 truncate rounded-sm border border-white/10 bg-black/70 px-1.5 py-0.5 text-center text-[9px] font-bold uppercase tracking-[0.08em] text-white/85 sm:text-[10.5px]"
             style={{ left: `${hostX(i)}%`, top: `${deskTop * 100 + 3}%`, maxWidth: `${76 / n}%`, borderBottom: `2px solid ${tint(i)}` }}>
-            {h.name}
+            {/* A phone has room for a first name. */}
+            {narrow && h.name.length > 9 ? h.name.split(' ')[0] : h.name}
           </span>
         ))}
+
+        {/* Before it plays (and paused): the episode, like a video's poster, with a big play button. */}
+        {!live && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/30 to-black/10">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_40px_-8px_hsl(var(--primary)/0.85)] ring-4 ring-white/15 sm:h-20 sm:w-20">
+              {s.buffering ? <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-current border-t-transparent" /> : <svg viewBox="0 0 24 24" className="ml-1 h-8 w-8 sm:h-9 sm:w-9" fill="currentColor" aria-hidden><path d="M7 4.5v15l12.5-7.5Z" /></svg>}
+            </span>
+            <span className="absolute inset-x-0 bottom-0 p-3 text-left sm:p-5">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 sm:text-[11px]">{s.progress > 0 || s.chapter > 0 || s.line > 0 ? 'Paused' : `Week ${episode.week}, ${episode.season}`}</span>
+              <span className="mt-0.5 line-clamp-2 block font-display text-[18px] font-black leading-tight text-white sm:text-[26px]">{episode.title}</span>
+            </span>
+          </motion.div>
+        )}
       </div>
 
       {/* The chyron. */}
       <div className="flex h-9 items-stretch border-t border-white/10 bg-[#0d0e15] text-[11px] sm:h-10 sm:text-[12.5px]">
-        <span className={cn('flex items-center gap-1.5 px-2.5 font-black uppercase tracking-[0.18em] sm:px-3', live ? 'bg-[#e0352b] text-white' : 'bg-white/10 text-white/60')}>
-          {live ? 'Live' : 'Next up'}
+        <span className="flex items-center gap-1.5 bg-white/10 px-2.5 font-black uppercase tracking-[0.14em] text-white/80 sm:px-3">
+          Wk {episode.week}
         </span>
         <span className="flex min-w-0 items-center bg-primary px-2.5 font-display font-black uppercase text-primary-foreground sm:px-3">
           <span className="truncate">{ch?.title ?? episode.title}</span>
@@ -407,31 +423,10 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName }
             <span className="px-4">{leagueName.toUpperCase()}   •   WEEK {episode.week}   •   {rundown}</span>
           </span>
         </span>
-        <span className="flex items-center bg-black/50 px-2.5 font-bold tabular-nums text-white/80 sm:px-3">{clock}</span>
+        <span className="hidden items-center bg-black/50 px-2.5 font-bold tabular-nums text-white/80 sm:flex sm:px-3">{clock}</span>
       </div>
 
-      {/* The soundboard. */}
-      <div className="flex items-center gap-1.5 overflow-x-auto border-t border-white/5 bg-[#0a0b11] px-2.5 py-2 [scrollbar-width:none] sm:gap-2 sm:px-3">
-        <span className="mr-1 hidden text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 sm:inline">Soundboard</span>
-        {([
-          { id: 'roar', label: 'Crowd', icon: 'M4 14c2-4 4-4 6 0s4 4 6 0 4-4 6 0M4 9c2-3 4-3 6 0s4 3 6 0 4-3 6 0' },
-          { id: 'groan', label: 'Boo', icon: 'M8 15s1.5-2 4-2 4 2 4 2M9 9h.01M15 9h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z' },
-          { id: 'turn', label: 'Sting', icon: 'M13 3 4 14h7l-1 7 9-11h-7l1-7Z' },
-          { id: 'theme', label: 'Theme', icon: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' },
-        ] as const).map(p => (
-          <motion.button key={p.id} type="button" whileTap={{ scale: 0.88 }} onClick={() => engine.fx(p.id)}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-gradient-to-b from-[#23263a] to-[#151724] px-2.5 text-[11.5px] font-bold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:border-primary/60 hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={p.icon} /></svg>
-            {p.label}
-          </motion.button>
-        ))}
-        <motion.button type="button" whileTap={{ scale: 0.88 }} onClick={() => setLights(l => (l === 'show' ? 'party' : l === 'party' ? 'warm' : 'show'))}
-          aria-label={`Lights: ${LIGHT_LABEL[lights]}`}
-          className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-gradient-to-b from-[#23263a] to-[#151724] px-2.5 text-[11.5px] font-bold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-primary/60">
-          <span className="flex gap-0.5" aria-hidden>{[0, 1, 2].map(k => <span key={k} className="h-2.5 w-1.5 rounded-sm" style={{ background: lights === 'warm' ? '#ffd9a0' : lights === 'party' ? tint(k + 1) : tint(0) }} />)}</span>
-          Lights: {LIGHT_LABEL[lights]}
-        </motion.button>
-      </div>
+      {children}
     </div>
   );
 }
