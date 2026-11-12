@@ -185,3 +185,11 @@ export function repairTimings<T extends { line: number; start: number; end: numb
   }
   return out;
 }
+
+/**
+ * How The Desk Weekly's chapters are recorded, as a version (lib/ai/podcastAudio, the chapter
+ * route and the player). When it changes, every chapter is recorded again the next time it's
+ * played, at a new address, and the old recordings go with their episode.
+ *   2: recorded without the neighbouring lines as context, which had left most of a chapter unsaid
+ */
+export const RECORDING = 2;

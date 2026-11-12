@@ -314,9 +314,10 @@ export async function performChapter(
     outputFormat: 'mp3_44100_96',
     // Lively, a little loose: the panel arguing, not reading.
     settings: { stability: 0.5 },
-    previousText: contextBefore(around.previous),
-    futureText: contextAfter(around.next),
+    // No previous or next text: given the line before a chapter, the dialogue model would perform
+    // the first line or so and leave the rest of the chapter unsaid. A chapter is a scene of its own.
   });
+  void around;
   const spans = new Map<number, { start: number; end: number; from: number; to: number }>();
   for (const s of res.voiceSegments ?? []) {
     const had = spans.get(s.dialogueInputIndex);

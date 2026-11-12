@@ -19,7 +19,11 @@ import { getRedis } from '@/lib/redisClient';
 export interface ChapterTimings { line: number; start: number; end: number; words?: number[] }
 export interface StoredChapter { url: string; segments: ChapterTimings[] }
 
-const recKey = (ep: string, c: number) => `lp_podcast_rec:${ep}:${c}`;
+// The recording version (lib/podcastText RECORDING): a new one records every chapter again.
+import { RECORDING } from '@/lib/podcastText';
+export { RECORDING };
+const recKey = (ep: string, c: number) => `lp_podcast_rec${RECORDING > 1 ? `_v${RECORDING}` : ''}:${ep}:${c}`;
+const oldRecKey = (ep: string, c: number) => `lp_podcast_rec:${ep}:${c}`;
 const lockKey = (ep: string, c: number) => `lp_podcast_lock:${ep}:${c}`;
 
 export const blobConfigured = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
@@ -81,7 +85,7 @@ export async function waitForChapter(ep: string, c: number, ms = 45_000): Promis
 /** Deletes an episode's recordings: its Blob files and their records. Best effort. */
 export async function forgetEpisode(ep: string, chapters: number): Promise<void> {
   const { client } = getRedis();
-  await Promise.all(Array.from({ length: chapters }, (_, c) => client?.del(recKey(ep, c)))).catch(() => {});
+  await Promise.all(Array.from({ length: chapters }, (_, c) => Promise.all([client?.del(recKey(ep, c)), client?.del(oldRecKey(ep, c))]))).catch(() => {});
   if (!blobConfigured()) return;
   try {
     const { list, del } = await import('@vercel/blob');

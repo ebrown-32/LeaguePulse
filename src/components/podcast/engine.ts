@@ -19,7 +19,7 @@
  * preference (lib/prefs music) only for those: the voices are what they pressed play for.
  */
 
-import { estimateWordStarts, plainLine, repairTimings, spokenWords } from '@/lib/podcastText';
+import { estimateWordStarts, plainLine, RECORDING, repairTimings, spokenWords } from '@/lib/podcastText';
 import type { Episode } from '@/lib/ai/podcast';
 
 export interface Position { chapter: number; line: number }
@@ -442,7 +442,8 @@ export class PodcastEngine {
   private fetchChapter(c: number) {
     let got = this.takes.get(c);
     if (!got) {
-      const url = `/api/podcast/chapter?ep=${encodeURIComponent(this.ep.id)}&c=${c}`;
+      // `v`: the recording version the server records at (lib/ai/podcastAudio RECORDING).
+      const url = `/api/podcast/chapter?ep=${encodeURIComponent(this.ep.id)}&c=${c}&v=${RECORDING}`;
       // 503: someone else's play is recording this chapter right now. It's worth waiting for
       // rather than recording the chapter again line by line.
       const ask = async (tries: number): Promise<Response> => {
