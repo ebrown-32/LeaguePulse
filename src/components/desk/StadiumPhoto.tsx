@@ -31,7 +31,7 @@ let current: Job | null = null;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach(l => l());
 
-const keyOf = (s: PhotoSpec) => `lp_photo_v1:${s.shot}:${s.host}:${s.guest}:${s.season}:${s.week}:${s.hour.toFixed(1)}:${s.stands.toFixed(2)}:${s.lots.toFixed(2)}`;
+const keyOf = (s: PhotoSpec) => `lp_photo_v2:${s.shot}:${s.track ?? ''}:${s.host}:${s.guest}:${s.season}:${s.week}:${s.hour.toFixed(1)}:${s.stands.toFixed(2)}:${s.lots.toFixed(2)}`;
 
 function stored(key: string): string | null {
   if (developed.has(key)) return developed.get(key)!;
@@ -83,9 +83,13 @@ function Darkroom() {
   return (
     // On screen (a view off screen stops drawing) but unseen and out of the way.
     <div ref={box} aria-hidden style={{ position: 'fixed', left: 0, top: 0, width: W, height: H, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-      <Stadium3D key={job.key} photo franchiseId={spec.host} facilities={ground.facilities} fill={spec.stands} lots={spec.lots} visitors={ground.guestColor ?? undefined}
+      <Stadium3D key={job.key} photo franchiseId={spec.host} facilities={ground.facilities} fill={spec.stands}
+        // Up close with the fans, the lots round them are busy: they're among the tents, not alone in a car park.
+        lots={spec.shot === 'fans' ? Math.max(spec.lots, 0.85) : spec.lots} visitors={ground.guestColor ?? undefined}
         field={view.field} color={ground.color ?? '#2a78d6'} name={ground.tierName} teamName={job.hostTeam} logo={ground.logo} look={ground.look}
-        hour={spec.hour} view={{ position: view.position, target: view.target, fov: view.fov, still: true }} />
+        // An upgrade is framed the way the studio previews it; the fans, as a group in front of the lens.
+        focus={spec.shot === 'upgrade' ? spec.track ?? null : null} fans={view.fans ?? null} week={spec.week}
+        hour={spec.hour} view={{ position: view.position, target: view.target, fov: view.fov, near: view.near, far: view.far, still: true }} />
     </div>
   );
 }
@@ -189,4 +193,5 @@ function cutout(url: string): string {
 const ALT: Record<PhotoSpec['shot'], string> = {
   exterior: 'from across the plaza', drone: 'from a drone over the tailgates', tailgate: 'from among the tailgates',
   crowd: 'the crowd from the field', warmup: 'both teams warming up', interview: 'on the sideline', aerial: 'from high above',
+  fans: 'fans tailgating early, with signs', stands: 'the stands from high in one end', upgrade: 'the new upgrade',
 };

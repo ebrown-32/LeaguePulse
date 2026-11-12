@@ -53,10 +53,14 @@ const QUIET_MS: Record<Announcement['kind'], number> = {
   motto: 3_600_000, look: 6 * 3_600_000, logo: 3_600_000,
 };
 
-/** The shot that shows each upgrade off. */
+/**
+ * The shot that shows each upgrade off: a new bowl from the air, more seats across the bowl, and
+ * everything else framed the way the studio previews it (`upgrade`: the stands, the restrooms
+ * under the seats, the store, the board, the suites, the lights, the lots).
+ */
 const BUILD_SHOT: Record<TrackId, Shot> = {
-  stadium: 'aerial', seating: 'crowd', concessions: 'exterior', restrooms: 'exterior', parking: 'drone',
-  videoboard: 'crowd', suites: 'crowd', store: 'exterior', atmosphere: 'crowd',
+  stadium: 'aerial', seating: 'stands', concessions: 'upgrade', restrooms: 'upgrade', parking: 'upgrade',
+  videoboard: 'upgrade', suites: 'upgrade', store: 'upgrade', atmosphere: 'upgrade',
 };
 
 const pick = <T,>(xs: T[], seed: number): T => xs[Math.abs(seed) % xs.length];
@@ -219,12 +223,18 @@ export async function announce(franchiseId: string, a: Announcement): Promise<vo
     const visual: OfficialVisual | null =
       a.kind === 'promo'
         ? { type: 'promo', promo: a.promo, when: game.when, opponent: game.opponent, color, stadium,
-            // Beer night from the tailgates in the lots (among the tents, or the drone over them),
+            // Beer night in the lots (the fans up close, or among the tents),
             // fireworks over the bowl after dark, bobbleheads at the gates.
             photo: a.promo === 'fireworks' ? photo('aerial', 21.5, 0.95)
-              : a.promo === 'beer' ? photo(seed % 2 ? 'tailgate' : 'drone', 15.5, 0.95)
+              : a.promo === 'beer' ? photo(seed % 2 ? 'fans' : 'tailgate', 15.5, 0.95)
               : photo('exterior', 16.5, 0.8) }
-      : a.kind === 'build' ? { type: 'photo', photo: photo(BUILD_SHOT[a.track], 15, a.track === 'parking' ? 0.7 : 0) }
+      : a.kind === 'build' ? {
+          type: 'photo',
+          photo: {
+            ...photo(BUILD_SHOT[a.track], 15, a.track === 'parking' ? 0.7 : a.track === 'concessions' || a.track === 'store' ? 0.55 : a.track === 'seating' ? 0.35 : 0),
+            ...(BUILD_SHOT[a.track] === 'upgrade' ? { track: a.track } : {}),
+          },
+        }
       : a.kind === 'prices' ? { type: 'ticket', ticket: a.ticket, was: a.was, color, stadium, team, opponent: game.opponent, when: game.when }
       : a.kind === 'renamed' || a.kind === 'colors' ? { type: 'photo', photo: photo('exterior', 19.5, 0) }
       : a.kind === 'look' ? { type: 'photo', photo: photo('aerial', 17.5, 0) }

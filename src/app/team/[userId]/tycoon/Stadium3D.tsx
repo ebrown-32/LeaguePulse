@@ -48,14 +48,18 @@ import { HAZE } from './campusLook';
 import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
 import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
+import FanCluster, { type FanSpot } from './FanCluster';
 
 export type { RosterPlayer as SidelinePlayer } from './RosterSideline';
 import type { RosterPlayer as SidelinePlayer } from './RosterSideline';
 
 export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
-  /** An upgrade being looked at (previewed in the studio): the camera flies to it, and back when it's cleared. */
+  /** An upgrade being looked at (previewed in the studio): the camera flies to it, and back when it's cleared. In a photograph, the camera is simply there. */
   focus?: TrackId | null;
+  /** A photograph's crowd of fans up close (FanCluster), where they stand; with the week for their signs. */
+  fans?: FanSpot | null;
+  week?: number;
   /** Whose stadium it is: the statues around it are of the franchise's legends (LegendStatues). */
   franchiseId?: string;
   /**
@@ -81,6 +85,9 @@ export interface StadiumProps {
     broadcast?: boolean;
     /** Seconds a change of view takes to glide there (the broadcast view; 1.1 by default). */
     glide?: number;
+    /** The camera's near and far planes, for a photograph taken up close (0.5 and 400 otherwise). */
+    near?: number;
+    far?: number;
   };
   /**
    * How full the lots and the plaza are, 0 to 1, when it differs from the stands:
@@ -1076,7 +1083,7 @@ const FIELD_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => new V
  * Flies the camera to an upgrade being previewed (plazaBuildings.focusShot), and back to the wide view
  * when it's put down. The visitor can still turn the camera once it's there.
  */
-function FocusRig({ shot }: { shot: Shot | null }) {
+function FocusRig({ shot, still = false }: { shot: Shot | null; still?: boolean }) {
   const camera = useThree(st => st.camera);
   const controls = useThree(st => st.controls) as unknown as { target: Vector3; update: () => void } | null;
   const invalidate = useThree(st => st.invalidate);
@@ -1112,7 +1119,9 @@ function FocusRig({ shot }: { shot: Shot | null }) {
   useEffect(() => () => { for (const m of dressed.current) { m.clippingPlanes = null; m.clipIntersection = false; m.needsUpdate = true; } }, []);
 
   useFrame((_, dt) => {
-    const g = glide.current;
+    // A photograph: no flight, the camera is simply at the shot (every frame, so nothing else moves it).
+    if (still && shot) { camera.position.set(...shot.position); camera.lookAt(...shot.target); glide.current = null; }
+    const g = still ? null : glide.current;
     if (g) {
       g.t = Math.min(1, g.t + dt / 1.4);
       const e = g.t * g.t * (3 - 2 * g.t);
@@ -1284,7 +1293,7 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view, franchiseId, onLegend, sideline }: StadiumProps & { hour: number; quality: Quality; onLegend?: (l: FranchiseLegend) => void }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view, franchiseId, onLegend, sideline, fans, week }: StadiumProps & { hour: number; quality: Quality; onLegend?: (l: FranchiseLegend) => void }) {
   const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
@@ -1332,7 +1341,9 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
       {quality.shadows > 0 && <ShadowRig dirty={`${build}|${JSON.stringify(look)}|${Math.round(hour * 4)}|${f.parking}|${Math.round(fill * 20)}|${Math.round(lots * 20)}|${closed}`} />}
       {sky.night > 0.4 && <Stars radius={80} depth={30} count={Math.round(2500 * quality.detail)} factor={3} fade speed={0.4} />}
 
-      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={lots} night={sky.night} sky={tone} detail={quality.detail} look={look} team={p.team} accent={p.accent} crowd={crowdHex} />
+      <Grounds o={o} footprint={bp.footprint} parking={f.parking} fill={lots} night={sky.night} sky={tone} detail={quality.detail} look={look} team={p.team} accent={p.accent} crowd={crowdHex}
+        // A photo's fans up close: their corner of the lot, and the camera's, kept clear.
+        clear={photo && fans && view ? { x: (fans.x + view.position[0]) / 2, z: (fans.z + view.position[2]) / 2, r: 0.62 } : null} />
 
       {/* The floor of the bowl, the wall around the field with a stripe, and the field. */}
       <Ribbon o={o} k={`floor${bp.inner}${apron}`} profile={() => [[0, 0.008], [bp.inner + 0.02, 0.008]]}><meshStandardMaterial color={apron} roughness={0.95} /></Ribbon>
@@ -1386,7 +1397,8 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
         <Rise key={`st${f.store}${build}`}><TeamStore at={layout.plan.store} level={f.store} team={color} accent={p.accent} night={sky.night} /></Rise>
       )}
       <PlazaCrowd bp={bp} plan={layout.plan} fill={lots} colors={crowdColors} />
-      {!photo && !view?.broadcast && <FocusRig shot={shot} />}
+      {(!photo || shot) && !view?.broadcast && <FocusRig shot={shot} still={photo} />}
+      {photo && fans && <FanCluster at={fans} team={color} accent={p.accent} visitors={visitors} teamName={team} week={week} />}
       {/* Watching a game, the cannons only go off for a score. */}
       {f.atmosphere >= 3 && (live
         ? live.celebrate?.td && <Pyro key={`pyro-${live.celebrate.id}`} bp={bp} once />
@@ -1451,7 +1463,7 @@ export default function Stadium3D(props: StadiumProps) {
         <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={props.photo ? 'always' : visible ? 'demand' : 'never'}
           // The default GPU: asking for the high-performance one wakes a laptop's discrete graphics.
           gl={{ antialias: quality.antialias, powerPreference: 'default', stencil: false, preserveDrawingBuffer: !!props.photo }}
-          camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: 0.5, far: 400 }}>
+          camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: props.view?.near ?? 0.5, far: props.view?.far ?? 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
           {!props.photo && visible && <Pace fps={fps} />}
           {/* Measured against the pace it's held to, so a stadium held to 30 isn't taken for a slow one. */}
