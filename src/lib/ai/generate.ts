@@ -1206,7 +1206,7 @@ const PhotoCaptionSchema = z.object({
 
 /** What a desk photographer's shot shows, for its caption. */
 export interface PhotoMoment {
-  shot: 'exterior' | 'drone' | 'tailgate' | 'crowd' | 'warmup' | 'interview' | 'aerial';
+  shot: 'exterior' | 'drone' | 'fans' | 'tailgate' | 'crowd' | 'warmup' | 'interview' | 'aerial' | 'stands' | 'upgrade';
   stage: 'quiet' | 'tailgating' | 'gates' | 'live' | 'final';
   host: { teamName: string; record: string };
   guest: { teamName: string; record: string };
@@ -1224,11 +1224,14 @@ export interface PhotoMoment {
 const SHOT_WORDS: Record<PhotoMoment['shot'], string> = {
   exterior: 'the stadium from across the plaza',
   drone: 'a drone shot looking straight down on the tailgates in the parking lot',
+  fans: 'a close-up of fans who got to the lots early: jerseys, caps, foam fingers and homemade signs, tailgating hours before kickoff, the stadium behind them. The lots are still filling: early, keen, not packed yet',
   tailgate: 'a photo from among the tailgate tents, the stadium behind',
   crowd: 'a photo from the field looking up into the stands',
   warmup: 'both teams warming up on the field, in their colors',
   interview: 'a selfie of you on the sideline, there to interview people before the game',
   aerial: 'an aerial shot of the whole stadium',
+  stands: 'the stands from high in one end, sweeping round the bowl',
+  upgrade: 'a new part of the stadium',
 };
 const STAGE_WORDS: Record<PhotoMoment['stage'], string> = {
   quiet: 'days before the game, the lots still empty',

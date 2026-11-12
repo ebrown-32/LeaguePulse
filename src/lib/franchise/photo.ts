@@ -7,7 +7,10 @@
  *
  *   exterior   the stadium from across the plaza
  *   drone      straight down over the tailgates in a lot
+ *   fans       up close with the early crowd in the lots: jerseys, caps, signs, the stadium behind
  *   tailgate   standing among the tents, the stadium behind
+ *   stands     high across the bowl, the seats filling it (a seating upgrade)
+ *   upgrade    an upgrade, framed the way the studio previews it (plazaBuildings focusShot)
  *   crowd      from the field, up into the stands
  *   warmup     field level, both teams warming up in their colors
  *   interview  on the sideline with the writer, a selfie
@@ -19,9 +22,9 @@
 import { blueprint, type Outline } from './stadiumBlueprint.ts';
 import { campusPlan } from './campusPlan.ts';
 import type { StadiumLook } from './model.ts';
-import type { Facilities } from '../tycoon/catalog.ts';
+import type { Facilities, TrackId } from '../tycoon/catalog.ts';
 
-export const SHOTS = ['exterior', 'drone', 'tailgate', 'crowd', 'warmup', 'interview', 'aerial'] as const;
+export const SHOTS = ['exterior', 'drone', 'fans', 'tailgate', 'crowd', 'warmup', 'interview', 'aerial', 'stands', 'upgrade'] as const;
 export type Shot = (typeof SHOTS)[number];
 
 export interface PhotoSpec {
@@ -36,6 +39,8 @@ export interface PhotoSpec {
   /** How full the stands and the lots were (lib/franchise/venue gameDay). */
   stands: number;
   lots: number;
+  /** For an `upgrade` shot: which one (the camera frames it as the studio's preview does). */
+  track?: TrackId;
 }
 
 export interface PhotoView {
@@ -43,13 +48,19 @@ export interface PhotoView {
   target: [number, number, number];
   fov: number;
   field: 'game' | 'warmup' | 'empty';
+  /** A close-up's camera planes: near enough not to clip what's a step away. */
+  near?: number;
+  far?: number;
+  /** The fans' crowd up close, where it stands and the way it faces. */
+  fans?: { x: number; z: number; ry: number };
 }
 
 /** Which shots suit each moment of game day. */
 export const SHOTS_FOR: Record<'quiet' | 'tailgating' | 'gates' | 'live' | 'final', Shot[]> = {
   quiet: ['exterior', 'aerial'],
-  tailgating: ['drone', 'tailgate', 'exterior'],
-  gates: ['warmup', 'interview', 'crowd', 'drone'],
+  // The early crowd first: the fans, up close, before the lots are anywhere near full.
+  tailgating: ['fans', 'tailgate', 'drone', 'exterior'],
+  gates: ['fans', 'warmup', 'interview', 'crowd', 'drone'],
   live: ['crowd', 'aerial', 'interview'],
   final: ['exterior', 'aerial'],
 };
@@ -64,6 +75,23 @@ export function photoView(shot: Shot, facilities: Facilities, look: Pick<Stadium
       return { position: [R * 1.9, Math.max(2.2, top * 0.75), R * 2.1], target: [0, top * 0.45, 0], fov: 46, field };
     case 'aerial':
       return { position: [R * 1.35, top + R * 1.9, R * 1.45], target: [0, 0, 0], fov: 40, field };
+    case 'stands':
+      // From high in one end, across the bowl: the stands sweeping round.
+      return { position: [-(bp.inner + R) * 0.55, top * 1.15, (bp.inner + R) * 0.35], target: [(bp.inner + R) * 0.25, top * 0.45, -(bp.inner + R) * 0.2], fov: 58, field };
+    case 'upgrade':
+      // The studio's own framing takes over (Stadium3D `focus`); this is only where it starts.
+      return { position: [R * 1.9, Math.max(2.2, top * 0.75), R * 2.1], target: [0, top * 0.45, 0], fov: 42, field: 'empty' };
+    case 'fans': {
+      // In a lot, at eye level: the fans a step in front of the camera, facing it, the stadium behind them.
+      const lot = lotOf(bp.outline, bp.footprint, facilities.parking, look);
+      const d = Math.hypot(lot[0], lot[1]) || 1, ux = -lot[0] / d, uz = -lot[1] / d;
+      // In the lot itself, a little toward the stadium: on the tarmac among the tailgates, not the road.
+      const fx = lot[0] + ux * 0.1, fz = lot[1] + uz * 0.1;
+      return {
+        position: [fx - ux * 0.42, 0.115, fz - uz * 0.42], target: [fx + ux * 2, 0.2, fz + uz * 2], fov: 50, field,
+        near: 0.02, far: 160, fans: { x: fx, z: fz, ry: Math.atan2(-ux, -uz) },
+      };
+    }
     case 'crowd':
       // From midfield, up into the home stand.
       return { position: [0.4, 0.55, 1.2], target: [-0.6, top * 0.7, -(bp.inner + R) / 2], fov: 62, field };

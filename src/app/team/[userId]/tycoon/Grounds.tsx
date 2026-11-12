@@ -1016,8 +1016,10 @@ function Transit({ z }: { z: number }) {
 
 // ── The grounds ─────────────────────────────────────────────────────────────
 
-export function Grounds({ o, footprint, parking, fill, night, sky, look, team, accent, crowd, detail = 1 }: {
+export function Grounds({ o, footprint, parking, fill, night, sky, look, team, accent, crowd, detail = 1, clear }: {
   o: Outline; footprint: number; parking: number; fill: number; night: number;
+  /** A patch of a lot kept clear of cars and other tailgates (a photo's fans have taken that corner). */
+  clear?: { x: number; z: number; r: number } | null;
   /** How much of the scattered and moving detail to draw, for the device (see quality). */
   detail?: number;
   /** The sky: its horizon is the haze the far land fades into. */
@@ -1026,9 +1028,14 @@ export function Grounds({ o, footprint, parking, fill, night, sky, look, team, a
   /** The fans' shirt colors, the same as the crowd's in the stands. */
   crowd: string[];
 }) {
-  const plan = useMemo(() => campusPlan({ outline: o, footprint, parking, fill, look }),
+  const planned = useMemo(() => campusPlan({ outline: o, footprint, parking, fill, look }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [o, footprint, parking, fill, look.setting, look.district, look.tailgate, look.plaza, look.features.join()]);
+  const plan = useMemo(() => {
+    if (!clear) return planned;
+    const away = (p: { x: number; z: number }) => Math.hypot(p.x - clear.x, p.z - clear.z) > clear.r;
+    return { ...planned, cars: planned.cars.filter(away), curbCars: planned.curbCars.filter(away), tailgates: planned.tailgates.filter(away), rvs: planned.rvs.filter(away) };
+  }, [planned, clear?.x, clear?.z, clear?.r]); // eslint-disable-line react-hooks/exhaustive-deps
   const ground = GROUND[look.setting];
   const haze = sky.horizon;
   const grassTex = useMemo(() => {
