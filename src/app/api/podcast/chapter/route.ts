@@ -2,7 +2,7 @@
  * One chapter of an episode, performed by its panel as a single conversation (ElevenLabs Text to
  * Dialogue), when the platform has ELEVENLABS_API_KEY.
  *
- *   GET ?ep=<episode id>&c=<chapter>
+ *   GET ?ep=<episode id>&c=<chapter>&v=<recording version>
  *     audio/mpeg, with `x-lp-segments`: where each line starts and ends, in seconds, as JSON
  *     404 / 429 / 502 / 503  not recorded: the player falls back to line by line, then to the
  *                            browser's voice
@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { castVoices, elevenLabsKey, episodeCharacters, payForEpisode, performChapter, voicePool } from '@/lib/ai/elevenlabs';
-import { claimChapter, releaseChapter, storeChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
+import { claimChapter, RECORDING, releaseChapter, storeChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +46,9 @@ export async function GET(req: NextRequest) {
   if (!elevenLabsKey()) return refuse('Recorded voices are not set up.', 404);
   const q = req.nextUrl.searchParams;
   const epId = q.get('ep') ?? '', c_ = q.get('c') ?? '';
-  if (!EP_ID.test(epId) || !INDEX.test(c_) || [...q.keys()].length !== 2) return refuse('Bad request.', 400);
+  // `v`: the recording's version (podcastAudio RECORDING). A new one means new addresses, so no
+  // cache anywhere serves a chapter recorded the old way.
+  if (!EP_ID.test(epId) || !INDEX.test(c_) || q.get('v') !== String(RECORDING) || [...q.keys()].length !== 3) return refuse('Bad request.', 400);
   const c = Number(c_);
 
   const stored = await storedChapter(epId, c);
