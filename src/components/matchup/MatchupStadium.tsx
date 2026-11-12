@@ -100,12 +100,14 @@ export default function MatchupStadium(props: {
   highlights?: boolean;
   /** Called once the stadium has drawn and the matchup is in: the show cuts to it only then. */
   onReady?: () => void;
+  /** A show's highlight: held still until it cuts here, then the week's biggest play, once (useLiveMatchup). */
+  hold?: boolean;
 }) {
   if (process.env.NEXT_PUBLIC_LP_HOSTED !== '1') return null;
   return <HostedStadium {...props} />;
 }
 
-function HostedStadium({ a, b, week, className, prompt = false, compact = false, highlights = false, onReady }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean; highlights?: boolean; onReady?: () => void }) {
+function HostedStadium({ a, b, week, className, prompt = false, compact = false, highlights = false, onReady, hold }: { a: Team; b: Team; week?: number; className?: string; prompt?: boolean; compact?: boolean; highlights?: boolean; onReady?: () => void; hold?: boolean }) {
   const [venue, setVenue] = useState<Venue | null | undefined>(undefined);
   const [full, setFull] = useState(false);
   // The crowd moves with the clock: checked every minute.
@@ -162,7 +164,7 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false,
   // A card tapped on the field, shown up close.
   const [picked, setPicked] = useState<LivePlayer | null>(null);
   useEffect(() => { if (!full) setPicked(null); }, [full]);
-  const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full, highlights });
+  const { match, celebrate, reel } = useLiveMatchup({ host: venue?.host ?? null, guest: venue?.guest ?? null, week, enabled: liveOn, polling: inView || full, highlights, hold, single: hold !== undefined });
   const playing = match && match.phase !== 'upcoming' ? match : null;
   // Ready for the show: the stadium drawn and the matchup in, said once.
   const [drawn, setDrawn] = useState(false);
@@ -193,6 +195,8 @@ function HostedStadium({ a, b, week, className, prompt = false, compact = false,
     <Stadium3D franchiseId={venue?.host} facilities={ground.facilities} fill={day.stands} lots={day.lots} visitors={ground.guestColor ?? undefined}
       // A preview is a glance: 30 frames a second is smooth for a crowd and a slow orbit, at half the battery.
       fps={full ? 60 : 30}
+      // Staged behind a show's desk, once drawn: still until the cut.
+      idle={!full && Boolean(hold && drawn)}
       // In a live matchup the starters are the players on the field.
       field={playing ? 'empty' : day.stage === 'live' ? 'game' : day.stage === 'gates' ? 'warmup' : 'empty'}
       live={playing ? { match: playing, hostColor: ground.color ?? '#2a78d6', guestColor, cards: true, pins: !full && !highlights, pinSize: 14, cardScale: narrow || portrait ? 0.85 : 1, celebrate: celebrate ? { id: celebrate.play.id, side: celebrate.play.side, td: celebrate.play.scoring } : null, reel: reel?.play ?? null, onPick: full ? setPicked : undefined, picked: full ? picked?.playerId ?? null : null } : null}

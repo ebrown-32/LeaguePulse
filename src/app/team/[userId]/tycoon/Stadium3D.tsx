@@ -57,6 +57,11 @@ export interface StadiumProps {
   facilities: Facilities; fill: number; color: string; name: string;
   /** An upgrade being looked at (previewed in the studio): the camera flies to it, and back when it's cleared. In a photograph, the camera is simply there. */
   focus?: TrackId | null;
+  /**
+   * Waiting out of sight (a show's highlight, staged behind the desk): drawn no more until it's
+   * wanted, its last frame kept, so it costs nothing while hidden and appears at once.
+   */
+  idle?: boolean;
   /** A photograph's crowd of fans up close (FanCluster), where they stand; with the week for their signs. */
   fans?: FanSpot | null;
   week?: number;
@@ -1261,8 +1266,13 @@ function Pace({ fps }: { fps: number }) {
 function ReadySignal({ onReady }: { onReady: () => void }) {
   const frames = useRef(0);
   const done = useRef(false);
+  // A view drawn on demand draws nothing while nothing moves (a held highlight, a still stadium):
+  // ask for frames until the count is in, so "ready" never waits on something else changing.
+  const invalidate = useThree(s => s.invalidate);
+  useEffect(() => { invalidate(); }, [invalidate]);
   useFrame(() => {
-    if (done.current || ++frames.current < 20) return;
+    if (done.current) return;
+    if (++frames.current < 20) { invalidate(); return; }
     done.current = true;
     onReady();
   });
@@ -1460,12 +1470,12 @@ export default function Stadium3D(props: StadiumProps) {
           <p className="px-6 text-sm font-semibold text-foreground/70">{props.name}: the 3D view needs WebGL, which this browser has turned off.</p>
         </div>
       ) : ok && quality ? (
-        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={props.photo ? 'always' : visible ? 'demand' : 'never'}
+        <Canvas shadows={quality.shadows > 0} dpr={dpr} frameloop={props.photo ? 'always' : visible && !props.idle ? 'demand' : 'never'}
           // The default GPU: asking for the high-performance one wakes a laptop's discrete graphics.
           gl={{ antialias: quality.antialias, powerPreference: 'default', stencil: false, preserveDrawingBuffer: !!props.photo }}
           camera={{ position: props.view?.position ?? [19, 7, 19], fov: props.view?.fov ?? 38, near: props.view?.near ?? 0.5, far: props.view?.far ?? 400 }}>
           {/* Fewer pixels when frames start to drop, more again once there's room. */}
-          {!props.photo && visible && <Pace fps={fps} />}
+          {!props.photo && visible && !props.idle && <Pace fps={fps} />}
           {/* Measured against the pace it's held to, so a stadium held to 30 isn't taken for a slow one. */}
           {!scripted() && !props.photo && <PerformanceMonitor key={fps} bounds={() => [fps - 8, fps + 30]} flipflops={4} onDecline={() => setDpr(d => Math.max(quality.minDpr, +(d - 0.25).toFixed(2)))}
             onIncline={() => setDpr(d => Math.min(Math.min(window.devicePixelRatio || 1, quality.maxDpr), +(d + 0.25).toFixed(2)))} />}

@@ -32,7 +32,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { trophyBeat } from '@/lib/trophyBeat';
 import { cn } from '@/lib/utils';
 import type { Episode } from '@/lib/ai/podcast';
@@ -42,6 +42,9 @@ import type { EngineState, PodcastEngine } from './engine';
 // stadium, which a self-hosted copy doesn't have, so there the panel stays at the desk.
 const MatchupStadium = dynamic(() => import('@/components/matchup/MatchupStadium'), { ssr: false });
 const HOSTED = process.env.NEXT_PUBLIC_LP_HOSTED === '1';
+/** Highlights an episode cuts to, at most: the desk is the show. And how long a cut lasts. */
+const MAX_CUTS = 2;
+const CUT_MS = 7_500;
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const STADIUMS = ['bowl', 'cantilever', 'coliseum', 'dome', 'grandstand', 'horseshoe'];
@@ -226,15 +229,28 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
   // A game segment, with both managers known, on a site with stadiums: highlights.
   const v = ch?.visual;
   const game = HOSTED && v?.type === 'matchup' && v.home.userId && v.away.userId ? v : null;
-  const highlights = Boolean(live && game);
-  // The cut waits for the stadium: it loads out of sight behind the desk, and the show cuts to it once
-  // it's drawn with the game in. A new game segment loads its own.
+  // The desk is the show; a highlight is a cut away from it, used sparingly. A game segment stages
+  // its stadium out of sight behind the desk; once it's drawn and the panel is a line into the
+  // game, the show cuts to it for that game's biggest play (the Game Day replay), then back to the
+  // desk when the play is over. One cut a segment, two an episode.
+  const cuts = useRef<Set<number>>(new Set());
+  const staged = Boolean(live && game && (cuts.current.size < MAX_CUTS || cuts.current.has(s.chapter)));
   const [hlReady, setHlReady] = useState(false);
-  useEffect(() => { setHlReady(false); }, [s.chapter]);
+  const [cut, setCut] = useState(false);
+  useEffect(() => { setHlReady(false); setCut(false); }, [s.chapter]);
+  useEffect(() => { if (!live) setCut(false); }, [live]);
   useEffect(() => {
-    if (highlights) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
+    if (!staged || !hlReady || cut || cuts.current.has(s.chapter) || s.line < 1) return;
+    cuts.current.add(s.chapter);
+    setCut(true);
+  }, [staged, hlReady, cut, s.chapter, s.line]);
+  // Back to the desk when the replay's done: long enough for a touchdown to land and be celebrated.
+  useEffect(() => { if (!cut) return; const t = setTimeout(() => setCut(false), CUT_MS); return () => clearTimeout(t); }, [cut]);
+  // The beat, under the cut only.
+  useEffect(() => {
+    if (cut) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
     else trophyBeat.stop();
-  }, [highlights, engine]);
+  }, [cut, engine]);
   useEffect(() => () => trophyBeat.stop(), []);
   // The room's lights follow the show: a party for the open and the sign-off, warm for a hot take.
   const lights: Lights = !live ? 'show' : ch?.kind === 'open' || ch?.kind === 'close' ? 'party' : ch?.kind === 'take' ? 'warm' : 'show';
@@ -420,13 +436,16 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
         ))}
 
         {/* Highlights: the cut to the stadium, the panel in boxes, still talking. */}
-        <AnimatePresence>
-          {game && highlights && (
-            <motion.div key={`hl-${s.chapter}`} initial={{ opacity: 0, scale: 1.06 }} animate={hlReady ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.06 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.5, ease }} className={cn('absolute inset-0 z-[25] bg-black', !hlReady && 'pointer-events-none')}
+        {game && staged && (
+            // A CSS fade, run by the browser itself: a scripted one stalls while the stadium draws,
+            // which is exactly when it has to run.
+            <div key={`hl-${s.chapter}`}
+              className={cn('absolute inset-0 z-[25] bg-black transition-[opacity,transform] duration-[450ms] ease-out', cut && hlReady ? 'scale-100 opacity-100' : 'pointer-events-none scale-[1.04] opacity-0')}
+              data-ready={hlReady ? '1' : '0'} data-cut={cut ? '1' : '0'}
               // The stadium's own buttons stay its own; anywhere else, a tap pauses the show as usual.
               onClick={e => { if ((e.target as HTMLElement).closest('button')) e.stopPropagation(); }}>
               <MatchupStadium highlights compact week={game.week} className="h-full w-full" onReady={() => setHlReady(true)}
+                hold={!cut}
                 a={{ userId: game.home.userId!, teamName: game.home.team, avatar: game.home.avatar ?? '' }}
                 b={{ userId: game.away.userId!, teamName: game.away.team, avatar: game.away.avatar ?? '' }} />
               <span className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md bg-[#e0352b] px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg sm:text-[11px]">
@@ -444,9 +463,8 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
                   );
                 })}
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
 
         {/* Before it plays (and paused): the episode, like a video's poster, with a big play button. */}
         {!live && (
