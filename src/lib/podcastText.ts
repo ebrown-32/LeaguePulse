@@ -130,3 +130,58 @@ export function alignWordStarts(plain: string, chars: string[], starts: number[]
   let last = span.start;
   return out.map(t => { const v = Math.max(last, Math.min(span.end, t ?? last)); last = v; return Math.round(v * 1000) / 1000; });
 }
+
+// ── Where each line is in a chapter's recording ───────────────────────────────
+
+/**
+ * Each line's span in a chapter recorded as one dialogue, from ElevenLabs' character timings: the
+ * lines' texts, as sent, found in turn in the recording's characters. ElevenLabs reports turns by
+ * voice, and two lines in a row from the same voice can come back as one turn, the second line
+ * with no turn of its own; its characters are still there, so its span is still found here.
+ * Null for a line that can't be found.
+ */
+export function lineSpans(texts: string[], chars: string[], starts: number[], ends: number[]): ({ start: number; end: number; from: number; to: number } | null)[] {
+  const joined = chars.join('');
+  let cursor = 0;
+  return texts.map(t => {
+    const want = t.trim();
+    if (!want) return null;
+    // The whole line where it can be found, else its opening, so a small difference later on doesn't lose it.
+    let at = joined.indexOf(want, cursor), len = want.length;
+    if (at < 0) { const head = want.slice(0, Math.min(24, want.length)); at = joined.indexOf(head, cursor); len = want.length; }
+    if (at < 0) return null;
+    const from = at, to = Math.min(chars.length - 1, at + len - 1);
+    cursor = to + 1;
+    const start = starts[from], end = ends[to] ?? starts[to];
+    return typeof start === 'number' && typeof end === 'number' && end > start ? { start, end, from, to } : null;
+  });
+}
+
+/**
+ * Timings recorded before lines were found by their own text: where a line has no span of its own
+ * (a turn ElevenLabs merged with the line before), the merged turn is shared between them by how
+ * much each says. Their word timings, which belonged to the merged turn, are dropped (estimated).
+ */
+export function repairTimings<T extends { line: number; start: number; end: number; words?: number[] }>(segs: T[], texts: string[]): T[] {
+  const out = segs.map(s => ({ ...s }));
+  const empty = (s: T) => s.end - s.start < 0.08;
+  for (let i = 0; i < out.length; i++) {
+    if (empty(out[i])) continue;
+    let j = i + 1;
+    while (j < out.length && empty(out[j])) j++;
+    if (j === i + 1) continue;
+    // Lines i..j-1 share i's span.
+    const run = out.slice(i, j);
+    const weight = run.map(s => Math.max(1, plainLine(texts[s.line] ?? '').length));
+    const total = weight.reduce((a, b) => a + b, 0);
+    let t = out[i].start;
+    const span = out[i].end - out[i].start;
+    run.forEach((s, k) => {
+      const len = (span * weight[k]) / total;
+      s.start = t; s.end = t + len; t += len;
+      delete s.words;
+    });
+    i = j - 1;
+  }
+  return out;
+}

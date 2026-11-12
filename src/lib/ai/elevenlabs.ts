@@ -23,7 +23,7 @@
 import 'server-only';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { getRedis } from '@/lib/redisClient';
-import { alignWordStarts, EPISODE_CHARS, plainLine } from '@/lib/podcastText';
+import { alignWordStarts, EPISODE_CHARS, lineSpans, plainLine } from '@/lib/podcastText';
 
 export interface SpeakingVoice { id: string; name: string; description: string; preview: string | null }
 
@@ -324,13 +324,18 @@ export async function performChapter(
       ? { start: Math.min(had.start, s.startTimeSeconds), end: Math.max(had.end, s.endTimeSeconds), from: Math.min(had.from, s.characterStartIndex), to: Math.max(had.to, s.characterEndIndex) }
       : { start: s.startTimeSeconds, end: s.endTimeSeconds, from: s.characterStartIndex, to: s.characterEndIndex });
   }
+  // Each line found by its own text in the recording's characters (lineSpans): a line ElevenLabs
+  // folded into the turn before (the same voice twice running) still gets its own span. Its turn's
+  // span where its text can't be found.
+  const al = res.alignment;
+  const own = al?.characters?.length ? lineSpans(lines.map(l => l.text), al.characters, al.characterStartTimesSeconds, al.characterEndTimesSeconds) : [];
+  for (const [i, sp] of own.entries()) if (sp) spans.set(i, sp);
   const segments: { line: number; start: number; end: number; words?: number[] }[] = lines.map((_, i) => {
     const sp = spans.get(i);
     return { line: i, start: sp?.start ?? -1, end: sp?.end ?? -1 };
   });
   // When each word starts, from the characters' own timings, so the transcript lights each word
   // as it's said (Player). Where they can't be matched up, the player estimates instead.
-  const al = res.alignment;
   if (al?.characters?.length) {
     segments.forEach((seg, i) => {
       const sp = spans.get(i);

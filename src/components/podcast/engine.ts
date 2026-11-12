@@ -19,7 +19,7 @@
  * preference (lib/prefs music) only for those: the voices are what they pressed play for.
  */
 
-import { estimateWordStarts, plainLine, spokenWords } from '@/lib/podcastText';
+import { estimateWordStarts, plainLine, repairTimings, spokenWords } from '@/lib/podcastText';
 import type { Episode } from '@/lib/ai/podcast';
 
 export interface Position { chapter: number; line: number }
@@ -456,7 +456,9 @@ export class PodcastEngine {
           // for too many). The episode is all-or-nothing, so the browser reads all of it.
           if (r.status === 429) { this.recorded = false; return null; }
           if (!r.ok) return null;
-          const segments = JSON.parse(r.headers.get('x-lp-segments') || '[]') as Timing[];
+          // Older recordings can have a line with no time of its own (folded into the line before):
+          // shared out, so no line is skipped (lib/podcastText repairTimings).
+          const segments = repairTimings(JSON.parse(r.headers.get('x-lp-segments') || '[]') as Timing[], this.ep.chapters[c]?.lines.map(l => l.text) ?? []);
           const b = await r.blob();
           return b.size && segments.length ? { url: URL.createObjectURL(b), segments } : null;
         })
