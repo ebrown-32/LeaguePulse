@@ -82,7 +82,14 @@ function recreatedReel(d: LiveMatchup, count: number): { play: LivePlay; name: s
     }));
 }
 
-export function useLiveMatchup(o: { host: string | null; guest: string | null; week?: number; enabled: boolean; polling: boolean; highlights?: boolean }) {
+export function useLiveMatchup(o: {
+  host: string | null; guest: string | null; week?: number; enabled: boolean; polling: boolean; highlights?: boolean;
+  /**
+   * Highlights for a show (The Desk Weekly): the reel waits, loaded and still, while `hold` is on;
+   * let go, it plays (`single`: just the week's biggest play, once). The show times its own cut.
+   */
+  hold?: boolean; single?: boolean;
+}) {
   const [match, setMatch] = useState<LiveMatchup | null>(null);
   const [reel, setReel] = useState<{ play: LivePlay; name: string } | null>(null);
   const queue = useRef<{ play: LivePlay; name: string }[]>([]);
@@ -90,6 +97,13 @@ export function useLiveMatchup(o: { host: string | null; guest: string | null; w
   const seen = useRef<Set<string> | null>(null);
   const demo = useRef(false);
   const reelOf = useRef<{ play: LivePlay; name: string }[]>([]);
+  const started = useRef(false);
+  // Let go: the reel rolls from its first frame. Held again: stopped, ready for the next cut.
+  useEffect(() => {
+    if (!o.highlights) return;
+    if (o.hold) { started.current = false; queue.current = []; setReel(null); return; }
+    if (!started.current && reelOf.current.length) { started.current = true; queue.current = [...reelOf.current]; setQueued(n => n + 1); }
+  }, [o.hold, o.highlights]);
   useEffect(() => { demo.current = liveDemoRequested(); }, []);
 
   useEffect(() => {
@@ -108,8 +122,9 @@ export function useLiveMatchup(o: { host: string | null; guest: string | null; w
         if (o.highlights && seen.current === null) {
           seen.current = new Set();
           reelOf.current = highlightReel(d);
-          queue.current = [...reelOf.current];
-          setQueued(n => n + 1);
+          // For a show: the biggest only, and only once it cuts here.
+          if (o.single) reelOf.current = reelOf.current.slice(-1);
+          if (!o.hold) { queue.current = [...reelOf.current]; started.current = true; setQueued(n => n + 1); }
         }
         // The first look is the record so far; anything after it is news.
         else if (seen.current === null) seen.current = new Set(d.plays.map(p => p.id));
@@ -137,13 +152,15 @@ export function useLiveMatchup(o: { host: string | null; guest: string | null; w
 
   // One replay at a time, each for its time on stage. Highlights go round again after a breath.
   useEffect(() => {
-    if (reel) return;
+    if (reel || o.hold) return;
     if (queue.current.length) { setReel(queue.current.shift()!); return; }
+    // A show's single play doesn't go round again.
+    if (o.single) return;
     if (o.highlights && reelOf.current.length) {
       const t = setTimeout(() => { queue.current = [...reelOf.current]; setQueued(n => n + 1); }, 1500);
       return () => clearTimeout(t);
     }
-  }, [reel, queued, o.highlights]);
+  }, [reel, queued, o.highlights, o.hold, o.single]);
   useEffect(() => {
     if (!reel) return;
     const t = setTimeout(() => setReel(null), reel.play.scoring ? TOUCHDOWN_MS : REEL_MS);

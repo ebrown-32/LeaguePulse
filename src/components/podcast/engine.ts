@@ -373,7 +373,7 @@ export class PodcastEngine {
       // If the system has the audio held (a call, another app), the show waits for a tap rather
       // than pretending to play.
       window.setTimeout(() => {
-        if (my === this.token && this.state.playing && ctx.state !== 'running') { this.stopVoice(true); this.set({ playing: false }); }
+        if (my === this.token && this.state.playing && ctx.state !== 'running') { this.stopVoice(true); this.pause(); }
       }, 1500);
     });
   }
@@ -621,8 +621,10 @@ export class PodcastEngine {
    */
   private unlockPlayback() {
     if (typeof window === 'undefined') return;
-    // Until a play on the element has gone through, every tap tries the unlock again.
-    if (this.recorded && !this.unlocked && (!this.audio || this.audio.paused)) {
+    // Until a play on the element has gone through, every tap tries the unlock again. Not on Apple
+    // devices: their chapters play through Web Audio, and an element starting and ending a moment
+    // later (the silence) ends iOS's audio session with it, cutting the theme off mid-note.
+    if (this.recorded && !appleAudio() && !this.unlocked && (!this.audio || this.audio.paused)) {
       const a = this.audio ?? (this.audio = new Audio());
       a.preload = 'auto';
       this.loadedChapter = -1;
@@ -648,7 +650,20 @@ export class PodcastEngine {
     if (session && session.type !== 'playback') { try { session.type = 'playback'; } catch { /* older Safari */ } }
     if (!this.ctx) {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (Ctx) this.ctx = new Ctx();
+      if (Ctx) {
+        this.ctx = new Ctx();
+        // iOS can take the audio away mid-show (a call, another app, the session ending): try to
+        // carry on by itself; if it can't within a moment, pause cleanly at the line, so one tap
+        // picks it up again rather than a play button that shows playing over silence.
+        const c = this.ctx;
+        c.onstatechange = () => {
+          if (c !== this.ctx || c.state === 'running' || !this.state.playing) return;
+          c.resume().catch(() => {});
+          window.setTimeout(() => {
+            if (c === this.ctx && c.state !== 'running' && this.state.playing) { this.stopVoice(true); this.pause(); }
+          }, 1200);
+        };
+      }
     }
     // Inside the tap: some browsers make a new context suspended until it's asked to run.
     this.ctx?.resume().catch(() => {});
