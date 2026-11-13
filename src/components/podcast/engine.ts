@@ -355,7 +355,7 @@ export class PodcastEngine {
       src.onended = () => { if (my === this.token && this.voice === src) { this.voice = null; this.misses = 0; this.nextChapter(my); } };
 
       const tick = () => {
-        if (my !== this.token) return;
+        if (my !== this.token || this.state.chapter !== c) return;
         const t = this.voiceTime();
         let i = 0;
         for (let k = 0; k < segs.length; k++) if (segs[k].start <= t + LEAD_S) i = k;
@@ -381,6 +381,10 @@ export class PodcastEngine {
   /** On to the next chapter (with its stinger, and the crowd if the game calls for it), or the end. */
   private nextChapter(my: number) {
     if (my !== this.token) return;
+    // The finished chapter's follow-along stops here. Left running through the sting's pause, it
+    // read its own last line into the next chapter's state, which then started from that line,
+    // every line before it unsaid.
+    cancelAnimationFrame(this.clock);
     const { chapter } = this.state;
     if (chapter < this.ep.chapters.length - 1) {
       this.sting('turn');
@@ -520,7 +524,7 @@ export class PodcastEngine {
       a.onended = () => { if (my === this.token) { this.misses = 0; this.nextChapter(my); } };
       a.onerror = () => { if (my === this.token) { this.loadedChapter = -1; this.lineMode.add(c); this.speakRecorded(my); } };
       const tick = () => {
-        if (my !== this.token) return;
+        if (my !== this.token || this.state.chapter !== c) return;
         const t = this.audioTime(a);
         let i = 0;
         for (let k = 0; k < segs.length; k++) if (segs[k].start <= t + LEAD_S) i = k;
