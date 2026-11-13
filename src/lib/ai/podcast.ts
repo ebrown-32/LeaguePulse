@@ -423,7 +423,26 @@ async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>,
     })).filter(c => c.lines.length),
   };
   await saveEpisode(ep);
+  await recordInBackground(ep);
   return ep;
+}
+
+/**
+ * The episode's chapters recorded straight after it's written, in the background (podcastRecord),
+ * so the first listener hears the panel at once rather than waiting on each chapter. Only with
+ * recorded voices set up, and only where there's a request to finish after (a route).
+ */
+async function recordInBackground(ep: Episode): Promise<void> {
+  if (!process.env.ELEVENLABS_API_KEY?.trim()) return;
+  try {
+    const [{ after }, { currentTenant, runAsTenant }, { recordEpisode }] = await Promise.all([
+      import('next/server'), import('@/lib/tenant/context'), import('./podcastRecord'),
+    ]);
+    const tenant = await currentTenant().catch(() => null);
+    after(() => runAsTenant(tenant, () => recordEpisode(ep)));
+  } catch (err) {
+    console.warn('[podcast] could not record in the background', err instanceof Error ? err.message : err);
+  }
 }
 
 /**

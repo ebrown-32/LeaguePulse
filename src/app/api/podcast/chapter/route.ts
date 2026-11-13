@@ -18,8 +18,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { castVoices, elevenLabsKey, episodeCharacters, payForEpisode, performChapter, voicePool } from '@/lib/ai/elevenlabs';
-import { claimChapter, RECORDING, releaseChapter, storeChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
+import { elevenLabsKey } from '@/lib/ai/elevenlabs';
+import { claimChapter, RECORDING, releaseChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
+import { recordChapter, UnpaidError } from '@/lib/ai/podcastRecord';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
 
 export const dynamic = 'force-dynamic';
@@ -29,8 +30,9 @@ const EP_ID = /^[A-Za-z0-9-]{1,80}$/;
 const INDEX = /^(0|[1-9]\d?)$/;
 const KEEP = { 'cache-control': 'public, max-age=31536000, s-maxage=31536000, immutable' };
 
-const refuse = (error: string, status: number) =>
-  NextResponse.json({ error }, { status, headers: { 'cache-control': 'no-store' } });
+/** `reason`, for the player: 'used_up' (the month's voices: read it in the browser) or 'busy' (try again shortly). */
+const refuse = (error: string, status: number, reason?: 'used_up' | 'busy') =>
+  NextResponse.json({ error, reason }, { status, headers: { 'cache-control': 'no-store' } });
 
 const audioResponse = (body: BodyInit, segments: unknown) => new NextResponse(body, {
   headers: { 'content-type': 'audio/mpeg', 'x-content-type-options': 'nosniff', 'x-lp-segments': JSON.stringify(segments), ...KEEP },
@@ -67,24 +69,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    if (!(await rateLimit('lp_rl_podcast_chapter:', clientIp(req), 24, 10 * 60_000)).ok) return refuse('Slow down.', 429);
-
-    const voices = castVoices(ep.hosts, await voicePool());
-    const lines = chapter.lines.map(l => ({ voiceId: voices[l.host] || voices[0], text: l.text }));
-    if (lines.some(l => !l.voiceId)) return refuse('No ElevenLabs voices to read with.', 502);
-
-    // The whole episode is paid for with its first recording, or none of it is recorded.
-    if (!(await payForEpisode(epId, episodeCharacters(ep)).catch(() => true))) return refuse('This month\'s recorded voices are used up.', 429);
-
-    const before = ep.chapters[c - 1]?.lines.at(-1)?.text;
-    const after = ep.chapters[c + 1]?.lines[0]?.text;
-    const { audio, segments } = await performChapter(lines, { previous: before, next: after });
-
-    await storeChapter(epId, c, audio, segments).catch(err => {
-      console.error('[api/podcast/chapter] could not store', err instanceof Error ? err.message : err);
-    });
+    if (!(await rateLimit('lp_rl_podcast_chapter:', clientIp(req), 24, 10 * 60_000)).ok) return refuse('Slow down.', 429, 'busy');
+    // Recorded (tried again if ElevenLabs is busy), stored, and paid for as a whole episode (podcastRecord).
+    const { audio, segments } = await recordChapter(ep, c);
     return audioResponse(new Uint8Array(audio), segments);
   } catch (err) {
+    if (err instanceof UnpaidError) return refuse(err.message, 429, 'used_up');
     const e = err as { statusCode?: number; message?: string };
     console.error('[api/podcast/chapter]', e.statusCode ?? '', String(e.message ?? err).slice(0, 300));
     return refuse('The chapter could not be recorded.', 502);

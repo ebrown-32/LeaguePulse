@@ -444,18 +444,22 @@ export class PodcastEngine {
     if (!got) {
       // `v`: the recording version the server records at (lib/ai/podcastAudio RECORDING).
       const url = `/api/podcast/chapter?ep=${encodeURIComponent(this.ep.id)}&c=${c}&v=${RECORDING}`;
-      // 503: someone else's play is recording this chapter right now. It's worth waiting for
-      // rather than recording the chapter again line by line.
-      const ask = async (tries: number): Promise<Response> => {
-        const r = await fetch(url);
-        if (r.status === 503 && tries > 0) { await new Promise(res => setTimeout(res, 3000)); return ask(tries - 1); }
+      // The recorded voices are the show: a chapter that's still being recorded (503), that the
+      // server couldn't record just then (5xx), or that it asked to wait for (429 'busy'), is asked
+      // for again a few seconds later, the player showing the panel taking their seats, rather than
+      // dropping to anything less. Only the month's voices being used up (429 'used_up') ends it.
+      const ask = async (waits: number[]): Promise<Response> => {
+        const r = await fetch(url).catch(() => null);
+        const again = !r || r.status === 503 || r.status >= 500 || (r.status === 429 && (await r.clone().json().catch(() => ({})))?.reason !== 'used_up');
+        if (again && waits.length) { await new Promise(res => setTimeout(res, waits[0])); return ask(waits.slice(1)); }
+        if (!r) throw new Error('offline');
         return r;
       };
-      got = ask(2)
+      got = ask([3000, 6000, 9000])
         .then(async r => {
-          // 429: the league's recorded voices are used up for the month (or this visitor asked
-          // for too many). The episode is all-or-nothing, so the browser reads all of it.
-          if (r.status === 429) { this.recorded = false; return null; }
+          // The league's recorded voices are used up for the month: the episode is all-or-nothing,
+          // so the browser reads all of it.
+          if (r.status === 429 && (await r.clone().json().catch(() => ({})))?.reason === 'used_up') { this.recorded = false; return null; }
           if (!r.ok) return null;
           // Older recordings can have a line with no time of its own (folded into the line before):
           // shared out, so no line is skipped (lib/podcastText repairTimings).
