@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Sparkles, Tag, Ticket, Trophy, X } from '@/components/icons';
+import { AlertTriangle, BarChart3, CalendarDays, Flame, Layers, Maximize2, Megaphone, Receipt, Rocket, Scroll, Sparkles, Verified, Tag, Ticket, Trophy, X } from '@/components/icons';
 import { Section, Sections } from '../Section';
 import { StadiumMark } from '@/components/platform/marks';
 import { cash, projectGame, type Prices } from '@/lib/tycoon/economy';
@@ -67,7 +67,7 @@ function Counter({ value, suffix = '', format }: { value: number; suffix?: strin
 
 const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   start: CalendarDays, title: Trophy, build: Layers, sellout: Ticket, record: Megaphone, unrest: AlertTriangle, streak: Flame, milestone: Rocket, prices: Tag,
-  covered: Receipt, promo: Sparkles,
+  covered: Receipt, promo: Sparkles, pickem: Verified,
 };
 
 /**

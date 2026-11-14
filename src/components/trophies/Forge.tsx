@@ -717,3 +717,14 @@ export function TrophyPiece({ league, champions, height = 340 }: { league: strin
   const style = useTrophyStyle();
   return <Piece height={height} dark>{still => <LeagueTrophy league={league} champions={champions} accent={accent} still={still} style={style} />}</Piece>;
 }
+
+/** Pick'em's own trophy: a silver cup on marble, a crystal orb (the all-seeing kind), every winner on its base. */
+const PICKEM_CUP: TrophyStyle = { ...DEFAULT_TROPHY, name: 'The Pick\'em Cup', metal: 'silver', base: 'marble', crown: 'orb', handles: 'loops', glow: '#7CC4FF' };
+export function PickemCup({ league, champions, height = 300 }: { league: string; champions: Champion[]; height?: number }) {
+  const accent = useAccent() ?? '#3BE0B0';
+  return (
+    <Showcase height={height} dark label="The Pick'em Cup">
+      {still => <LeagueTrophy league={league} champions={champions} accent={accent} still={still} style={PICKEM_CUP} />}
+    </Showcase>
+  );
+}

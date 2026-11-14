@@ -417,3 +417,18 @@ legal entity and governing law, before charging real customers.
   can be removed with `deleteTenant`; its `t:<slug>:` keys are left).
 - **Custom domains** per league, such as moving your own league onto the platform.
 - **A platform admin page** (today: the operator leagues endpoint).
+
+## The site soundtrack
+
+Every league site (hosted) can play a soundtrack: a music button in the side rail (and in the
+top bar on a phone) that plays the tracks in `public/soundtrack/`, in file-name order, and keeps
+playing from page to page. To add or change the music, put the files in that folder and deploy.
+
+- Formats: mp3 (best supported), m4a/aac, ogg/opus, wav, webm.
+- Order and titles come from the file names: `01 - Kickoff.mp3` plays first, titled "Kickoff".
+- With no files in the folder, no button shows.
+- It starts on a tap (browsers allow sound no other way), remembers a visitor who had it on and
+  picks up on their next tap, shows on a phone's lock screen, and makes way while The Desk Weekly,
+  a trophy's beat or League Wrapped's music is playing.
+- Use only music you have the rights to stream publicly: these files are served to every visitor.
+

@@ -31,8 +31,10 @@ import {
   ArrowLeftRight,
   Target,
   Star,
+  Verified,
 } from '@/components/icons';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { SoundtrackButton } from './Soundtrack';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
 import PoweredBy from '@/components/ui/PoweredBy';
@@ -70,6 +72,7 @@ const MORE_NAV: NavItem[] = [
   { name: 'Home',         href: '/',             icon: LayoutDashboard },
   { name: 'Game Day',     href: '/live',         icon: Radio        },
   { name: 'Matchups',     href: '/matchups',     icon: Swords       },
+  { name: 'Pick\'em',      href: '/pickem',       icon: Verified     },
   { name: 'Weekly Report', href: '/report',      icon: ClipboardCheck },
   { name: 'Rivalries',    href: '/rivalries',    icon: Sword        },
   { name: 'Trade Finder', href: '/trades',       icon: ArrowLeftRight },
@@ -111,6 +114,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { name: 'Home',      href: '/',          icon: LayoutDashboard },
       { name: 'Game Day',  href: '/live',      icon: Radio           },
       { name: 'Matchups',  href: '/matchups',  icon: Swords          },
+      { name: 'Pick\'em',   href: '/pickem',    icon: Verified        },
       { name: 'Standings', href: '/standings', icon: ListOrdered     },
       // The report is about the week just played, so it belongs with the
       // other things you check on a Tuesday rather than with the deep dives.
@@ -297,6 +301,7 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
             >
               <Search className="h-4 w-4" />
             </button>
+            <SoundtrackButton place="header" />
             <ThemeToggle />
             <button
               onClick={() => setIsOpen(!isOpen)}

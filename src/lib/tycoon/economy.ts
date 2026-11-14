@@ -101,7 +101,10 @@ export interface GameReport {
   promo?: { id: PromoId; score: number };
 }
 
-export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title' | 'covered' | 'promo'; title: string; detail: string }
+export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title' | 'covered' | 'promo' | 'pickem'; title: string; detail: string }
+
+/** Money the franchise earns off the field (Pick'em winnings, lib/pickem): into the bank on the day, with its line in the story. */
+export interface Earning { at: number; vc: number; title: string; detail: string }
 
 export interface Day { at: number; vc: number; interest: number; merch: number; sponsors: number; upkeep: number }
 
@@ -360,6 +363,8 @@ export function simulate(o: {
    * see lib/demo/site). After the old front office's off-season, which keeps only a reserve.
    */
   grant?: { at: number; vc: number };
+  /** Off-field earnings (Pick'em), each on its day. */
+  earnings?: Earning[];
 }): EconomyState {
   const s = startingState();
   let granted = !o.grant;
@@ -371,6 +376,8 @@ export function simulate(o: {
   const decisions = [...o.decisions].sort((a, b) => a.at - b.at);
   let gi = 0, di = 0, streak = 0, best = 0, milestone = 1_000, season = 0, seasonStartVc = s.vc;
   const waiting: Decision[] = [];
+  const earnings = [...(o.earnings ?? [])].sort((a, b) => a.at - b.at);
+  let ei = 0;
 
   for (let day = o.start; day <= o.now; day += DAY) {
     const end = Math.min(day + DAY, o.now + 1);
@@ -378,6 +385,13 @@ export function simulate(o: {
       granted = true;
       move(s, o.grant.vc, o.grant.at);
       tell(s, { at: o.grant.at, kind: 'start', title: 'Deep pockets', detail: `The owner opened the books with ${cash(o.grant.vc)} to build something special.` });
+    }
+    // Earned off the field today.
+    while (ei < earnings.length && earnings[ei].at < end) {
+      const e = earnings[ei++];
+      if (e.vc <= 0) continue;
+      move(s, e.vc, e.at);
+      tell(s, { at: e.at, kind: 'pickem', title: e.title, detail: e.detail });
     }
     // Decisions made today, in order.
     while (di < decisions.length && decisions[di].at < end) {

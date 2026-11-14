@@ -49,6 +49,7 @@ import { detectQuality, type Quality } from './quality';
 import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
 import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
 import FanCluster, { type FanSpot } from './FanCluster';
+import { RivalryDress, ShameFlyover, useDressing } from './Dressing';
 
 export type { RosterPlayer as SidelinePlayer } from './RosterSideline';
 import type { RosterPlayer as SidelinePlayer } from './RosterSideline';
@@ -1337,6 +1338,9 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
     flash: live.celebrate ? (live.celebrate.td ? 'TOUCHDOWN!' : 'BIG PLAY!') : null,
   } : null), [live]);
 
+  // Dressed for the week: a rivalry game coming, or a rivalry lost (lib/rivalryWeek). Not in a photo.
+  const dressing = useDressing(franchiseId, !photo);
+
   // The roster on the home sideline, as Watch Live has a team waiting there; up to the wall in front of the stands.
   const sidelineZ = useMemo(() => Math.abs(bp.outline.around(Math.PI / 2, bp.inner)[1]), [bp]);
 
@@ -1383,7 +1387,7 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
       {bp.roof?.kind === 'gable' && <Rise key={`roof${build}`} delay={0.3}><Gables bp={bp} stands={bp.roof.stands} lift={bp.roof.lift} p={p} lightsOn={lightsOn} /></Rise>}
       {bp.roof?.kind === 'membrane' && <Rise key={`roof${build}`} delay={0.3}><Membrane bp={bp} moving={bp.roof.moving} closed={closed} p={p} lightsOn={lightsOn} /></Rise>}
 
-      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={look.endZoneText || team} look={look} score={liveScore} /></Rise>}
+      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={dressing?.rivalry ? 'Rivalry week' : look.endZoneText || team} look={look} score={liveScore} /></Rise>}
       {live && live.match.phase !== 'upcoming' && <LiveField live={live} />}
       {!live && !photo && sideline && sideline.length > 0 && <RosterSideline players={sideline} color={color} sidelineZ={sidelineZ} />}
       <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
@@ -1408,6 +1412,8 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
       )}
       <PlazaCrowd bp={bp} plan={layout.plan} fill={lots} colors={crowdColors} />
       {(!photo || shot) && !view?.broadcast && <FocusRig shot={shot} still={photo} />}
+      {dressing?.rivalry && <RivalryDress bp={bp} home={color} rival={dressing.rivalry.opponentColor} opponent={dressing.rivalry.opponent} record={dressing.rivalry.record} />}
+      {dressing?.shame && <ShameFlyover bp={bp} by={dressing.shame.by} color={dressing.shame.byColor} />}
       {photo && fans && <FanCluster at={fans} team={color} accent={p.accent} visitors={visitors} teamName={team} week={week} />}
       {/* Watching a game, the cannons only go off for a score. */}
       {f.atmosphere >= 3 && (live

@@ -35,7 +35,12 @@ export type Visual =
   | { type: 'matchup'; week: number; home: VisualTeam; away: VisualTeam; margin: number }
   | { type: 'team'; team: string; manager: string; record: string; rank: number; pointsFor: number; top: { name: string; position: string; points: number | null }[] }
   | { type: 'standings'; rows: { rank: number; team: string; record: string; pointsFor: number }[] }
-  | { type: 'move'; kind: 'trade' | 'waiver' | 'free_agent'; week: number; summary: string };
+  | { type: 'move'; kind: 'trade' | 'waiver' | 'free_agent'; week: number; summary: string }
+  /** Next week's grudge match (lib/rivalryWeek), for the trailer that opens the show. */
+  | { type: 'rivalry'; week: number; a: RivalTeam; b: RivalTeam; label: string; reasons: string[]; last: { season: string; week: number; aScore: number; bScore: number } | null };
+
+/** A side of a rivalry, with its all-time wins in the series and its colour. */
+export interface RivalTeam { team: string; userId: string; avatar: string; color: string; wins: number }
 
 /** A side of a game: `userId` and `avatar` (the manager) find its stadium for the highlights. */
 export interface VisualTeam { team: string; points: number; userId?: string; avatar?: string }
@@ -43,7 +48,7 @@ export interface VisualTeam { team: string; points: number; userId?: string; ava
 export interface Host { id: string; name: string; handle: string; avatar: string; accent: string; voiceId?: string }
 /** `host`: which of the episode's hosts says it (an index into Episode.hosts). */
 export interface Line { host: number; text: string }
-export type ChapterKind = 'open' | 'games' | 'standings' | 'move' | 'take' | 'close';
+export type ChapterKind = 'rivalry' | 'open' | 'games' | 'standings' | 'move' | 'take' | 'close';
 export interface Chapter { title: string; kind: ChapterKind; visual: Visual | null; lines: Line[] }
 export interface Episode {
   id: string;
@@ -96,10 +101,10 @@ const EPISODE_MAX = 1_900;
 const scriptCharacters = (s: Script) => s.chapters.reduce((n, c) => n + c.lines.reduce((m, l) => m + keepDeliveryTags(l.text).length, 0), 0);
 
 /** The script's shape, for a panel of `n` hosts. */
-function scriptSchema(n: number) {
+function scriptSchema(n: number, rivalry = false) {
   const chapter = z.object({
     title: z.string().describe('Two to five words, punchy, like a segment name on a sports show'),
-    kind: z.enum(['open', 'games', 'standings', 'move', 'take', 'close']),
+    kind: z.enum(rivalry ? ['rivalry', 'open', 'games', 'standings', 'move', 'take', 'close'] : ['open', 'games', 'standings', 'move', 'take', 'close']),
     ref: z.string().describe('What this chapter shows on screen: one of the REFERENCE ids given (e.g. "matchup:2", "team:3", "move:0", "standings"), or "none"'),
     lines: z.array(z.object({
       host: z.number().int().min(0).max(n - 1).describe(`Which host speaks: 0 to ${n - 1}, as numbered in THE PANEL`),
@@ -109,13 +114,13 @@ function scriptSchema(n: number) {
   return z.object({
     title: z.string().describe('The episode title: a headline for the week, under eight words, ideally funny'),
     teaser: z.string().describe('One sentence that makes a manager press play'),
-    chapters: z.array(chapter).min(3).max(4),
+    chapters: z.array(chapter).min(3).max(rivalry ? 5 : 4),
   });
 }
 type Script = z.infer<ReturnType<typeof scriptSchema>>;
 
 /** The things a chapter may show, numbered for the model, filled in here from the record. */
-function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: BriefMove[]): { text: string; resolve: (ref: string) => Visual | null } {
+function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: BriefMove[], rivalry: Extract<Visual, { type: 'rivalry' }> | null = null): { text: string; resolve: (ref: string) => Visual | null } {
   const teams = [...teamsIn].sort((x, y) => x.rank - y.rank);
   const moves = movesIn.slice(0, 6);
   const text = [
@@ -124,6 +129,7 @@ function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: Bri
     ...teams.map((t, i) => `team:${i} = ${t.teamName} (${t.manager}), ${t.record}, rank ${t.rank}`),
     ...moves.map((m, i) => `move:${i} = ${m.type}, week ${m.week}: ${m.summary}`),
     'standings = the table, top to bottom',
+    ...(rivalry ? [`rivalry = next week's grudge match, ${rivalry.a.team} vs ${rivalry.b.team}`] : []),
   ].join('\n');
   const resolve = (ref: string): Visual | null => {
     const [kind, n] = ref.trim().split(':');
@@ -137,6 +143,7 @@ function references(games: BriefMatchup[], teamsIn: SnapshotTeam[], movesIn: Bri
       return { type: 'team', team: t.teamName, manager: t.manager, record: t.record, rank: t.rank, pointsFor: t.pointsFor, top: t.topPlayers.slice(0, 3) };
     }
     if (kind === 'move' && moves[i]) return { type: 'move', kind: moves[i].type, week: moves[i].week, summary: moves[i].summary };
+    if (kind === 'rivalry' && rivalry) return rivalry;
     if (kind === 'standings') return { type: 'standings', rows: teams.slice(0, 6).map(t => ({ rank: t.rank, team: t.teamName, record: t.record, pointsFor: t.pointsFor })) };
     return null;
   };
@@ -154,13 +161,13 @@ function pickHosts(people: Personality[]): Personality[] | null {
   return pool.slice(0, Math.min(pool.length, Math.random() < 0.5 ? 3 : 4));
 }
 
-interface Brief { context: string; refs: string; focus: string }
+interface Brief { context: string; refs: string; focus: string; rivalry: boolean }
 
-async function writeScript(hosts: Personality[], { context, refs, focus }: Brief, correction = ''): Promise<Script> {
+async function writeScript(hosts: Personality[], { context, refs, focus, rivalry }: Brief, correction = ''): Promise<Script> {
   const panel = hosts.map((h, i) => `${i}. ${h.name} (${h.handle}), ${(h.type ?? 'media') === 'fan' ? 'a fan from the group chat' : 'a Desk writer'}. Voice: ${h.voice}`).join('\n');
   const { object } = await generateObject({
     model: claude(MODEL_SMART),
-    schema: scriptSchema(hosts.length),
+    schema: scriptSchema(hosts.length, rivalry),
     schemaName: 'Episode',
     system: `${GROUNDING_RULES}
 
@@ -213,7 +220,15 @@ The shape (three or four chapters):
   - move: a trade or a pickup worth arguing about.
   - take: a hot take that splits the panel.
 - close: a sign-off in two or three quick turns, ideally landing the running gag.
-
+${rivalry ? `
+RIVALRY WEEK IS NEXT WEEK, so the episode opens with a trailer before the cold open: a first
+chapter of kind "rivalry", ref "rivalry". It's a movie trailer for next week's grudge match (NEXT
+WEEK'S RIVALRY above). One host does the deep trailer voice ("In a league... where nothing is
+forgotten..."), with [whispers] or [mock serious]; another cuts in once to hype or mock it; the
+all-time series and the last meeting are the plot. Two to four turns, under three hundred
+characters, ending on "next week". Its result doesn't exist yet: no predictions stated as fact.
+Then the cold open, as usual. The trailer counts toward the length: trim elsewhere.
+` : ''}
 WRITTEN FOR THE EAR. Short sentences. Contractions. Say numbers the way people say them
 ("one twenty-four" for 124.3 is fine, or "a hundred and twenty-four"). No lists, no
 parentheses, no emoji, no hashtags, no stage directions.
@@ -224,6 +239,9 @@ ${DELIVERY_TAGS.map(t => `[${t}]`).join(' ')}
 e.g. "[scoffs] Eighty-eight points. That's not a team, that's a cry for help."
 e.g. "So the trade itself was actually..." then "[interrupting] Don't. Do not defend that trade."
 Nothing else goes in brackets. The cues count toward the length, so don't pile them up.
+
+If the context has a PICK'EM section, somebody roasts the week's worst predictor by name, in a
+turn or two, wherever it lands best (a pile-on is fine). Keep it about their picks.
 
 Call managers by name. Every claim comes from the league context above: the
 scores, records and moves are the real ones. Each chapter's ref must point at the thing it's
@@ -362,7 +380,7 @@ export async function publishEpisode(week?: number, { admin = false }: { admin?:
   const replacing = (await listEpisodes()).some(e => e.season === brief.season && e.week === target);
   const refund = admin && replacing ? await claimRerecord() : null;
   try {
-    const ep = await writeEpisode(brief, hosts, target);
+    const ep = await writeEpisode(brief, hosts, target, latest);
     await announceEpisode(ep, hosts[0], latest);
     return ep;
   } catch (err) {
@@ -371,18 +389,31 @@ export async function publishEpisode(week?: number, { admin = false }: { admin?:
   }
 }
 
-async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>, hosts: Personality[], target: number): Promise<Episode> {
+async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>, hosts: Personality[], target: number, latest: number): Promise<Episode> {
 
   // Every episode, the latest week's included, is written from the week as it stood when it
   // finished (podcastWeek.ts), never from the live brief: that carries the week in progress, and
   // its scores and storylines leaked into last week's episode.
   const snap = await weekSnapshot(brief, target);
   if (!snap.games.length) throw new Error(`Week ${target} has no finished games on record.`);
-  const refsOf = references(snap.games, snap.table, snap.moves);
+  // Next week's grudge match, for a trailer: only on the latest week's episode (a look back is set
+  // in the past), and only when the schedule has one (lib/rivalryWeek). And the week's Pick'em.
+  const [rivalry, pickem] = await Promise.all([
+    target === latest ? rivalryVisual(target + 1) : Promise.resolve(null),
+    import('@/lib/pickem').then(m => m.pickemForDesk(target)).catch(() => null),
+  ]);
+  const refsOf = references(snap.games, snap.table, snap.moves, rivalry);
+  const rivalryText = rivalry ? [
+    `NEXT WEEK'S RIVALRY (week ${rivalry.week}: the schedule is set, the game hasn't been played): ${rivalry.a.team} vs ${rivalry.b.team}, a ${rivalry.label.toLowerCase()}.`,
+    `All-time series: ${rivalry.a.team} ${rivalry.a.wins}, ${rivalry.b.team} ${rivalry.b.wins}.`,
+    rivalry.last ? `Last meeting: ${rivalry.last.season} week ${rivalry.last.week}, ${rivalry.a.team} ${rivalry.last.aScore} to ${rivalry.b.team} ${rivalry.last.bScore}.` : '',
+    ...rivalry.reasons,
+  ].filter(Boolean).join('\n') : '';
   const ctx: Brief = {
-    context: `${GAME_STATUS_NOTE}\n\nLEAGUE CONTEXT FOR THIS EPISODE (the complete, authoritative record of week ${target}):\n\n${snap.text}`,
+    context: `${GAME_STATUS_NOTE}${rivalry ? ' The one exception: next week\'s rivalry game below, which is on the schedule, previewed but never decided.' : ''}\n\nLEAGUE CONTEXT FOR THIS EPISODE (the complete, authoritative record of week ${target}):\n\n${snap.text}${pickem ? `\n\n${pickem}` : ''}${rivalryText ? `\n\n${rivalryText}` : ''}`,
     refs: refsOf.text,
-    focus: `Write the episode for week ${target}: a recap of that week, for the managers in this league, as if it had just been played. Week ${target + 1} and anything after it doesn't exist yet.`,
+    focus: `Write the episode for week ${target}: a recap of that week, for the managers in this league, as if it had just been played. Week ${target + 1} and anything after it doesn't exist yet${rivalry ? ', apart from the rivalry trailer' : ''}.`,
+    rivalry: Boolean(rivalry),
   };
 
   // Cast while the script is written: the two don't depend on each other.
@@ -425,6 +456,19 @@ async function writeEpisode(brief: Awaited<ReturnType<typeof buildLeagueBrief>>,
   await saveEpisode(ep);
   await recordInBackground(ep);
   return ep;
+}
+
+/** Next week's biggest grudge match, as the trailer's visual; null when there isn't one. */
+async function rivalryVisual(week: number): Promise<Extract<Visual, { type: 'rivalry' }> | null> {
+  try {
+    const { rivalryFor } = await import('@/lib/rivalryWeek');
+    const g = (await rivalryFor(week))?.games[0];
+    if (!g) return null;
+    const side = (t: typeof g.a, wins: number): RivalTeam => ({ team: t.teamName, userId: t.userId, avatar: t.avatar, color: t.color, wins });
+    return { type: 'rivalry', week, a: side(g.a, g.series.aWins), b: side(g.b, g.series.bWins), label: g.label, reasons: g.reasons, last: g.last };
+  } catch {
+    return null;
+  }
 }
 
 /**

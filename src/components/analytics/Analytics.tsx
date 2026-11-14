@@ -8,6 +8,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/':             'Home',
   '/matchups':     'Matchups',
   '/rivalries':    'Rivalries',
+  '/pickem':       'Pick\'em',
   '/trades':       'Trade Finder',
   '/next-gen':     'Next Gen Stats',
   '/history':      'History',

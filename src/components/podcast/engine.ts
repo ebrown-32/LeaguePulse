@@ -21,6 +21,7 @@
 
 import { estimateWordStarts, plainLine, RECORDING, repairTimings, spokenWords } from '@/lib/podcastText';
 import type { Episode } from '@/lib/ai/podcast';
+import { audioTakeover } from '@/lib/soundtrack';
 
 export interface Position { chapter: number; line: number }
 
@@ -189,6 +190,8 @@ export class PodcastEngine {
   }
 
   play() {
+    // The site's soundtrack makes way while the show is on (lib/soundtrack).
+    audioTakeover('podcast', true);
     if (this.state.done) this.seek({ chapter: 0, line: 0 });
     this.unlockAudio();
     this.unlockPlayback();
@@ -204,6 +207,7 @@ export class PodcastEngine {
   }
 
   pause() {
+    audioTakeover('podcast', false);
     this.token++;
     this.set({ playing: false, buffering: false });
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
@@ -236,7 +240,7 @@ export class PodcastEngine {
     const ch = Math.max(0, Math.min(this.ep.chapters.length - 1, pos.chapter));
     const ln = Math.max(0, Math.min(this.ep.chapters[ch].lines.length - 1, pos.line));
     this.set({ chapter: ch, line: ln, progress: 0, char: -1, done: false });
-    if (was) { this.set({ playing: true }); this.speak(); }
+    if (was) { audioTakeover('podcast', true); this.set({ playing: true }); this.speak(); }
   }
 
   next() { const c = this.state.chapter; if (c < this.ep.chapters.length - 1) { this.sting('turn'); this.seek({ chapter: c + 1, line: 0 }); } }
@@ -395,6 +399,7 @@ export class PodcastEngine {
     }
     this.sting('close');
     this.set({ playing: false, done: true, progress: 1 });
+    audioTakeover('podcast', false);
   }
 
   private advance(my: number) {

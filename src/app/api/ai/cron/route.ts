@@ -390,6 +390,12 @@ async function runForLeague(request: Request): Promise<Response> {
 
   // The Desk Weekly: on Tuesdays, once the week is final, this week's episode (lib/ai/podcast).
   if (params.get('mode') !== 'live') {
+    // Rivalry week first: last week's settled (the loser's banner goes up) and next week's chosen,
+    // before the episode that trails it is written (lib/rivalryWeek).
+    await import('@/lib/rivalryWeek').then(m => m.rivalryNow())
+      .catch(err => console.error('[ai/cron] rivalry week', err instanceof Error ? err.message : err));
+    await import('@/lib/pickem').then(m => m.pickemTick())
+      .catch(err => console.error('[ai/cron] pickem', err instanceof Error ? err.message : err));
     await import('@/lib/ai/podcast').then(m => m.maybePublishWeekly())
       .catch(err => console.error('[ai/cron] podcast', err instanceof Error ? err.message : err));
   }

@@ -48,7 +48,7 @@ const CUT_MS = 7_500;
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const STADIUMS = ['bowl', 'cantilever', 'coliseum', 'dome', 'grandstand', 'horseshoe'];
-const KIND_LABEL: Record<string, string> = { open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
+const KIND_LABEL: Record<string, string> = { rivalry: 'Rivalry week', open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
 
 /** A seeded generator, so a league's city is the same every visit. */
 function seeded(seed: string) {
@@ -246,11 +246,14 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
   }, [staged, hlReady, cut, s.chapter, s.line]);
   // Back to the desk when the replay's done: long enough for a touchdown to land and be celebrated.
   useEffect(() => { if (!cut) return; const t = setTimeout(() => setCut(false), CUT_MS); return () => clearTimeout(t); }, [cut]);
-  // The beat, under the cut only.
+  // Rivalry week's trailer: the show opens on next week's grudge match, like a film's.
+  const rival = live && ch?.kind === 'rivalry' && v?.type === 'rivalry' ? v : null;
+  // The beat, under a cut or the trailer.
+  const beat = cut || Boolean(rival);
   useEffect(() => {
-    if (cut) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
+    if (beat) trophyBeat.start({ ctx: engine.audioContext(), volume: 0.16 });
     else trophyBeat.stop();
-  }, [cut, engine]);
+  }, [beat, engine]);
   useEffect(() => () => trophyBeat.stop(), []);
   // The room's lights follow the show: a party for the open and the sign-off, warm for a hot take.
   const lights: Lights = !live ? 'show' : ch?.kind === 'open' || ch?.kind === 'close' ? 'party' : ch?.kind === 'take' ? 'warm' : 'show';
@@ -434,6 +437,51 @@ export default function Studio({ episode, s, engine, tint, logoUrl, leagueName, 
             {narrow && h.name.length > 9 ? h.name.split(' ')[0] : h.name}
           </span>
         ))}
+
+        {/* Rivalry week: the trailer. Letterboxed, both sides squaring up, the series between them. */}
+        {rival && (
+          <div key={`rv-${s.chapter}`} className="pointer-events-none absolute inset-0 z-[24] overflow-hidden bg-black" data-trailer="1">
+            <div className="absolute inset-0" style={{ background: `radial-gradient(60% 90% at 0% 50%, ${rival.a.color}66, transparent 70%), radial-gradient(60% 90% at 100% 50%, ${rival.b.color}66, transparent 70%)` }} />
+            <div className="absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(255,255,255,0.03)_0_1px,transparent_1px_3px)]" aria-hidden />
+            {/* A slow push in, the whole chapter long. */}
+            <motion.div className="absolute inset-0 flex items-center justify-between px-[6%]" initial={{ scale: 1 }} animate={motionOn ? { scale: 1.07 } : {}} transition={{ duration: 14, ease: 'linear' }}>
+              {[rival.a, rival.b].map((t, i) => (
+                <motion.div key={t.userId} className="flex w-[30%] flex-col items-center gap-2 text-center"
+                  initial={motionOn ? { x: i ? 120 : -120, opacity: 0 } : false} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.25 + i * 0.35, duration: 0.8, ease }}>
+                  {t.avatar
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={t.avatar} alt="" className="aspect-square w-[min(110px,60%)] rounded-full object-cover" style={{ boxShadow: `0 0 0 3px ${t.color}, 0 0 50px 6px ${t.color}` }} />
+                    : <span className="aspect-square w-[min(110px,60%)] rounded-full" style={{ background: t.color, boxShadow: `0 0 50px 6px ${t.color}` }} />}
+                  <span className="line-clamp-2 font-display text-[12px] font-black uppercase leading-tight tracking-[0.04em] text-white sm:text-[17px]">{t.team}</span>
+                  <span className="lp-num text-[22px] font-black leading-none sm:text-[34px]" style={{ color: t.color, textShadow: `0 0 18px ${t.color}` }}>{t.wins}</span>
+                </motion.div>
+              ))}
+            </motion.div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <motion.span initial={motionOn ? { opacity: 0, letterSpacing: '0.6em' } : false} animate={{ opacity: 1, letterSpacing: '0.28em' }} transition={{ delay: 1.1, duration: 1.6, ease }}
+                className="text-[9px] font-bold uppercase text-white/70 sm:text-[11px]">Next week · {rival.label}</motion.span>
+              <motion.span initial={motionOn ? { opacity: 0, scale: 1.6 } : false} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.6, duration: 0.5, ease }}
+                className="lp-flicker mt-1 font-display text-[26px] font-black uppercase italic leading-none text-white sm:text-[46px]" style={{ textShadow: '0 0 30px rgba(255,255,255,0.35)' }}>
+                Rivalry<br />Week
+              </motion.span>
+              <motion.span initial={motionOn ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ delay: 2.4, duration: 0.8 }}
+                className="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/60 sm:text-[12px]">All-time {rival.a.wins} to {rival.b.wins}</motion.span>
+            </div>
+            {/* The letterbox. */}
+            <motion.div className="absolute inset-x-0 top-0 bg-black" initial={{ height: 0 }} animate={{ height: '11%' }} transition={{ duration: 0.6, ease }} />
+            <motion.div className="absolute inset-x-0 bottom-0 bg-black" initial={{ height: 0 }} animate={{ height: '11%' }} transition={{ duration: 0.6, ease }} />
+            {/* Who's narrating. */}
+            <div className="absolute bottom-[13%] right-3 flex gap-1.5">
+              {episode.hosts.map((h, i) => (
+                <div key={h.id} className="overflow-hidden rounded-md transition-all duration-300"
+                  style={{ opacity: i === speaker ? 1 : 0.35, boxShadow: i === speaker ? `0 0 0 2px ${tint(i)}` : 'none' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={h.avatar} alt={h.name} width={narrow ? 26 : 34} height={narrow ? 26 : 34} className="block bg-[#22242f] object-cover" style={{ width: narrow ? 26 : 34, height: narrow ? 26 : 34 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Highlights: the cut to the stadium, the panel in boxes, still talking. */}
         {game && staged && (
