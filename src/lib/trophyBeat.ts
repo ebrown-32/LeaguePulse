@@ -14,6 +14,7 @@
  */
 
 import { getPrefs, setPrefs } from './prefs';
+import { audioTakeover } from './soundtrack';
 
 const BPM = 140;
 const STEP = 60 / BPM / 4; // a sixteenth
@@ -43,6 +44,7 @@ class Beat {
    */
   start(o: { ctx?: AudioContext | null; volume?: number } = {}) {
     if (typeof window === 'undefined' || this.running) return;
+    audioTakeover('beat', true);
     this.volume = o.volume ?? 0.55;
     if (o.ctx && o.ctx !== this.ctx) { this.build(o.ctx); this.owned = false; }
     // Its own again after playing under the show.
@@ -75,6 +77,7 @@ class Beat {
   }
 
   stop() {
+    audioTakeover('beat', false);
     const c = this.ctx;
     if (!c || !this.running) return;
     this.running = false;

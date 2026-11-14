@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (kind === 'demo') {
     return [
       at('/', 0.9, 'daily'), at('/history', 0.7), at('/trades', 0.7, 'daily'), at('/desk', 0.7, 'daily'),
-      at('/franchises', 0.6), at('/matchups', 0.6, 'daily'), at('/standings', 0.6, 'daily'), at('/rivalries', 0.5),
+      at('/franchises', 0.6), at('/matchups', 0.6, 'daily'), at('/standings', 0.6, 'daily'), at('/rivalries', 0.5), at('/pickem', 0.5, 'daily'),
       at('/analytics', 0.5), at('/next-gen', 0.5), at('/drafts', 0.4), at('/transactions', 0.4, 'daily'),
     ];
   }

@@ -2,6 +2,7 @@
 import { PageLayout } from '@/components/layout/PageLayout';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import RivalryView from './RivalryView';
+import RivalryWeekBanner from './RivalryWeekBanner';
 import { fetchRivalriesData } from '@/lib/rivalries';
 import type { RivalriesResponse } from '@/app/api/rivalries/route';
 import { leagueConfigured } from '@/config/league';
@@ -41,6 +42,7 @@ export default async function RivalriesPage() {
       title="Rivalry Tracker"
       subtitle="All-time head-to-head records across every season: regular season, playoff and consolation games. Open a rivalry to see the split."
     >
+      <RivalryWeekBanner />
       <RivalryView data={data} />
     </PageLayout>
   );

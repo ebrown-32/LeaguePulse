@@ -26,7 +26,7 @@ import { PodcastEngine, type EngineState } from './engine';
 import { plainLine, spokenWords } from '@/lib/podcastText';
 
 const ease = [0.22, 1, 0.36, 1] as const;
-const KIND_LABEL: Record<string, string> = { open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
+const KIND_LABEL: Record<string, string> = { rivalry: 'Rivalry week', open: 'Cold open', games: 'The games', standings: 'The table', move: 'The move', take: 'Hot take', close: 'Sign-off' };
 /**
  * Each host's colour, for their voice ring, their dot in the transcript and the room's glow. The
  * first is the league's own primary colour; the others sit beside it and read on light and dark.
@@ -119,6 +119,34 @@ function VisualCard({ v }: { v: Visual }) {
             </motion.li>
           ))}
         </ol>
+      </div>
+    );
+  }
+  if (v.type === 'rivalry') {
+    const total = Math.max(1, v.a.wins + v.b.wins);
+    return (
+      <div className="w-full">
+        <p className={LABEL}>Week {v.week} · {v.label}</p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          {[v.a, v.b].map((t, i) => (
+            <motion.div key={t.userId} initial={{ opacity: 0, x: i ? 24 : -24 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1, duration: 0.55, ease }}
+              className={cn('flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center', i && 'order-3')}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {t.avatar ? <img src={t.avatar} alt="" className="h-14 w-14 rounded-full object-cover" style={{ boxShadow: `0 0 0 3px ${t.color}` }} />
+                : <span className="h-14 w-14 rounded-full" style={{ background: t.color }} />}
+              <span className="line-clamp-2 text-[13px] font-bold leading-tight text-foreground">{t.team}</span>
+              <span className="lp-num text-[26px] font-black leading-none" style={{ color: t.color }}>{t.wins}</span>
+            </motion.div>
+          ))}
+          <motion.span initial={{ scale: 2.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.45, type: 'spring', stiffness: 260, damping: 14 }}
+            className="order-2 font-display text-[22px] font-black italic text-muted-foreground">VS</motion.span>
+        </div>
+        <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+          <motion.span initial={{ width: 0 }} animate={{ width: `${(v.a.wins / total) * 100}%` }} transition={{ delay: 0.5, duration: 0.8, ease }} style={{ background: v.a.color }} />
+          <motion.span initial={{ width: 0 }} animate={{ width: `${(v.b.wins / total) * 100}%` }} transition={{ delay: 0.5, duration: 0.8, ease }} className="ml-auto" style={{ background: v.b.color }} />
+        </div>
+        <p className="mt-1.5 text-center text-[11.5px] font-semibold text-muted-foreground">All-time series</p>
+        {v.last && <p className="mt-2 text-center text-[12.5px] text-foreground/80">Last time, {v.last.season} week {v.last.week}: <span className="lp-num font-bold">{v.last.aScore.toFixed(1)}</span> to <span className="lp-num font-bold">{v.last.bScore.toFixed(1)}</span></p>}
       </div>
     );
   }

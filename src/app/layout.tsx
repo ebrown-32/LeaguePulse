@@ -28,6 +28,8 @@ import NavMemory from '@/components/layout/NavMemory';
 import SetupBar from '@/components/layout/SetupBar';
 import DemoBar from '@/components/platform/DemoBar';
 import FeedbackProvider from '@/components/layout/FeedbackProvider';
+import { SoundtrackTracks } from '@/components/layout/Soundtrack';
+import { soundtrackTracks } from '@/lib/soundtrackFiles';
 
 // Bundled with the app (src/fonts, OFL), not fetched from Google Fonts at build time: a Google
 // Fonts hiccup on the build machine used to fail the whole deploy.
@@ -219,6 +221,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <RouteProgress />
         <ThemeInjector />
         <NavMemory />
+        {/* The site's soundtrack (hosted): the tracks in public/soundtrack, for the players in the nav. */}
+        <SoundtrackTracks tracks={await soundtrackTracks()} />
         {theme.background === 'particles' && <ParticleField />}
         {/* The demo opens dark (lib/demo): its theme is made for the night. */}
         <ThemeProvider defaultTheme={demoProduct ? 'dark' : 'light'}>

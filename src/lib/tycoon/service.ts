@@ -17,7 +17,7 @@
 
 import { getRedis } from '@/lib/redisClient';
 import { ensureArchive, T } from '@/lib/archive/db';
-import { simulate, franchiseValue, DAY, REBALANCED_AT, type Decision, type EconomyState, type GameDay } from './economy';
+import { simulate, franchiseValue, cash, DAY, REBALANCED_AT, type Decision, type Earning, type EconomyState, type GameDay } from './economy';
 import { chooseHost, type MeetingResult, type TeamGame } from '@/lib/franchise/venue';
 import { DEMO_BANKROLL, DEMO_SLUG } from '@/lib/demo/site';
 import { TRACKS } from './catalog';
@@ -178,6 +178,39 @@ export async function recordDecision(franchiseId: string, d: Decision): Promise<
   await r.set(LOG(franchiseId), JSON.stringify([...log, d].slice(-LOG_MAX)));
 }
 
+/**
+ * A franchise's Pick'em winnings this season (lib/pickem), as the economy's earnings: each week's
+ * on the Tuesday it went final, the Cup the day after the regular season's last week. Only for the
+ * league being served (Pick'em reads the current league), and nothing if Pick'em can't be read.
+ */
+async function pickemEarnings(site: string, franchiseId: string): Promise<Earning[]> {
+  try {
+    const { currentTenant } = await import('@/lib/tenant/context');
+    const t = await currentTenant().catch(() => null);
+    if (t && t.slug !== site) return [];
+    const { pickemPayouts, PICKEM_PAY } = await import('@/lib/pickem');
+    const p = await pickemPayouts();
+    const out: Earning[] = [];
+    for (const w of p.weeks) {
+      const sc = w.scores.get(franchiseId);
+      // A week the sim picked for them pays nothing: the money is for playing.
+      if (!sc || sc.points <= 0 || sc.auto) continue;
+      const vc = sc.points * PICKEM_PAY.perPoint;
+      out.push({
+        at: weekFinal(p.season, w.week), vc,
+        title: `Pick'em, week ${w.week}`,
+        detail: `${sc.points} point${sc.points === 1 ? '' : 's'}: ${sc.right} right${sc.upsets ? `, ${sc.upsets} upset${sc.upsets === 1 ? '' : 's'}` : ''}${sc.lockRight ? ', the lock hit' : ''}. ${cash(vc)} to the bank.`,
+      });
+    }
+    if (p.champion === franchiseId) {
+      out.push({ at: weekFinal(p.season, p.lastWeek) + DAY, vc: PICKEM_PAY.cup, title: "The Pick'em Cup", detail: `Best predictor in the league. ${cash(PICKEM_PAY.cup)} to the bank, and their name on the Cup.` });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** A franchise's economy as of now, or null when the league has no archive yet. */
 export async function economyOf(site: string, franchiseId: string, now = Date.now()): Promise<EconomyState | null> {
   const inputs = await leagueInputs(site);
@@ -187,7 +220,7 @@ export async function economyOf(site: string, franchiseId: string, now = Date.no
   // A franchise that has left the league stops a week after its last game.
   const end = last && last.season < inputs.latestSeason ? Math.min(now, last.at + 7 * DAY) : now;
   return simulate({
-    games, decisions: await decisionsOf(franchiseId), titles: inputs.titles.get(franchiseId) ?? [],
+    games, decisions: await decisionsOf(franchiseId), earnings: await pickemEarnings(site, franchiseId), titles: inputs.titles.get(franchiseId) ?? [],
     start: first ? kickoff(first.season) : end, now: end, grandfatherBefore: REBALANCED_AT,
     // The demo's owners put in their bankroll each season (lib/demo/site), the day after its first
     // week: after the old front office's off-season, which sweeps the bank down to a reserve.

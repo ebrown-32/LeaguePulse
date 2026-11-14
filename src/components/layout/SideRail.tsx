@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { SoundtrackButton } from './Soundtrack';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -185,6 +186,9 @@ export default function SideRail({ featured, groups, logoUrl, leagueName, legal 
             <div className="lp-rail-label">
               <AccountChip compact className="w-full" />
             </div>
+
+            {/* The soundtrack (hosted, when it has tracks): what's playing, and a skip. */}
+            <SoundtrackButton place="rail" />
 
             {/* The mark, then two quiet icons: preferences behind the gear, and the fold. */}
             <div className="flex items-center gap-1 lp-rail-folded:flex-col lp-rail-folded:gap-1">

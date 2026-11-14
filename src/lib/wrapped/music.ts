@@ -23,6 +23,7 @@
  */
 
 import { getPrefs, setPrefs } from '../prefs';
+import { audioTakeover } from '../soundtrack';
 
 export type Cue = 'fanfare' | 'trombone' | 'scratch' | 'boom' | 'impact' | null;
 
@@ -182,6 +183,7 @@ class Music {
 
   /** From the count-in: the story opened. */
   start() {
+    audioTakeover('wrapped', true);
     this.unlock();
     const c = this.ctx; if (!c || this.running) return;
     this.gen++;
@@ -200,6 +202,7 @@ class Music {
 
   /** Fades out: the story closed. */
   stop() {
+    audioTakeover('wrapped', false);
     const c = this.ctx; if (!c || !this.running) return;
     this.running = false;
     const g = ++this.gen;
