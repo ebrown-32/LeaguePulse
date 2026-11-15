@@ -11,8 +11,14 @@ import type { Track } from './soundtrack';
 const AUDIO = /\.(mp3|m4a|aac|ogg|oga|opus|wav|webm)$/i;
 let cached: Promise<Track[]> | null = null;
 
+/**
+ * Off for now: no tracks, so no button and nothing loads. The tracks stay in public/soundtrack;
+ * set this to true to bring the soundtrack back.
+ */
+const SOUNDTRACK_ON = false;
+
 export function soundtrackTracks(): Promise<Track[]> {
-  if (process.env.LP_HOSTED !== '1') return Promise.resolve([]);
+  if (!SOUNDTRACK_ON || process.env.LP_HOSTED !== '1') return Promise.resolve([]);
   cached ??= fs.readdir(path.join(process.cwd(), 'public', 'soundtrack'))
     .then(names => names.filter(n => AUDIO.test(n) && !n.startsWith('.')).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
       .map(n => ({
