@@ -1,5 +1,6 @@
 'use client';
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Upload, Trash2, Shuffle, Check, Plus, RotateCcw, Sparkles } from '@/components/icons';
@@ -554,9 +555,11 @@ export default function AIDeskAdmin({ adminPassword }: { adminPassword: string }
           {volumeError && <p className="mt-2 text-[11px] text-red-500">{volumeError}</p>}
         </Section>
 
-        <Section title="The Desk Weekly" summary="Record an episode for any week of the season">
-          <PodcastAdmin password={password} />
-        </Section>
+        {DESK_WEEKLY_ON && (
+          <Section title="The Desk Weekly" summary="Record an episode for any week of the season">
+            <PodcastAdmin password={password} />
+          </Section>
+        )}
 
         <Section title="Chat assistant" summary={assistantName || 'Unnamed'}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">

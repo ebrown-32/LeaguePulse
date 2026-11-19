@@ -1,3 +1,4 @@
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -50,7 +51,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
 
   const [likes, episodes] = await Promise.all([
     getLikes(mine.map(p => p.id)),
-    import('@/lib/ai/podcast').then(m => m.listEpisodes()).catch(() => []),
+    DESK_WEEKLY_ON ? import('@/lib/ai/podcast').then(m => m.listEpisodes()).catch(() => []) : Promise.resolve([]),
   ]);
   const hosted = episodes.filter(e => e.hosts.some(h => h.id === person.id));
   const totalLikes = mine.reduce((n, p) => n + (likes[p.id] ?? 0), 0);

@@ -8,6 +8,7 @@
  * Public, like the episode. The same episode always draws the same cover, so it's cached hard.
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { ImageResponse } from 'next/og';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -39,6 +40,7 @@ function faceUrl(src: string, origin: string): string {
 }
 
 export async function GET(req: Request) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   const url = new URL(req.url);
   const id = url.searchParams.get('ep') ?? '';
   if (!/^[A-Za-z0-9-]{1,80}$/.test(id)) return new Response('Bad request', { status: 400 });

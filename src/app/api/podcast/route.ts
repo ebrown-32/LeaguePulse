@@ -8,6 +8,7 @@
  *                  { error, nextAt } until then.
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/tenant/admin';
 
@@ -36,6 +37,7 @@ async function withManagers<T extends { chapters: { visual: any }[] }>(episodes:
 }
 
 export async function GET() {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   const { listEpisodes } = await import('@/lib/ai/podcast');
   const episodes = await withManagers(await listEpisodes().catch(() => []));
   return NextResponse.json({ episodes, recorded: Boolean(process.env.ELEVENLABS_API_KEY?.trim()) }, {
@@ -44,6 +46,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => ({})) as { week?: unknown };
   const week = body.week === undefined ? undefined : Number(body.week);

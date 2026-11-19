@@ -6,12 +6,14 @@
  *                      nextRerecordAt: when the league may next replace an episode (once a week), or null
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/tenant/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const [{ isAIConfigured }, { episodeWeeks }] = await Promise.all([import('@/lib/ai/claude'), import('@/lib/ai/podcast')]);

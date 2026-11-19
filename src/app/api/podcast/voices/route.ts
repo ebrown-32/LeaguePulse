@@ -7,6 +7,7 @@
  * listener's browser, and there is nothing to pick.
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/tenant/admin';
 import { elevenLabsKey, listVoices, voicesProblem } from '@/lib/ai/elevenlabs';
@@ -14,6 +15,7 @@ import { elevenLabsKey, listVoices, voicesProblem } from '@/lib/ai/elevenlabs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   if (!(await isAdminRequest(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!elevenLabsKey()) return NextResponse.json({ recorded: false, voices: [] });
   try {

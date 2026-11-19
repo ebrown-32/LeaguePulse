@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { getTheme } from '@/lib/themeStorage';
+import { notFound } from 'next/navigation';
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import PodcastView from './PodcastView';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +27,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 
 export default async function PodcastPage() {
+  if (!DESK_WEEKLY_ON) notFound();
   const theme = await getTheme();
   return (
     <PageLayout title="The Desk Weekly" subtitle="Your league's week, as a show. New every Tuesday." className="max-w-6xl">

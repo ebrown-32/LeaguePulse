@@ -17,6 +17,7 @@
  * monthly character caps.
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenLabsKey } from '@/lib/ai/elevenlabs';
 import { claimChapter, RECORDING, releaseChapter, storedChapter, waitForChapter, type StoredChapter } from '@/lib/ai/podcastAudio';
@@ -45,6 +46,7 @@ async function serveStored(rec: StoredChapter): Promise<NextResponse | null> {
 }
 
 export async function GET(req: NextRequest) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   if (!elevenLabsKey()) return refuse('Recorded voices are not set up.', 404);
   const q = req.nextUrl.searchParams;
   const epId = q.get('ep') ?? '', c_ = q.get('c') ?? '';
