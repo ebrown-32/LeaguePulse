@@ -1,3 +1,4 @@
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import type { Metadata } from 'next';
 import Landing from '@/components/platform/Landing';
 import { FAQS } from '@/components/platform/faq';
@@ -28,7 +29,7 @@ function structuredData() {
       '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: PLATFORM.name, url: site,
       applicationCategory: 'SportsApplication', operatingSystem: 'Web, iOS, Android',
       description: 'Turns a Sleeper or ESPN fantasy football league into its own website: full league history and record book, AI-written coverage, live win odds, a trade finder and 3D franchise stadiums.',
-      featureList: ['Sleeper and ESPN leagues', 'Every season of league history and a record book', 'AI beat writers and trade grades', 'A weekly comedy podcast about your league', 'Live scores and win probability', 'Trade finder for up to six teams', '3D stadiums for every franchise', 'Self-serve analytics in plain English'],
+      featureList: ['Sleeper and ESPN leagues', 'Every season of league history and a record book', 'AI beat writers and trade grades', ...(DESK_WEEKLY_ON ? ['A weekly comedy podcast about your league'] : []), 'Live scores and win probability', 'Trade finder for up to six teams', '3D stadiums for every franchise', 'Self-serve analytics in plain English'],
       offers: [
         offer('League Pass, yearly', PLANS.pro.season, 'P1Y'), offer('League Pass, monthly', PLANS.pro.monthly, 'P1M'),
         offer('League Pass + AI, yearly', PLANS.ai.season, 'P1Y'), offer('League Pass + AI, monthly', PLANS.ai.monthly, 'P1M'),

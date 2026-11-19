@@ -396,8 +396,11 @@ async function runForLeague(request: Request): Promise<Response> {
       .catch(err => console.error('[ai/cron] rivalry week', err instanceof Error ? err.message : err));
     await import('@/lib/pickem').then(m => m.pickemTick())
       .catch(err => console.error('[ai/cron] pickem', err instanceof Error ? err.message : err));
-    await import('@/lib/ai/podcast').then(m => m.maybePublishWeekly())
-      .catch(err => console.error('[ai/cron] podcast', err instanceof Error ? err.message : err));
+    // Off for now (lib/features).
+    if ((await import('@/lib/features')).DESK_WEEKLY_ON) {
+      await import('@/lib/ai/podcast').then(m => m.maybePublishWeekly())
+        .catch(err => console.error('[ai/cron] podcast', err instanceof Error ? err.message : err));
+    }
   }
 
   // Game-day coverage runs on its own cadence and its own guards.

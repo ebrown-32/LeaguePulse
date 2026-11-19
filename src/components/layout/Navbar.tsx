@@ -37,6 +37,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { SoundtrackButton } from './Soundtrack';
 import Logo from '@/components/ui/Logo';
 import { cn } from '@/lib/utils';
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import PoweredBy from '@/components/ui/PoweredBy';
 import AccountChip from './AccountChip';
 import { useInstallPrompt } from '@/components/pwa/InstallPromptProvider';
@@ -178,7 +179,8 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
   const shown = (item: NavItem) =>
     (franchises || (item.href !== '/franchises' && item.href !== '/wrapped')) &&
     (rankings || item.href !== '/rankings') &&
-    (market || item.href !== '/edge');
+    (market || item.href !== '/edge') &&
+    (DESK_WEEKLY_ON || item.href !== '/podcast');
   // Always four: Rivalries steps in where there are no franchises.
   const featured = franchises ? PRIMARY_NAV : PRIMARY_NAV.map(item => (item.href === '/franchises' ? RIVALRIES : item));
   const isFeatured = (item: NavItem) => featured.some(f => f.href === item.href);

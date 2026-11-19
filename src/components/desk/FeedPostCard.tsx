@@ -1,5 +1,6 @@
 'use client';
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import StadiumPhoto from './StadiumPhoto';
 import OfficialVisualView from './OfficialVisual';
 import { useState } from 'react';
@@ -521,6 +522,8 @@ export function FeedPostCard({
   const isEpisode = post.kind === 'episode';
   const isLong = post.kind !== 'tweet' && post.kind !== 'comment' && !isLive && !isGotw && !isPhoto && !isOfficial && !isEpisode;
   const profile = profileHref(post);
+  // The Desk Weekly is off for now (lib/features): its episode posts don't show.
+  if (isEpisode && !DESK_WEEKLY_ON) return null;
   return (
     <motion.article
       initial={{ opacity: 0, y: 8 }}

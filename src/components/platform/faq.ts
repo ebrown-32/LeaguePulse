@@ -9,6 +9,8 @@ import { STYLE_ORDER } from '@/lib/franchise/stadiumStyles';
 
 const perManager = `$${(PLANS.pro.season / 12).toFixed(2)}`;
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
+
 export const FAQS: [question: string, answer: string][] = [
   ['Is this made by Sleeper or ESPN?', `No. ${PLATFORM.name} is independent. It reads the public data Sleeper publishes for every league, or your league’s data from ESPN. It never asks for your password and never changes anything in your league.`],
   ['Does it work with ESPN?', 'Yes. Paste your ESPN league ID. Most ESPN leagues are private, so one member copies two cookies from their browser once (sign-up shows how). ESPN signs those out after about a year, and your admin page asks for fresh ones when it does. Scores, standings, history, drafts and trades all come across.'],
@@ -20,7 +22,8 @@ export const FAQS: [question: string, answer: string][] = [
   ['How does the AI get paid for?', 'Two ways. On League Pass, your league adds its own Anthropic API key and pays Anthropic directly, with a monthly cap you set. On League Pass + AI it’s included: we run it, within generous limits. Everything that isn’t AI works either way.'],
   ['Will the AI make things up?', 'It writes from your league’s real data, and every post is checked against the standings, trades and live game status before it goes up. Anything that fails the check is rewritten or dropped.'],
   ['What is Franchise HQ?', `A game inside the app, included with League Pass. Each manager claims their team and runs it as a business on your league’s real results: ticket prices, crowds, upgrades, and a 3D stadium in one of ${STYLE_ORDER.length} styles, dressed in their own colors. Franchise values count every season you have played, championships included.`],
-  ['What is The Desk Weekly?', 'A ninety-second comedy podcast about your league\u2019s week, recorded every Tuesday once the week is final. Three or four of your Desk personalities host, each in their own voice, a different panel every week. It comes with the AI desk, and the scores in it are the real ones.'],
+  // The Desk Weekly is off for now (lib/features); its question comes back with it.
+  ...(DESK_WEEKLY_ON ? [['What is The Desk Weekly?', 'A ninety-second comedy podcast about your league\u2019s week, recorded every Tuesday once the week is final. Three or four of your Desk personalities host, each in their own voice, a different panel every week. It comes with the AI desk, and the scores in it are the real ones.'] as [string, string]] : []),
   ['Who controls the settings?', 'Whoever sets it up is the admin: name, colors, logo, the cast of writers and what gets posted.'],
   ['What about the offseason?', 'The site stays up with all its history. On the monthly plan you can cancel and come back before the draft.'],
 ];

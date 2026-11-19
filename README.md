@@ -94,7 +94,6 @@ The whole app, on your own account, for your own league. Franchise HQ is view on
 | League Wrapped, every season's story | With a database | Yes | Yes |
 | The Edge: your league against thousands of others | No | Yes | Yes |
 | AI writers, chat and plain-English analytics | Your Anthropic key | Your Anthropic key | **Included** |
-| The Desk Weekly, a podcast about your league | Your keys | Your Anthropic key, our voices | **Included** |
 | Servers, database, updates, 3am fixes | You | Us | Us |
 
 <sub>League Pass is $39 a year or $8 a month for the whole league; League Pass + AI is $79 a year or $16 a month. <a href="https://leaguepulse.io/#pricing">Full pricing</a>.</sub>
@@ -138,6 +137,7 @@ publishes, so nobody gets traded the wrong way round.
 
 <br />
 
+<!-- The Desk Weekly is off for now (src/lib/features.ts). Uncomment this when it comes back.
 ### A podcast about your league, every Tuesday
 
 **The Desk Weekly** is your league's week as a ninety-second comedy show. Three or four of your
@@ -151,6 +151,7 @@ Admins pick each personality's voice and can record any earlier week of the seas
 back, from that week as it stood. Re-recording an episode is limited to once a week per league.
 
 <br />
+-->
 
 ### Trades that help both sides
 
@@ -268,8 +269,10 @@ CRON_SECRET=any_random_string
 Open `/admin` → **AI Desk** → **Test connections**, then **Run scheduler** for the first batch.
 After that it posts on its own.
 
+<!-- The Desk Weekly is off for now (src/lib/features.ts). Uncomment this when it comes back.
 The Desk Weekly comes with it: once the desk is on, an episode records itself every Tuesday.
 Without a voice key, listeners' browsers read it aloud. For recorded voices, see below.
+-->
 
 For live game coverage and a feed that moves through the day, add two repository secrets
 (Settings → Secrets and variables → Actions): `SITE_URL`, the exact address your site is served
@@ -278,6 +281,7 @@ from, and `CRON_SECRET`, the same value as in Vercel. The workflows in
 
 </details>
 
+<!-- The Desk Weekly is off for now (src/lib/features.ts). Uncomment this when it comes back.
 <details>
 <summary><b>Give The Desk Weekly real voices</b></summary>
 
@@ -314,6 +318,17 @@ Two caps keep a month from running away (past either, browsers read the episode 
 | `ELEVENLABS_MONTHLY_CHARS_TOTAL` | 36000 | Everything together: keep it under your plan's limit. |
 | `ELEVENLABS_MODEL` | `eleven_v4` | The most natural model; it acts out cues like [laughs]. |
 | `ELEVENLABS_VOICES` | every voice | A comma list of voice ids, to limit what admins can pick. |
+-->
+
+<details>
+<summary><b>Give League Wrapped its own music</b></summary>
+
+<br />
+
+```bash
+ELEVENLABS_API_KEY=...
+BLOB_READ_WRITE_TOKEN=...      # set for you when you connect a Vercel Blob store
+```
 
 With ElevenLabs and Blob, League Wrapped also gets its own music: an original instrumental for each
 finished season, in the mood that season earned (a runaway champion, an underdog, a season of
@@ -336,8 +351,8 @@ The caps need Redis, which the AI desk already uses.
 | `ESPN_SWID` + `ESPN_S2` | A private ESPN league. |
 | `ADMIN_PASSWORD` | The admin panel. Set this before going public. |
 | `ANTHROPIC_API_KEY` | AI desk, chat and plain-English analytics. |
-| `ELEVENLABS_API_KEY` | Recorded voices for The Desk Weekly podcast; pick each personality's voice in the AI Desk admin. Optional: without it, browsers read episodes aloud. |
-| `BLOB_READ_WRITE_TOKEN` | Keeping The Desk Weekly's recordings, so each is paid for once. Set by connecting a Vercel Blob store. |
+| `ELEVENLABS_API_KEY` | League Wrapped's generated music. Optional: without it, Wrapped plays its built-in soundtrack. |
+| `BLOB_READ_WRITE_TOKEN` | Keeping League Wrapped's music, so each piece is paid for once. Set by connecting a Vercel Blob store. |
 | `ELEVENLABS_MONTHLY_CHARS_PER_LEAGUE` + `ELEVENLABS_MONTHLY_CHARS_TOTAL` | Monthly caps on recorded voices (12,000 and 36,000 characters). Optional. |
 | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Saving anything in production. Or `REDIS_URL` for a `rediss://` connection string. |
 | `CRON_SECRET` | Keeping the scheduled jobs private. |

@@ -19,6 +19,7 @@
  * follows the conversation.
  */
 
+import { DESK_WEEKLY_ON } from '@/lib/features';
 import { NextRequest, NextResponse } from 'next/server';
 import { castVoices, elevenLabsKey, episodeCharacters, payForEpisode, speak, voicePool } from '@/lib/ai/elevenlabs';
 import { clientIp, rateLimit } from '@/lib/ai/rateLimit';
@@ -32,6 +33,7 @@ const refuse = (error: string, status: number) =>
   NextResponse.json({ error }, { status, headers: { 'cache-control': 'no-store' } });
 
 export async function GET(req: NextRequest) {
+  if (!DESK_WEEKLY_ON) return new Response(null, { status: 404 });
   if (!elevenLabsKey()) return refuse('Recorded voices are not set up.', 404);
 
   const q = req.nextUrl.searchParams;
