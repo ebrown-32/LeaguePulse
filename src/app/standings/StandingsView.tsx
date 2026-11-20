@@ -125,6 +125,21 @@ export default function StandingsView() {
   if (error) return <ErrorMessage title="Error" message={error} />;
 
   const playoffTeams = Number(league?.settings?.playoff_teams ?? 0);
+
+  // Leagues with divisions get one table per division, ranked within it, above the
+  // overall table. Rosters are already sorted, so filtering keeps that order. The
+  // division name is the league's `division_N` metadata when set. Leagues without
+  // divisions (fewer than two distinct ids) render exactly as before.
+  const divisionGroups: { key: string; name: string; rosters: any[] }[] = (() => {
+    if (season === 'all-time') return [];
+    const ids = Array.from(new Set(sortedRosters.map((r: any) => Number(r.settings?.division ?? 0)).filter((d: number) => d > 0))).sort((a, b) => a - b);
+    if (ids.length < 2) return [];
+    return ids.map(d => ({
+      key: String(d),
+      name: (league?.metadata?.['division_' + d] as string | undefined)?.trim() || 'Division ' + d,
+      rosters: sortedRosters.filter((r: any) => Number(r.settings?.division ?? 0) === d),
+    }));
+  })();
   const subtitle = season === 'all-time'
     ? `${league?.name ?? 'League'}, every season`
     : `${league?.name ?? 'League'}, ${season} season`;
@@ -144,12 +159,23 @@ export default function StandingsView() {
       {switching ? (
         <LoadingBlock size={16} />
       ) : (
-        <StandingsTable
-          rosters={season === 'all-time' ? undefined : sortedRosters}
-          users={users}
-          allTime={season === 'all-time' ? allTime : undefined}
-          playoffTeams={season === 'all-time' ? 0 : playoffTeams}
-        />
+        <>
+          {divisionGroups.map(g => (
+            <section key={g.key} className="mb-8">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{g.name}</h2>
+              <StandingsTable rosters={g.rosters} users={users} playoffTeams={0} />
+            </section>
+          ))}
+          {divisionGroups.length > 0 && (
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Overall</h2>
+          )}
+          <StandingsTable
+            rosters={season === 'all-time' ? undefined : sortedRosters}
+            users={users}
+            allTime={season === 'all-time' ? allTime : undefined}
+            playoffTeams={season === 'all-time' ? 0 : playoffTeams}
+          />
+        </>
       )}
     </PageLayout>
   );
