@@ -50,6 +50,8 @@ import { bendToOutline, deckProfile, deckStrip } from './stadiumGeometry';
 import { along, Boxes, Instanced, mat, Placed, Ribbon, Rise, mix, rng, type Item } from './stadiumParts';
 import FanCluster, { type FanSpot } from './FanCluster';
 import { RivalryDress, ShameFlyover, useDressing } from './Dressing';
+import { Blimp, NamingSign, SidelineBoards, brandOf, useWordmark, type Partners } from './Sponsors3D';
+import type { Brand } from '@/lib/tycoon/sponsors';
 
 export type { RosterPlayer as SidelinePlayer } from './RosterSideline';
 import type { RosterPlayer as SidelinePlayer } from './RosterSideline';
@@ -122,6 +124,10 @@ export interface StadiumProps {
   live?: LiveScene | null;
   /** Called once the stadium has drawn its first frames, for a loader to step aside. */
   onReady?: () => void;
+  /** The franchise's sponsors, by what each bought (Sponsors3D): boards, a blimp, the name on the building. */
+  partners?: Partners | null;
+  /** What the building is called under a naming deal ("Blitz Cola Field"), for its sign. */
+  namedAs?: string | null;
 }
 
 // ── Time of day ─────────────────────────────────────────────────────────────
@@ -860,13 +866,22 @@ function useScoreScreen(score: ScoreScreen | null) {
  * and framed in its style's own way. Their backs carry the team's name too,
  * for everyone outside.
  */
-function Boards({ bp, p, text, look, score = null }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook; score?: ScoreScreen | null }) {
+function Boards({ bp, p, text, look, score = null, ad = null }: { bp: Blueprint; p: Palette; text: string; look: StadiumLook; score?: ScoreScreen | null; ad?: Brand | null }) {
   const named = useScreen(p.team, p.accent, text);
   const scored = useScoreScreen(score);
+  // The video boards' sponsor: its card, cut to between the team's own (never over a live score).
+  const adCard = useWordmark(ad, 512, 200, undefined, ad?.tagline);
   // In a live matchup the screens show the score; otherwise the team's name.
   const screen = scored ?? named;
   const mats = useRef<MeshStandardMaterial[]>([]);
-  useFrame(({ clock }) => { for (const m of mats.current) if (m) m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2; });
+  useFrame(({ clock }) => {
+    const show = adCard && !scored && Math.floor(clock.elapsedTime / 7) % 2 === 1 ? adCard : screen;
+    for (const m of mats.current) {
+      if (!m) continue;
+      m.emissiveIntensity = 0.85 + Math.sin(clock.elapsedTime * 2.4) * 0.2;
+      if (show && m.map !== show) { m.map = show; m.emissiveMap = show; m.needsUpdate = true; }
+    }
+  });
   const wall = p.wall, stone = stoneOf(look);
   const FRAME: Record<Board['frame'], string> = { steel: '#2a2e33', team: mix(p.team, '#15181c', 0.35), classic: '#1f3b2d', glass: '#e4e9ee', stone };
   const steel = <meshStandardMaterial color={mix(p.steel, '#000000', 0.3)} roughness={0.5} />;
@@ -1304,7 +1319,7 @@ function ScriptedCamera() {
   return null;
 }
 
-function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view, franchiseId, onLegend, sideline, fans, week }: StadiumProps & { hour: number; quality: Quality; onLegend?: (l: FranchiseLegend) => void }) {
+function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: identity, name, teamName, logo, look: chosen, hour, quality, live, focus, photo, view, franchiseId, onLegend, sideline, fans, week, partners, namedAs }: StadiumProps & { hour: number; quality: Quality; onLegend?: (l: FranchiseLegend) => void }) {
   const lots = lotsFill ?? fill;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const look = useMemo(() => normalizeLook(chosen), [JSON.stringify(chosen ?? null)]);
@@ -1387,7 +1402,7 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
       {bp.roof?.kind === 'gable' && <Rise key={`roof${build}`} delay={0.3}><Gables bp={bp} stands={bp.roof.stands} lift={bp.roof.lift} p={p} lightsOn={lightsOn} /></Rise>}
       {bp.roof?.kind === 'membrane' && <Rise key={`roof${build}`} delay={0.3}><Membrane bp={bp} moving={bp.roof.moving} closed={closed} p={p} lightsOn={lightsOn} /></Rise>}
 
-      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={dressing?.rivalry ? 'Rivalry week' : look.endZoneText || team} look={look} score={liveScore} /></Rise>}
+      {bp.boards.length > 0 && <Rise key={`b${build}-${f.videoboard}`}><Boards bp={bp} p={p} text={dressing?.rivalry ? 'Rivalry week' : look.endZoneText || team} look={look} score={liveScore} ad={brandOf(partners?.boards)} /></Rise>}
       {live && live.match.phase !== 'upcoming' && <LiveField live={live} />}
       {!live && !photo && sideline && sideline.length > 0 && <RosterSideline players={sideline} color={color} sidelineZ={sidelineZ} />}
       <LightTowers at={bp.towers} color={p.light} on={lightsOn} />
@@ -1412,6 +1427,10 @@ function Scene({ facilities: f, fill, lots: lotsFill, visitors, field, color: id
       )}
       <PlazaCrowd bp={bp} plan={layout.plan} fill={lots} colors={crowdColors} />
       {(!photo || shot) && !view?.broadcast && <FocusRig shot={shot} still={photo} />}
+      {/* The sponsors: what each deal bought, built (lib/tycoon/sponsors). */}
+      {brandOf(partners?.sideline) && <SidelineBoards bp={bp} brand={brandOf(partners?.sideline)!} wallTop={PODIUM} />}
+      {brandOf(partners?.naming) && <NamingSign bp={bp} brand={brandOf(partners?.naming)!} name={namedAs || brandOf(partners?.naming)!.name} />}
+      {brandOf(partners?.skies) && <Blimp bp={bp} brand={brandOf(partners?.skies)!} />}
       {dressing?.rivalry && <RivalryDress bp={bp} home={color} rival={dressing.rivalry.opponentColor} opponent={dressing.rivalry.opponent} record={dressing.rivalry.record} />}
       {dressing?.shame && <ShameFlyover bp={bp} by={dressing.shame.by} color={dressing.shame.byColor} />}
       {photo && fans && <FanCluster at={fans} team={color} accent={p.accent} visitors={visitors} teamName={team} week={week} />}

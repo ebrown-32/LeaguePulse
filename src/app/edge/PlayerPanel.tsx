@@ -269,7 +269,7 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
     ...(r.field ? [{ k: 'Started by the field', v: (p: Player) => p.mkt?.started ?? null, f: (x: number) => `${Math.round(x)}%` }] : []),
   ];
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compare players">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compare players">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-background/75 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, ease }}
         className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl">

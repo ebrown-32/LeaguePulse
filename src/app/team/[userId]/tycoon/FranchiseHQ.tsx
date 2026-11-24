@@ -25,6 +25,8 @@ import { seededLook } from '@/lib/franchise/seededLook';
 import { FULLY_BUILT, lookSummary, PreviewControls, StadiumStudio } from './StadiumStudio';
 import { CHART_VARS, CrowdsChart, DemandCharts, InterestChart, RevenueChart, VCChart } from './charts';
 import GamePlan, { LevelUp } from './GamePlan';
+import { PartnerStrip, SponsorDesk, TryOnBar, type SponsorBooks } from './Sponsors';
+import { BRAND, namedStadium, type SlotId } from '@/lib/tycoon/sponsors';
 
 import type { SidelinePlayer } from './Stadium3D';
 const Stadium3D = dynamic(() => import('./Stadium3D'), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-muted/40" /> });
@@ -45,6 +47,8 @@ export interface Tycoon {
   stadium: { stadiumName: string; capacity: number; parking: number; appeal: number; upkeep: number; facilities: Facilities };
   interest: number; value: number; games: Game[];
   story: { at: number; kind: string; title: string; detail: string }[];
+  /** The franchise's sponsors, by what each bought (lib/tycoon/sponsors). */
+  partners?: { slot: SlotId; brand: string }[];
   books: null | {
     vc: number; prices: Prices; fair: Prices; autopilot: boolean; form: number; resentment: number;
     days: { at: number; vc: number; interest: number; merch: number; sponsors: number; upkeep: number }[];
@@ -52,6 +56,7 @@ export interface Tycoon {
     /** Promotion night: the one booked for the next home game, and when the next can be. */
     promo?: { pending: { id: 'beer' | 'fireworks' | 'bobblehead'; score: number } | null; nextAt: number; max: number };
     covered?: number;
+    sponsors?: SponsorBooks | null;
   };
 }
 
@@ -67,7 +72,7 @@ function Counter({ value, suffix = '', format }: { value: number; suffix?: strin
 
 const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   start: CalendarDays, title: Trophy, build: Layers, sellout: Ticket, record: Megaphone, unrest: AlertTriangle, streak: Flame, milestone: Rocket, prices: Tag,
-  covered: Receipt, promo: Sparkles, pickem: Verified,
+  covered: Receipt, promo: Sparkles, pickem: Verified, sponsor: Sparkles,
 };
 
 /**
@@ -122,6 +127,8 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   useEffect(() => { if (available && window.location.hash === '#stadium') setFull(true); }, [available]);
   // Fullscreen: the stadium fills the screen, with the studio beside it (below it on a phone) for its manager.
   const [full, setFull] = useState(false);
+  // A sponsorship offer tried on in the stadium before it's signed.
+  const [tryOn, setTryOn] = useState<{ slot: SlotId; brand: string } | null>(null);
   // Closing, the overlay fades out over the page; it lets clicks through from the start.
   const overlay = useRef<HTMLDivElement>(null);
   const close = useCallback(() => {
@@ -185,8 +192,17 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
   const previewItem = buildPreview ? shop.find(i => i.track === buildPreview && i.next) ?? null : null;
   const facilitiesShown = previewing ? FULLY_BUILT
     : previewItem ? { ...t.stadium.facilities, [previewItem.track]: previewItem.next!.level } : t.stadium.facilities;
+  // The sponsors on the building: the deals in force, and one being tried on over them.
+  const partnerMap = Object.fromEntries([...(t.partners ?? []), ...(tryOn ? [tryOn] : [])].map(p => [p.slot, p.brand])) as Partial<Record<SlotId, string>>;
+  const namingBrand = partnerMap.naming ? BRAND[partnerMap.naming] : null;
+  const namedAs = namingBrand ? namedStadium(namingBrand, t.stadium.capacity) : null;
+  const post = async (body: object) => {
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...(auth ?? {}) }, body: JSON.stringify(body) }).catch(() => null);
+    const data = await r?.json().catch(() => null);
+    return { ok: Boolean(r?.ok), data, error: r?.status === 401 ? 'Your editing pass has expired. Open the franchise again from your LeaguePulse account.' : data?.error };
+  };
   const stadium = (
-    <Stadium3D franchiseId={franchiseId} sideline={mode === 'public' ? roster : null} focus={previewItem?.track ?? null} facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
+    <Stadium3D partners={partnerMap} namedAs={namedAs} franchiseId={franchiseId} sideline={mode === 'public' ? roster : null} focus={previewItem?.track ?? null} facilities={facilitiesShown} fill={last ? last.attendance / last.capacity : 0.6} color={hue} name={t.stadium.stadiumName}
       teamName={teamName} logo={logo} look={lookNow} hour={hour} />
   );
   const studio = (compact: boolean) => (
@@ -210,7 +226,7 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 text-white sm:p-5">
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3, duration: 0.6, ease: EASE }}>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75">{teamName}</p>
-            <p className="font-display text-xl font-bold leading-tight tracking-tight drop-shadow sm:text-2xl">{shownName}</p>
+            <p className="font-display text-xl font-bold leading-tight tracking-tight drop-shadow sm:text-2xl">{namedAs ?? shownName}</p>
             <p className="text-[12.5px] text-white/85 drop-shadow">{t.stadium.stadiumName}, {t.stadium.capacity.toLocaleString('en-US')} seats</p>
           </motion.div>
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4, duration: 0.6, ease: EASE }} className="text-right">
@@ -252,8 +268,13 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         <AnimatePresence>
           {previewItem && <PreviewBar item={previewItem} vc={t.books!.vc} building={building === previewItem.track} onBuild={() => buildNow(previewItem)} onClose={() => setBuildPreview(null)} />}
         </AnimatePresence>
+        <AnimatePresence>
+          {tryOn && !previewItem && <TryOnBar p={tryOn} capacity={t.stadium.capacity} onBack={() => setTryOn(null)} />}
+        </AnimatePresence>
       </motion.div>
 
+
+      <PartnerStrip partners={t.partners ?? []} capacity={t.stadium.capacity} />
 
       <Sections>
         {mode === 'public' && thisSeason.length > 0 && (
@@ -279,6 +300,11 @@ export default function FranchiseHQ({ franchiseId, mode, auth = null, color, tea
         )}
         {identity}
         {mode === 'manage' && t.books && <ControlRoom t={tSeason} url={url} auth={auth} reload={load} canManage={t.canManage} scope={scope} />}
+        {mode === 'manage' && t.books?.sponsors && (
+          <SponsorDesk books={t.books.sponsors} scope={scope} index={3} canManage={t.canManage} capacity={t.stadium.capacity} post={post}
+            reload={() => { load(); stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
+            previewing={tryOn} onPreview={p => { setTryOn(p); if (p) stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
+        )}
 
         {children}
       </Sections>
@@ -566,7 +592,7 @@ function Ledger({ games }: { games: Game[] }) {
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[640px] text-[12.5px] tabular-nums">
           <thead className="text-left text-muted-foreground">
-            <tr>{['Week', 'Result', 'Ticket', 'Crowd', 'Tickets', 'Food', 'Parking', 'Suites', 'Sponsors', 'Home date', 'Road', 'Costs', 'Profit', 'Fans'].map(h => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr>
+            <tr>{['Week', 'Result', 'Ticket', 'Crowd', 'Tickets', 'Food', 'Parking', 'Suites', 'Sponsors', 'Home date', 'Road', 'Deals', 'Costs', 'Profit', 'Fans'].map(h => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr>
           </thead>
           <tbody>
             {[...rows].reverse().map(g => (
@@ -575,7 +601,7 @@ function Ledger({ games }: { games: Game[] }) {
                 <td className="pr-3">{g.result} {g.points.toFixed(1)}</td>
                 <td className="pr-3">${g.prices!.ticket}</td>
                 <td className="pr-3">{g.home === false ? 'Away' : `${Math.round(100 * g.attendance / g.capacity)}%`}</td>
-                {(['tickets', 'concessions', 'parking', 'suites', 'sponsors', 'premium', 'road'] as const).map(k => <td key={k} className="pr-3">{money(g.revenue![k] ?? 0)}</td>)}
+                {(['tickets', 'concessions', 'parking', 'suites', 'sponsors', 'premium', 'road', 'partners'] as const).map(k => <td key={k} className="pr-3">{money(g.revenue![k] ?? 0)}</td>)}
                 <td className="pr-3">{money(g.costs!.operations)}</td>
                 <td className="pr-3 font-semibold">{money(g.profit!)}</td>
                 <td>{g.interestChange! > 0 ? '+' : ''}{g.interestChange}</td>
