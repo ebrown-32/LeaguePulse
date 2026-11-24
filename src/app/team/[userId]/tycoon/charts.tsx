@@ -76,7 +76,8 @@ const SOURCES = [
   { key: 'concessions', name: 'Concessions', color: 'var(--s2)' },
   { key: 'parking', name: 'Parking', color: 'var(--s3)' },
   { key: 'suites', name: 'Suites', color: 'var(--s4)' },
-  { key: 'sponsors', name: 'Sponsors', color: 'var(--s5)' },
+  { key: 'sponsors', name: 'Board sponsors', color: 'var(--s5)' },
+  { key: 'partners', name: 'Sponsorship deals', color: 'var(--s8, var(--s3))' },
   { key: 'premium', name: 'Home date premium', color: 'var(--s6, var(--s1))' },
   { key: 'road', name: 'Road share and TV', color: 'var(--s7, var(--s2))' },
 ] as const;

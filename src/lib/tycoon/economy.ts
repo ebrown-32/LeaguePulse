@@ -28,6 +28,7 @@
  */
 
 import { EMPTY_FACILITIES, TRACK, TRACKS, facilityStats, nextLevel, type Facilities, type FacilityStats, type TrackId } from './catalog.ts';
+import { BRAND, ESCALATOR, LOYALTY_MAX, SLOT, VIBE_FANS, WALK_LOSSES, buyoutCost, isSlot, isStructure, type Clause, type Deal, type SlotId, type Structure } from './sponsors.ts';
 
 export interface GameDay {
   key: string; season: number; week: number;
@@ -61,7 +62,15 @@ export type Decision =
   | { at: number; kind: 'prices'; prices: Prices }
   | { at: number; kind: 'build'; track: TrackId }
   /** A promotion night run before a home game (PROMOS): 0 to PROMO_MAX for how well it went. */
-  | { at: number; kind: 'promo'; promo: PromoId; score: number };
+  | { at: number; kind: 'promo'; promo: PromoId; score: number }
+  /**
+   * A sponsorship signed (sponsors.ts): the slot, the brand, and the terms as agreed that day, in
+   * dollars. The terms are kept with the decision, so a deal pays what was signed however the
+   * offers are priced later.
+   */
+  | { at: number; kind: 'sponsor'; slot: SlotId; brand: string; structure: Structure; clause: Clause; term: number; base: number; win: number; sellout: number; statement: number; signing: number }
+  /** A sponsorship bought out early, for half the guaranteed money still to come. */
+  | { at: number; kind: 'sponsor-end'; slot: SlotId };
 
 /**
  * Promotion nights: once a week, a manager can run one promotion at their next
@@ -93,7 +102,7 @@ export interface GameReport {
    * `premium`: at home, what a franchise's one home date in two weeks adds (premium pricing, every
    * suite and sponsor); `road`: on the road, its share of the gate and the league's TV money.
    */
-  revenue: { tickets: number; concessions: number; parking: number; suites: number; sponsors: number; premium: number; road: number };
+  revenue: { tickets: number; concessions: number; parking: number; suites: number; sponsors: number; premium: number; road: number; /** What the franchise's sponsorship deals paid for this game (sponsors.ts). */ partners?: number };
   costs: { operations: number };
   profit: number;
   interest: number; interestChange: number;
@@ -101,7 +110,10 @@ export interface GameReport {
   promo?: { id: PromoId; score: number };
 }
 
-export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title' | 'covered' | 'promo' | 'pickem'; title: string; detail: string }
+export interface StoryEvent { at: number; kind: 'build' | 'sellout' | 'record' | 'unrest' | 'streak' | 'milestone' | 'prices' | 'start' | 'title' | 'covered' | 'promo' | 'pickem' | 'sponsor'; title: string; detail: string }
+
+/** A sponsorship that's over: how it ended, and what it paid. Dollars. */
+export interface PastDeal { slot: SlotId; brand: string; structure: Structure; term: number; earned: number; wins: number; losses: number; endedAt: number; how: 'completed' | 'walked' | 'bought-out' }
 
 /** Money the franchise earns off the field (Pick'em winnings, lib/pickem): into the bank on the day, with its line in the story. */
 export interface Earning { at: number; vc: number; title: string; detail: string }
@@ -137,6 +149,11 @@ export interface EconomyState {
   /** A promotion waiting for the next home game, and when the last was run (see PROMOS). */
   promo: { id: PromoId; score: number; at: number } | null;
   lastPromoAt: number;
+  /** Sponsorships in force, one a slot; those that are over; stars earned with each brand; and all they've paid, in dollars. */
+  deals: Deal[];
+  pastDeals: PastDeal[];
+  loyalty: Record<string, number>;
+  partnerEarned: number;
 }
 
 export const DAY = 86_400_000;
@@ -183,6 +200,7 @@ export function startingState(): EconomyState {
     vc: 150, interest: 40, form: 0.5, resentment: 0, facilities: { ...EMPTY_FACILITIES },
     prices: { ticket: 0, concession: 0, parking: 0 }, autopilot: true, managed: false, games: [], days: [], story: [], invested: 0, titles: 0,
     covered: 0, broke: false, promo: null, lastPromoAt: 0,
+    deals: [], pastDeals: [], loyalty: {}, partnerEarned: 0,
   };
   const { exact: _, ...fair } = fairPrices(state);
   state.prices = fair;
@@ -345,6 +363,47 @@ function playGame(s: EconomyState, g: GameDay): GameReport {
 
 function tell(s: EconomyState, e: StoryEvent) { s.story.push(e); }
 
+const brandName = (id: string) => BRAND[id]?.name ?? 'A sponsor';
+
+/** A deal over: off the books, into the record, and what it does to the brand's stars. */
+function endDeal(s: EconomyState, d: Deal, at: number, how: PastDeal['how']) {
+  s.deals = s.deals.filter(x => x !== d);
+  s.pastDeals.push({ slot: d.slot, brand: d.brand, structure: d.structure, term: d.term, earned: Math.round(d.earned), wins: d.wins, losses: d.losses, endedAt: at, how });
+  const stars = s.loyalty[d.brand] ?? 0;
+  if (how === 'completed') s.loyalty[d.brand] = Math.min(LOYALTY_MAX, stars + 1);
+  else if (how === 'walked') delete s.loyalty[d.brand];
+  else if (stars > 0) s.loyalty[d.brand] = stars - 1;
+}
+
+/**
+ * What the franchise's sponsors pay for a game, in dollars: the fee and a sellout bonus at home,
+ * a win bonus and a statement-week bonus home or away. A home game counts against the term; a deal
+ * out of home games is seen through, and one with a walk-away clause leaves after too many losses
+ * in a row.
+ */
+function payDeals(s: EconomyState, g: GameDay, r: GameReport): number {
+  let total = 0;
+  for (const d of [...s.deals]) {
+    let pay = 0;
+    if (r.home) { pay += d.base; d.left -= 1; if (r.fill >= 0.995) pay += d.sellout; }
+    if (r.result === 'W') {
+      pay += d.win; d.wins += 1; d.skid = 0;
+      if (d.clause === 'escalator') d.base = Math.min(Math.round(d.base0 / ESCALATOR.start * ESCALATOR.cap), Math.round(d.base * (1 + ESCALATOR.step)));
+    } else if (r.result === 'L') { d.losses += 1; d.skid += 1; }
+    if (d.statement && g.teams >= 4 && g.rank <= 2) pay += d.statement;
+    d.earned += pay; total += pay;
+    if (d.left <= 0) {
+      endDeal(s, d, g.at, 'completed');
+      tell(s, { at: g.at, kind: 'sponsor', title: `${brandName(d.brand)}: deal seen through`, detail: `${d.term} home games, ${cash(d.earned * VC_PER_DOLLAR)} paid. They would like to talk about another.` });
+    } else if (d.clause === 'walk' && d.skid >= WALK_LOSSES) {
+      endDeal(s, d, g.at, 'walked');
+      tell(s, { at: g.at, kind: 'sponsor', title: `${brandName(d.brand)} walked`, detail: `${WALK_LOSSES} straight losses, and the clause said they could. The ${SLOT[d.slot].name.toLowerCase()} are for sale again.` });
+    }
+  }
+  s.partnerEarned += total;
+  return total;
+}
+
 /**
  * The whole replay. `start` is opening day of the franchise's first season
  * (epoch ms); `now` is where it stops: today, or the end of a former
@@ -397,6 +456,35 @@ export function simulate(o: {
     while (di < decisions.length && decisions[di].at < end) {
       const d = decisions[di++];
       // Anything else in the log (a retired feature's entries) changes nothing.
+      if (d.kind === 'sponsor') {
+        // One deal a slot, a brand once, and only a slot that's been built: anything else in the log changes nothing.
+        if (!isSlot(d.slot) || !isStructure(d.structure) || !BRAND[d.brand] || !SLOT[d.slot].open(s.facilities)) continue;
+        if (s.deals.some(x => x.slot === d.slot || x.brand === d.brand)) continue;
+        const pos = (x: unknown) => Math.max(0, Math.round(Number(x) || 0));
+        const term = Math.min(16, Math.max(1, pos(d.term)));
+        const deal: Deal = {
+          slot: d.slot, brand: d.brand, structure: d.structure, clause: d.clause === 'walk' || d.clause === 'escalator' ? d.clause : null,
+          term, left: term, base: pos(d.base), base0: pos(d.base), win: pos(d.win), sellout: pos(d.sellout), statement: pos(d.statement), signing: pos(d.signing),
+          earned: pos(d.signing), signedAt: d.at, wins: 0, losses: 0, skid: 0,
+        };
+        s.deals.push(deal);
+        s.partnerEarned += deal.signing;
+        if (deal.signing) move(s, deal.signing * VC_PER_DOLLAR, d.at);
+        // What the town makes of the name going up.
+        s.interest = clamp(s.interest + VIBE_FANS[BRAND[d.brand].vibe], 5, 100);
+        tell(s, { at: d.at, kind: 'sponsor', title: `Signed: ${brandName(d.brand)}`, detail: `${SLOT[d.slot].name}, ${term} home games, ${cash(deal.base * VC_PER_DOLLAR)} a game${deal.signing ? ` and ${cash(deal.signing * VC_PER_DOLLAR)} on signing` : ''}.` });
+        continue;
+      }
+      if (d.kind === 'sponsor-end') {
+        const deal = s.deals.find(x => x.slot === d.slot);
+        if (!deal) continue;
+        const cost = buyoutCost(deal) * VC_PER_DOLLAR;
+        if (s.vc < cost) continue;
+        move(s, -cost, d.at);
+        endDeal(s, deal, d.at, 'bought-out');
+        tell(s, { at: d.at, kind: 'sponsor', title: `Bought out: ${brandName(deal.brand)}`, detail: `${cash(cost)} to end it with ${deal.left} home game${deal.left === 1 ? '' : 's'} left. The ${SLOT[deal.slot].name.toLowerCase()} are for sale again.` });
+        continue;
+      }
       if (d.kind !== 'prices' && d.kind !== 'build' && d.kind !== 'promo') continue;
       // Setting prices or building takes the franchise over from the old front office; a promotion doesn't.
       if (d.kind !== 'promo') s.managed = true;
@@ -443,6 +531,11 @@ export function simulate(o: {
         tell(s, { at: g.at, kind: 'start', title: `The ${season} season`, detail: `${facilityStats(s.facilities).stadiumName}, ${Math.round(s.interest)} fan interest, ${cash(s.vc)} in the bank.` });
       }
       const r = playGame(s, g);
+      // The sponsors' cheques for the game, on top of the gate.
+      if (s.deals.length) {
+        const partners = payDeals(s, g, r);
+        if (partners) { r.revenue.partners = partners; r.profit += partners; move(s, partners * VC_PER_DOLLAR, g.at); }
+      }
       s.games.push(r);
       if (won.has(g.season) && g.at === seasonEnd.get(g.season)) {
         s.titles += 1;

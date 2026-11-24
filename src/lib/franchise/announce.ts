@@ -21,6 +21,7 @@
 import type { PhotoSpec, Shot } from './photo';
 import type { PromoId } from '@/lib/tycoon/economy';
 import type { TrackId } from '@/lib/tycoon/catalog';
+import { BRAND, SLOT, namedStadium } from '../tycoon/sponsors.ts';
 
 export type Announcement =
   | { kind: 'promo'; promo: PromoId; score: number }
@@ -30,7 +31,9 @@ export type Announcement =
   | { kind: 'colors'; color: string }
   | { kind: 'motto'; motto: string }
   | { kind: 'look' }
-  | { kind: 'logo'; url: string };
+  | { kind: 'logo'; url: string }
+  /** A sponsorship signed (lib/tycoon/sponsors). */
+  | { kind: 'sponsor'; brand: string; slot: import('@/lib/tycoon/sponsors').SlotId; term: number };
 
 /** What the post shows under its text. */
 export type OfficialVisual =
@@ -49,7 +52,7 @@ export type OfficialVisual =
 
 /** How long after one announcement of a kind before the next can go out. */
 const QUIET_MS: Record<Announcement['kind'], number> = {
-  promo: 0, build: 15 * 60_000, prices: 6 * 3_600_000, renamed: 3_600_000, colors: 3_600_000,
+  promo: 0, sponsor: 0, build: 15 * 60_000, prices: 6 * 3_600_000, renamed: 3_600_000, colors: 3_600_000,
   motto: 3_600_000, look: 6 * 3_600_000, logo: 3_600_000,
 };
 
@@ -122,6 +125,19 @@ function copy(a: Announcement, o: { team: string; stadium: string; tag: string; 
       ], o.seed);
     case 'colors':
       return `New season, new colors. Wear them loud. ${o.tag}`;
+    case 'sponsor': {
+      const brand = BRAND[a.brand], slot = SLOT[a.slot];
+      if (!brand) return `A new partner at ${o.stadium}. ${o.tag}`;
+      if (a.slot === 'naming') return pick([
+        `Our home has a new name. Welcome to ${namedStadium(brand, 50_000).replace(/ (Stadium|Field|Park|Grounds)$/, '')} country.\n\n${brand.name} takes the naming rights at ${o.stadium} for the next ${a.term} home games. "${brand.tagline}" ${o.tag}`,
+        `It's official: ${brand.name} now has its name on the building. ${a.term} home games. "${brand.tagline}" ${o.tag}`,
+      ], o.seed);
+      if (a.slot === 'skies') return `Look up. The ${brand.name} blimp flies over ${o.stadium} for the next ${a.term} home games. "${brand.tagline}" ${o.tag}`;
+      return pick([
+        `Please welcome ${brand.name}, the newest partner of ${o.team}.\n\n${slot.name} at ${o.stadium}, ${a.term} home games. "${brand.tagline}" ${o.tag}`,
+        `New partner: ${brand.name}. ${slot.about.replace('Their', 'Its').replace('their', 'its')} "${brand.tagline}" ${o.tag}`,
+      ], o.seed);
+    }
     case 'motto':
       return `“${a.motto}”\n\nThat's who we are. ${o.tag}`;
     case 'look':
@@ -237,6 +253,7 @@ export async function announce(franchiseId: string, a: Announcement): Promise<vo
         }
       : a.kind === 'prices' ? { type: 'ticket', ticket: a.ticket, was: a.was, color, stadium, team, opponent: game.opponent, when: game.when }
       : a.kind === 'renamed' || a.kind === 'colors' ? { type: 'photo', photo: photo('exterior', 19.5, 0) }
+      : a.kind === 'sponsor' ? { type: 'photo', photo: photo(a.slot === 'skies' ? 'aerial' : 'exterior', 18.5, 0.6) }
       : a.kind === 'look' ? { type: 'photo', photo: photo('aerial', 17.5, 0) }
       : a.kind === 'logo' ? { type: 'logo', url: a.url, color, team }
       : null;
