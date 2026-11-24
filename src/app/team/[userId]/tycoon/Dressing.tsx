@@ -98,7 +98,7 @@ export function RivalryDress({ bp, home, rival, opponent, record }: { bp: Bluepr
     const a = (i / 16) * Math.PI * 2 + Math.PI / 16;
     return { at: bp.outline.around(a, r) as [number, number], color: i % 2 ? rival : home, phase: i * 0.7 };
   }), [bp, r, home, rival]);
-  const tex = useBanner(['Rivalry week', `vs ${opponent}  ·  all-time ${record}`], home, rival);
+  const tex = useBanner(['Rivalry week', `vs ${opponent}, all-time ${record}`], home, rival);
   const bh = Math.max(0.7, bp.top * 0.42), bw = bh * 4;
   const drops = useMemo(() => [Math.PI / 2, -Math.PI / 2].map(a => {
     const [x, z] = bp.outline.around(a, bp.footprint + 0.06);

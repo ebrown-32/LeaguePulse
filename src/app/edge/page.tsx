@@ -1,20 +1,21 @@
 import { PageLayout } from '@/components/layout/PageLayout';
-import EdgeView from './EdgeView';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { leagueConfigured } from '@/config/league';
+import EdgeHub from './EdgeHub';
 
-export const metadata = { title: 'The Edge | League Pulse' };
+export const dynamic = 'force-dynamic';
+export const metadata = {
+  title: 'The Edge | League Pulse',
+  description: 'The league\'s research desk: every player\'s season in your scoring, usage, matchups, lineup calls, team comparisons and the waiver wire.',
+};
 
-export default function EdgePage() {
-  // The Edge reads thousands of other leagues, sampled by the hosted product's crawl (lib/market/crawl).
-  // A self-hosted copy has none to compare against, so it says so rather than "check back" forever.
-  const hosted = process.env.LP_HOSTED === '1';
+export default async function EdgePage() {
+  if (!(await leagueConfigured())) return <ErrorMessage title="The Edge" message="No league configured" />;
+  // The research (stats, usage, matchups, lineups) is for every site. What leagues like yours are
+  // doing comes from the hosted product's market (lib/market/crawl), so that tab is hosted only.
   return (
-    <PageLayout title="The Edge" subtitle="What leagues like yours are doing, and what it means for yours." className="max-w-5xl">
-      {hosted ? <EdgeView /> : (
-        <div className="lp-surface rounded-xl p-6 text-[14px] leading-relaxed text-muted-foreground">
-          <p className="font-semibold text-foreground">The Edge isn&apos;t available on this site.</p>
-          <p className="mt-1">It compares your league with thousands of others that LeaguePulse samples every week, which only the hosted version of LeaguePulse does.</p>
-        </div>
-      )}
+    <PageLayout title="The Edge" subtitle="Your league's research desk: every player in your scoring, the matchups, the lineup calls, and how every team stacks up." className="max-w-7xl">
+      <EdgeHub hosted={process.env.LP_HOSTED === '1'} />
     </PageLayout>
   );
 }

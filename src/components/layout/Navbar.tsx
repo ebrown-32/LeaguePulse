@@ -179,7 +179,6 @@ export default function Navbar({ logoUrl, leagueName, franchises = true, ranking
   const shown = (item: NavItem) =>
     (franchises || (item.href !== '/franchises' && item.href !== '/wrapped')) &&
     (rankings || item.href !== '/rankings') &&
-    (market || item.href !== '/edge') &&
     (DESK_WEEKLY_ON || item.href !== '/podcast');
   // Always four: Rivalries steps in where there are no franchises.
   const featured = franchises ? PRIMARY_NAV : PRIMARY_NAV.map(item => (item.href === '/franchises' ? RIVALRIES : item));

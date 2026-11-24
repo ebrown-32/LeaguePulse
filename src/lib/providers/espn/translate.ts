@@ -316,6 +316,10 @@ export function translateBase(raw: any, pid: PlayerIdMap, opts: { firstSeason?: 
       reserve_slots: Number(counts[IR] ?? 0),
       waiver_budget: acq.isUsingAcquisitionBudget ? Number(acq.acquisitionBudget ?? 0) : 0,
       trade_deadline: 99,
+      // ESPN's own: the days its waivers process, and the moment trading closes (The Edge's calendar).
+      waiver_days: (Array.isArray(acq.waiverProcessDays) ? acq.waiverProcessDays : [])
+        .map((d: unknown) => ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'].indexOf(String(d).toUpperCase())).filter((n: number) => n >= 0),
+      trade_deadline_at: Number(settings.tradeSettings?.deadlineDate) > 0 ? Number(settings.tradeSettings.deadlineDate) : null,
       // ESPN's "win bonus for top half" is Sleeper's league median game: a
       // second result each week, a win for scoring in the top half. ESPN
       // already counts it in each team's record.
