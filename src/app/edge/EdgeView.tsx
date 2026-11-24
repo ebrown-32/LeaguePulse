@@ -2,8 +2,10 @@
 
 /**
  * The Edge (lib/market/read): what leagues like this one are doing, turned into calls this
- * league can use. Its waiver wire against the field's rosters, the week's market, and every
- * manager's lineup calls that went against the field.
+ * league can use. Its waiver wire against the field's rosters, the week's market, whose share of
+ * lineups and rosters is moving, the big games the field sat, the draft's steals and busts, real
+ * trades from leagues like this one, and every manager's lineup calls that went against the field.
+ * Each player says who has him here, or that he's a free agent.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -12,7 +14,7 @@ import { SectionHeader } from '@/components/ui/kit';
 import { Activity, ArrowLeftRight, Target, TrendingDown, TrendingUp, Users } from '@/components/icons';
 import { initialsOf, playerPhoto } from '@/lib/playerPhoto';
 import { cn } from '@/lib/utils';
-import type { Edge, EdgePlayer, Metric, Mover, TeamCalls, WaiverPick } from '@/lib/market/read';
+import type { DraftValue, Edge, EdgePlayer, FieldTrade, Hit, Metric, Mover, Shift, TeamCalls, WaiverPick } from '@/lib/market/read';
 
 const card = 'rounded-2xl border border-border bg-card p-4 sm:p-5';
 
@@ -39,7 +41,11 @@ function Who({ p }: { p: EdgePlayer }) {
   return (
     <span className="min-w-0">
       <span className="block truncate text-[13.5px] font-semibold">{p.name}</span>
-      <span className="block text-[11px] text-muted-foreground">{p.position}{p.team ? ` · ${p.team}` : ''}</span>
+      <span className="block truncate text-[11px] text-muted-foreground">
+        {p.position}{p.team ? `, ${p.team}` : ''}
+        {p.here === null && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-px text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Free agent here</span>}
+        {p.here && <span className="ml-1.5">{p.here}</span>}
+      </span>
     </span>
   );
 }
@@ -61,7 +67,7 @@ function VsField({ metrics }: { metrics: Metric[] }) {
     ? (m.percentile >= 50 ? `Busier than ${m.percentile}% of leagues like yours` : `Quieter than ${100 - m.percentile}% of leagues like yours`)
     : (m.percentile >= 50 ? `Higher than ${m.percentile}% of leagues like yours` : `Lower than ${100 - m.percentile}% of leagues like yours`);
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className={cn('grid gap-3 sm:grid-cols-2', metrics.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
       {metrics.map(m => (
         <div key={m.id} className={card}>
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{m.label}</p>
@@ -119,6 +125,94 @@ function MoverList({ title, icon, items, unit, bids }: { title: string; icon: ty
         {!items.length && <li className="text-[13px] text-muted-foreground">Nothing yet this week.</li>}
       </ol>
     </div>
+  );
+}
+
+/** Players whose share of the field moved: now, and where it was. */
+function ShiftList({ title, icon, items, noun, empty }: { title: string; icon: typeof TrendingUp; items: Shift[]; noun: string; empty: string }) {
+  return (
+    <div className={card}>
+      <SectionHeader icon={icon} title={title} />
+      <ol className="mt-3 space-y-2.5">
+        {items.map(m => {
+          const d = m.now - m.was;
+          return (
+            <li key={m.id} className="flex items-center gap-2.5">
+              <Face p={m} size={30} />
+              <span className="min-w-0 flex-1"><Who p={m} /></span>
+              <span className="shrink-0 text-right">
+                <span className={cn('block text-[12.5px] font-bold tabular-nums', d >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>{d >= 0 ? 'Up' : 'Down'} {Math.abs(d).toFixed(0)}</span>
+                <span className="block text-[10.5px] tabular-nums text-muted-foreground">{Math.round(m.was)}% to {Math.round(m.now)}% {noun}</span>
+              </span>
+            </li>
+          );
+        })}
+        {!items.length && <li className="text-[13px] text-muted-foreground">{empty}</li>}
+      </ol>
+    </div>
+  );
+}
+
+function Hits({ items }: { items: Hit[] }) {
+  if (!items.length) return <p className={cn(card, 'text-[13px] text-muted-foreground')}>No big games slipped past the field last week.</p>;
+  return (
+    <ul className={cn(card, 'grid gap-x-6 gap-y-3 sm:grid-cols-2')}>
+      {items.map(h => (
+        <li key={h.id} className="flex items-center gap-2.5">
+          <Face p={h} size={32} />
+          <span className="min-w-0 flex-1"><Who p={h} /><span className="mt-0.5 block text-[11px] text-muted-foreground">Started in only {Math.round(h.startPct)}% of leagues</span></span>
+          <span className="shrink-0 text-right"><span className="block text-[16px] font-extrabold tabular-nums">{h.points.toFixed(1)}</span><span className="block text-[10px] text-muted-foreground">pts when started</span></span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const ord = (n: number) => { const x = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (x[(v - 20) % 10] || x[v] || x[0]); };
+
+function DraftList({ title, icon, items, steal }: { title: string; icon: typeof TrendingUp; items: DraftValue[]; steal: boolean }) {
+  return (
+    <div className={card}>
+      <SectionHeader icon={icon} title={title} />
+      <ol className="mt-3 space-y-2.5">
+        {items.map(d => (
+          <li key={d.id} className="flex items-center gap-2.5">
+            <Face p={d} size={30} />
+            <span className="min-w-0 flex-1"><Who p={d} /><span className="mt-0.5 block text-[11px] text-muted-foreground">Drafted {ord(d.adpRank)} on average (pick {d.adp.toFixed(0)}), {ord(d.ptsRank)} in points</span></span>
+            <span className={cn('shrink-0 text-[12.5px] font-bold tabular-nums', steal ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>{steal ? '+' : '-'}{Math.abs(d.adpRank - d.ptsRank)}<span className="block text-right text-[10px] font-normal text-muted-foreground">spots</span></span>
+          </li>
+        ))}
+        {!items.length && <li className="text-[13px] text-muted-foreground">Nobody stands out yet.</li>}
+      </ol>
+    </div>
+  );
+}
+
+function Trades({ items }: { items: FieldTrade[] }) {
+  if (!items.length) return <p className={cn(card, 'text-[13px] text-muted-foreground')}>No trades in the field over the last three weeks.</p>;
+  const side = (s: FieldTrade['sides'][number]) => [...s.players.map(p => p.name), ...s.picks.map(x => `${x} pick`), ...(s.faab ? [`$${s.faab} of budget`] : [])];
+  return (
+    <ul className="grid gap-3 md:grid-cols-2">
+      {items.map((t, i) => (
+        <li key={i} className={card}>
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Week {t.week}</p>
+          <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-start gap-2.5">
+            {t.sides.map((s, k) => (
+              <div key={k} className={cn('min-w-0', k === 1 && 'order-3')}>
+                <p className="text-[10.5px] font-semibold text-muted-foreground">{k === 0 ? 'One side got' : 'The other got'}</p>
+                <ul className="mt-1 space-y-1.5">
+                  {s.players.map(p => (
+                    <li key={p.id} className="flex items-center gap-2"><Face p={p} size={24} /><span className="min-w-0"><span className="block truncate text-[12.5px] font-semibold">{p.name}</span>{p.here !== undefined && <span className="block truncate text-[10.5px] text-muted-foreground">{p.here === null ? 'Free agent here' : p.here}</span>}</span></li>
+                  ))}
+                  {side(s).slice(s.players.length).map(x => <li key={x} className="text-[12.5px] font-semibold">{x}</li>)}
+                </ul>
+              </div>
+            ))}
+            <ArrowLeftRight className="order-2 mt-5 h-4 w-4 text-muted-foreground" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -194,7 +288,7 @@ export default function EdgeView() {
     <div className="space-y-8">
       <div className={cn(card, 'flex flex-wrap items-center justify-between gap-3')}>
         <div className="min-w-0">
-          <p className="text-[13.5px] font-semibold">Compared with {f.leagues.toLocaleString()} Sleeper leagues: {f.label.toLowerCase()}</p>
+          <p className="text-[13.5px] font-semibold">Compared with {f.leagues.toLocaleString()} Sleeper leagues: {f.label}</p>
           <p className="text-[12px] text-muted-foreground">
             Through week {f.week}, {f.season}.{!f.exact ? ` Not enough leagues match yours exactly (${edge.format}) yet, so this is the closest group.` : ''} Counts only, from public leagues; no names.
           </p>
@@ -224,11 +318,71 @@ export default function EdgeView() {
         </div>
       </section>
 
+      {edge.lineups && (edge.lineups.risers.length > 0 || edge.lineups.fallers.length > 0) && (
+        <section className="space-y-3">
+          <SectionHeader icon={TrendingUp} title="Lineups on the move" meta={`Week ${f.week} against week ${f.week - 1}`} />
+          <p className="text-[13px] text-muted-foreground">Whose share of the field&apos;s starting lineups changed most in a week: roles won and lost, before your league notices.</p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <ShiftList title="Into lineups" icon={TrendingUp} items={edge.lineups.risers} noun="start him" empty="Nobody jumped this week." />
+            <ShiftList title="Out of lineups" icon={TrendingDown} items={edge.lineups.fallers} noun="start him" empty="Nobody fell out this week." />
+            <ShiftList title="Being stashed" icon={Target} items={edge.stashes ?? []} noun="roster him" empty="No stashes building over the last two weeks." />
+          </div>
+        </section>
+      )}
+
+      {edge.hits && (
+        <section className="space-y-3">
+          <SectionHeader icon={Activity} title="The games the field sat" meta={`Week ${f.week}`} />
+          <p className="text-[13px] text-muted-foreground">Big games from players most leagues like yours left on the bench. Somebody saw it coming.</p>
+          <Hits items={edge.hits} />
+        </section>
+      )}
+
+      {edge.draft && (
+        <section className="space-y-3">
+          <SectionHeader icon={Target} title="The draft, graded" meta={`${edge.draft.drafts.toLocaleString()} drafts`} />
+          <p className="text-[13px] text-muted-foreground">Where the field drafted each player against where he ranks in points this season.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <DraftList title="Steals" icon={TrendingUp} items={edge.draft.steals} steal />
+            <DraftList title="Busts" icon={TrendingDown} items={edge.draft.busts} steal={false} />
+          </div>
+        </section>
+      )}
+
+      {edge.trades && (
+        <section className="space-y-3">
+          <SectionHeader icon={ArrowLeftRight} title="Trades in leagues like yours" meta="Last three weeks" />
+          <p className="text-[13px] text-muted-foreground">Real trades from the field, as they were made. Ones with a player rostered in your league come first: this is what he goes for.</p>
+          <Trades items={edge.trades} />
+        </section>
+      )}
+
       <section className="space-y-3">
         <SectionHeader icon={Users} title="Calls against the field" meta={`Week ${f.week}`} />
         <p className="text-[13px] text-muted-foreground">Last week&apos;s lineup decisions that went against what leagues like yours did, and how they turned out.</p>
         <Calls teams={edge.calls ?? []} />
       </section>
+
+      {edge.sample && edge.sample.length > 0 && (
+        <section className="space-y-3">
+          <SectionHeader icon={Users} title="Who the field is" meta={`Week ${f.week}`} />
+          <div className={card}>
+            <p className="text-[13px] text-muted-foreground">The market&apos;s biggest groups of leagues this week. Yours is compared with the ones marked.</p>
+            <ul className="mt-3 space-y-2">
+              {edge.sample.map(x => {
+                const top = Math.max(...edge.sample!.map(y => y.leagues));
+                return (
+                  <li key={x.label} className="grid grid-cols-[minmax(0,220px)_1fr_auto] items-center gap-3 text-[12.5px]">
+                    <span className={cn('truncate', x.yours ? 'font-bold text-foreground' : 'text-muted-foreground')}>{x.label}{x.yours ? ' (your field)' : ''}</span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-muted"><span className={cn('block h-full rounded-full', x.yours ? 'bg-primary' : 'bg-foreground/25')} style={{ width: `${(x.leagues / top) * 100}%` }} /></span>
+                    <span className="tabular-nums text-muted-foreground">{x.leagues.toLocaleString()}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

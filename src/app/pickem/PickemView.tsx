@@ -127,7 +127,7 @@ function Game({ g, phase, mine, pick, locked, onPick, onLock, pickers, rivalry, 
       style={rivalry ? { background: `linear-gradient(hsl(var(--card)), hsl(var(--card))) padding-box, linear-gradient(90deg, ${rivalry.a}, ${rivalry.b}) border-box`, borderWidth: 2 } : undefined}>
       {(rivalry || own) && (
         <div className="flex items-center justify-between px-3.5 pt-2.5 text-[10.5px] font-black uppercase tracking-[0.16em]">
-          {rivalry ? <span className="inline-flex items-center gap-1 text-[#e0352b]"><Flame className="h-3.5 w-3.5" /> Rivalry week · {rivalry.label}</span> : <span />}
+          {rivalry ? <span className="inline-flex items-center gap-1 text-[#e0352b]"><Flame className="h-3.5 w-3.5" /> Rivalry week, {rivalry.label}</span> : <span />}
           {own && <span className="text-muted-foreground">Your game</span>}
         </div>
       )}
@@ -232,7 +232,7 @@ function Table({ table, me, lastWeek, money }: { table: PickemTable; me: string 
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13.5px] font-bold text-foreground">{r.teamName}{r.userId === me && <span className="ml-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-primary">You</span>}
                 {r.simWeeks === r.weeks && <span title="Hasn't picked: the sim picks for them" className="ml-1.5 rounded bg-muted px-1 py-px text-[9.5px] font-black uppercase tracking-[0.1em] text-muted-foreground">Sim</span>}</p>
-              <p className="text-[11.5px] text-muted-foreground">{r.right}-{r.wrong}{r.upsets ? ` · ${r.upsets} upset${r.upsets === 1 ? '' : 's'}` : ''}{r.simWeeks && r.simWeeks < r.weeks ? ` · ${r.simWeeks} sim week${r.simWeeks === 1 ? '' : 's'}` : ''}{r.locksPlayed ? ` · locks ${r.locksRight}/${r.locksPlayed}` : ''} · best week {r.bestWeek}</p>
+              <p className="text-[11.5px] text-muted-foreground">{r.right}-{r.wrong}{r.upsets ? `, ${r.upsets} upset${r.upsets === 1 ? '' : 's'}` : ''}{r.simWeeks && r.simWeeks < r.weeks ? `, ${r.simWeeks} sim week${r.simWeeks === 1 ? '' : 's'}` : ''}{r.locksPlayed ? `, locks ${r.locksRight}/${r.locksPlayed}` : ''}, best week {r.bestWeek}</p>
             </div>
             {/* Each week's points, as little bars. */}
             <div className="hidden h-6 items-end gap-[2px] sm:flex" aria-hidden>
@@ -350,7 +350,7 @@ export default function PickemView({ league }: { league: string }) {
         <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/12 via-card to-card p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{data.season} · Regular season</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{data.season}, Regular season</p>
               <h2 className="font-display text-[32px] font-black leading-none text-foreground sm:text-[40px]">{head ? `Week ${head.week}` : 'Pick\'em'}</h2>
             </div>
             {head && <PhasePill week={head} />}
@@ -365,7 +365,7 @@ export default function PickemView({ league }: { league: string }) {
                 {card?.phase === 'open' && me && (
                   <span className="ml-auto text-[12.5px] font-semibold text-muted-foreground">
                     {made} of {pickable.length} picked{lock !== null ? ', lock set' : ''}
-                    {saving === 'saving' && ' · saving'}{saving === 'saved' && ' · saved'}
+                    {saving === 'saving' && ', saving'}{saving === 'saved' && ', saved'}
                   </span>
                 )}
               </>

@@ -41,7 +41,7 @@ function Card({ g, week, done, i }: { g: RivalryGame; week: number; done: boolea
       <div className="relative rounded-[14px] bg-card p-3.5 sm:p-4">
         <div className="pointer-events-none absolute inset-0 rounded-[14px] opacity-[0.08]" style={{ background: `linear-gradient(100deg, ${g.a.color}, transparent 45%, transparent 55%, ${g.b.color})` }} />
         <p className="relative flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-[0.18em] text-[#e0352b]">
-          <Flame className="h-3.5 w-3.5" /> {done ? `Week ${week} rivalry, final` : `Rivalry week · week ${week}`} · {g.label}
+          <Flame className="h-3.5 w-3.5" /> {done ? `Week ${week} rivalry, final` : `Rivalry week, week ${week}`}, {g.label}
         </p>
         <div className="relative mt-3 flex items-center gap-2">
           <Side t={g.a} wins={g.series.aWins} won={done ? g.winner === g.a.userId : undefined} />
